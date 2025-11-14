@@ -1,0 +1,91 @@
+/* Desktop-first; usar media queries para ajustes mobile quando necessário */
+:root {
+  --brand-red: #ff003c; /* Vermelho Vibrante */
+  --brand-pink: #f77f89; /* Rosa bebê */
+  --brand-brown: #381013; /* Marrom escuro */
+  --brand-white: #ffffff; /* Branco */
+  --brand-gray: #353535; /* Cinza Escuro */
+  --brand-black: #000000; /* Preto */
+}
+
+/* Utilidades que complementam Tailwind via classes personalizadas */
+.text-brand-black { color: var(--brand-black); }
+.text-brand-brown { color: var(--brand-brown); }
+.text-brand-pink { color: var(--brand-pink); }
+
+.bg-brand-red { background-color: var(--brand-red); }
+.bg-brand-pink { background-color: var(--brand-pink); }
+.bg-brand-brown { background-color: var(--brand-brown); }
+.bg-brand-gray { background-color: var(--brand-gray); }
+.bg-brand-black { background-color: var(--brand-black); }
+.bg-brand-gray-50 { background-color: #f3f4f6; }
+
+.border-brand-brown { border-color: var(--brand-brown); }
+.border-brand-red { border-color: var(--brand-red); }
+
+/* Kanban: estilo dos cartões/colunas */
+.kanban-column { min-height: 360px; }
+
+.kanban-card { border: 1px solid #e5e7eb; }
+
+/* Sidebar responsiva: desktop-first; oculta em telas muito pequenas */
+@media (max-width: 900px) {
+  aside { position: fixed; width: 18rem; }
+  main { margin-left: 18rem; }
+}
+
+/* Dark mode overrides básicos */
+.dark body { background-color: #0f172a; color: #e5e7eb; }
+.dark .bg-white { background-color: #111827; }
+.dark .text-gray-500 { color: #9ca3af; }
+.dark .text-brand-black { color: #e5e7eb; }
+
+/* Emulação mínima de @tailwindcss/forms */
+input[type="text"], input[type="email"], input[type="password"], input[type="number"], select, textarea {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  background-color: #ffffff;
+  color: #111827;
+}
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+  border-color: #93c5fd;
+}
+.dark input, .dark select, .dark textarea {
+  background-color: #0b1324;
+  color: #e5e7eb;
+  border-color: #334155;
+}
+.dark input:focus, .dark select:focus, .dark textarea:focus {
+  outline-color: #60a5fa;
+  border-color: #60a5fa;
+}
+
+/* Emulação mínima de @tailwindcss/typography (classe .prose) */
+.prose {
+  color: #374151;
+  max-width: 65ch;
+}
+.prose h1 { font-size: 1.875rem; line-height: 2.25rem; margin: 1rem 0; font-weight: 700; }
+.prose h2 { font-size: 1.5rem; line-height: 2rem; margin: 1rem 0; font-weight: 700; }
+.prose h3 { font-size: 1.25rem; line-height: 1.75rem; margin: 0.75rem 0; font-weight: 600; }
+.prose p { margin: 0.75rem 0; line-height: 1.75; }
+.prose ul { list-style: disc; padding-left: 1.25rem; margin: 0.75rem 0; }
+.prose ol { list-style: decimal; padding-left: 1.25rem; margin: 0.75rem 0; }
+.prose a { color: #2563eb; text-decoration: underline; }
+.prose blockquote { border-left: 4px solid #e5e7eb; padding-left: 1rem; color: #6b7280; font-style: italic; }
+.prose code { background: #f3f4f6; padding: 0.2rem 0.35rem; border-radius: 0.25rem; }
+.dark .prose { color: #d1d5db; }
+.dark .prose a { color: #93c5fd; }
+.dark .prose code { background: #1f2937; }
+
+/* Emulação mínima de @tailwindcss/aspect-ratio */
+.aspect-square { aspect-ratio: 1 / 1; }
+.aspect-video { aspect-ratio: 16 / 9; }
+.aspect-4-3 { aspect-ratio: 4 / 3; }
+.aspect-container > img,
+.aspect-container > iframe,
+.aspect-container > video { width: 100%; height: 100%; object-fit: cover; }

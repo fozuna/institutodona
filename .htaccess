@@ -1,0 +1,6 @@
+Options -Indexes
+RewriteEngine On
+
+# Redireciona tudo da raiz para /public
+RewriteCond %{REQUEST_URI} !^/institutodona/public/
+RewriteRule ^(.*)$ public/$1 [L]
