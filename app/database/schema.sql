@@ -1,10 +1,10 @@
 -- Banco: institutodona
 -- Criação das tabelas essenciais com chaves e relacionamentos
 
-CREATE DATABASE IF NOT EXISTS `institutodona`
-  DEFAULT CHARACTER SET utf8mb4
-  DEFAULT COLLATE utf8mb4_unicode_ci;
-USE `institutodona`;
+--CREATE DATABASE IF NOT EXISTS `institutodona`
+--  DEFAULT CHARACTER SET utf8mb4
+--  DEFAULT COLLATE utf8mb4_unicode_ci;
+--USE `institutodona`;
 
 CREATE TABLE IF NOT EXISTS clientes (
   id INT AUTO_INCREMENT PRIMARY KEY,
