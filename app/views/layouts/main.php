@@ -4,6 +4,7 @@ if (!file_exists($cfg)) {
     $cfg = __DIR__ . '/../../../config/config.example.php';
 }
 $config = require $cfg;
+$isLoginRoute = (($_GET['route'] ?? 'auth/login') === 'auth/login');
 ?>
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -18,7 +19,7 @@ $config = require $cfg;
 <body class="bg-brand-gray-50 text-brand-black">
     <?php $user = $_SESSION['user'] ?? null; ?>
     <div class="flex min-h-screen">
-        <?php if ($user): ?>
+        <?php if ($user && !$isLoginRoute): ?>
             <!-- Sidebar fixa (apenas quando logado) -->
             <aside class="w-72 shrink-0 bg-brand-brown text-white fixed h-screen desktop:relative desktop:block flex flex-col">
                 <div class="px-6 py-5 border-b border-brand-brown-700">
@@ -53,11 +54,11 @@ $config = require $cfg;
         <?php endif; ?>
 
         <!-- Container principal -->
-        <main class="flex-1 <?php echo $user ? 'ml-72' : ''; ?> flex flex-col min-h-screen">
-            <div class="flex-1 <?php echo $user ? 'p-6' : 'p-0'; ?>">
+        <main class="flex-1 <?php echo ($user && !$isLoginRoute) ? 'ml-72' : ''; ?> flex flex-col min-h-screen">
+            <div class="flex-1 <?php echo ($user && !$isLoginRoute) ? 'p-6' : 'p-0'; ?>">
                 <?= $content ?>
             </div>
-            <?php if ($user): ?>
+            <?php if ($user && !$isLoginRoute): ?>
             <footer class="border-t bg-white text-center text-xs text-gray-500 py-3 px-6">
                 &copy; <?php echo date('Y'); ?> MENTORIA VIVA+. Todos os direitos reservados. <span class="opacity-70">v1.23.25</span>
             </footer>

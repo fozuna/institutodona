@@ -17,6 +17,10 @@ class AuthController extends BaseController
 
     public function login(): void
     {
+        if (isset($_SESSION['user'])) {
+            header('Location: index.php?route=dashboard/index');
+            return;
+        }
         $this->render('auth/login');
     }
 
