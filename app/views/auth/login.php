@@ -3,7 +3,7 @@
 <div class="min-h-screen flex">
     <!-- Lado esquerdo: 70% vermelho com imagem de fundo -->
     <div class="relative basis-[70%] text-white flex items-center justify-center"
-         style="background-image: url('assets/img/login-bg.jpg'); background-size: cover; background-position: center; background-repeat: no-repeat; background-color: var(--brand-red); background-blend-mode: multiply;">
+         style="background-color: var(--brand-red);">
         <div class="p-10 max-w-2xl">
             <h1 class="text-4xl font-bold mb-4">Instituto Dona</h1>
             <p class="text-lg opacity-90">Gestão de processos, pessoas e metodologias com simplicidade.</p>

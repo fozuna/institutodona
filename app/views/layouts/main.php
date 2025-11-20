@@ -35,6 +35,9 @@ $config = require $cfg;
                     <a class="block px-3 py-2 rounded hover:bg-brand-brown-700" href="index.php?route=metodologias/index"><span data-feather="book-open" class="inline-block mr-2"></span>Metodologias</a>
                     <a class="block px-3 py-2 rounded hover:bg-brand-brown-700" href="index.php?route=clientes/index"><span data-feather="users" class="inline-block mr-2"></span>Clientes</a>
                     <a class="block px-3 py-2 rounded hover:bg-brand-brown-700" href="index.php?route=pilares/index"><span data-feather="layers" class="inline-block mr-2"></span>Pilares</a>
+                    <?php if (($user['tipo_acesso'] ?? null) === 'instituto'): ?>
+                    <a class="block px-3 py-2 rounded hover:bg-brand-brown-700" href="index.php?route=avaliacao/create"><span data-feather="check-square" class="inline-block mr-2"></span>Avaliação</a>
+                    <?php endif; ?>
                 </nav>
                 <div class="mt-auto px-4 py-3 border-t border-brand-brown-700 flex items-center justify-between">
                     <button id="themeToggle" class="text-sm flex items-center gap-2">

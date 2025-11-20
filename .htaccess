@@ -1,6 +1,9 @@
 Options -Indexes
 RewriteEngine On
 
-# Redireciona tudo da raiz para /public
-RewriteCond %{REQUEST_URI} !^/institutodona/public/
-RewriteRule ^(.*)$ public/$1 [L]
+# Redireciona para /public_html evitando loop e ignorando arquivos/diretórios existentes
+RewriteCond %{REQUEST_URI} !^/public_html/
+RewriteCond %{REQUEST_URI} !^/institutodona/public_html/
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ public_html/$1 [L]

@@ -8,6 +8,8 @@ use App\Controllers\DashboardController;
 use App\Controllers\AuthController;
 use App\Controllers\ClientesController;
 use App\Controllers\PilaresController;
+use App\Controllers\AvaliacaoController;
+use App\Models\UsuarioModel;
 
 $route = $_GET['route'] ?? 'auth/login';
 
@@ -75,6 +77,30 @@ switch ($route) {
         break;
     case 'auth/logout':
         (new AuthController())->logout();
+        break;
+    case 'avaliacao/create':
+        (new AvaliacaoController())->create();
+        break;
+    case 'avaliacao/store':
+        (new AvaliacaoController())->store();
+        break;
+    case 'dev/seedAdmin':
+        $email = 'admin@institutodona.local';
+        $model = new UsuarioModel();
+        $existing = $model->findByEmail($email);
+        if (!$existing) {
+            $hash = password_hash('admin123789', PASSWORD_DEFAULT);
+            $model->create([
+                'nome' => 'Admin',
+                'email' => $email,
+                'senha_hash' => $hash,
+                'tipo_acesso' => 'instituto',
+                'id_cliente' => null,
+            ]);
+            echo 'OK';
+        } else {
+            echo 'EXISTS';
+        }
         break;
     case 'dashboard/index':
     default:
