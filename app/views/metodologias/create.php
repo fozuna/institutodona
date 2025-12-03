@@ -14,6 +14,6 @@
             <label class="block text-sm">Item do Pilar</label>
             <input name="item_pilar" class="border rounded p-2 w-full" />
         </div>
-        <button class="px-4 py-2 bg-brand-red text-white rounded" type="submit">Salvar</button>
+        <button class="icon-btn icon-btn--primary" type="submit" title="Salvar" aria-label="Salvar"><span data-feather="check"></span></button>
     </form>
 </div>

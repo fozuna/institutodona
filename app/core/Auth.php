@@ -34,4 +34,9 @@ class Auth
     {
         return (self::user()['tipo_acesso'] ?? null) === 'cliente';
     }
+
+    public static function isConsultor(): bool
+    {
+        return (self::user()['tipo_acesso'] ?? null) === 'consultor';
+    }
 }

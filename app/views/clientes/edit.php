@@ -5,7 +5,7 @@
     <?php if (!$item): ?>
         <p>Registro não encontrado.</p>
     <?php else: ?>
-        <form method="post" action="index.php?route=clientes/update" class="space-y-4">
+        <form method="post" action="index.php?route=clientes/update" class="space-y-4" enctype="multipart/form-data">
             <input type="hidden" name="csrf" value="<?= Security::csrfToken() ?>" />
             <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
             <div>
@@ -20,7 +20,16 @@
                 <label class="block text-sm">Contato</label>
                 <input name="contato" class="border rounded p-2 w-full" value="<?= htmlspecialchars($item['contato']) ?>" />
             </div>
-            <button class="px-4 py-2 bg-brand-red text-white rounded" type="submit">Salvar</button>
+            <div>
+                <label class="block text-sm">Logo (png, jpg, webp, svg)</label>
+                <input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" />
+                <?php if (!empty($item['logo_path'])): ?>
+                  <div class="mt-2">
+                    <img src="../<?= htmlspecialchars($item['logo_path']) ?>" alt="Logo atual" class="h-10 w-auto" />
+                  </div>
+                <?php endif; ?>
+            </div>
+            <button class="icon-btn icon-btn--primary" type="submit" title="Salvar" aria-label="Salvar"><span data-feather="check"></span></button>
         </form>
     <?php endif; ?>
 </div>

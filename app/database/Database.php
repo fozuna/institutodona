@@ -36,4 +36,20 @@ class Database
         self::$instance = $pdo;
         return self::$instance;
     }
+
+    public static function tableExists(string $table): bool
+    {
+        $pdo = self::getConnection();
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = :t');
+        $stmt->execute(['t' => $table]);
+        return (int)$stmt->fetchColumn() > 0;
+    }
+
+    public static function columnExists(string $table, string $column): bool
+    {
+        $pdo = self::getConnection();
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = :t AND column_name = :c');
+        $stmt->execute(['t' => $table, 'c' => $column]);
+        return (int)$stmt->fetchColumn() > 0;
+    }
 }

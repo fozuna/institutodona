@@ -8,6 +8,8 @@ use App\Controllers\DashboardController;
 use App\Controllers\AuthController;
 use App\Controllers\ClientesController;
 use App\Controllers\PilaresController;
+use App\Controllers\AgendaController;
+use App\Controllers\ConsultoresController;
 
 $route = $_GET['route'] ?? 'auth/login';
 
@@ -49,6 +51,18 @@ switch ($route) {
     case 'clientes/delete':
         (new ClientesController())->delete();
         break;
+    case 'clientes/show':
+        (new ClientesController())->show();
+        break;
+    case 'clientes/attach':
+        (new ClientesController())->attach();
+        break;
+    case 'clientes/updateAplicacao':
+        (new ClientesController())->updateAplicacao();
+        break;
+    case 'clientes/deleteAplicacao':
+        (new ClientesController())->deleteAplicacao();
+        break;
     case 'pilares/index':
         (new PilaresController())->index();
         break;
@@ -66,6 +80,27 @@ switch ($route) {
         break;
     case 'pilares/delete':
         (new PilaresController())->delete();
+        break;
+    case 'agenda/index':
+        (new AgendaController())->index();
+        break;
+    case 'consultores/index':
+        (new ConsultoresController())->index();
+        break;
+    case 'consultores/create':
+        (new ConsultoresController())->create();
+        break;
+    case 'consultores/store':
+        (new ConsultoresController())->store();
+        break;
+    case 'consultores/edit':
+        (new ConsultoresController())->edit();
+        break;
+    case 'consultores/update':
+        (new ConsultoresController())->update();
+        break;
+    case 'consultores/delete':
+        (new ConsultoresController())->delete();
         break;
     case 'auth/login':
         (new AuthController())->login();

@@ -17,12 +17,12 @@
             <tbody>
                 <?php foreach ($items as $c): ?>
                     <tr class="border-b">
-                        <td class="p-3"><?= htmlspecialchars($c['nome_empresa']) ?></td>
+                        <td class="p-3"><a class="text-brand-red hover:underline" href="index.php?route=clientes/show&id=<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['nome_empresa']) ?></a></td>
                         <td class="p-3"><?= htmlspecialchars($c['CNPJ']) ?></td>
                         <td class="p-3"><?= htmlspecialchars($c['contato']) ?></td>
                         <td class="p-3">
-                            <a class="text-brand-pink" href="index.php?route=clientes/edit&id=<?= (int)$c['id'] ?>">Editar</a>
-                            <a class="text-brand-brown ml-4" href="index.php?route=clientes/delete&id=<?= (int)$c['id'] ?>">Excluir</a>
+                            <a class="text-brand-pink icon-action" href="index.php?route=clientes/edit&id=<?= (int)$c['id'] ?>" title="Editar" aria-label="Editar"><span data-feather="edit"></span></a>
+                            <a class="text-brand-brown icon-action ml-2" href="index.php?route=clientes/delete&id=<?= (int)$c['id'] ?>" title="Excluir" aria-label="Excluir"><span data-feather="trash-2"></span></a>
                         </td>
                     </tr>
                 <?php endforeach; ?>
