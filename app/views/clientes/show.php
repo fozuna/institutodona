@@ -41,44 +41,16 @@
                 <th class="p-3">Prevista</th>
                 <th class="p-3">Consultor</th>
                 <th class="p-3">Status</th>
-                <th class="p-3">Ações</th>
               </tr>
             </thead>
             <tbody>
               <?php foreach ($apps as $a): ?>
                 <tr class="border-b">
                   <td class="p-3"><?= htmlspecialchars($a['pilar_nome']) ?></td>
-                  <td class="p-3"><?= htmlspecialchars($a['item_pilar']) ?></td>
-                  <td class="p-3">
-                    <form method="post" action="index.php?route=clientes/updateAplicacao" class="inline">
-                      <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
-                      <input type="hidden" name="id_cliente" value="<?= (int)$item['id'] ?>" />
-                      <input type="hidden" name="id_aplicacao" value="<?= (int)$a['id'] ?>" />
-                      <input type="date" name="data_prevista" value="<?= htmlspecialchars($a['data_prevista'] ?? '') ?>" />
-                  </td>
-                  <td class="p-3">
-                      <select name="consultor_id" class="text-sm">
-                        <option value="">—</option>
-                        <?php foreach ((new \App\Models\ConsultorModel())->all() as $cons): ?>
-                          <option value="<?= (int)$cons['id'] ?>" <?= ($a['consultor_id'] ?? null) === (int)$cons['id'] ? 'selected' : '' ?>><?= htmlspecialchars($cons['nome']) ?></option>
-                        <?php endforeach; ?>
-                      </select>
-                  <td class="p-3">
-                    <form method="post" action="index.php?route=clientes/updateAplicacao" class="inline">
-                      <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
-                      <input type="hidden" name="id_cliente" value="<?= (int)$item['id'] ?>" />
-                      <input type="hidden" name="id_aplicacao" value="<?= (int)$a['id'] ?>" />
-                      <select name="status" class="text-sm">
-                        <?php foreach (['A Fazer','Em Andamento','Concluído','Pendente'] as $s): ?>
-                          <option value="<?= $s ?>" <?= $a['status'] === $s ? 'selected' : '' ?>><?= $s ?></option>
-                        <?php endforeach; ?>
-                      </select>
-                      <button type="submit" class="ml-2 icon-btn icon-btn--primary" title="Salvar" aria-label="Salvar"><span data-feather="check"></span></button>
-                    </form>
-                  </td>
-                  <td class="p-3">
-                    <a class="text-brand-brown icon-action" href="index.php?route=clientes/deleteAplicacao&id_cliente=<?= (int)$item['id'] ?>&id_aplicacao=<?= (int)$a['id'] ?>" title="Remover" aria-label="Remover"><span data-feather="trash-2"></span></a>
-                  </td>
+                  <td class="p-3"><a class="text-brand-red hover:underline" href="index.php?route=aplicacoes/show&id=<?= (int)$a['id'] ?>"><?= htmlspecialchars($a['item_pilar']) ?></a></td>
+                  <td class="p-3"><?= htmlspecialchars($a['data_prevista'] ?? '') ?></td>
+                  <td class="p-3"><?= htmlspecialchars($a['consultor_nome'] ?? '') ?></td>
+                  <td class="p-3"><?= htmlspecialchars($a['status']) ?></td>
                 </tr>
               <?php endforeach; ?>
             </tbody>

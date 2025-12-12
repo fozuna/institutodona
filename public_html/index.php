@@ -10,6 +10,7 @@ use App\Controllers\ClientesController;
 use App\Controllers\PilaresController;
 use App\Controllers\AgendaController;
 use App\Controllers\ConsultoresController;
+use App\Controllers\AplicacoesController;
 
 $route = $_GET['route'] ?? 'auth/login';
 
@@ -101,6 +102,12 @@ switch ($route) {
         break;
     case 'consultores/delete':
         (new ConsultoresController())->delete();
+        break;
+    case 'aplicacoes/show':
+        (new AplicacoesController())->show();
+        break;
+    case 'aplicacoes/update':
+        (new AplicacoesController())->update();
         break;
     case 'auth/login':
         (new AuthController())->login();

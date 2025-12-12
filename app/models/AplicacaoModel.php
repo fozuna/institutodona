@@ -123,6 +123,32 @@ class AplicacaoModel extends BaseModel
         }
     }
 
+    public function find(int $idAplicacao): ?array
+    {
+        $hasConsTbl = \App\Database\Database::tableExists('consultores');
+        $hasPrevistaCol = \App\Database\Database::columnExists('aplicacoes', 'data_prevista');
+        $hasConclusaoCol = \App\Database\Database::columnExists('aplicacoes', 'data_conclusao');
+        $hasConsultorCol = \App\Database\Database::columnExists('aplicacoes', 'consultor_id');
+
+        $selectPrevista = $hasPrevistaCol ? 'a.data_prevista' : 'NULL AS data_prevista';
+        $selectConclusao = $hasConclusaoCol ? 'a.data_conclusao' : 'NULL AS data_conclusao';
+        $selectConsultorId = $hasConsultorCol ? 'a.consultor_id' : 'NULL AS consultor_id';
+        $selectCons = $hasConsTbl && $hasConsultorCol ? 'c.nome AS consultor_nome' : 'NULL AS consultor_nome';
+        $joinCons = $hasConsTbl && $hasConsultorCol ? 'LEFT JOIN consultores c ON c.id = a.consultor_id' : '';
+
+        $sql = "SELECT a.id, a.id_cliente, a.id_metodologia, a.status, $selectPrevista, $selectConclusao, $selectConsultorId,
+                       m.item_pilar, p.nome AS pilar_nome, cli.nome_empresa AS cliente_nome, $selectCons
+                FROM aplicacoes a
+                JOIN metodologias m ON m.id = a.id_metodologia
+                JOIN pilares p ON p.id = m.id_pilar
+                JOIN clientes cli ON cli.id = a.id_cliente
+                $joinCons
+                WHERE a.id = :id LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute(['id' => $idAplicacao]);
+        $row = $stmt->fetch();
+        return $row ?: null;
+    }
     public function delete(int $idAplicacao): bool
     {
         $stmt = $this->db->prepare('DELETE FROM aplicacoes WHERE id = :id');
