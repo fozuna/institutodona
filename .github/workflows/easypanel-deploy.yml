@@ -2,14 +2,21 @@ name: EasyPanel Deploy
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
+concurrency:
+  group: easypanel-deploy
+  cancel-in-progress: true
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Check secret
+        run: |
+          test -n "${{ secrets.EASYPANEL_DEPLOY_URL }}"
       - name: Trigger EasyPanel
         env:
           EASYPANEL_DEPLOY_URL: ${{ secrets.EASYPANEL_DEPLOY_URL }}
         run: |
-          if ! curl -fsS -X POST "$EASYPANEL_DEPLOY_URL"; then
-            curl -fsS -X GET "$EASYPANEL_DEPLOY_URL"
+          set -e
+          curl -fsS -X POST "$EASYPANEL_DEPLOY_URL" || curl -fsS -X GET "$EASYPANEL_DEPLOY_URL"
           fi
