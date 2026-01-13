@@ -15,7 +15,7 @@ class BaseController
     protected function requireLogin(): void
     {
         if (!isset($_SESSION['user'])) {
-            header('Location: index.php?route=auth/login');
+            header('Location: /login');
             exit;
         }
     }

@@ -5,7 +5,7 @@
     <?php if (!$metodologia): ?>
         <p>Registro não encontrado.</p>
     <?php else: ?>
-        <form method="post" action="index.php?route=metodologias/update" class="space-y-4">
+        <form method="post" action="/metodologias/update" class="space-y-4">
             <input type="hidden" name="id" value="<?= (int)$metodologia['id'] ?>" />
             <div>
                 <label class="block text-sm">Pilar</label>

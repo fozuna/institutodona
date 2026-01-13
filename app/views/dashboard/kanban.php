@@ -16,8 +16,7 @@
         </div>
 
         <?php if ($user['tipo_acesso'] === 'instituto'): ?>
-            <form method="get" class="flex items-center gap-2">
-                <input type="hidden" name="route" value="dashboard/index" />
+            <form method="get" action="/dashboard" class="flex items-center gap-2">
                 <label class="text-sm">Cliente</label>
                 <select name="cliente" class="border rounded p-2 min-w-[16rem]">
                     <option value="">-- Geral --</option>
