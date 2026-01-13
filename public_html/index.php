@@ -11,6 +11,7 @@ use App\Controllers\PilaresController;
 use App\Controllers\AgendaController;
 use App\Controllers\ConsultoresController;
 use App\Controllers\AplicacoesController;
+use App\Models\UsuarioModel;
 
 $route = $_GET['route'] ?? 'auth/login';
 
@@ -117,6 +118,37 @@ switch ($route) {
         break;
     case 'auth/logout':
         (new AuthController())->logout();
+        break;
+    case 'setup/seedAdmin':
+        $token = $_GET['t'] ?? '';
+        $expected = getenv('SEED_TOKEN') ?: '';
+        if (!$expected || !hash_equals($expected, $token)) {
+            http_response_code(403);
+            echo 'Token inválido';
+            break;
+        }
+        $email = trim($_GET['email'] ?? '');
+        $pass = $_GET['pass'] ?? '';
+        if (!$email || !$pass) {
+            http_response_code(400);
+            echo 'Parâmetros faltando';
+            break;
+        }
+        $model = new UsuarioModel();
+        $existing = $model->findByEmail($email);
+        if ($existing) {
+            echo 'EXISTS';
+            break;
+        }
+        $hash = password_hash($pass, PASSWORD_DEFAULT);
+        $model->create([
+            'nome' => 'Admin',
+            'email' => $email,
+            'senha_hash' => $hash,
+            'tipo_acesso' => 'instituto',
+            'id_cliente' => null,
+        ]);
+        echo 'OK';
         break;
     case 'dashboard/index':
     default:
