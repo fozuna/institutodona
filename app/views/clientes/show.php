@@ -21,6 +21,18 @@
           <div class="text-sm text-gray-500">Contato</div>
           <div class="font-semibold"><?= htmlspecialchars($item['contato'] ?? '') ?></div>
         </div>
+        <div>
+          <div class="text-sm text-gray-500">Tipo</div>
+          <div class="font-semibold"><?= ((int)($item['is_matriz'] ?? 1) === 1) ? 'Matriz' : 'Filial' ?></div>
+        </div>
+        <?php if (!empty($item['matriz_id'])): ?>
+        <div>
+          <div class="text-sm text-gray-500">Matriz</div>
+          <div class="font-semibold">
+            <?php foreach ($matrizes as $m): if ((int)$m['id'] === (int)$item['matriz_id']) { echo htmlspecialchars($m['nome_empresa']); break; } endforeach; ?>
+          </div>
+        </div>
+        <?php endif; ?>
       </div>
     </div>
   </div>
@@ -93,6 +105,33 @@
           </form>
         </div>
       </div>
+      <?php if ((int)($item['is_matriz'] ?? 1) === 1): ?>
+      <div class="bg-white shadow rounded mt-6">
+        <div class="px-4 py-3 border-b font-semibold">Filiais</div>
+        <div class="p-4">
+          <?php if (empty($filiais)): ?>
+            <div class="text-sm text-gray-600 mb-3">Nenhuma filial cadastrada.</div>
+          <?php else: ?>
+            <ul class="list-disc pl-5 mb-3">
+              <?php foreach ($filiais as $f): ?>
+                <li><?= htmlspecialchars($f['nome_empresa']) ?> — CNPJ: <?= htmlspecialchars($f['CNPJ']) ?></li>
+              <?php endforeach; ?>
+            </ul>
+          <?php endif; ?>
+          <form method="post" action="index.php?route=clientes/storeFilial" class="space-y-3">
+            <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+            <input type="hidden" name="matriz_id" value="<?= (int)$item['id'] ?>" />
+            <label class="block text-sm">Nome da Filial</label>
+            <input name="nome_empresa" class="border rounded p-2 w-full" required />
+            <label class="block text-sm">CNPJ</label>
+            <input name="CNPJ" class="border rounded p-2 w-full" required />
+            <label class="block text-sm">Contato</label>
+            <input name="contato" class="border rounded p-2 w-full" />
+            <button type="submit" class="icon-btn icon-btn--primary" title="Cadastrar Filial" aria-label="Cadastrar Filial"><span data-feather="plus"></span></button>
+          </form>
+        </div>
+      </div>
+      <?php endif; ?>
     </div>
   </div>
 </div>

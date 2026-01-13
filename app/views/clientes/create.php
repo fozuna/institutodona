@@ -15,6 +15,24 @@
             <label class="block text-sm">Contato</label>
             <input name="contato" class="border rounded p-2 w-full" />
         </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm">Tipo da Unidade</label>
+                <select name="tipo_unidade" class="border rounded p-2 w-full">
+                    <option value="matriz">Matriz</option>
+                    <option value="filial">Filial</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm">Matriz (quando Filial)</label>
+                <select name="matriz_id" class="border rounded p-2 w-full">
+                    <option value="">—</option>
+                    <?php foreach ((new \App\Models\ClienteModel())->matrizes() as $m): ?>
+                        <option value="<?= (int)$m['id'] ?>"><?= htmlspecialchars($m['nome_empresa']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
         <div>
             <label class="block text-sm">Logo (png, jpg, webp, svg)</label>
             <input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" />

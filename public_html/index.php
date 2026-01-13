@@ -69,6 +69,9 @@ switch ($route) {
     case 'clientes/deleteAplicacao':
         (new ClientesController())->deleteAplicacao();
         break;
+    case 'clientes/storeFilial':
+        (new ClientesController())->storeFilial();
+        break;
     case 'pilares/index':
         (new PilaresController())->index();
         break;

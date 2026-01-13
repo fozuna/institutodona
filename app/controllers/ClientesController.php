@@ -39,6 +39,11 @@ class ClientesController extends BaseController
             'CNPJ' => trim($_POST['CNPJ'] ?? ''),
             'contato' => trim($_POST['contato'] ?? ''),
         ];
+        // Matriz/Filial
+        $tipo = $_POST['tipo_unidade'] ?? 'matriz';
+        $matrizId = isset($_POST['matriz_id']) ? (int)$_POST['matriz_id'] : null;
+        $data['is_matriz'] = $tipo === 'matriz' ? 1 : 0;
+        $data['matriz_id'] = $tipo === 'filial' ? $matrizId : null;
         $data['logo_path'] = null;
         if (!empty($_FILES['logo']['name']) && is_uploaded_file($_FILES['logo']['tmp_name'])) {
             $allow = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/webp' => 'webp', 'image/svg+xml' => 'svg'];
@@ -55,10 +60,6 @@ class ClientesController extends BaseController
                     $data['logo_path'] = 'public/assets/img/clients/' . $file;
                 }
             }
-        }
-        if ($data['logo_path'] === null) {
-            $current = $this->clientes->find($id);
-            if ($current && !empty($current['logo_path'])) { $data['logo_path'] = $current['logo_path']; }
         }
         if ($data['nome_empresa'] && $data['CNPJ']) {
             $this->clientes->create($data);
@@ -85,6 +86,10 @@ class ClientesController extends BaseController
             'CNPJ' => trim($_POST['CNPJ'] ?? ''),
             'contato' => trim($_POST['contato'] ?? ''),
         ];
+        $tipo = $_POST['tipo_unidade'] ?? 'matriz';
+        $matrizId = isset($_POST['matriz_id']) ? (int)$_POST['matriz_id'] : null;
+        $data['is_matriz'] = $tipo === 'matriz' ? 1 : 0;
+        $data['matriz_id'] = $tipo === 'filial' ? $matrizId : null;
         $data['logo_path'] = null;
         if (!empty($_FILES['logo']['name']) && is_uploaded_file($_FILES['logo']['tmp_name'])) {
             $allow = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/webp' => 'webp', 'image/svg+xml' => 'svg'];
@@ -123,11 +128,34 @@ class ClientesController extends BaseController
         $apps = $apl->byCliente($id);
         $met = new MetodologiaModel();
         $metodologias = $met->all();
+        $filiais = $this->clientes->filiaisByMatriz($id);
+        $matrizes = $this->clientes->matrizes();
         $this->render('clientes/show', [
             'item' => $item,
             'apps' => $apps,
             'metodologias' => $metodologias,
+            'filiais' => $filiais,
+            'matrizes' => $matrizes,
         ]);
+    }
+
+    public function storeFilial(): void
+    {
+        $this->requireRole('instituto');
+        $csrf = $_POST['csrf'] ?? null;
+        if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
+        $matrizId = (int)($_POST['matriz_id'] ?? 0);
+        $data = [
+            'nome_empresa' => trim($_POST['nome_empresa'] ?? ''),
+            'CNPJ' => trim($_POST['CNPJ'] ?? ''),
+            'contato' => trim($_POST['contato'] ?? ''),
+            'is_matriz' => 0,
+            'matriz_id' => $matrizId ?: null,
+        ];
+        if ($data['nome_empresa'] && $data['CNPJ'] && $matrizId) {
+            $this->clientes->create($data);
+        }
+        header('Location: index.php?route=clientes/show&id=' . $matrizId);
     }
 
     public function attach(): void
