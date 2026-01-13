@@ -28,7 +28,7 @@ class AuthController extends BaseController
 
         if (!Security::verifyCsrf($csrf)) {
             http_response_code(400);
-            echo 'CSRF inválido';
+            $this->render('auth/login', ['error' => 'Sessão expirada ou CSRF inválido. Tente novamente.']);
             return;
         }
 
