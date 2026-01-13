@@ -13,6 +13,9 @@ use App\Controllers\ConsultoresController;
 use App\Controllers\AplicacoesController;
 use App\Models\UsuarioModel;
 use App\Controllers\UsuariosController;
+use App\Controllers\DepartamentosController;
+use App\Models\DepartamentoModel;
+use App\Models\ClienteModel;
 
 $route = $_GET['route'] ?? 'auth/login';
 
@@ -138,6 +141,24 @@ switch ($route) {
     case 'usuarios/delete':
         (new UsuariosController())->delete();
         break;
+    case 'departamentos/index':
+        (new DepartamentosController())->index();
+        break;
+    case 'departamentos/create':
+        (new DepartamentosController())->create();
+        break;
+    case 'departamentos/store':
+        (new DepartamentosController())->store();
+        break;
+    case 'departamentos/edit':
+        (new DepartamentosController())->edit();
+        break;
+    case 'departamentos/update':
+        (new DepartamentosController())->update();
+        break;
+    case 'departamentos/delete':
+        (new DepartamentosController())->delete();
+        break;
     case 'setup/seedAdmin':
         $token = $_GET['t'] ?? '';
         $expected = getenv('SEED_TOKEN') ?: '';
@@ -167,6 +188,33 @@ switch ($route) {
             'tipo_acesso' => 'instituto',
             'id_cliente' => null,
         ]);
+        echo 'OK';
+        break;
+    case 'setup/seedDepartamentos':
+        $token = $_GET['t'] ?? '';
+        $expected = getenv('SEED_TOKEN') ?: '';
+        if (!$expected || !hash_equals($expected, $token)) {
+            http_response_code(403);
+            echo 'Token inválido';
+            break;
+        }
+        $names = [
+            'PEÇAS','PRODUÇÃO','FINANCEIRO','DEPARTAMENTO PESSOAL','TI','COMPRAS','CONTABILIDADE',
+            'CORPORATIVO','ADMINISTRATIVO','MANUTENÇÃO','QUALIDADE','SESMT','GERAL'
+        ];
+        $deps = new DepartamentoModel();
+        $clientes = (new ClienteModel())->all();
+        $pdo = \App\Database\Database::getConnection();
+        foreach ($clientes as $c) {
+            $cid = (int)$c['id'];
+            foreach ($names as $n) {
+                $stmt = $pdo->prepare('SELECT COUNT(*) FROM departamentos WHERE cliente_id = :cid AND nome = :n');
+                $stmt->execute(['cid' => $cid, 'n' => $n]);
+                if ((int)$stmt->fetchColumn() === 0) {
+                    try { $deps->create(['nome' => $n, 'cliente_id' => $cid]); } catch (\Throwable $e) {}
+                }
+            }
+        }
         echo 'OK';
         break;
     case 'dashboard/index':

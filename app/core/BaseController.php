@@ -50,6 +50,7 @@ class BaseController
             'clientes' => 'Clientes',
             'pilares' => 'Pilares',
             'metodologias' => 'Metodologias',
+            'departamentos' => 'Departamentos',
             'agenda' => 'Agenda',
             'consultores' => 'Consultores',
             'avaliacao' => 'Avaliação',
