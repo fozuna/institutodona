@@ -31,10 +31,10 @@ $config = require $cfg;
                     </div>
                 </div>
                 <nav class="px-4 py-4 space-y-1">
-                    <a class="block px-3 py-2 rounded nav-link" href="/dashboard"><span data-feather="home" class="inline-block mr-2"></span>Dashboard</a>
-                    <a class="block px-3 py-2 rounded nav-link" href="/metodologias"><span data-feather="check-square" class="inline-block mr-2"></span>Tarefas</a>
-                    <a class="block px-3 py-2 rounded nav-link" href="/clientes"><span data-feather="users" class="inline-block mr-2"></span>Clientes</a>
-                    <a class="block px-3 py-2 rounded nav-link" href="/pilares"><span data-feather="layers" class="inline-block mr-2"></span>Pilares</a>
+                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=dashboard/index"><span data-feather="home" class="inline-block mr-2"></span>Dashboard</a>
+                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=metodologias/index"><span data-feather="check-square" class="inline-block mr-2"></span>Tarefas</a>
+                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=clientes/index"><span data-feather="users" class="inline-block mr-2"></span>Clientes</a>
+                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=pilares/index"><span data-feather="layers" class="inline-block mr-2"></span>Pilares</a>
                     <a class="block px-3 py-2 rounded nav-link" href="index.php?route=agenda/index"><span data-feather="calendar" class="inline-block mr-2"></span>Agenda</a>
                     <a class="block px-3 py-2 rounded nav-link" href="index.php?route=consultores/index"><span data-feather="users" class="inline-block mr-2"></span>Consultores</a>
                 </nav>
@@ -43,7 +43,7 @@ $config = require $cfg;
                         <span data-feather="moon"></span>
                         <span>Modo escuro</span>
                     </button>
-                    <a href="/logout" class="text-sm flex items-center gap-2">
+                    <a href="index.php?route=auth/logout" class="text-sm flex items-center gap-2">
                         <span data-feather="log-out"></span>
                         <span>Sair</span>
                     </a>

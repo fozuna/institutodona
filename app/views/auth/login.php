@@ -17,7 +17,7 @@
             <?php if (!empty($error)): ?>
                 <div class="mb-3 px-3 py-2 rounded bg-red-100 text-red-700 text-sm"><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
-            <form method="post" action="/login/do" class="space-y-4">
+            <form method="post" action="index.php?route=auth/doLogin" class="space-y-4">
                 <input type="hidden" name="csrf" value="<?= Security::csrfToken() ?>" />
                 <div>
                     <label class="block text-sm">E-mail</label>

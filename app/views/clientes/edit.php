@@ -5,7 +5,7 @@
     <?php if (!$item): ?>
         <p>Registro não encontrado.</p>
     <?php else: ?>
-        <form method="post" action="/clientes/update" class="space-y-4" enctype="multipart/form-data">
+        <form method="post" action="index.php?route=clientes/update" class="space-y-4" enctype="multipart/form-data">
             <input type="hidden" name="csrf" value="<?= Security::csrfToken() ?>" />
             <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
             <div>

@@ -35,7 +35,7 @@ class AuthController extends BaseController
         $user = $this->usuarios->findByEmail($email);
         if ($user && password_verify($senha, $user['senha_hash'])) {
             Auth::login($user);
-            header('Location: /dashboard');
+            header('Location: index.php?route=dashboard/index');
         } else {
             $this->render('auth/login', ['error' => 'Credenciais inválidas']);
         }
@@ -44,6 +44,6 @@ class AuthController extends BaseController
     public function logout(): void
     {
         Auth::logout();
-        header('Location: /login');
+        header('Location: index.php?route=auth/login');
     }
 }
