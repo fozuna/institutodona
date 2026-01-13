@@ -12,6 +12,7 @@ use App\Controllers\AgendaController;
 use App\Controllers\ConsultoresController;
 use App\Controllers\AplicacoesController;
 use App\Models\UsuarioModel;
+use App\Controllers\UsuariosController;
 
 $route = $_GET['route'] ?? 'auth/login';
 
@@ -118,6 +119,24 @@ switch ($route) {
         break;
     case 'auth/logout':
         (new AuthController())->logout();
+        break;
+    case 'usuarios/index':
+        (new UsuariosController())->index();
+        break;
+    case 'usuarios/create':
+        (new UsuariosController())->create();
+        break;
+    case 'usuarios/store':
+        (new UsuariosController())->store();
+        break;
+    case 'usuarios/edit':
+        (new UsuariosController())->edit();
+        break;
+    case 'usuarios/update':
+        (new UsuariosController())->update();
+        break;
+    case 'usuarios/delete':
+        (new UsuariosController())->delete();
         break;
     case 'setup/seedAdmin':
         $token = $_GET['t'] ?? '';

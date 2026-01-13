@@ -100,4 +100,15 @@ class ConsultorModel extends BaseModel
             return false;
         }
     }
+
+    public function linkUser(int $consultorId, int $usuarioId): bool
+    {
+        $this->ensureTable();
+        try {
+            $stmt = $this->db->prepare('UPDATE consultores SET usuario_id = :uid WHERE id = :cid');
+            return $stmt->execute(['uid' => $usuarioId, 'cid' => $consultorId]);
+        } catch (\PDOException $e) {
+            return false;
+        }
+    }
 }
