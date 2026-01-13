@@ -36,6 +36,17 @@
       </div>
     </div>
   </div>
+  <div class="mb-6">
+    <div class="bg-white shadow rounded p-4">
+      <div class="font-semibold mb-3">Estrutura Organizacional</div>
+      <div class="flex flex-wrap gap-3">
+        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=departamentos/index&cliente=<?= (int)$item['id'] ?>">Departamentos</a>
+        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=setores/index&cliente=<?= (int)$item['id'] ?>">Setores</a>
+        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=funcoes/index&cliente=<?= (int)$item['id'] ?>">Funções</a>
+        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=colaboradores/index&cliente=<?= (int)$item['id'] ?>">Colaboradores</a>
+      </div>
+    </div>
+  </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div class="lg:col-span-2">

@@ -16,6 +16,9 @@ use App\Controllers\UsuariosController;
 use App\Controllers\DepartamentosController;
 use App\Models\DepartamentoModel;
 use App\Models\ClienteModel;
+use App\Controllers\SetoresController;
+use App\Controllers\FuncoesController;
+use App\Controllers\ColaboradoresController;
 
 $route = $_GET['route'] ?? 'auth/login';
 
@@ -161,6 +164,60 @@ switch ($route) {
         break;
     case 'departamentos/delete':
         (new DepartamentosController())->delete();
+        break;
+    case 'setores/index':
+        (new SetoresController())->index();
+        break;
+    case 'setores/create':
+        (new SetoresController())->create();
+        break;
+    case 'setores/store':
+        (new SetoresController())->store();
+        break;
+    case 'setores/edit':
+        (new SetoresController())->edit();
+        break;
+    case 'setores/update':
+        (new SetoresController())->update();
+        break;
+    case 'setores/delete':
+        (new SetoresController())->delete();
+        break;
+    case 'funcoes/index':
+        (new FuncoesController())->index();
+        break;
+    case 'funcoes/create':
+        (new FuncoesController())->create();
+        break;
+    case 'funcoes/store':
+        (new FuncoesController())->store();
+        break;
+    case 'funcoes/edit':
+        (new FuncoesController())->edit();
+        break;
+    case 'funcoes/update':
+        (new FuncoesController())->update();
+        break;
+    case 'funcoes/delete':
+        (new FuncoesController())->delete();
+        break;
+    case 'colaboradores/index':
+        (new ColaboradoresController())->index();
+        break;
+    case 'colaboradores/create':
+        (new ColaboradoresController())->create();
+        break;
+    case 'colaboradores/store':
+        (new ColaboradoresController())->store();
+        break;
+    case 'colaboradores/edit':
+        (new ColaboradoresController())->edit();
+        break;
+    case 'colaboradores/update':
+        (new ColaboradoresController())->update();
+        break;
+    case 'colaboradores/delete':
+        (new ColaboradoresController())->delete();
         break;
     case 'setup/seedAdmin':
         $token = $_GET['t'] ?? '';

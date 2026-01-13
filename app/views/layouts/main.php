@@ -36,7 +36,6 @@ $config = require $cfg;
                     <a class="block px-3 py-2 rounded nav-link" href="index.php?route=clientes/index"><span data-feather="users" class="inline-block mr-2"></span>Clientes</a>
                     <a class="block px-3 py-2 rounded nav-link" href="index.php?route=usuarios/index"><span data-feather="user" class="inline-block mr-2"></span>Usuários</a>
                     <a class="block px-3 py-2 rounded nav-link" href="index.php?route=pilares/index"><span data-feather="layers" class="inline-block mr-2"></span>Pilares</a>
-                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=departamentos/index"><span data-feather="grid" class="inline-block mr-2"></span>Departamentos</a>
                     <a class="block px-3 py-2 rounded nav-link" href="index.php?route=agenda/index"><span data-feather="calendar" class="inline-block mr-2"></span>Agenda</a>
                     <a class="block px-3 py-2 rounded nav-link" href="index.php?route=consultores/index"><span data-feather="users" class="inline-block mr-2"></span>Consultores</a>
                 </nav>
