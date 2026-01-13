@@ -10,7 +10,7 @@ class AgendaController extends BaseController
 {
     public function index(): void
     {
-        $this->requireLogged();
+        $this->requireLogin();
         $aplicacoes = new AplicacaoModel();
         $items = [];
         if (Auth::isInstituto()) {
