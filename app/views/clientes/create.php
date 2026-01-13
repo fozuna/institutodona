@@ -1,6 +1,6 @@
 <?php use App\Core\Security; ?>
 <div class="p-6 max-w-xl">
-    <h1 class="text-2xl font-bold mb-4">Novo Cliente</h1>
+    <h1 class="text-2xl font-bold mb-4"><?= htmlspecialchars($pageTitle ?? 'Novo Cliente') ?></h1>
     <form method="post" action="index.php?route=clientes/store" class="space-y-4" enctype="multipart/form-data">
         <input type="hidden" name="csrf" value="<?= Security::csrfToken() ?>" />
         <div>

@@ -1,7 +1,7 @@
 <?php /** @var array|null $item */ ?>
 <?php use App\Core\Security; ?>
 <div class="p-6 max-w-xl">
-    <h1 class="text-2xl font-bold mb-4">Editar Cliente</h1>
+    <h1 class="text-2xl font-bold mb-4"><?= htmlspecialchars($pageTitle ?? 'Editar Cliente') ?></h1>
     <?php if (!$item): ?>
         <p>Registro não encontrado.</p>
     <?php else: ?>
