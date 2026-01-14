@@ -51,7 +51,7 @@ class ColaboradoresController extends BaseController
         $email = trim($_POST['email'] ?? '');
         $funcaoId = (int)($_POST['funcao_id'] ?? 0);
         $cliente = isset($_POST['cliente']) ? (int)$_POST['cliente'] : 0;
-        if ($nome && $funcaoId) { $this->colabs->create(['nome' => $nome, 'email' => $email, 'funcao_id' => $funcaoId]); }
+        if ($nome && $funcaoId) { $this->colabs->create(['nome' => $nome, 'email' => $email, 'funcao_id' => $funcaoId, 'cliente_id' => $cliente]); }
         header('Location: index.php?route=colaboradores/index' . ($cliente ? '&cliente=' . $cliente : ''));
     }
 
@@ -75,7 +75,7 @@ class ColaboradoresController extends BaseController
         $email = trim($_POST['email'] ?? '');
         $funcaoId = (int)($_POST['funcao_id'] ?? 0);
         $cliente = isset($_POST['cliente']) ? (int)$_POST['cliente'] : 0;
-        if ($id) { $this->colabs->update($id, ['nome' => $nome, 'email' => $email, 'funcao_id' => $funcaoId]); }
+        if ($id) { $this->colabs->update($id, ['nome' => $nome, 'email' => $email, 'funcao_id' => $funcaoId, 'cliente_id' => $cliente]); }
         header('Location: index.php?route=colaboradores/index' . ($cliente ? '&cliente=' . $cliente : ''));
     }
 

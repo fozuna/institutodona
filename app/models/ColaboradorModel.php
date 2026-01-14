@@ -10,21 +10,25 @@ class ColaboradorModel extends BaseModel
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 nome VARCHAR(180) NOT NULL,
                 email VARCHAR(180) NULL,
-                funcao_id INT NOT NULL
+                funcao_id INT NOT NULL,
+                cliente_id INT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+            if (!\App\Database\Database::columnExists('colaboradores', 'cliente_id')) {
+                $this->db->exec('ALTER TABLE colaboradores ADD COLUMN cliente_id INT NULL');
+            }
         } catch (\PDOException $e) {}
     }
 
     public function allByCliente(int $clienteId): array
     {
         $this->ensureTable();
-        $sql = 'SELECT col.id, col.nome, col.email, col.funcao_id,
+        $sql = 'SELECT col.id, col.nome, col.email, col.funcao_id, col.cliente_id,
                        f.nome AS funcao, s.nome AS setor, d.nome AS departamento
                 FROM colaboradores col
                 JOIN funcoes f ON f.id = col.funcao_id
                 JOIN setores s ON s.id = f.setor_id
                 JOIN departamentos d ON d.id = s.departamento_id
-                WHERE d.cliente_id = :cid
+                WHERE col.cliente_id = :cid
                 ORDER BY d.nome, s.nome, f.nome, col.nome';
         $stmt = $this->db->prepare($sql);
         $stmt->execute(['cid' => $clienteId]);
@@ -43,16 +47,16 @@ class ColaboradorModel extends BaseModel
     public function create(array $data): int
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('INSERT INTO colaboradores (nome, email, funcao_id) VALUES (:nome, :email, :funcao_id)');
-        $stmt->execute(['nome' => $data['nome'], 'email' => $data['email'] ?? null, 'funcao_id' => (int)$data['funcao_id']]);
+        $stmt = $this->db->prepare('INSERT INTO colaboradores (nome, email, funcao_id, cliente_id) VALUES (:nome, :email, :funcao_id, :cliente_id)');
+        $stmt->execute(['nome' => $data['nome'], 'email' => $data['email'] ?? null, 'funcao_id' => (int)$data['funcao_id'], 'cliente_id' => $data['cliente_id'] ?? null]);
         return (int)$this->db->lastInsertId();
     }
 
     public function update(int $id, array $data): bool
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('UPDATE colaboradores SET nome = :nome, email = :email, funcao_id = :funcao_id WHERE id = :id');
-        return $stmt->execute(['nome' => $data['nome'], 'email' => $data['email'] ?? null, 'funcao_id' => (int)$data['funcao_id'], 'id' => $id]);
+        $stmt = $this->db->prepare('UPDATE colaboradores SET nome = :nome, email = :email, funcao_id = :funcao_id, cliente_id = :cliente_id WHERE id = :id');
+        return $stmt->execute(['nome' => $data['nome'], 'email' => $data['email'] ?? null, 'funcao_id' => (int)$data['funcao_id'], 'cliente_id' => $data['cliente_id'] ?? null, 'id' => $id]);
     }
 
     public function delete(int $id): bool

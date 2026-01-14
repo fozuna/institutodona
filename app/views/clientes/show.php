@@ -85,7 +85,10 @@
 
     <div>
       <div class="bg-white shadow rounded">
-        <div class="px-4 py-3 border-b font-semibold">Aplicar nova tarefa</div>
+        <div class="px-4 py-3 border-b font-semibold flex justify-between items-center">
+          <span>Aplicar nova tarefa</span>
+          <a class="px-3 py-1 rounded bg-gray-200 text-brand-brown" href="index.php?route=clientes/index">Voltar</a>
+        </div>
         <div class="p-4">
           <form method="post" action="index.php?route=clientes/attach" class="space-y-3">
             <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
@@ -125,7 +128,7 @@
           <?php else: ?>
             <ul class="list-disc pl-5 mb-3">
               <?php foreach ($filiais as $f): ?>
-                <li><?= htmlspecialchars($f['nome_empresa']) ?> — CNPJ: <?= htmlspecialchars($f['CNPJ']) ?></li>
+                <li><a class="text-brand-red hover:underline" href="index.php?route=clientes/show&id=<?= (int)$f['id'] ?>"><?= htmlspecialchars($f['nome_empresa']) ?></a> — CNPJ: <?= htmlspecialchars($f['CNPJ']) ?></li>
               <?php endforeach; ?>
             </ul>
           <?php endif; ?>

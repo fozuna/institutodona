@@ -19,7 +19,7 @@ class ClientesController extends BaseController
     public function index(): void
     {
         $this->requireRole('instituto');
-        $items = $this->clientes->all();
+        $items = $this->clientes->matrizes();
         $this->render('clientes/index', ['items' => $items]);
     }
 
