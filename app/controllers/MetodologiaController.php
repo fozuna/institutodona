@@ -33,6 +33,7 @@ class MetodologiaController extends BaseController
         $idPilar = (int)($_POST['id_pilar'] ?? 0);
         $itemPilar = trim($_POST['item_pilar'] ?? '');
         $tipo = $_POST['tipo'] ?? 'tarefa';
+        $observacoes = trim($_POST['observacoes'] ?? '');
         $arquivoPath = null;
         if (!empty($_FILES['arquivo']['name']) && is_uploaded_file($_FILES['arquivo']['tmp_name'])) {
             $allow = [
@@ -57,12 +58,17 @@ class MetodologiaController extends BaseController
                 }
             }
         }
+        if ($tipo === 'manual' && !$arquivoPath) {
+            header('Location: index.php?route=metodologias/create&err=arquivo_obrigatorio');
+            return;
+        }
         if ($idPilar && $itemPilar !== '') {
             $this->model->create([
                 'id_pilar' => $idPilar,
                 'item_pilar' => $itemPilar,
                 'tipo' => $tipo,
-                'arquivo_path' => $arquivoPath
+                'arquivo_path' => $arquivoPath,
+                'observacoes' => $observacoes
             ]);
         }
         header('Location: index.php?route=metodologias/index');
@@ -82,6 +88,7 @@ class MetodologiaController extends BaseController
         $idPilar = (int)($_POST['id_pilar'] ?? 0);
         $itemPilar = trim($_POST['item_pilar'] ?? '');
         $tipo = $_POST['tipo'] ?? 'tarefa';
+        $observacoes = trim($_POST['observacoes'] ?? '');
         $current = $this->model->find($id);
         $arquivoPath = $current['arquivo_path'] ?? null;
         if (!empty($_FILES['arquivo']['name']) && is_uploaded_file($_FILES['arquivo']['tmp_name'])) {
@@ -107,12 +114,17 @@ class MetodologiaController extends BaseController
                 }
             }
         }
+        if ($tipo === 'manual' && !$arquivoPath) {
+            header('Location: index.php?route=metodologias/edit&id=' . $id . '&err=arquivo_obrigatorio');
+            return;
+        }
         if ($id && $idPilar && $itemPilar !== '') {
             $this->model->update($id, [
                 'id_pilar' => $idPilar,
                 'item_pilar' => $itemPilar,
                 'tipo' => $tipo,
-                'arquivo_path' => $arquivoPath
+                'arquivo_path' => $arquivoPath,
+                'observacoes' => $observacoes
             ]);
         }
         header('Location: index.php?route=metodologias/index');

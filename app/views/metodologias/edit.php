@@ -36,6 +36,10 @@
                 <input type="file" name="arquivo" class="border rounded p-2 w-full" />
                 <div class="text-xs text-gray-500 mt-1">PDF, DOC, DOCX, XLS, XLSX ou TXT</div>
             </div>
+            <div>
+                <label class="block text-sm">Observações (opcional)</label>
+                <textarea name="observacoes" class="border rounded p-2 w-full" rows="4"><?= htmlspecialchars($metodologia['observacoes'] ?? '') ?></textarea>
+            </div>
             <button class="icon-btn icon-btn--primary" type="submit" title="Salvar" aria-label="Salvar"><span data-feather="check"></span></button>
         </form>
     <?php endif; ?>

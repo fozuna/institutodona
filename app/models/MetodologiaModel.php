@@ -12,6 +12,9 @@ class MetodologiaModel extends BaseModel
             if (!\App\Database\Database::columnExists('metodologias', 'arquivo_path')) {
                 $this->db->exec('ALTER TABLE metodologias ADD COLUMN arquivo_path VARCHAR(255) NULL');
             }
+            if (!\App\Database\Database::columnExists('metodologias', 'observacoes')) {
+                $this->db->exec('ALTER TABLE metodologias ADD COLUMN observacoes TEXT NULL');
+            }
         } catch (\PDOException $e) {
         }
     }
@@ -19,14 +22,14 @@ class MetodologiaModel extends BaseModel
     public function all(): array
     {
         $this->ensureColumns();
-        $stmt = $this->db->query('SELECT m.id, m.id_pilar, m.item_pilar, m.tipo, m.arquivo_path, p.nome AS pilar_nome FROM metodologias m JOIN pilares p ON p.id = m.id_pilar ORDER BY p.nome, m.item_pilar');
+        $stmt = $this->db->query('SELECT m.id, m.id_pilar, m.item_pilar, m.tipo, m.arquivo_path, m.observacoes, p.nome AS pilar_nome FROM metodologias m JOIN pilares p ON p.id = m.id_pilar ORDER BY p.nome, m.item_pilar');
         return $stmt->fetchAll();
     }
 
     public function find(int $id): ?array
     {
         $this->ensureColumns();
-        $stmt = $this->db->prepare('SELECT id, id_pilar, item_pilar, tipo, arquivo_path FROM metodologias WHERE id = :id');
+        $stmt = $this->db->prepare('SELECT id, id_pilar, item_pilar, tipo, arquivo_path, observacoes FROM metodologias WHERE id = :id');
         $stmt->execute(['id' => $id]);
         $row = $stmt->fetch();
         return $row ?: null;
@@ -35,12 +38,13 @@ class MetodologiaModel extends BaseModel
     public function create(array $data): int
     {
         $this->ensureColumns();
-        $stmt = $this->db->prepare('INSERT INTO metodologias (id_pilar, item_pilar, tipo, arquivo_path) VALUES (:id_pilar, :item_pilar, :tipo, :arquivo_path)');
+        $stmt = $this->db->prepare('INSERT INTO metodologias (id_pilar, item_pilar, tipo, arquivo_path, observacoes) VALUES (:id_pilar, :item_pilar, :tipo, :arquivo_path, :observacoes)');
         $stmt->execute([
             'id_pilar' => $data['id_pilar'],
             'item_pilar' => $data['item_pilar'],
             'tipo' => $data['tipo'] ?? 'tarefa',
             'arquivo_path' => $data['arquivo_path'] ?? null,
+            'observacoes' => $data['observacoes'] ?? null,
         ]);
         return (int)$this->db->lastInsertId();
     }
@@ -48,12 +52,13 @@ class MetodologiaModel extends BaseModel
     public function update(int $id, array $data): bool
     {
         $this->ensureColumns();
-        $stmt = $this->db->prepare('UPDATE metodologias SET id_pilar = :id_pilar, item_pilar = :item_pilar, tipo = :tipo, arquivo_path = :arquivo_path WHERE id = :id');
+        $stmt = $this->db->prepare('UPDATE metodologias SET id_pilar = :id_pilar, item_pilar = :item_pilar, tipo = :tipo, arquivo_path = :arquivo_path, observacoes = :observacoes WHERE id = :id');
         return $stmt->execute([
             'id_pilar' => $data['id_pilar'],
             'item_pilar' => $data['item_pilar'],
             'tipo' => $data['tipo'] ?? 'tarefa',
             'arquivo_path' => $data['arquivo_path'] ?? null,
+            'observacoes' => $data['observacoes'] ?? null,
             'id' => $id,
         ]);
     }
