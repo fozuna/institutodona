@@ -9,6 +9,8 @@ class AplicacaoModel extends BaseModel
         $hasPrevistaCol = \App\Database\Database::columnExists('aplicacoes', 'data_prevista');
         $hasConclusaoCol = \App\Database\Database::columnExists('aplicacoes', 'data_conclusao');
         $hasConsultorCol = \App\Database\Database::columnExists('aplicacoes', 'consultor_id');
+        $hasTipoCol = \App\Database\Database::columnExists('metodologias', 'tipo');
+        $hasArquivoCol = \App\Database\Database::columnExists('metodologias', 'arquivo_path');
 
         $selectPrevista = $hasPrevistaCol ? 'a.data_prevista' : 'NULL AS data_prevista';
         $selectConclusao = $hasConclusaoCol ? 'a.data_conclusao' : 'NULL AS data_conclusao';
@@ -16,9 +18,11 @@ class AplicacaoModel extends BaseModel
         $selectCons = $hasConsTbl && $hasConsultorCol ? 'c.nome AS consultor_nome' : 'NULL AS consultor_nome';
         $joinCons = $hasConsTbl && $hasConsultorCol ? 'LEFT JOIN consultores c ON c.id = a.consultor_id' : '';
         $order = $hasPrevistaCol ? 'ORDER BY a.data_prevista IS NULL, a.data_prevista, p.nome' : 'ORDER BY p.nome';
+        $selectTipo = $hasTipoCol ? 'm.tipo' : 'NULL AS tipo';
+        $selectArquivo = $hasArquivoCol ? 'm.arquivo_path' : 'NULL AS arquivo_path';
 
         $sql = "SELECT a.id, a.status, a.id_metodologia, a.id_cliente, $selectPrevista, $selectConclusao, $selectConsultorId,
-                       m.item_pilar, m.tipo, m.arquivo_path, p.nome AS pilar_nome, cli.nome_empresa AS cliente_nome, $selectCons
+                       m.item_pilar, $selectTipo, $selectArquivo, p.nome AS pilar_nome, cli.nome_empresa AS cliente_nome, $selectCons
                 FROM aplicacoes a
                 JOIN metodologias m ON m.id = a.id_metodologia
                 JOIN pilares p ON p.id = m.id_pilar
@@ -37,6 +41,8 @@ class AplicacaoModel extends BaseModel
         $hasPrevistaCol = \App\Database\Database::columnExists('aplicacoes', 'data_prevista');
         $hasConclusaoCol = \App\Database\Database::columnExists('aplicacoes', 'data_conclusao');
         $hasConsultorCol = \App\Database\Database::columnExists('aplicacoes', 'consultor_id');
+        $hasTipoCol = \App\Database\Database::columnExists('metodologias', 'tipo');
+        $hasArquivoCol = \App\Database\Database::columnExists('metodologias', 'arquivo_path');
 
         $selectPrevista = $hasPrevistaCol ? 'a.data_prevista' : 'NULL AS data_prevista';
         $selectConclusao = $hasConclusaoCol ? 'a.data_conclusao' : 'NULL AS data_conclusao';
@@ -44,9 +50,11 @@ class AplicacaoModel extends BaseModel
         $selectCons = $hasConsTbl && $hasConsultorCol ? 'c.nome AS consultor_nome' : 'NULL AS consultor_nome';
         $joinCons = $hasConsTbl && $hasConsultorCol ? 'LEFT JOIN consultores c ON c.id = a.consultor_id' : '';
         $order = $hasPrevistaCol ? 'ORDER BY a.data_prevista IS NULL, a.data_prevista, cli.nome_empresa, p.nome' : 'ORDER BY cli.nome_empresa, p.nome';
+        $selectTipo = $hasTipoCol ? 'm.tipo' : 'NULL AS tipo';
+        $selectArquivo = $hasArquivoCol ? 'm.arquivo_path' : 'NULL AS arquivo_path';
 
         $sql = "SELECT a.id, a.status, a.id_metodologia, a.id_cliente, $selectPrevista, $selectConclusao, $selectConsultorId,
-                       m.item_pilar, m.tipo, m.arquivo_path, p.nome AS pilar_nome, cli.nome_empresa AS cliente_nome, $selectCons
+                       m.item_pilar, $selectTipo, $selectArquivo, p.nome AS pilar_nome, cli.nome_empresa AS cliente_nome, $selectCons
                 FROM aplicacoes a
                 JOIN metodologias m ON m.id = a.id_metodologia
                 JOIN pilares p ON p.id = m.id_pilar
@@ -129,15 +137,19 @@ class AplicacaoModel extends BaseModel
         $hasPrevistaCol = \App\Database\Database::columnExists('aplicacoes', 'data_prevista');
         $hasConclusaoCol = \App\Database\Database::columnExists('aplicacoes', 'data_conclusao');
         $hasConsultorCol = \App\Database\Database::columnExists('aplicacoes', 'consultor_id');
+        $hasTipoCol = \App\Database\Database::columnExists('metodologias', 'tipo');
+        $hasArquivoCol = \App\Database\Database::columnExists('metodologias', 'arquivo_path');
 
         $selectPrevista = $hasPrevistaCol ? 'a.data_prevista' : 'NULL AS data_prevista';
         $selectConclusao = $hasConclusaoCol ? 'a.data_conclusao' : 'NULL AS data_conclusao';
         $selectConsultorId = $hasConsultorCol ? 'a.consultor_id' : 'NULL AS consultor_id';
         $selectCons = $hasConsTbl && $hasConsultorCol ? 'c.nome AS consultor_nome' : 'NULL AS consultor_nome';
         $joinCons = $hasConsTbl && $hasConsultorCol ? 'LEFT JOIN consultores c ON c.id = a.consultor_id' : '';
+        $selectTipo = $hasTipoCol ? 'm.tipo' : 'NULL AS tipo';
+        $selectArquivo = $hasArquivoCol ? 'm.arquivo_path' : 'NULL AS arquivo_path';
 
         $sql = "SELECT a.id, a.id_cliente, a.id_metodologia, a.status, $selectPrevista, $selectConclusao, $selectConsultorId,
-                       m.item_pilar, m.tipo, m.arquivo_path, p.nome AS pilar_nome, cli.nome_empresa AS cliente_nome, $selectCons
+                       m.item_pilar, $selectTipo, $selectArquivo, p.nome AS pilar_nome, cli.nome_empresa AS cliente_nome, $selectCons
                 FROM aplicacoes a
                 JOIN metodologias m ON m.id = a.id_metodologia
                 JOIN pilares p ON p.id = m.id_pilar
