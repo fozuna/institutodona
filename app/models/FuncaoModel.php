@@ -18,13 +18,26 @@ class FuncaoModel extends BaseModel
     public function allByCliente(int $clienteId): array
     {
         $this->ensureTable();
-        $sql = 'SELECT f.id, f.nome, f.setor_id, s.nome AS setor, d.nome AS departamento
-                FROM funcoes f JOIN setores s ON s.id = f.setor_id
-                JOIN departamentos d ON d.id = s.departamento_id
-                WHERE d.cliente_id = :cid ORDER BY d.nome, s.nome, f.nome';
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute(['cid' => $clienteId]);
-        return $stmt->fetchAll();
+        try {
+            if (!\App\Database\Database::tableExists('departamentos')) {
+                (new \App\Models\DepartamentoModel())->all();
+            }
+            if (!\App\Database\Database::tableExists('setores')) {
+                (new \App\Models\SetorModel())->all();
+            }
+        } catch (\PDOException $e) {
+        }
+        try {
+            $sql = 'SELECT f.id, f.nome, f.setor_id, s.nome AS setor, d.nome AS departamento
+                    FROM funcoes f JOIN setores s ON s.id = f.setor_id
+                    JOIN departamentos d ON d.id = s.departamento_id
+                    WHERE d.cliente_id = :cid ORDER BY d.nome, s.nome, f.nome';
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute(['cid' => $clienteId]);
+            return $stmt->fetchAll();
+        } catch (\PDOException $e) {
+            return [];
+        }
     }
 
     public function find(int $id): ?array
