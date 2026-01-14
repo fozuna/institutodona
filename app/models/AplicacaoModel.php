@@ -3,6 +3,18 @@ namespace App\Models;
 
 class AplicacaoModel extends BaseModel
 {
+    public function updateAssignment(int $idAplicacao, ?int $funcaoId): bool
+    {
+        try {
+            if (!\App\Database\Database::columnExists('aplicacoes', 'funcao_id')) {
+                $this->db->exec('ALTER TABLE aplicacoes ADD COLUMN funcao_id INT NULL');
+            }
+            $stmt = $this->db->prepare('UPDATE aplicacoes SET funcao_id = :funcao_id WHERE id = :id');
+            return $stmt->execute(['funcao_id' => $funcaoId, 'id' => $idAplicacao]);
+        } catch (\PDOException $e) {
+            return false;
+        }
+    }
     public function byCliente(int $idCliente): array
     {
         $hasConsTbl = \App\Database\Database::tableExists('consultores');

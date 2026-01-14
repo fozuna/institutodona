@@ -5,6 +5,7 @@ use App\Core\BaseController;
 use App\Core\Security;
 use App\Models\AplicacaoModel;
 use App\Models\ConsultorModel;
+use App\Models\FuncaoModel;
 
 class AplicacoesController extends BaseController
 {
@@ -21,9 +22,11 @@ class AplicacoesController extends BaseController
         $id = (int)($_GET['id'] ?? 0);
         $app = $this->aplicacoes->find($id);
         $consultores = (new ConsultorModel())->all();
+        $funcoes = $app ? (new FuncaoModel())->allByCliente((int)$app['id_cliente']) : [];
         $this->render('aplicacoes/show', [
             'app' => $app,
             'consultores' => $consultores,
+            'funcoes' => $funcoes,
         ]);
     }
 
@@ -36,9 +39,11 @@ class AplicacoesController extends BaseController
         $status = $_POST['status'] ?? 'A Fazer';
         $dataPrevista = $_POST['data_prevista'] ?? null;
         $consultorId = isset($_POST['consultor_id']) ? (int)$_POST['consultor_id'] : null;
+        $funcaoId = isset($_POST['funcao_id']) ? (int)$_POST['funcao_id'] : null;
         if ($idAplicacao) {
             $this->aplicacoes->updateStatus($idAplicacao, $status);
             $this->aplicacoes->updateSchedule($idAplicacao, $dataPrevista, $consultorId);
+            $this->aplicacoes->updateAssignment($idAplicacao, $funcaoId);
         }
         header('Location: index.php?route=aplicacoes/show&id=' . $idAplicacao);
     }

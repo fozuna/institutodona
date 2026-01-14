@@ -62,6 +62,7 @@
               <tr class="text-left border-b">
                 <th class="p-3">Pilar</th>
                 <th class="p-3">Tarefa</th>
+                <th class="p-3">Função</th>
                 <th class="p-3">Manual</th>
                 <th class="p-3">Prevista</th>
                 <th class="p-3">Consultor</th>
@@ -73,6 +74,7 @@
                 <tr class="border-b">
                   <td class="p-3"><?= htmlspecialchars($a['pilar_nome']) ?></td>
                   <td class="p-3"><a class="text-brand-red hover:underline" href="index.php?route=aplicacoes/show&id=<?= (int)$a['id'] ?>"><?= htmlspecialchars($a['item_pilar']) ?></a></td>
+                  <td class="p-3"><?= htmlspecialchars($a['funcao_nome'] ?? '') ?></td>
                   <td class="p-3">
                     <?php if (($a['tipo'] ?? 'tarefa') === 'manual' && !empty($a['arquivo_path'])): ?>
                       <a class="text-brand-red hover:underline" target="_blank" href="../<?= htmlspecialchars($a['arquivo_path']) ?>">baixar</a>
@@ -108,6 +110,13 @@
                 <option value="<?= (int)$m['id'] ?>">[<?= htmlspecialchars($m['pilar_nome']) ?>] <?= htmlspecialchars($m['item_pilar']) ?></option>
               <?php endforeach; ?>
             </select>
+            <label class="block text-sm">Função</label>
+            <select name="funcao_id" class="w-full" required>
+              <option value="">— selecione —</option>
+              <?php foreach ($funcoes as $fn): ?>
+                <option value="<?= (int)$fn['id'] ?>"><?= htmlspecialchars($fn['departamento'] . ' / ' . $fn['setor'] . ' / ' . $fn['nome']) ?></option>
+              <?php endforeach; ?>
+            </select>
             <label class="block text-sm">Data prevista</label>
             <input type="date" name="data_prevista" class="w-full" />
             <label class="block text-sm">Consultor</label>
@@ -125,6 +134,30 @@
               <option value="Pendente">Pendente</option>
             </select>
             <button type="submit" class="icon-btn icon-btn--primary" title="Aplicar" aria-label="Aplicar"><span data-feather="plus"></span></button>
+          </form>
+        </div>
+      </div>
+      <div class="bg-white shadow rounded mt-6">
+        <div class="px-4 py-3 border-b font-semibold">Criar nova tarefa</div>
+        <div class="p-4">
+          <form method="post" action="index.php?route=metodologias/store" class="space-y-3" enctype="multipart/form-data">
+            <label class="block text-sm">Pilar</label>
+            <select name="id_pilar" class="w-full" required>
+              <?php foreach ($pilares as $p): ?>
+                <option value="<?= (int)$p['id'] ?>"><?= htmlspecialchars($p['nome']) ?></option>
+              <?php endforeach; ?>
+            </select>
+            <label class="block text-sm">Item do Pilar</label>
+            <input name="item_pilar" class="border rounded p-2 w-full" required />
+            <label class="block text-sm">Tipo</label>
+            <select name="tipo" class="w-full">
+              <option value="tarefa">Tarefa</option>
+              <option value="manual">Manual</option>
+            </select>
+            <label class="block text-sm">Arquivo (opcional)</label>
+            <input type="file" name="arquivo" class="border rounded p-2 w-full" />
+            <div class="text-xs text-gray-500">PDF, DOC, DOCX, XLS, XLSX ou TXT</div>
+            <button type="submit" class="icon-btn icon-btn--primary" title="Criar" aria-label="Criar"><span data-feather="check"></span></button>
           </form>
         </div>
       </div>

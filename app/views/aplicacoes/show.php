@@ -1,4 +1,4 @@
-<?php /** @var array $app */ /** @var array $consultores */ ?>
+<?php /** @var array $app */ /** @var array $consultores */ /** @var array $funcoes */ ?>
 <div class="p-6 max-w-3xl">
   <h1 class="text-2xl font-bold text-brand-black mb-2">Editar Tarefa</h1>
   <?php if (!$app): ?>
@@ -43,6 +43,15 @@
           <select name="status">
             <?php foreach (['A Fazer','Em Andamento','Concluído','Pendente'] as $s): ?>
               <option value="<?= $s ?>" <?= ($app['status'] ?? '') === $s ? 'selected' : '' ?>><?= $s ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Função</label>
+          <select name="funcao_id" required>
+            <option value="">— selecione —</option>
+            <?php foreach ($funcoes as $fn): ?>
+              <option value="<?= (int)$fn['id'] ?>" <?= ((int)($app['funcao_id'] ?? 0) === (int)$fn['id']) ? 'selected' : '' ?>><?= htmlspecialchars(($fn['departamento'] ?? '') . ' / ' . ($fn['setor'] ?? '') . ' / ' . $fn['nome']) ?></option>
             <?php endforeach; ?>
           </select>
         </div>

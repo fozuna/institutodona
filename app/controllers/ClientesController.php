@@ -6,6 +6,8 @@ use App\Core\Security;
 use App\Models\ClienteModel;
 use App\Models\AplicacaoModel;
 use App\Models\MetodologiaModel;
+use App\Models\PilarModel;
+use App\Models\FuncaoModel;
 
 class ClientesController extends BaseController
 {
@@ -128,12 +130,16 @@ class ClientesController extends BaseController
         $apps = $apl->byCliente($id);
         $met = new MetodologiaModel();
         $metodologias = $met->all();
+        $pilares = (new PilarModel())->all();
+        $funcoes = (new FuncaoModel())->allByCliente($id);
         $filiais = $this->clientes->filiaisByMatriz($id);
         $matrizes = $this->clientes->matrizes();
         $this->render('clientes/show', [
             'item' => $item,
             'apps' => $apps,
             'metodologias' => $metodologias,
+            'pilares' => $pilares,
+            'funcoes' => $funcoes,
             'filiais' => $filiais,
             'matrizes' => $matrizes,
         ]);
@@ -168,8 +174,11 @@ class ClientesController extends BaseController
         $status = $_POST['status'] ?? 'A Fazer';
         $consultorId = isset($_POST['consultor_id']) ? (int)$_POST['consultor_id'] : null;
         $dataPrevista = $_POST['data_prevista'] ?? null;
+        $funcaoId = isset($_POST['funcao_id']) ? (int)$_POST['funcao_id'] : null;
+        if (!$funcaoId) { http_response_code(400); echo 'Função é obrigatória'; return; }
         if ($idCliente && $idMetodologia) {
-            (new AplicacaoModel())->create($idCliente, $idMetodologia, $status, $consultorId, $dataPrevista);
+            $aplId = (new AplicacaoModel())->create($idCliente, $idMetodologia, $status, $consultorId, $dataPrevista);
+            (new AplicacaoModel())->updateAssignment($aplId, $funcaoId);
         }
         header('Location: index.php?route=clientes/show&id=' . $idCliente);
     }
@@ -184,9 +193,11 @@ class ClientesController extends BaseController
         $status = $_POST['status'] ?? 'A Fazer';
         $dataPrevista = $_POST['data_prevista'] ?? null;
         $consultorId = isset($_POST['consultor_id']) ? (int)$_POST['consultor_id'] : null;
+        $funcaoId = isset($_POST['funcao_id']) ? (int)$_POST['funcao_id'] : null;
         if ($idAplicacao) {
             (new AplicacaoModel())->updateStatus($idAplicacao, $status);
             (new AplicacaoModel())->updateSchedule($idAplicacao, $dataPrevista, $consultorId);
+            (new AplicacaoModel())->updateAssignment($idAplicacao, $funcaoId);
         }
         header('Location: index.php?route=clientes/show&id=' . $idCliente);
     }
