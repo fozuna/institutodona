@@ -61,6 +61,9 @@
                                   <?php endif; ?>
                                 </div>
                                 <div class="font-medium mb-1"><?= htmlspecialchars($card['item_pilar']) ?></div>
+                                <?php if (($card['tipo'] ?? 'tarefa') === 'manual' && !empty($card['arquivo_path'])): ?>
+                                  <div class="text-xs"><a class="text-brand-red hover:underline" target="_blank" href="../<?= htmlspecialchars($card['arquivo_path']) ?>">manual</a></div>
+                                <?php endif; ?>
                                 <?php if (!empty($card['cliente_nome'])): ?>
                                   <div class="text-xs text-gray-600">Cliente: <?= htmlspecialchars($card['cliente_nome']) ?></div>
                                 <?php endif; ?>

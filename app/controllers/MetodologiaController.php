@@ -32,8 +32,38 @@ class MetodologiaController extends BaseController
     {
         $idPilar = (int)($_POST['id_pilar'] ?? 0);
         $itemPilar = trim($_POST['item_pilar'] ?? '');
+        $tipo = $_POST['tipo'] ?? 'tarefa';
+        $arquivoPath = null;
+        if (!empty($_FILES['arquivo']['name']) && is_uploaded_file($_FILES['arquivo']['tmp_name'])) {
+            $allow = [
+                'application/pdf' => 'pdf',
+                'application/msword' => 'doc',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+                'application/vnd.ms-excel' => 'xls',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+                'text/plain' => 'txt'
+            ];
+            $type = $_FILES['arquivo']['type'] ?? '';
+            $ext = $allow[$type] ?? null;
+            if ($ext) {
+                $dir = __DIR__ . '/../../public/assets/files/metodologias';
+                if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+                $safe = preg_replace('/[^a-zA-Z0-9_-]+/', '-', strtolower($itemPilar));
+                $name = $safe ? $safe : 'manual';
+                $file = $name . '-' . uniqid() . '.' . $ext;
+                $dest = $dir . '/' . $file;
+                if (@move_uploaded_file($_FILES['arquivo']['tmp_name'], $dest)) {
+                    $arquivoPath = 'public/assets/files/metodologias/' . $file;
+                }
+            }
+        }
         if ($idPilar && $itemPilar !== '') {
-            $this->model->create(['id_pilar' => $idPilar, 'item_pilar' => $itemPilar]);
+            $this->model->create([
+                'id_pilar' => $idPilar,
+                'item_pilar' => $itemPilar,
+                'tipo' => $tipo,
+                'arquivo_path' => $arquivoPath
+            ]);
         }
         header('Location: index.php?route=metodologias/index');
     }
@@ -51,8 +81,39 @@ class MetodologiaController extends BaseController
         $id = (int)($_POST['id'] ?? 0);
         $idPilar = (int)($_POST['id_pilar'] ?? 0);
         $itemPilar = trim($_POST['item_pilar'] ?? '');
+        $tipo = $_POST['tipo'] ?? 'tarefa';
+        $current = $this->model->find($id);
+        $arquivoPath = $current['arquivo_path'] ?? null;
+        if (!empty($_FILES['arquivo']['name']) && is_uploaded_file($_FILES['arquivo']['tmp_name'])) {
+            $allow = [
+                'application/pdf' => 'pdf',
+                'application/msword' => 'doc',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+                'application/vnd.ms-excel' => 'xls',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+                'text/plain' => 'txt'
+            ];
+            $type = $_FILES['arquivo']['type'] ?? '';
+            $ext = $allow[$type] ?? null;
+            if ($ext) {
+                $dir = __DIR__ . '/../../public/assets/files/metodologias';
+                if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+                $safe = preg_replace('/[^a-zA-Z0-9_-]+/', '-', strtolower($itemPilar));
+                $name = $safe ? $safe : 'manual';
+                $file = $name . '-' . uniqid() . '.' . $ext;
+                $dest = $dir . '/' . $file;
+                if (@move_uploaded_file($_FILES['arquivo']['tmp_name'], $dest)) {
+                    $arquivoPath = 'public/assets/files/metodologias/' . $file;
+                }
+            }
+        }
         if ($id && $idPilar && $itemPilar !== '') {
-            $this->model->update($id, ['id_pilar' => $idPilar, 'item_pilar' => $itemPilar]);
+            $this->model->update($id, [
+                'id_pilar' => $idPilar,
+                'item_pilar' => $itemPilar,
+                'tipo' => $tipo,
+                'arquivo_path' => $arquivoPath
+            ]);
         }
         header('Location: index.php?route=metodologias/index');
     }

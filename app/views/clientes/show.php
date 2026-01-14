@@ -44,6 +44,7 @@
         <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=setores/index&cliente=<?= (int)$item['id'] ?>">Setores</a>
         <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=funcoes/index&cliente=<?= (int)$item['id'] ?>">Funções</a>
         <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=colaboradores/index&cliente=<?= (int)$item['id'] ?>">Colaboradores</a>
+        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=dashboard/index&cliente=<?= (int)$item['id'] ?>">Tarefas</a>
       </div>
     </div>
   </div>
@@ -61,6 +62,7 @@
               <tr class="text-left border-b">
                 <th class="p-3">Pilar</th>
                 <th class="p-3">Tarefa</th>
+                <th class="p-3">Manual</th>
                 <th class="p-3">Prevista</th>
                 <th class="p-3">Consultor</th>
                 <th class="p-3">Status</th>
@@ -71,6 +73,13 @@
                 <tr class="border-b">
                   <td class="p-3"><?= htmlspecialchars($a['pilar_nome']) ?></td>
                   <td class="p-3"><a class="text-brand-red hover:underline" href="index.php?route=aplicacoes/show&id=<?= (int)$a['id'] ?>"><?= htmlspecialchars($a['item_pilar']) ?></a></td>
+                  <td class="p-3">
+                    <?php if (($a['tipo'] ?? 'tarefa') === 'manual' && !empty($a['arquivo_path'])): ?>
+                      <a class="text-brand-red hover:underline" target="_blank" href="../<?= htmlspecialchars($a['arquivo_path']) ?>">baixar</a>
+                    <?php else: ?>
+                      —
+                    <?php endif; ?>
+                  </td>
                   <td class="p-3"><?= htmlspecialchars($a['data_prevista'] ?? '') ?></td>
                   <td class="p-3"><?= htmlspecialchars($a['consultor_nome'] ?? '') ?></td>
                   <td class="p-3"><?= htmlspecialchars($a['status']) ?></td>

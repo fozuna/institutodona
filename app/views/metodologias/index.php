@@ -10,6 +10,8 @@
                 <tr class="text-left border-b">
                     <th class="p-3">Pilar</th>
                     <th class="p-3">Item</th>
+                    <th class="p-3">Tipo</th>
+                    <th class="p-3">Manual</th>
                     <th class="p-3">Ações</th>
                 </tr>
             </thead>
@@ -18,6 +20,14 @@
                     <tr class="border-b">
                         <td class="p-3"><?= htmlspecialchars($m['pilar_nome']) ?></td>
                         <td class="p-3"><?= htmlspecialchars($m['item_pilar']) ?></td>
+                        <td class="p-3"><?= htmlspecialchars($m['tipo'] ?? 'tarefa') ?></td>
+                        <td class="p-3">
+                            <?php if (!empty($m['arquivo_path'])): ?>
+                                <a class="text-brand-red hover:underline" target="_blank" href="../<?= htmlspecialchars($m['arquivo_path']) ?>">baixar</a>
+                            <?php else: ?>
+                                —
+                            <?php endif; ?>
+                        </td>
                         <td class="p-3">
                             <a class="text-brand-pink icon-action" href="index.php?route=metodologias/edit&id=<?= (int)$m['id'] ?>" title="Editar" aria-label="Editar"><span data-feather="edit"></span></a>
                             <a class="text-brand-brown icon-action ml-2" href="index.php?route=metodologias/delete&id=<?= (int)$m['id'] ?>" title="Excluir" aria-label="Excluir"><span data-feather="trash-2"></span></a>

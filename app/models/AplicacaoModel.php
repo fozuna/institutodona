@@ -18,7 +18,7 @@ class AplicacaoModel extends BaseModel
         $order = $hasPrevistaCol ? 'ORDER BY a.data_prevista IS NULL, a.data_prevista, p.nome' : 'ORDER BY p.nome';
 
         $sql = "SELECT a.id, a.status, a.id_metodologia, a.id_cliente, $selectPrevista, $selectConclusao, $selectConsultorId,
-                       m.item_pilar, p.nome AS pilar_nome, cli.nome_empresa AS cliente_nome, $selectCons
+                       m.item_pilar, m.tipo, m.arquivo_path, p.nome AS pilar_nome, cli.nome_empresa AS cliente_nome, $selectCons
                 FROM aplicacoes a
                 JOIN metodologias m ON m.id = a.id_metodologia
                 JOIN pilares p ON p.id = m.id_pilar
@@ -46,7 +46,7 @@ class AplicacaoModel extends BaseModel
         $order = $hasPrevistaCol ? 'ORDER BY a.data_prevista IS NULL, a.data_prevista, cli.nome_empresa, p.nome' : 'ORDER BY cli.nome_empresa, p.nome';
 
         $sql = "SELECT a.id, a.status, a.id_metodologia, a.id_cliente, $selectPrevista, $selectConclusao, $selectConsultorId,
-                       m.item_pilar, p.nome AS pilar_nome, cli.nome_empresa AS cliente_nome, $selectCons
+                       m.item_pilar, m.tipo, m.arquivo_path, p.nome AS pilar_nome, cli.nome_empresa AS cliente_nome, $selectCons
                 FROM aplicacoes a
                 JOIN metodologias m ON m.id = a.id_metodologia
                 JOIN pilares p ON p.id = m.id_pilar
@@ -137,7 +137,7 @@ class AplicacaoModel extends BaseModel
         $joinCons = $hasConsTbl && $hasConsultorCol ? 'LEFT JOIN consultores c ON c.id = a.consultor_id' : '';
 
         $sql = "SELECT a.id, a.id_cliente, a.id_metodologia, a.status, $selectPrevista, $selectConclusao, $selectConsultorId,
-                       m.item_pilar, p.nome AS pilar_nome, cli.nome_empresa AS cliente_nome, $selectCons
+                       m.item_pilar, m.tipo, m.arquivo_path, p.nome AS pilar_nome, cli.nome_empresa AS cliente_nome, $selectCons
                 FROM aplicacoes a
                 JOIN metodologias m ON m.id = a.id_metodologia
                 JOIN pilares p ON p.id = m.id_pilar
