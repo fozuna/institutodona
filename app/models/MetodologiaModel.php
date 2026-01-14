@@ -15,6 +15,9 @@ class MetodologiaModel extends BaseModel
             if (!\App\Database\Database::columnExists('metodologias', 'observacoes')) {
                 $this->db->exec('ALTER TABLE metodologias ADD COLUMN observacoes TEXT NULL');
             }
+            if (!\App\Database\Database::columnExists('metodologias', 'cliente_id')) {
+                $this->db->exec('ALTER TABLE metodologias ADD COLUMN cliente_id INT NULL');
+            }
         } catch (\PDOException $e) {
         }
     }
@@ -22,14 +25,14 @@ class MetodologiaModel extends BaseModel
     public function all(): array
     {
         $this->ensureColumns();
-        $stmt = $this->db->query('SELECT m.id, m.id_pilar, m.item_pilar, m.tipo, m.arquivo_path, m.observacoes, p.nome AS pilar_nome FROM metodologias m JOIN pilares p ON p.id = m.id_pilar ORDER BY p.nome, m.item_pilar');
+        $stmt = $this->db->query('SELECT m.id, m.id_pilar, m.item_pilar, m.tipo, m.arquivo_path, m.observacoes, m.cliente_id, p.nome AS pilar_nome FROM metodologias m JOIN pilares p ON p.id = m.id_pilar ORDER BY p.nome, m.item_pilar');
         return $stmt->fetchAll();
     }
 
     public function find(int $id): ?array
     {
         $this->ensureColumns();
-        $stmt = $this->db->prepare('SELECT id, id_pilar, item_pilar, tipo, arquivo_path, observacoes FROM metodologias WHERE id = :id');
+        $stmt = $this->db->prepare('SELECT id, id_pilar, item_pilar, tipo, arquivo_path, observacoes, cliente_id FROM metodologias WHERE id = :id');
         $stmt->execute(['id' => $id]);
         $row = $stmt->fetch();
         return $row ?: null;
@@ -38,13 +41,14 @@ class MetodologiaModel extends BaseModel
     public function create(array $data): int
     {
         $this->ensureColumns();
-        $stmt = $this->db->prepare('INSERT INTO metodologias (id_pilar, item_pilar, tipo, arquivo_path, observacoes) VALUES (:id_pilar, :item_pilar, :tipo, :arquivo_path, :observacoes)');
+        $stmt = $this->db->prepare('INSERT INTO metodologias (id_pilar, item_pilar, tipo, arquivo_path, observacoes, cliente_id) VALUES (:id_pilar, :item_pilar, :tipo, :arquivo_path, :observacoes, :cliente_id)');
         $stmt->execute([
             'id_pilar' => $data['id_pilar'],
             'item_pilar' => $data['item_pilar'],
             'tipo' => $data['tipo'] ?? 'tarefa',
             'arquivo_path' => $data['arquivo_path'] ?? null,
             'observacoes' => $data['observacoes'] ?? null,
+            'cliente_id' => $data['cliente_id'] ?? null,
         ]);
         return (int)$this->db->lastInsertId();
     }
@@ -52,13 +56,14 @@ class MetodologiaModel extends BaseModel
     public function update(int $id, array $data): bool
     {
         $this->ensureColumns();
-        $stmt = $this->db->prepare('UPDATE metodologias SET id_pilar = :id_pilar, item_pilar = :item_pilar, tipo = :tipo, arquivo_path = :arquivo_path, observacoes = :observacoes WHERE id = :id');
+        $stmt = $this->db->prepare('UPDATE metodologias SET id_pilar = :id_pilar, item_pilar = :item_pilar, tipo = :tipo, arquivo_path = :arquivo_path, observacoes = :observacoes, cliente_id = :cliente_id WHERE id = :id');
         return $stmt->execute([
             'id_pilar' => $data['id_pilar'],
             'item_pilar' => $data['item_pilar'],
             'tipo' => $data['tipo'] ?? 'tarefa',
             'arquivo_path' => $data['arquivo_path'] ?? null,
             'observacoes' => $data['observacoes'] ?? null,
+            'cliente_id' => $data['cliente_id'] ?? null,
             'id' => $id,
         ]);
     }
@@ -67,5 +72,13 @@ class MetodologiaModel extends BaseModel
     {
         $stmt = $this->db->prepare('DELETE FROM metodologias WHERE id = :id');
         return $stmt->execute(['id' => $id]);
+    }
+
+    public function byCliente(int $clienteId): array
+    {
+        $this->ensureColumns();
+        $stmt = $this->db->prepare('SELECT m.id, m.id_pilar, m.item_pilar, m.tipo, m.arquivo_path, m.observacoes, m.cliente_id, p.nome AS pilar_nome FROM metodologias m JOIN pilares p ON p.id = m.id_pilar WHERE m.cliente_id = :cid ORDER BY p.nome, m.item_pilar');
+        $stmt->execute(['cid' => $clienteId]);
+        return $stmt->fetchAll();
     }
 }

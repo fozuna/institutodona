@@ -25,7 +25,8 @@ class MetodologiaController extends BaseController
     public function create(): void
     {
         $pilares = $this->pilares->all();
-        $this->render('metodologias/create', compact('pilares'));
+        $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
+        $this->render('metodologias/create', ['pilares' => $pilares, 'cliente' => $cliente]);
     }
 
     public function store(): void
@@ -62,16 +63,19 @@ class MetodologiaController extends BaseController
             header('Location: index.php?route=metodologias/create&err=arquivo_obrigatorio');
             return;
         }
-        if ($idPilar && $itemPilar !== '') {
+        $clienteId = (int)($_POST['id_cliente'] ?? 0);
+        if ($idPilar && $itemPilar !== '' && $clienteId) {
             $this->model->create([
                 'id_pilar' => $idPilar,
                 'item_pilar' => $itemPilar,
                 'tipo' => $tipo,
                 'arquivo_path' => $arquivoPath,
-                'observacoes' => $observacoes
+                'observacoes' => $observacoes,
+                'cliente_id' => $clienteId,
             ]);
         }
-        header('Location: index.php?route=metodologias/index');
+        $redirectCliente = $clienteId ? ('&id=' . $clienteId) : '';
+        header('Location: index.php?route=clientes/show' . $redirectCliente);
     }
 
     public function edit(): void
@@ -118,16 +122,19 @@ class MetodologiaController extends BaseController
             header('Location: index.php?route=metodologias/edit&id=' . $id . '&err=arquivo_obrigatorio');
             return;
         }
-        if ($id && $idPilar && $itemPilar !== '') {
+        $clienteId = (int)($_POST['id_cliente'] ?? 0);
+        if ($id && $idPilar && $itemPilar !== '' && $clienteId) {
             $this->model->update($id, [
                 'id_pilar' => $idPilar,
                 'item_pilar' => $itemPilar,
                 'tipo' => $tipo,
                 'arquivo_path' => $arquivoPath,
-                'observacoes' => $observacoes
+                'observacoes' => $observacoes,
+                'cliente_id' => $clienteId,
             ]);
         }
-        header('Location: index.php?route=metodologias/index');
+        $redirectCliente = $clienteId ? ('&id=' . $clienteId) : '';
+        header('Location: index.php?route=clientes/show' . $redirectCliente);
     }
 
     public function delete(): void

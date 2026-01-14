@@ -5,6 +5,10 @@
         <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="javascript:history.back()">Voltar</a>
     </div>
     <form method="post" action="index.php?route=metodologias/store" class="space-y-4" enctype="multipart/form-data">
+        <?php if (!empty($cliente)): ?>
+            <input type="hidden" name="id_cliente" value="<?= (int)$cliente ?>" />
+            <div class="text-xs text-gray-600">Tarefa será criada para a empresa #<?= (int)$cliente ?></div>
+        <?php endif; ?>
         <div>
             <label class="block text-sm">Pilar</label>
             <select name="id_pilar" class="border rounded p-2 w-64">

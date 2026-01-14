@@ -129,7 +129,7 @@ class ClientesController extends BaseController
         $apl = new AplicacaoModel();
         $apps = $apl->byCliente($id);
         $met = new MetodologiaModel();
-        $metodologias = $met->all();
+        $metodologias = $met->byCliente($id);
         $pilares = (new PilarModel())->all();
         $funcoes = (new FuncaoModel())->allByCliente($id);
         $filiais = $this->clientes->filiaisByMatriz($id);

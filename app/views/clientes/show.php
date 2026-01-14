@@ -1,7 +1,10 @@
 <?php /** @var array $item */ /** @var array $apps */ /** @var array $metodologias */ ?>
 <div class="p-6">
   <div class="mb-4">
-    <h1 class="text-2xl font-bold text-brand-black">Perfil do Cliente</h1>
+    <div class="flex justify-between items-center">
+      <h1 class="text-2xl font-bold text-brand-black">Perfil do Cliente</h1>
+      <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=metodologias/create&cliente=<?= (int)$item['id'] ?>">Criar Tarefa</a>
+    </div>
     <div class="mt-2 bg-white shadow rounded p-4">
       <?php if (!empty($item['logo_path'])): ?>
         <div class="mb-3">
@@ -141,6 +144,7 @@
         <div class="px-4 py-3 border-b font-semibold">Criar nova tarefa</div>
         <div class="p-4">
           <form method="post" action="index.php?route=metodologias/store" class="space-y-3" enctype="multipart/form-data">
+            <input type="hidden" name="id_cliente" value="<?= (int)$item['id'] ?>" />
             <label class="block text-sm">Pilar</label>
             <select name="id_pilar" class="w-full" required>
               <?php foreach ($pilares as $p): ?>
