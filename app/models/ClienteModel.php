@@ -129,11 +129,15 @@ class ClienteModel extends BaseModel
     {
         $this->ensureColumns();
         try {
-            $stmt = $this->db->query('SELECT id, nome_empresa FROM clientes WHERE is_matriz = 1 ORDER BY nome_empresa');
-            return $stmt->fetchAll();
+            $stmt = $this->db->query('SELECT id, nome_empresa, CNPJ, contato, logo_path, is_matriz, matriz_id FROM clientes WHERE is_matriz = 1 ORDER BY nome_empresa');
         } catch (\PDOException $e) {
-            return $this->all();
+            try {
+                $stmt = $this->db->query('SELECT id, nome_empresa, CNPJ, contato, logo_path FROM clientes WHERE is_matriz = 1 ORDER BY nome_empresa');
+            } catch (\PDOException $e2) {
+                $stmt = $this->db->query('SELECT id, nome_empresa, CNPJ, contato FROM clientes WHERE is_matriz = 1 ORDER BY nome_empresa');
+            }
         }
+        return $stmt->fetchAll();
     }
 
     public function filiaisByMatriz(int $matrizId): array
