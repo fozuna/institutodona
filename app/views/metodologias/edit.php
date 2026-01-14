@@ -40,7 +40,10 @@
                 <label class="block text-sm">Observações (opcional)</label>
                 <textarea name="observacoes" class="border rounded p-2 w-full" rows="4"><?= htmlspecialchars($metodologia['observacoes'] ?? '') ?></textarea>
             </div>
-            <button class="icon-btn icon-btn--primary" type="submit" title="Salvar" aria-label="Salvar"><span data-feather="check"></span></button>
+            <div class="flex items-center gap-3">
+                <button class="icon-btn icon-btn--primary" type="submit" title="Salvar" aria-label="Salvar"><span data-feather="check"></span></button>
+                <a class="icon-btn icon-btn--muted" href="javascript:history.back()" title="Cancelar" aria-label="Cancelar"><span data-feather="x"></span></a>
+            </div>
         </form>
     <?php endif; ?>
 </div>

@@ -136,7 +136,10 @@
               <option value="Concluído">Concluído</option>
               <option value="Pendente">Pendente</option>
             </select>
-            <button type="submit" class="icon-btn icon-btn--primary" title="Aplicar" aria-label="Aplicar"><span data-feather="plus"></span></button>
+            <div class="flex items-center gap-3">
+              <button type="submit" class="icon-btn icon-btn--primary" title="Aplicar" aria-label="Aplicar"><span data-feather="plus"></span></button>
+              <a class="icon-btn icon-btn--muted" href="javascript:history.back()" title="Cancelar" aria-label="Cancelar"><span data-feather="x"></span></a>
+            </div>
           </form>
         </div>
       </div>
@@ -161,7 +164,10 @@
             <label class="block text-sm">Arquivo (opcional)</label>
             <input type="file" name="arquivo" class="border rounded p-2 w-full" />
             <div class="text-xs text-gray-500">PDF, DOC, DOCX, XLS, XLSX ou TXT</div>
-            <button type="submit" class="icon-btn icon-btn--primary" title="Criar" aria-label="Criar"><span data-feather="check"></span></button>
+            <div class="flex items-center gap-3">
+              <button type="submit" class="icon-btn icon-btn--primary" title="Criar" aria-label="Criar"><span data-feather="check"></span></button>
+              <a class="icon-btn icon-btn--muted" href="javascript:history.back()" title="Cancelar" aria-label="Cancelar"><span data-feather="x"></span></a>
+            </div>
           </form>
         </div>
       </div>
