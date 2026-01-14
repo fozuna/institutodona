@@ -17,14 +17,19 @@ foreach ($items as $i) {
 }
 $prev = (clone $firstDay)->modify('-1 month');
 $next = (clone $firstDay)->modify('+1 month');
+$monthsFull = [1=>'Janeiro',2=>'Fevereiro',3=>'Março',4=>'Abril',5=>'Maio',6=>'Junho',7=>'Julho',8=>'Agosto',9=>'Setembro',10=>'Outubro',11=>'Novembro',12=>'Dezembro'];
+$monthsShort = [1=>'Jan',2=>'Fev',3=>'Mar',4=>'Abr',5=>'Mai',6=>'Jun',7=>'Jul',8=>'Ago',9=>'Set',10=>'Out',11=>'Nov',12=>'Dez'];
+$currentTitle = $monthsFull[(int)$firstDay->format('n')] . ' ' . $firstDay->format('Y');
+$prevLabel = $monthsShort[(int)$prev->format('n')];
+$nextLabel = $monthsShort[(int)$next->format('n')];
 ?>
 <div class="p-6">
   <div class="flex items-center justify-between mb-4">
     <h1 class="text-2xl font-bold text-brand-black">Agenda</h1>
     <div class="flex items-center gap-2">
-      <a class="px-3 py-1 rounded bg-gray-200 text-brand-brown" href="index.php?route=agenda/index&year=<?= (int)$prev->format('Y') ?>&month=<?= (int)$prev->format('n') ?>">◀ <?= htmlspecialchars($prev->format('M')) ?></a>
-      <div class="px-3 py-1 font-semibold"><?= htmlspecialchars($firstDay->format('F Y')) ?></div>
-      <a class="px-3 py-1 rounded bg-gray-200 text-brand-brown" href="index.php?route=agenda/index&year=<?= (int)$next->format('Y') ?>&month=<?= (int)$next->format('n') ?>"><?= htmlspecialchars($next->format('M')) ?> ▶</a>
+      <a class="px-3 py-1 rounded bg-gray-200 text-brand-brown" href="index.php?route=agenda/index&year=<?= (int)$prev->format('Y') ?>&month=<?= (int)$prev->format('n') ?>">◀ <?= htmlspecialchars($prevLabel) ?></a>
+      <div class="px-3 py-1 font-semibold"><?= htmlspecialchars($currentTitle) ?></div>
+      <a class="px-3 py-1 rounded bg-gray-200 text-brand-brown" href="index.php?route=agenda/index&year=<?= (int)$next->format('Y') ?>&month=<?= (int)$next->format('n') ?>"><?= htmlspecialchars($nextLabel) ?> ▶</a>
     </div>
   </div>
   <div class="bg-white shadow rounded p-4">
