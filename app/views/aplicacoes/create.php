@@ -1,11 +1,13 @@
 <?php /** @var int $cliente */ /** @var array $clientes */ /** @var array $metodologias */ /** @var array $funcoes */ /** @var array $consultores */ ?>
-<div class="p-6 max-w-3xl">
+<div class="p-6">
   <div class="flex justify-between items-center mb-4">
     <h1 class="text-2xl font-bold">Aplicar nova tarefa</h1>
     <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="javascript:history.back()">Voltar</a>
   </div>
-  <div class="bg-white shadow rounded p-4">
-    <form method="post" action="index.php?route=clientes/attach" class="space-y-3">
+  <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+    <div class="md:col-span-7">
+      <div class="bg-white shadow rounded p-4">
+        <form method="post" action="index.php?route=clientes/attach" class="space-y-3">
       <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
       <?php if ($cliente): ?>
         <input type="hidden" name="id_cliente" value="<?= (int)$cliente ?>" />
@@ -56,39 +58,41 @@
             <option value="Pendente">Pendente</option>
           </select>
         </div>
-        <div class="md:col-span-12 grid grid-cols-1 md:grid-cols-12 gap-6">
-          <div class="md:col-span-7">
-            <label class="block text-sm">Colaboradores selecionados</label>
-            <div id="colabSelected" class="flex flex-wrap gap-2"></div>
-          </div>
-          <div class="md:col-span-5">
-            <label class="block text-sm">Lista de Colaboradores</label>
-            <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-end mb-2">
-              <input type="text" id="colabSearch" class="border rounded p-2 w-full md:col-span-9" placeholder="Buscar por nome..." />
-              <button type="button" id="colabSearchBtn" class="px-3 py-2 rounded bg-brand-red text-white md:col-span-3">Filtrar</button>
-            </div>
-            <div class="border rounded overflow-hidden">
-              <table class="min-w-full text-sm">
-                <thead>
-                  <tr class="text-left border-b">
-                    <th class="p-2">Nome</th>
-                    <th class="p-2">E-mail</th>
-                    <th class="p-2">Ação</th>
-                  </tr>
-                </thead>
-                <tbody id="colabTable">
-                  <tr><td class="p-2 text-gray-500" colspan="3">Digite para buscar…</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
+        <div class="md:col-span-12">
+          <label class="block text-sm">Colaboradores selecionados</label>
+          <div id="colabSelected" class="flex flex-wrap gap-2"></div>
         </div>
       </div>
       <div class="flex items-center gap-3 justify-end">
         <button type="submit" class="px-4 py-2 rounded bg-brand-red text-white">SALVAR</button>
         <button type="button" class="px-4 py-2 rounded bg-gray-200 text-brand-brown" onclick="history.back()">CANCELAR</button>
       </div>
-    </form>
+        </form>
+      </div>
+    </div>
+    <div class="md:col-span-5">
+      <div class="bg-white shadow rounded p-4">
+        <label class="block text-sm">Lista de Colaboradores</label>
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-end mb-2">
+          <input type="text" id="colabSearch" class="border rounded p-2 w-full md:col-span-9" placeholder="Buscar por nome..." />
+          <button type="button" id="colabSearchBtn" class="px-3 py-2 rounded bg-brand-red text-white md:col-span-3">Filtrar</button>
+        </div>
+        <div class="border rounded overflow-hidden">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="text-left border-b">
+                <th class="p-2">Nome</th>
+                <th class="p-2">E-mail</th>
+                <th class="p-2">Ação</th>
+              </tr>
+            </thead>
+            <tbody id="colabTable">
+              <tr><td class="p-2 text-gray-500" colspan="3">Digite para buscar…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
   <script>
     (function(){
