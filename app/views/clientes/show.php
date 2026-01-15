@@ -154,8 +154,8 @@
             <input type="file" name="arquivo" class="border rounded p-2 w-full" />
             <div class="text-xs text-gray-500">PDF, DOC, DOCX, XLS, XLSX ou TXT</div>
             <div class="flex items-center gap-3">
-              <button type="submit" class="icon-btn icon-btn--primary" title="Criar" aria-label="Criar"><span data-feather="check"></span></button>
-              <a class="icon-btn icon-btn--muted" href="javascript:history.back()" title="Cancelar" aria-label="Cancelar"><span data-feather="x"></span></a>
+              <button type="submit" class="px-4 py-2 rounded bg-brand-red text-white">SALVAR</button>
+              <button type="button" class="px-4 py-2 rounded bg-gray-200 text-brand-brown" onclick="history.back()">CANCELAR</button>
             </div>
           </form>
         </div>
@@ -218,7 +218,7 @@
             <input name="CNPJ" class="border rounded p-2 w-full" required />
             <label class="block text-sm">Contato</label>
             <input name="contato" class="border rounded p-2 w-full" />
-            <button type="submit" class="icon-btn icon-btn--primary" title="Cadastrar Filial" aria-label="Cadastrar Filial"><span data-feather="plus"></span></button>
+            <button type="submit" class="px-4 py-2 rounded bg-brand-red text-white">SALVAR</button>
           </form>
         </div>
       </div>

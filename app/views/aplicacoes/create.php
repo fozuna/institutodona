@@ -50,8 +50,8 @@
         <option value="Pendente">Pendente</option>
       </select>
       <div class="flex items-center gap-3">
-        <button type="submit" class="icon-btn icon-btn--primary" title="Aplicar" aria-label="Aplicar"><span data-feather="plus"></span></button>
-        <a class="icon-btn icon-btn--muted" href="javascript:history.back()" title="Cancelar" aria-label="Cancelar"><span data-feather="x"></span></a>
+        <button type="submit" class="px-4 py-2 rounded bg-brand-red text-white">SALVAR</button>
+        <button type="button" class="px-4 py-2 rounded bg-gray-200 text-brand-brown" onclick="history.back()">CANCELAR</button>
       </div>
     </form>
   </div>

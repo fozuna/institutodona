@@ -38,8 +38,8 @@
             <textarea name="observacoes" class="border rounded p-2 w-full" rows="4"></textarea>
         </div>
         <div class="flex items-center gap-3">
-            <button class="icon-btn icon-btn--primary" type="submit" title="Salvar" aria-label="Salvar"><span data-feather="check"></span></button>
-            <a class="icon-btn icon-btn--muted" href="javascript:history.back()" title="Cancelar" aria-label="Cancelar"><span data-feather="x"></span></a>
+            <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">SALVAR</button>
+            <button class="px-4 py-2 rounded bg-gray-200 text-brand-brown" type="button" onclick="history.back()">CANCELAR</button>
         </div>
     </form>
 </div>

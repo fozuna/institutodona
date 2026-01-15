@@ -44,9 +44,9 @@
       <label class="block text-sm">Observações</label>
       <textarea name="observacoes" rows="4"><?= htmlspecialchars($item['observacoes'] ?? '') ?></textarea>
     </div>
-    <div class="flex gap-3">
-      <button class="icon-btn icon-btn--primary" type="submit" title="Salvar" aria-label="Salvar"><span data-feather="check"></span></button>
-      <a class="icon-btn icon-btn--muted" href="index.php?route=consultores/index" title="Cancelar" aria-label="Cancelar"><span data-feather="x"></span></a>
+    <div class="flex items-center gap-3">
+      <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">SALVAR</button>
+      <a class="px-4 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?route=consultores/index">CANCELAR</a>
     </div>
   </form>
 </div>
