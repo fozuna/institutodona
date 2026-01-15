@@ -43,7 +43,8 @@ class ConsultoresController extends BaseController
             'observacoes' => trim($_POST['observacoes'] ?? ''),
         ];
         if ($data['nome'] && $data['email']) {
-            $this->consultores->create($data);
+            $id = $this->consultores->create($data);
+            \App\Core\AuditLogger::log('create', 'consultor', $id, $data);
         }
         header('Location: index.php?route=consultores/index');
     }
@@ -72,7 +73,7 @@ class ConsultoresController extends BaseController
             'estado' => strtoupper(substr(trim($_POST['estado'] ?? ''), 0, 2)),
             'observacoes' => trim($_POST['observacoes'] ?? ''),
         ];
-        if ($id) { $this->consultores->update($id, $data); }
+        if ($id) { $this->consultores->update($id, $data); \App\Core\AuditLogger::log('update', 'consultor', $id, $data); }
         header('Location: index.php?route=consultores/index');
     }
 
@@ -80,7 +81,7 @@ class ConsultoresController extends BaseController
     {
         $this->requireRole('instituto');
         $id = (int)($_GET['id'] ?? 0);
-        if ($id) { $this->consultores->delete($id); }
+        if ($id) { $this->consultores->delete($id); \App\Core\AuditLogger::log('delete', 'consultor', $id, []); }
         header('Location: index.php?route=consultores/index');
     }
 }

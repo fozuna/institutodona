@@ -66,6 +66,7 @@ class AvaliacoesController extends BaseController
             'realidade_processo' => $realPro,
         ];
         $id = $this->model->create($payload);
+        \App\Core\AuditLogger::log('create', 'avaliacao', $id, $payload);
         if ($clienteId) {
             header('Location: index.php?route=avaliacoes/show&id=' . $id . '&cliente=' . $clienteId);
         } else {

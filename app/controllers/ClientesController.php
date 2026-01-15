@@ -64,7 +64,8 @@ class ClientesController extends BaseController
             }
         }
         if ($data['nome_empresa'] && $data['CNPJ']) {
-            $this->clientes->create($data);
+            $id = $this->clientes->create($data);
+            \App\Core\AuditLogger::log('create', 'cliente', $id, $data);
         }
         header('Location: index.php?route=clientes/index');
     }
@@ -109,7 +110,7 @@ class ClientesController extends BaseController
                 }
             }
         }
-        if ($id) { $this->clientes->update($id, $data); }
+        if ($id) { $this->clientes->update($id, $data); \App\Core\AuditLogger::log('update', 'cliente', $id, $data); }
         header('Location: index.php?route=clientes/index');
     }
 
@@ -117,7 +118,7 @@ class ClientesController extends BaseController
     {
         $this->requireRole('instituto');
         $id = (int)($_GET['id'] ?? 0);
-        if ($id) { $this->clientes->delete($id); }
+        if ($id) { $this->clientes->delete($id); \App\Core\AuditLogger::log('delete', 'cliente', $id, []); }
         header('Location: index.php?route=clientes/index');
     }
 
@@ -189,6 +190,7 @@ class ClientesController extends BaseController
         if ($idCliente && $idMetodologia) {
             $aplId = (new AplicacaoModel())->create($idCliente, $idMetodologia, $status, $consultorId, $dataPrevista);
             (new AplicacaoModel())->addColaboradores($aplId, $colabIds);
+            \App\Core\AuditLogger::log('create', 'aplicacao', $aplId, ['id_cliente'=>$idCliente,'id_metodologia'=>$idMetodologia,'status'=>$status,'consultor_id'=>$consultorId,'data_prevista'=>$dataPrevista,'colabs'=>$colabIds]);
         }
         header('Location: index.php?route=clientes/show&id=' . $idCliente);
     }
@@ -209,6 +211,7 @@ class ClientesController extends BaseController
             (new AplicacaoModel())->updateStatus($idAplicacao, $status);
             (new AplicacaoModel())->updateSchedule($idAplicacao, $dataPrevista, $consultorId);
             if (!empty($colabIds)) { (new AplicacaoModel())->setColaboradores($idAplicacao, $colabIds); }
+            \App\Core\AuditLogger::log('update', 'aplicacao', $idAplicacao, ['status'=>$status,'data_prevista'=>$dataPrevista,'consultor_id'=>$consultorId,'colabs'=>$colabIds]);
         }
         header('Location: index.php?route=clientes/show&id=' . $idCliente);
     }
@@ -220,6 +223,7 @@ class ClientesController extends BaseController
         $idAplicacao = (int)($_GET['id_aplicacao'] ?? 0);
         if ($idAplicacao) {
             (new AplicacaoModel())->delete($idAplicacao);
+            \App\Core\AuditLogger::log('delete', 'aplicacao', $idAplicacao, ['id_cliente'=>$idCliente]);
         }
         header('Location: index.php?route=clientes/show&id=' . $idCliente);
     }

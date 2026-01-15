@@ -69,7 +69,7 @@ class MetodologiaController extends BaseController
         }
         $clienteId = (int)($_POST['id_cliente'] ?? 0);
         if ($idPilar && $itemPilar !== '' && $clienteId) {
-            $this->model->create([
+            $newId = $this->model->create([
                 'id_pilar' => $idPilar,
                 'item_pilar' => $itemPilar,
                 'tipo' => $tipo,
@@ -77,6 +77,7 @@ class MetodologiaController extends BaseController
                 'observacoes' => $observacoes,
                 'cliente_id' => $clienteId,
             ]);
+            \App\Core\AuditLogger::log('create', 'metodologia', (int)$newId, ['id_pilar'=>$idPilar,'item_pilar'=>$itemPilar,'tipo'=>$tipo,'arquivo_path'=>$arquivoPath,'observacoes'=>$observacoes,'cliente_id'=>$clienteId]);
         }
         $redirectCliente = $clienteId ? ('&cliente=' . $clienteId) : '';
         header('Location: index.php?route=metodologias/create' . $redirectCliente);
@@ -138,6 +139,7 @@ class MetodologiaController extends BaseController
                 'observacoes' => $observacoes,
                 'cliente_id' => $clienteId,
             ]);
+            \App\Core\AuditLogger::log('update', 'metodologia', $id, ['id_pilar'=>$idPilar,'item_pilar'=>$itemPilar,'tipo'=>$tipo,'arquivo_path'=>$arquivoPath,'observacoes'=>$observacoes,'cliente_id'=>$clienteId]);
         }
         $redirectCliente = $clienteId ? ('&id=' . $clienteId) : '';
         header('Location: index.php?route=clientes/show' . $redirectCliente);
@@ -149,6 +151,7 @@ class MetodologiaController extends BaseController
         $id = (int)($_GET['id'] ?? 0);
         if ($id) {
             $this->model->delete($id);
+            \App\Core\AuditLogger::log('delete', 'metodologia', $id, []);
         }
         header('Location: index.php?route=metodologias/index');
     }

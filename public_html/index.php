@@ -21,6 +21,7 @@ use App\Controllers\SetoresController;
 use App\Controllers\FuncoesController;
 use App\Controllers\ColaboradoresController;
 use App\Controllers\AvaliacoesController;
+use App\Controllers\LogsController;
 
 $route = $_GET['route'] ?? 'auth/login';
 
@@ -307,6 +308,8 @@ switch ($route) {
         echo 'OK';
         break;
     case 'dashboard/index':
+    case 'logs/index':
+        if ($route === 'logs/index') { (new LogsController())->index(); break; }
     default:
         (new DashboardController())->index();
         break;

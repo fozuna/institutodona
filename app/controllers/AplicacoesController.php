@@ -68,6 +68,7 @@ class AplicacoesController extends BaseController
             if (!empty($colabIds)) {
                 $this->aplicacoes->setColaboradores($idAplicacao, $colabIds);
             }
+            \App\Core\AuditLogger::log('update', 'aplicacao', $idAplicacao, ['status'=>$status,'data_prevista'=>$dataPrevista,'consultor_id'=>$consultorId,'colabs'=>$colabIds]);
         }
         header('Location: index.php?route=aplicacoes/show&id=' . $idAplicacao);
     }
@@ -81,6 +82,7 @@ class AplicacoesController extends BaseController
         $ok = false;
         if ($id && in_array($status, ['A Fazer','Em Andamento','Concluído','Pendente'], true)) {
             $ok = $this->aplicacoes->updateStatus($id, $status);
+            if ($ok) { \App\Core\AuditLogger::log('update', 'aplicacao', $id, ['status'=>$status]); }
         }
         echo json_encode(['ok' => $ok]);
     }
@@ -116,6 +118,7 @@ class AplicacoesController extends BaseController
                 if (@move_uploaded_file($_FILES['arquivo']['tmp_name'], $dest)) {
                     $rel = 'public/assets/files/' . (int)$app['id_cliente'] . '/aplicacao_' . (int)$app['id'] . '/' . $file;
                     $this->aplicacoes->addArquivo((int)$app['id'], (int)$app['id_cliente'], $_FILES['arquivo']['name'], $rel, $type, (int)($_FILES['arquivo']['size'] ?? 0));
+                    \App\Core\AuditLogger::log('upload', 'aplicacao_arquivo', (int)$app['id'], ['arquivo'=>$_FILES['arquivo']['name'],'path'=>$rel,'mime'=>$type,'size'=>(int)($_FILES['arquivo']['size'] ?? 0)]);
                 }
             }
         }
