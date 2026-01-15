@@ -12,6 +12,7 @@
 .text-brand-black { color: var(--brand-black); }
 .text-brand-brown { color: var(--brand-brown); }
 .text-brand-pink { color: var(--brand-pink); }
+.text-brand-red { color: var(--brand-red); }
 
 .bg-brand-red { background-color: var(--brand-red); }
 .bg-brand-pink { background-color: var(--brand-pink); }

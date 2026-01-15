@@ -108,7 +108,7 @@
               $selected = array_map('intval', $resp[$key] ?? []);
               foreach ($qs[$key] as $idx => $q) {
                 $on = in_array($idx+1, $selected, true);
-                echo '<li>'.($on ? '<span class="font-semibold">'.$q.'</span>' : '<span>'.$q.'</span>').'</li>';
+                echo '<li>'.($on ? '<span class="font-semibold">'.$q.'</span>' : '<span class="text-brand-red">'.$q.'</span>').'</li>';
               }
             ?>
           </ul>
