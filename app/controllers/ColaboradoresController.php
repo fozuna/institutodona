@@ -7,6 +7,7 @@ use App\Models\ColaboradorModel;
 use App\Models\FuncaoModel;
 use App\Models\SetorModel;
 use App\Models\DepartamentoModel;
+use App\Models\ClienteModel;
 
 class ColaboradoresController extends BaseController
 {
@@ -31,7 +32,8 @@ class ColaboradoresController extends BaseController
         $departamentos = $cliente ? $this->deps->allByCliente($cliente) : $this->deps->all();
         $setores = $cliente ? $this->setores->allByCliente($cliente) : $this->setores->all();
         $funcoes = $cliente ? $this->funcoes->allByCliente($cliente) : [];
-        $this->render('colaboradores/index', ['items' => $items, 'departamentos' => $departamentos, 'setores' => $setores, 'funcoes' => $funcoes, 'cliente' => $cliente]);
+        $clientes = (new ClienteModel())->all();
+        $this->render('colaboradores/index', ['items' => $items, 'departamentos' => $departamentos, 'setores' => $setores, 'funcoes' => $funcoes, 'cliente' => $cliente, 'clientes' => $clientes]);
     }
 
     public function create(): void

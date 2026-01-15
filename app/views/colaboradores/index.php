@@ -38,4 +38,17 @@
             </tbody>
         </table>
     </div>
+    <form method="get" action="index.php" class="mt-4 flex items-center gap-2">
+        <input type="hidden" name="route" value="colaboradores/index" />
+        <label class="text-sm">Cliente</label>
+        <select name="cliente" class="border rounded p-2 min-w-[16rem]">
+            <option value="">-- Selecione --</option>
+            <?php foreach ($clientes as $cl): ?>
+                <option value="<?= (int)$cl['id'] ?>" <?= ((int)$cliente === (int)$cl['id']) ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($cl['nome_empresa']) ?> <?= ((int)($cl['is_matriz'] ?? 1) === 1) ? '(Matriz)' : '(Filial)' ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+        <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">Filtrar</button>
+    </form>
 </div>
