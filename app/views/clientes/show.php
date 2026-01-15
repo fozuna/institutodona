@@ -81,6 +81,9 @@
             <div class="md:col-span-2">
               <button class="px-4 py-2 rounded bg-brand-red text-white w-full md:w-auto" type="submit">Filtrar</button>
             </div>
+            <div class="md:col-span-4 flex justify-end">
+              <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=aplicacoes/create&cliente=<?= (int)$item['id'] ?>">Aplicar Tarefa</a>
+            </div>
           </form>
           <?php if (empty($apps)): ?>
             <div class="text-sm text-gray-600">Nenhuma metodologia aplicada ainda.</div>
