@@ -43,6 +43,41 @@ CREATE TABLE IF NOT EXISTS usuarios (
   CONSTRAINT fk_usr_cliente FOREIGN KEY (id_cliente) REFERENCES clientes(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Estrutura organizacional
+CREATE TABLE IF NOT EXISTS departamentos (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nome VARCHAR(180) NOT NULL,
+  cliente_id INT NOT NULL,
+  UNIQUE KEY dep_unique (cliente_id, nome),
+  CONSTRAINT fk_dep_cliente FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS setores (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nome VARCHAR(180) NOT NULL,
+  departamento_id INT NOT NULL,
+  UNIQUE KEY setor_unique (departamento_id, nome),
+  CONSTRAINT fk_setor_departamento FOREIGN KEY (departamento_id) REFERENCES departamentos(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS funcoes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nome VARCHAR(180) NOT NULL,
+  setor_id INT NOT NULL,
+  UNIQUE KEY func_unique (setor_id, nome),
+  CONSTRAINT fk_func_setor FOREIGN KEY (setor_id) REFERENCES setores(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS colaboradores (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nome VARCHAR(180) NOT NULL,
+  email VARCHAR(180) NULL,
+  funcao_id INT NOT NULL,
+  cliente_id INT NULL,
+  CONSTRAINT fk_colab_func FOREIGN KEY (funcao_id) REFERENCES funcoes(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_colab_cliente FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Tabela de consultores (perfil e vínculo opcional com usuário)
 CREATE TABLE IF NOT EXISTS consultores (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -73,6 +108,20 @@ ALTER TABLE consultores
   ADD COLUMN IF NOT EXISTS cidade VARCHAR(120) NULL,
   ADD COLUMN IF NOT EXISTS estado CHAR(2) NULL,
   ADD COLUMN IF NOT EXISTS observacoes TEXT NULL;
+
+-- Campos adicionais
+ALTER TABLE clientes
+  ADD COLUMN IF NOT EXISTS is_matriz TINYINT(1) NOT NULL DEFAULT 1,
+  ADD COLUMN IF NOT EXISTS matriz_id INT NULL;
+
+ALTER TABLE metodologias
+  ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) NOT NULL DEFAULT 'tarefa',
+  ADD COLUMN IF NOT EXISTS arquivo_path VARCHAR(255) NULL,
+  ADD COLUMN IF NOT EXISTS observacoes TEXT NULL,
+  ADD COLUMN IF NOT EXISTS cliente_id INT NULL;
+
+ALTER TABLE aplicacoes
+  ADD COLUMN IF NOT EXISTS funcao_id INT NULL;
 
 -- Pilares básicos
 INSERT INTO pilares (nome) VALUES
