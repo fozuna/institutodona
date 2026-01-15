@@ -166,7 +166,7 @@ class ColaboradorModel extends BaseModel
         $q = trim($q);
         if ($q === '') { return []; }
         $stmt = $this->db->prepare('SELECT id, nome, email FROM colaboradores WHERE cliente_id = :cid AND nome LIKE :q ORDER BY nome LIMIT :lim');
-        $like = '%' . $q . '%';
+        $like = $q . '%';
         $stmt->bindValue(':cid', $clienteId, \PDO::PARAM_INT);
         $stmt->bindValue(':q', $like, \PDO::PARAM_STR);
         $stmt->bindValue(':lim', $limit, \PDO::PARAM_INT);

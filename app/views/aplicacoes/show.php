@@ -102,7 +102,7 @@
               results.innerHTML = arr.map(r=>{
                 cache[r.id] = r.nome;
                 const disabled = selectedIds.has(r.id) ? 'disabled' : '';
-                return `<button data-id="${r.id}" class="block w-full text-left px-2 py-1 hover:bg-gray-100 ${disabled}">${r.nome}${r.email ? ' • '+r.email : ''}</button>`;
+                return `<button type="button" data-id="${r.id}" class="block w-full text-left px-2 py-1 hover:bg-gray-100 ${disabled}">${r.nome}${r.email ? ' • '+r.email : ''}</button>`;
               }).join('') || '<div class="text-gray-500">Nenhum resultado</div>';
               results.querySelectorAll('button[data-id]').forEach(btn=>{
                 btn.onclick = ()=>{
@@ -116,6 +116,7 @@
                   const rm = document.createElement('button');
                   rm.className = 'ml-2 text-xs bg-gray-200 text-brand-brown px-1 rounded';
                   rm.textContent = 'x';
+                  rm.type = 'button';
                   rm.setAttribute('data-remove', String(id));
                   chip.appendChild(rm);
                   selected.appendChild(chip);
@@ -128,6 +129,12 @@
                 };
               });
             }, 300);
+          });
+          selected.addEventListener('click', (e)=>{
+            const t = e.target;
+            if (t.tagName === 'BUTTON' && t.textContent === 'x') {
+              e.preventDefault();
+            }
           });
         })();
       </script>
