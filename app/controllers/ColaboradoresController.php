@@ -71,7 +71,7 @@ class ColaboradoresController extends BaseController
         $items = [];
         if ($cliente) {
             if ($q !== '') {
-                $items = (new \App\Models\ColaboradorModel())->searchByClienteName($cliente, $q, 50);
+                $items = (new \App\Models\ColaboradorModel())->searchByClienteName($cliente, $q, 200);
             } else {
                 $items = (new \App\Models\ColaboradorModel())->allByCliente($cliente);
             }

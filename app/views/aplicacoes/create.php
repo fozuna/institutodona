@@ -5,7 +5,7 @@
     <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="javascript:history.back()">Voltar</a>
   </div>
   <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
-    <div class="md:col-span-7">
+    <div class="md:col-span-6">
       <div class="bg-white shadow rounded p-4">
         <form method="post" action="index.php?route=clientes/attach" class="space-y-3">
       <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
@@ -28,7 +28,7 @@
         </div>
       <?php endif; ?>
       <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
-        <div class="md:col-span-7">
+         <div class="md:col-span-7">
           <label class="block text-sm">Tarefa</label>
           <select name="id_metodologia" class="w-full" required>
             <?php foreach ($metodologias as $m): ?>
@@ -70,7 +70,7 @@
         </form>
       </div>
     </div>
-    <div class="md:col-span-5">
+    <div class="md:col-span-6">
       <div class="bg-white shadow rounded p-4">
         <label class="block text-sm">Lista de Colaboradores</label>
         <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-end mb-2">
