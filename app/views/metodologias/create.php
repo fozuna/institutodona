@@ -9,35 +9,37 @@
             <input type="hidden" name="id_cliente" value="<?= (int)$cliente ?>" />
             <div class="text-xs text-gray-600">Tarefa será criada para a empresa #<?= (int)$cliente ?></div>
         <?php endif; ?>
-        <div>
-            <label class="block text-sm">Pilar</label>
-            <select name="id_pilar" class="border rounded p-2 w-64">
-                <?php foreach ($pilares as $p): ?>
-                    <option value="<?= (int)$p['id'] ?>"><?= htmlspecialchars($p['nome']) ?></option>
-                <?php endforeach; ?>
-            </select>
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+            <div class="md:col-span-4">
+                <label class="block text-sm">Pilar</label>
+                <select name="id_pilar" class="border rounded p-2 w-full">
+                    <?php foreach ($pilares as $p): ?>
+                        <option value="<?= (int)$p['id'] ?>"><?= htmlspecialchars($p['nome']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="md:col-span-4">
+                <label class="block text-sm">Tipo</label>
+                <select name="tipo" class="border rounded p-2 w-full">
+                    <option value="tarefa">Tarefa</option>
+                    <option value="manual">Manual</option>
+                </select>
+            </div>
+            <div class="md:col-span-12">
+                <label class="block text-sm">Item do Pilar</label>
+                <input name="item_pilar" class="border rounded p-2 w-full" />
+            </div>
+            <div class="md:col-span-6">
+                <label class="block text-sm">Arquivo (opcional)</label>
+                <input type="file" name="arquivo" class="border rounded p-2 w-full" />
+                <div class="text-xs text-gray-500 mt-1">PDF, DOC, DOCX, XLS, XLSX ou TXT</div>
+            </div>
+            <div class="md:col-span-6">
+                <label class="block text-sm">Observações (opcional)</label>
+                <textarea name="observacoes" class="border rounded p-2 w-full" rows="4"></textarea>
+            </div>
         </div>
-        <div>
-            <label class="block text-sm">Item do Pilar</label>
-            <input name="item_pilar" class="border rounded p-2 w-full" />
-        </div>
-        <div>
-            <label class="block text-sm">Tipo</label>
-            <select name="tipo" class="border rounded p-2 w-64">
-                <option value="tarefa">Tarefa</option>
-                <option value="manual">Manual</option>
-            </select>
-        </div>
-        <div>
-            <label class="block text-sm">Arquivo (opcional)</label>
-            <input type="file" name="arquivo" class="border rounded p-2 w-full" />
-            <div class="text-xs text-gray-500 mt-1">PDF, DOC, DOCX, XLS, XLSX ou TXT</div>
-        </div>
-        <div>
-            <label class="block text-sm">Observações (opcional)</label>
-            <textarea name="observacoes" class="border rounded p-2 w-full" rows="4"></textarea>
-        </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 justify-end">
             <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">SALVAR</button>
             <button class="px-4 py-2 rounded bg-gray-200 text-brand-brown" type="button" onclick="history.back()">CANCELAR</button>
         </div>

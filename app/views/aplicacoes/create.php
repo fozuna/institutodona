@@ -13,43 +13,59 @@
           <?php foreach ($clientes as $c): if ((int)$c['id'] === (int)$cliente) { echo htmlspecialchars($c['nome_empresa']); break; } endforeach; ?>
         </div>
       <?php else: ?>
-        <label class="block text-sm">Cliente</label>
-        <select name="id_cliente" class="w-full" required>
-          <option value="">— selecione —</option>
-          <?php foreach ($clientes as $c): ?>
-            <option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['nome_empresa']) ?></option>
-          <?php endforeach; ?>
-        </select>
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+          <div class="md:col-span-6">
+            <label class="block text-sm">Cliente</label>
+            <select name="id_cliente" class="w-full" required>
+              <option value="">— selecione —</option>
+              <?php foreach ($clientes as $c): ?>
+                <option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['nome_empresa']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+        </div>
       <?php endif; ?>
-      <label class="block text-sm">Tarefa</label>
-      <select name="id_metodologia" class="w-full" required>
-        <?php foreach ($metodologias as $m): ?>
-          <option value="<?= (int)$m['id'] ?>">[<?= htmlspecialchars($m['pilar_nome']) ?>] <?= htmlspecialchars($m['item_pilar']) ?></option>
-        <?php endforeach; ?>
-      </select>
-      <label class="block text-sm">Colaboradores</label>
-      <div class="space-y-2">
-        <input type="text" id="colabSearch" class="border rounded p-2 w-full" placeholder="Buscar por nome..." />
-        <div id="colabResults" class="border rounded p-2 max-h-48 overflow-auto text-sm"></div>
-        <div id="colabSelected" class="flex flex-wrap gap-2"></div>
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+        <div class="md:col-span-6">
+          <label class="block text-sm">Tarefa</label>
+          <select name="id_metodologia" class="w-full" required>
+            <?php foreach ($metodologias as $m): ?>
+              <option value="<?= (int)$m['id'] ?>">[<?= htmlspecialchars($m['pilar_nome']) ?>] <?= htmlspecialchars($m['item_pilar']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="md:col-span-6">
+          <label class="block text-sm">Data prevista</label>
+          <input type="date" name="data_prevista" class="w-full" />
+        </div>
+        <div class="md:col-span-4">
+          <label class="block text-sm">Consultor</label>
+          <select name="consultor_id" class="w-full">
+            <option value="">—</option>
+            <?php foreach ($consultores as $cons): ?>
+              <option value="<?= (int)$cons['id'] ?>"><?= htmlspecialchars($cons['nome']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="md:col-span-4">
+          <label class="block text-sm">Status inicial</label>
+          <select name="status" class="w-full">
+            <option value="A Fazer">A Fazer</option>
+            <option value="Em Andamento">Em Andamento</option>
+            <option value="Concluído">Concluído</option>
+            <option value="Pendente">Pendente</option>
+          </select>
+        </div>
+        <div class="md:col-span-12">
+          <label class="block text-sm">Colaboradores</label>
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+            <input type="text" id="colabSearch" class="border rounded p-2 w-full md:col-span-4" placeholder="Buscar por nome..." />
+            <div id="colabResults" class="border rounded p-2 max-h-48 overflow-auto text-sm md:col-span-4"></div>
+            <div id="colabSelected" class="flex flex-wrap gap-2 md:col-span-4"></div>
+          </div>
+        </div>
       </div>
-      <label class="block text-sm">Data prevista</label>
-      <input type="date" name="data_prevista" class="w-full" />
-      <label class="block text-sm">Consultor</label>
-      <select name="consultor_id" class="w-full">
-        <option value="">—</option>
-        <?php foreach ($consultores as $cons): ?>
-          <option value="<?= (int)$cons['id'] ?>"><?= htmlspecialchars($cons['nome']) ?></option>
-        <?php endforeach; ?>
-      </select>
-      <label class="block text-sm">Status inicial</label>
-      <select name="status" class="w-full">
-        <option value="A Fazer">A Fazer</option>
-        <option value="Em Andamento">Em Andamento</option>
-        <option value="Concluído">Concluído</option>
-        <option value="Pendente">Pendente</option>
-      </select>
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-3 justify-end">
         <button type="submit" class="px-4 py-2 rounded bg-brand-red text-white">SALVAR</button>
         <button type="button" class="px-4 py-2 rounded bg-gray-200 text-brand-brown" onclick="history.back()">CANCELAR</button>
       </div>

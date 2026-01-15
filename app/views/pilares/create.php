@@ -7,7 +7,7 @@
             <label class="block text-sm">Nome</label>
             <input name="nome" class="border rounded p-2 w-full" required />
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 justify-end">
             <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">SALVAR</button>
             <button class="px-4 py-2 rounded bg-gray-200 text-brand-brown" type="button" onclick="history.back()">CANCELAR</button>
         </div>

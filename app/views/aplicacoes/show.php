@@ -24,7 +24,7 @@
     <form method="post" action="index.php?route=aplicacoes/update" class="space-y-4 bg-white shadow rounded p-4">
       <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
       <input type="hidden" name="id_aplicacao" value="<?= (int)$app['id'] ?>" />
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
         <div>
           <label class="block text-sm">Data prevista</label>
           <input type="date" name="data_prevista" value="<?= htmlspecialchars($app['data_prevista'] ?? '') ?>" />
@@ -49,10 +49,10 @@
       </div>
       <div>
         <label class="block text-sm">Colaboradores vinculados</label>
-        <div class="space-y-2">
-          <input type="text" id="colabSearch" class="border rounded p-2 w-full" placeholder="Buscar por nome..." />
-          <div id="colabResults" class="border rounded p-2 max-h-48 overflow-auto text-sm"></div>
-          <div id="colabSelected" class="flex flex-wrap gap-2">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+          <input type="text" id="colabSearch" class="border rounded p-2 w-full md:col-span-4" placeholder="Buscar por nome..." />
+          <div id="colabResults" class="border rounded p-2 max-h-48 overflow-auto text-sm md:col-span-4"></div>
+          <div id="colabSelected" class="flex flex-wrap gap-2 md:col-span-4">
             <?php foreach ($colabs as $c): ?>
               <span class="px-2 py-1 rounded bg-brand-brown text-white text-xs" data-id="<?= (int)$c['id'] ?>">
                 <?= htmlspecialchars($c['nome']) ?>
@@ -63,7 +63,7 @@
           </div>
         </div>
       </div>
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-3 justify-end">
         <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">SALVAR</button>
         <a class="px-4 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?route=clientes/show&id=<?= (int)$app['id_cliente'] ?>">CANCELAR</a>
       </div>
