@@ -11,10 +11,14 @@ class ColaboradorModel extends BaseModel
                 nome VARCHAR(180) NOT NULL,
                 email VARCHAR(180) NULL,
                 funcao_id INT NOT NULL,
+                lider ENUM(\'não\',\'sim\') NOT NULL DEFAULT \'não\',
                 cliente_id INT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
             if (!\App\Database\Database::columnExists('colaboradores', 'cliente_id')) {
                 $this->db->exec('ALTER TABLE colaboradores ADD COLUMN cliente_id INT NULL');
+            }
+            if (!\App\Database\Database::columnExists('colaboradores', 'lider')) {
+                $this->db->exec('ALTER TABLE colaboradores ADD COLUMN lider ENUM(\'não\',\'sim\') NOT NULL DEFAULT \'não\' AFTER funcao_id');
             }
         } catch (\PDOException $e) {}
     }

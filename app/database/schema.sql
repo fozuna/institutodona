@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS colaboradores (
   nome VARCHAR(180) NOT NULL,
   email VARCHAR(180) NULL,
   funcao_id INT NOT NULL,
+  lider ENUM('não','sim') NOT NULL DEFAULT 'não',
   cliente_id INT NULL,
   CONSTRAINT fk_colab_func FOREIGN KEY (funcao_id) REFERENCES funcoes(id) ON DELETE RESTRICT,
   CONSTRAINT fk_colab_cliente FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE SET NULL
@@ -122,6 +123,8 @@ ALTER TABLE metodologias
 
 ALTER TABLE aplicacoes
   ADD COLUMN IF NOT EXISTS funcao_id INT NULL;
+ALTER TABLE colaboradores
+  ADD COLUMN IF NOT EXISTS lider ENUM('não','sim') NOT NULL DEFAULT 'não' AFTER funcao_id;
 
 -- Pilares básicos
 INSERT INTO pilares (nome) VALUES
