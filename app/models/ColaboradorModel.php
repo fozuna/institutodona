@@ -26,10 +26,8 @@ class ColaboradorModel extends BaseModel
     public function allByCliente(int $clienteId): array
     {
         $this->ensureTable();
-        $hasIsMatriz = \App\Database\Database::columnExists('clientes', 'is_matriz');
-        $selectUnidade = $hasIsMatriz ? 'cli.is_matriz' : 'NULL AS is_matriz';
         $sql = 'SELECT col.id, col.nome, col.email, col.funcao_id, col.cliente_id,
-                       ' . $selectUnidade . ', f.nome AS funcao, s.nome AS setor, d.nome AS departamento
+                       cli.nome_empresa AS unidade, f.nome AS funcao, s.nome AS setor, d.nome AS departamento
                 FROM colaboradores col
                 JOIN funcoes f ON f.id = col.funcao_id
                 JOIN setores s ON s.id = f.setor_id
@@ -57,10 +55,8 @@ class ColaboradorModel extends BaseModel
         $page = max(1, (int)$page);
         $perPage = max(1, min(200, (int)$perPage));
         $offset = ($page - 1) * $perPage;
-        $hasIsMatriz = \App\Database\Database::columnExists('clientes', 'is_matriz');
-        $selectUnidade = $hasIsMatriz ? 'cli.is_matriz' : 'NULL AS is_matriz';
         $sql = 'SELECT col.id, col.nome, col.email, col.funcao_id, col.cliente_id,
-                       ' . $selectUnidade . ', f.nome AS funcao, s.nome AS setor, d.nome AS departamento
+                       cli.nome_empresa AS unidade, f.nome AS funcao, s.nome AS setor, d.nome AS departamento
                 FROM colaboradores col
                 JOIN funcoes f ON f.id = col.funcao_id
                 JOIN setores s ON s.id = f.setor_id

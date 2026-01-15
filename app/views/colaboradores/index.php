@@ -44,7 +44,7 @@
                     <tr class="border-b">
                         <td class="p-3"><?= htmlspecialchars($c['nome']) ?></td>
                         <td class="p-3"><?= htmlspecialchars($c['email'] ?? '') ?></td>
-                        <td class="p-3"><?= ((int)($c['is_matriz'] ?? 1) === 1) ? 'Matriz' : 'Filial' ?></td>
+                        <td class="p-3"><?= htmlspecialchars($c['unidade'] ?? '') ?></td>
                         <td class="p-3"><?= htmlspecialchars($c['funcao'] ?? '') ?></td>
                         <td class="p-3"><?= htmlspecialchars($c['setor'] ?? '') ?></td>
                         <td class="p-3"><?= htmlspecialchars($c['departamento'] ?? '') ?></td>
