@@ -22,7 +22,7 @@ class AplicacoesController extends BaseController
         $id = (int)($_GET['id'] ?? 0);
         $app = $this->aplicacoes->find($id);
         $consultores = (new ConsultorModel())->all();
-        $funcoes = $app ? (new FuncaoModel())->allByCliente((int)$app['id_cliente']) : [];
+        $funcoes = $app ? $this->aplicacoes->functionsForAplicacao((int)$app['id']) : [];
         $this->render('aplicacoes/show', [
             'app' => $app,
             'consultores' => $consultores,

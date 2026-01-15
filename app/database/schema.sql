@@ -137,6 +137,13 @@ ALTER TABLE metodologias
 
 ALTER TABLE aplicacoes
   ADD COLUMN IF NOT EXISTS funcao_id INT NULL;
+CREATE TABLE IF NOT EXISTS aplicacao_funcoes (
+  aplicacao_id INT NOT NULL,
+  funcao_id INT NOT NULL,
+  PRIMARY KEY (aplicacao_id, funcao_id),
+  CONSTRAINT fk_apf_apl FOREIGN KEY (aplicacao_id) REFERENCES aplicacoes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_apf_func FOREIGN KEY (funcao_id) REFERENCES funcoes(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ALTER TABLE colaboradores
   ADD COLUMN IF NOT EXISTS lider ENUM('não','sim') NOT NULL DEFAULT 'não' AFTER funcao_id;
 

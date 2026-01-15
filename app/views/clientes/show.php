@@ -70,6 +70,7 @@
                 <th class="p-3">Prevista</th>
                 <th class="p-3">Consultor</th>
                 <th class="p-3">Status</th>
+                <th class="p-3">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -77,7 +78,7 @@
                 <tr class="border-b">
                   <td class="p-3"><?= htmlspecialchars($a['pilar_nome']) ?></td>
                   <td class="p-3"><a class="text-brand-red hover:underline" href="index.php?route=aplicacoes/show&id=<?= (int)$a['id'] ?>"><?= htmlspecialchars($a['item_pilar']) ?></a></td>
-                  <td class="p-3"><?= htmlspecialchars($a['funcao_nome'] ?? '') ?></td>
+                  <td class="p-3"><?= htmlspecialchars($a['funcoes_vinculadas'] ?? '') ?></td>
                   <td class="p-3">
                     <?php if (($a['tipo'] ?? 'tarefa') === 'manual' && !empty($a['arquivo_path'])): ?>
                       <a class="text-brand-red hover:underline" target="_blank" href="../<?= htmlspecialchars($a['arquivo_path']) ?>">baixar</a>
@@ -88,6 +89,10 @@
                   <td class="p-3"><?= htmlspecialchars($a['data_prevista'] ?? '') ?></td>
                   <td class="p-3"><?= htmlspecialchars($a['consultor_nome'] ?? '') ?></td>
                   <td class="p-3"><?= htmlspecialchars($a['status']) ?></td>
+                  <td class="p-3 whitespace-nowrap">
+                    <a class="text-brand-pink icon-action" href="index.php?route=aplicacoes/show&id=<?= (int)$a['id'] ?>" title="Editar" aria-label="Editar"><span data-feather="edit"></span></a>
+                    <a class="text-brand-brown icon-action ml-2" href="index.php?route=clientes/deleteAplicacao&id_cliente=<?= (int)$item['id'] ?>&id_aplicacao=<?= (int)$a['id'] ?>" title="Excluir" aria-label="Excluir"><span data-feather="trash-2"></span></a>
+                  </td>
                 </tr>
               <?php endforeach; ?>
             </tbody>
@@ -113,9 +118,8 @@
                 <option value="<?= (int)$m['id'] ?>">[<?= htmlspecialchars($m['pilar_nome']) ?>] <?= htmlspecialchars($m['item_pilar']) ?></option>
               <?php endforeach; ?>
             </select>
-            <label class="block text-sm">Função</label>
-            <select name="funcao_id" class="w-full" required>
-              <option value="">— selecione —</option>
+            <label class="block text-sm">Funções (pode selecionar várias)</label>
+            <select name="funcao_ids[]" class="w-full" multiple size="6" required>
               <?php foreach ($funcoes as $fn): ?>
                 <option value="<?= (int)$fn['id'] ?>"><?= htmlspecialchars($fn['departamento'] . ' / ' . $fn['setor'] . ' / ' . $fn['nome']) ?></option>
               <?php endforeach; ?>
