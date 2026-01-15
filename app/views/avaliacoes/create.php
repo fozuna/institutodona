@@ -70,19 +70,40 @@
         ],
       ];
     ?>
-    <?php foreach ($qs as $pillar => $questions): ?>
-      <div class="bg-white shadow rounded p-4">
-        <div class="font-semibold mb-3 uppercase"><?= $pillar ?></div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <?php foreach ($questions as $idx => $q): ?>
-            <label class="flex items-center gap-2">
-              <input type="checkbox" name="<?= $pillar ?>[]" value="<?= $idx+1 ?>" />
-              <span class="text-sm"><?= htmlspecialchars($q) ?></span>
-            </label>
-          <?php endforeach; ?>
+    <div class="grid grid-cols-1 xl:grid-cols-4 gap-6">
+      <?php foreach ($qs as $pillar => $questions): ?>
+        <div class="bg-white shadow rounded">
+          <div class="px-4 py-3 border-b flex items-center justify-between">
+            <div class="font-semibold uppercase"><?= $pillar ?></div>
+            <span class="text-brand-brown">✔</span>
+          </div>
+          <div class="p-0">
+            <table class="min-w-full text-sm">
+              <tbody>
+              <?php foreach ($questions as $idx => $q): ?>
+                <tr class="border-b">
+                  <td class="p-2 w-8"><input type="checkbox" name="<?= $pillar ?>[]" value="<?= $idx+1 ?>" /></td>
+                  <td class="p-2"><?= htmlspecialchars($q) ?></td>
+                </tr>
+              <?php endforeach; ?>
+              <tr>
+                <td class="p-2 font-semibold">Nota:</td>
+                <td class="p-2"><input type="number" name="nota_<?= $pillar ?>" min="0" max="7" class="border rounded p-2 w-24" /></td>
+              </tr>
+              <tr>
+                <td class="p-2 font-semibold">Mundo ideal (100%)</td>
+                <td class="p-2">7</td>
+              </tr>
+              <tr>
+                <td class="p-2 font-semibold">Qual sua realidade? (%)</td>
+                <td class="p-2"><input type="number" name="realidade_<?= $pillar ?>" min="0" max="100" class="border rounded p-2 w-28" /></td>
+              </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
-    <?php endforeach; ?>
+      <?php endforeach; ?>
+    </div>
     <div class="flex items-center gap-3">
       <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">Salvar</button>
       <button class="px-4 py-2 rounded bg-gray-200 text-brand-brown" type="button" onclick="history.back()">Cancelar</button>

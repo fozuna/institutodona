@@ -43,10 +43,14 @@ class AvaliacoesController extends BaseController
         $mer = $_POST['mercado'] ?? [];
         $pes = $_POST['pessoas'] ?? [];
         $pro = $_POST['processo'] ?? [];
-        $notaFin = is_array($fin) ? count($fin) : 0;
-        $notaMer = is_array($mer) ? count($mer) : 0;
-        $notaPes = is_array($pes) ? count($pes) : 0;
-        $notaPro = is_array($pro) ? count($pro) : 0;
+        $notaFin = isset($_POST['nota_financeiro']) ? (int)$_POST['nota_financeiro'] : (is_array($fin) ? count($fin) : 0);
+        $notaMer = isset($_POST['nota_mercado']) ? (int)$_POST['nota_mercado'] : (is_array($mer) ? count($mer) : 0);
+        $notaPes = isset($_POST['nota_pessoas']) ? (int)$_POST['nota_pessoas'] : (is_array($pes) ? count($pes) : 0);
+        $notaPro = isset($_POST['nota_processo']) ? (int)$_POST['nota_processo'] : (is_array($pro) ? count($pro) : 0);
+        $realFin = isset($_POST['realidade_financeiro']) ? (int)$_POST['realidade_financeiro'] : null;
+        $realMer = isset($_POST['realidade_mercado']) ? (int)$_POST['realidade_mercado'] : null;
+        $realPes = isset($_POST['realidade_pessoas']) ? (int)$_POST['realidade_pessoas'] : null;
+        $realPro = isset($_POST['realidade_processo']) ? (int)$_POST['realidade_processo'] : null;
         $payload = [
             'cliente_id' => $clienteId ?: null,
             'empresa_nome' => $clienteId ? null : ($empresaNome ?: null),
@@ -56,6 +60,10 @@ class AvaliacoesController extends BaseController
             'nota_mercado' => $notaMer,
             'nota_pessoas' => $notaPes,
             'nota_processo' => $notaPro,
+            'realidade_financeiro' => $realFin,
+            'realidade_mercado' => $realMer,
+            'realidade_pessoas' => $realPes,
+            'realidade_processo' => $realPro,
         ];
         $id = $this->model->create($payload);
         if ($clienteId) {
