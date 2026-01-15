@@ -4,8 +4,8 @@
     <h1 class="text-2xl font-bold">Aplicar nova tarefa</h1>
     <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="javascript:history.back()">Voltar</a>
   </div>
-  <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
-    <div class="md:col-span-6">
+  <div class="md:flex md:gap-6">
+    <div class="md:basis-1/2">
       <div class="bg-white shadow rounded p-4">
         <form method="post" action="index.php?route=clientes/attach" class="space-y-3">
       <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
@@ -70,7 +70,7 @@
         </form>
       </div>
     </div>
-    <div class="md:col-span-6">
+    <div class="md:basis-1/2">
       <div class="bg-white shadow rounded p-4">
         <label class="block text-sm">Lista de Colaboradores</label>
         <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-end mb-2">
