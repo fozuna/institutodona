@@ -28,7 +28,8 @@ class MetodologiaController extends BaseController
         $this->requireRole('instituto');
         $pilares = $this->pilares->all();
         $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
-        $this->render('metodologias/create', ['pilares' => $pilares, 'cliente' => $cliente]);
+        $items = $cliente ? $this->model->byCliente($cliente) : [];
+        $this->render('metodologias/create', ['pilares' => $pilares, 'cliente' => $cliente, 'items' => $items]);
     }
 
     public function store(): void
@@ -77,8 +78,8 @@ class MetodologiaController extends BaseController
                 'cliente_id' => $clienteId,
             ]);
         }
-        $redirectCliente = $clienteId ? ('&id=' . $clienteId) : '';
-        header('Location: index.php?route=clientes/show' . $redirectCliente);
+        $redirectCliente = $clienteId ? ('&cliente=' . $clienteId) : '';
+        header('Location: index.php?route=metodologias/create' . $redirectCliente);
     }
 
     public function edit(): void

@@ -43,3 +43,47 @@
         </div>
     </form>
 </div>
+<?php if (!empty($cliente)): ?>
+<div class="p-6">
+  <div class="bg-white shadow rounded">
+    <div class="px-4 py-3 border-b font-semibold">Tarefas cadastradas para esta empresa</div>
+    <div class="p-4">
+      <?php if (empty($items ?? [])): ?>
+        <div class="text-sm text-gray-600">Nenhuma tarefa cadastrada ainda.</div>
+      <?php else: ?>
+        <table class="min-w-full">
+          <thead>
+            <tr class="text-left border-b">
+              <th class="p-3">Pilar</th>
+              <th class="p-3">Item</th>
+              <th class="p-3">Tipo</th>
+              <th class="p-3">Arquivo</th>
+              <th class="p-3">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($items as $m): ?>
+              <tr class="border-b">
+                <td class="p-3"><?= htmlspecialchars($m['pilar_nome'] ?? '') ?></td>
+                <td class="p-3"><?= htmlspecialchars($m['item_pilar'] ?? '') ?></td>
+                <td class="p-3"><?= htmlspecialchars($m['tipo'] ?? '') ?></td>
+                <td class="p-3">
+                  <?php if (($m['tipo'] ?? 'tarefa') === 'manual' && !empty($m['arquivo_path'])): ?>
+                    <a class="text-brand-red hover:underline" target="_blank" href="../<?= htmlspecialchars($m['arquivo_path']) ?>">baixar</a>
+                  <?php else: ?>
+                    —
+                  <?php endif; ?>
+                </td>
+                <td class="p-3 whitespace-nowrap">
+                  <a class="text-brand-pink icon-action" href="index.php?route=metodologias/edit&id=<?= (int)$m['id'] ?>" title="Editar" aria-label="Editar"><span data-feather="edit"></span></a>
+                  <a class="text-brand-brown icon-action ml-2" href="index.php?route=metodologias/delete&id=<?= (int)$m['id'] ?>" title="Excluir" aria-label="Excluir"><span data-feather="trash-2"></span></a>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      <?php endif; ?>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
