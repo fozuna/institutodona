@@ -85,8 +85,7 @@ class AplicacaoModel extends BaseModel
                 LEFT JOIN funcoes f ON f.id = af.funcao_id
                 $joinCons
                 WHERE a.id_cliente = :id_cliente
-                GROUP BY a.id, a.status, a.id_metodologia, a.id_cliente, $selectPrevista, $selectConclusao, $selectConsultorId,
-                         m.item_pilar, $selectTipo, $selectArquivo, p.nome, cli.nome_empresa, $selectCons
+                GROUP BY a.id
                 $order";
         $stmt = $this->db->prepare($sql);
         $stmt->execute(['id_cliente' => $idCliente]);
@@ -242,8 +241,7 @@ class AplicacaoModel extends BaseModel
                 LEFT JOIN funcoes f ON f.id = af.funcao_id
                 $joinCons
                 WHERE " . implode(' AND ', $conds) . "
-                GROUP BY a.id, a.status, a.id_metodologia, a.id_cliente, $selectPrevista, $selectConclusao, $selectConsultorId,
-                         m.item_pilar, $selectTipo, $selectArquivo, p.nome, cli.nome_empresa, $selectCons
+                GROUP BY a.id
                 $order";
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);

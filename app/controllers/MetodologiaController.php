@@ -18,12 +18,14 @@ class MetodologiaController extends BaseController
 
     public function index(): void
     {
+        $this->requireRole('instituto');
         $metodologias = $this->model->all();
         $this->render('metodologias/index', compact('metodologias'));
     }
 
     public function create(): void
     {
+        $this->requireRole('instituto');
         $pilares = $this->pilares->all();
         $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
         $this->render('metodologias/create', ['pilares' => $pilares, 'cliente' => $cliente]);
@@ -31,6 +33,7 @@ class MetodologiaController extends BaseController
 
     public function store(): void
     {
+        $this->requireRole('instituto');
         $idPilar = (int)($_POST['id_pilar'] ?? 0);
         $itemPilar = trim($_POST['item_pilar'] ?? '');
         $tipo = $_POST['tipo'] ?? 'tarefa';
@@ -80,6 +83,7 @@ class MetodologiaController extends BaseController
 
     public function edit(): void
     {
+        $this->requireRole('instituto');
         $id = (int)($_GET['id'] ?? 0);
         $metodologia = $this->model->find($id);
         $pilares = $this->pilares->all();
@@ -88,6 +92,7 @@ class MetodologiaController extends BaseController
 
     public function update(): void
     {
+        $this->requireRole('instituto');
         $id = (int)($_POST['id'] ?? 0);
         $idPilar = (int)($_POST['id_pilar'] ?? 0);
         $itemPilar = trim($_POST['item_pilar'] ?? '');
@@ -139,6 +144,7 @@ class MetodologiaController extends BaseController
 
     public function delete(): void
     {
+        $this->requireRole('instituto');
         $id = (int)($_GET['id'] ?? 0);
         if ($id) {
             $this->model->delete($id);
