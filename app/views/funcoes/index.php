@@ -2,7 +2,10 @@
 <div class="p-6">
     <div class="flex justify-between items-center mb-4">
         <h1 class="text-2xl font-bold"><?= htmlspecialchars($pageTitle ?? 'Funções') ?></h1>
-        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=funcoes/create<?= $cliente ? '&cliente='.(int)$cliente : '' ?>">Nova Função</a>
+        <div class="flex items-center gap-2">
+            <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=funcoes/create<?= $cliente ? '&cliente='.(int)$cliente : '' ?>">Nova Função</a>
+            <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="javascript:history.back()">Voltar</a>
+        </div>
     </div>
     <div class="bg-white shadow rounded">
         <table class="min-w-full">
