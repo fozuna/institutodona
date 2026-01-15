@@ -3,6 +3,36 @@ namespace App\Models;
 
 class AplicacaoModel extends BaseModel
 {
+    private function ensureTable(): void
+    {
+        try {
+            $this->db->exec("CREATE TABLE IF NOT EXISTS aplicacoes (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                id_cliente INT NOT NULL,
+                id_metodologia INT NOT NULL,
+                status ENUM('A Fazer','Em Andamento','Concluído','Pendente') NOT NULL DEFAULT 'A Fazer',
+                consultor_id INT NULL,
+                data_prevista DATE NULL,
+                data_conclusao DATE NULL,
+                funcao_id INT NULL,
+                CONSTRAINT fk_apl_cliente FOREIGN KEY (id_cliente) REFERENCES clientes(id) ON DELETE CASCADE,
+                CONSTRAINT fk_apl_metodologia FOREIGN KEY (id_metodologia) REFERENCES metodologias(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            if (!\App\Database\Database::columnExists('aplicacoes', 'consultor_id')) {
+                $this->db->exec('ALTER TABLE aplicacoes ADD COLUMN consultor_id INT NULL');
+            }
+            if (!\App\Database\Database::columnExists('aplicacoes', 'data_prevista')) {
+                $this->db->exec('ALTER TABLE aplicacoes ADD COLUMN data_prevista DATE NULL');
+            }
+            if (!\App\Database\Database::columnExists('aplicacoes', 'data_conclusao')) {
+                $this->db->exec('ALTER TABLE aplicacoes ADD COLUMN data_conclusao DATE NULL');
+            }
+            if (!\App\Database\Database::columnExists('aplicacoes', 'funcao_id')) {
+                $this->db->exec('ALTER TABLE aplicacoes ADD COLUMN funcao_id INT NULL');
+            }
+        } catch (\PDOException $e) {}
+    }
+
     public function updateAssignment(int $idAplicacao, ?int $funcaoId): bool
     {
         try {
@@ -17,6 +47,7 @@ class AplicacaoModel extends BaseModel
     }
     public function byCliente(int $idCliente): array
     {
+        $this->ensureTable();
         $hasConsTbl = \App\Database\Database::tableExists('consultores');
         $hasPrevistaCol = \App\Database\Database::columnExists('aplicacoes', 'data_prevista');
         $hasConclusaoCol = \App\Database\Database::columnExists('aplicacoes', 'data_conclusao');
@@ -49,6 +80,7 @@ class AplicacaoModel extends BaseModel
 
     public function all(): array
     {
+        $this->ensureTable();
         $hasConsTbl = \App\Database\Database::tableExists('consultores');
         $hasPrevistaCol = \App\Database\Database::columnExists('aplicacoes', 'data_prevista');
         $hasConclusaoCol = \App\Database\Database::columnExists('aplicacoes', 'data_conclusao');
@@ -80,6 +112,7 @@ class AplicacaoModel extends BaseModel
 
     public function statsByPilar(?int $idCliente = null): array
     {
+        $this->ensureTable();
         $where = '';
         $params = [];
         if ($idCliente !== null) {
@@ -101,6 +134,7 @@ class AplicacaoModel extends BaseModel
     public function create(int $idCliente, int $idMetodologia, string $status, ?int $consultorId = null, ?string $dataPrevista = null): int
     {
         try {
+            $this->ensureTable();
             $stmt = $this->db->prepare('INSERT INTO aplicacoes (id_cliente, id_metodologia, status, consultor_id, data_prevista) VALUES (:id_cliente, :id_metodologia, :status, :consultor_id, :data_prevista)');
             $stmt->execute([
                 'id_cliente' => $idCliente,
@@ -122,6 +156,7 @@ class AplicacaoModel extends BaseModel
 
     public function updateStatus(int $idAplicacao, string $status): bool
     {
+        $this->ensureTable();
         $stmt = $this->db->prepare('UPDATE aplicacoes SET status = :status WHERE id = :id');
         return $stmt->execute([
             'status' => $status,
@@ -132,6 +167,7 @@ class AplicacaoModel extends BaseModel
     public function updateSchedule(int $idAplicacao, ?string $dataPrevista, ?int $consultorId): bool
     {
         try {
+            $this->ensureTable();
             $stmt = $this->db->prepare('UPDATE aplicacoes SET data_prevista = :data_prevista, consultor_id = :consultor_id WHERE id = :id');
             return $stmt->execute([
                 'data_prevista' => $dataPrevista,
@@ -145,6 +181,7 @@ class AplicacaoModel extends BaseModel
 
     public function find(int $idAplicacao): ?array
     {
+        $this->ensureTable();
         $hasConsTbl = \App\Database\Database::tableExists('consultores');
         $hasPrevistaCol = \App\Database\Database::columnExists('aplicacoes', 'data_prevista');
         $hasConclusaoCol = \App\Database\Database::columnExists('aplicacoes', 'data_conclusao');
@@ -175,6 +212,7 @@ class AplicacaoModel extends BaseModel
     }
     public function delete(int $idAplicacao): bool
     {
+        $this->ensureTable();
         $stmt = $this->db->prepare('DELETE FROM aplicacoes WHERE id = :id');
         return $stmt->execute(['id' => $idAplicacao]);
     }
