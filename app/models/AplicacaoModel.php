@@ -43,6 +43,52 @@ class AplicacaoModel extends BaseModel
         } catch (\PDOException $e) {}
     }
 
+    public function addArquivo(int $aplicacaoId, int $clienteId, string $nomeOriginal, string $path, string $mime, int $size): bool
+    {
+        $this->ensureTable();
+        try {
+            $this->db->exec("CREATE TABLE IF NOT EXISTS aplicacao_arquivos (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                aplicacao_id INT NOT NULL,
+                cliente_id INT NOT NULL,
+                nome_original VARCHAR(255) NOT NULL,
+                arquivo_path VARCHAR(255) NOT NULL,
+                mime VARCHAR(100) NOT NULL,
+                tamanho INT NOT NULL,
+                uploaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            $stmt = $this->db->prepare('INSERT INTO aplicacao_arquivos (aplicacao_id, cliente_id, nome_original, arquivo_path, mime, tamanho) VALUES (:ap, :cl, :no, :pa, :mi, :ta)');
+            return $stmt->execute([
+                'ap' => $aplicacaoId,
+                'cl' => $clienteId,
+                'no' => $nomeOriginal,
+                'pa' => $path,
+                'mi' => $mime,
+                'ta' => $size,
+            ]);
+        } catch (\PDOException $e) {
+            return false;
+        }
+    }
+
+    public function arquivosForAplicacao(int $aplicacaoId): array
+    {
+        $this->ensureTable();
+        $this->db->exec("CREATE TABLE IF NOT EXISTS aplicacao_arquivos (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            aplicacao_id INT NOT NULL,
+            cliente_id INT NOT NULL,
+            nome_original VARCHAR(255) NOT NULL,
+            arquivo_path VARCHAR(255) NOT NULL,
+            mime VARCHAR(100) NOT NULL,
+            tamanho INT NOT NULL,
+            uploaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $stmt = $this->db->prepare('SELECT id, nome_original, arquivo_path, mime, tamanho, uploaded_at FROM aplicacao_arquivos WHERE aplicacao_id = :id ORDER BY uploaded_at DESC');
+        $stmt->execute(['id' => $aplicacaoId]);
+        return $stmt->fetchAll();
+    }
+
     public function updateAssignment(int $idAplicacao, ?int $funcaoId): bool
     {
         try {

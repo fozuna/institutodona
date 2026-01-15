@@ -42,10 +42,12 @@ class AplicacoesController extends BaseController
         $app = $this->aplicacoes->find($id);
         $consultores = (new ConsultorModel())->all();
         $colabs = $app ? $this->aplicacoes->colaboradoresForAplicacao((int)$app['id']) : [];
+        $arquivos = $app ? $this->aplicacoes->arquivosForAplicacao((int)$app['id']) : [];
         $this->render('aplicacoes/show', [
             'app' => $app,
             'consultores' => $consultores,
             'colabs' => $colabs,
+            'arquivos' => $arquivos,
         ]);
     }
 
@@ -81,5 +83,42 @@ class AplicacoesController extends BaseController
             $ok = $this->aplicacoes->updateStatus($id, $status);
         }
         echo json_encode(['ok' => $ok]);
+    }
+
+    public function upload(): void
+    {
+        $this->requireRole('instituto');
+        $csrf = $_POST['csrf'] ?? null;
+        if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
+        $id = (int)($_POST['id_aplicacao'] ?? 0);
+        $app = $this->aplicacoes->find($id);
+        if (!$app) { http_response_code(404); echo 'Tarefa não encontrada'; return; }
+        if (!empty($_FILES['arquivo']['name']) && is_uploaded_file($_FILES['arquivo']['tmp_name'])) {
+            $allow = [
+                'application/pdf' => 'pdf',
+                'image/png' => 'png',
+                'image/jpeg' => 'jpg',
+                'image/webp' => 'webp',
+                'text/plain' => 'txt',
+                'application/msword' => 'doc',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+                'application/vnd.ms-excel' => 'xls',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx'
+            ];
+            $type = $_FILES['arquivo']['type'] ?? '';
+            $ext = $allow[$type] ?? null;
+            if ($ext) {
+                $dir = __DIR__ . '/../../public/assets/files/' . (int)$app['id_cliente'] . '/aplicacao_' . (int)$app['id'];
+                if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+                $safe = preg_replace('/[^a-zA-Z0-9._-]+/', '-', strtolower($_FILES['arquivo']['name']));
+                $file = date('YmdHis') . '-' . ($safe ?: ('arquivo.' . $ext));
+                $dest = $dir . '/' . $file;
+                if (@move_uploaded_file($_FILES['arquivo']['tmp_name'], $dest)) {
+                    $rel = 'public/assets/files/' . (int)$app['id_cliente'] . '/aplicacao_' . (int)$app['id'] . '/' . $file;
+                    $this->aplicacoes->addArquivo((int)$app['id'], (int)$app['id_cliente'], $_FILES['arquivo']['name'], $rel, $type, (int)($_FILES['arquivo']['size'] ?? 0));
+                }
+            }
+        }
+        header('Location: index.php?route=aplicacoes/show&id=' . $id);
     }
 }

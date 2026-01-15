@@ -11,6 +11,7 @@ use App\Controllers\PilaresController;
 use App\Controllers\AgendaController;
 use App\Controllers\ConsultoresController;
 use App\Controllers\AplicacoesController;
+use App\Controllers\BibliotecaController;
 use App\Models\UsuarioModel;
 use App\Controllers\UsuariosController;
 use App\Controllers\DepartamentosController;
@@ -100,6 +101,9 @@ switch ($route) {
     case 'consultores/index':
         (new ConsultoresController())->index();
         break;
+    case 'biblioteca/index':
+        (new BibliotecaController())->index();
+        break;
     case 'consultores/create':
         (new ConsultoresController())->create();
         break;
@@ -126,6 +130,9 @@ switch ($route) {
         break;
     case 'aplicacoes/set_status':
         (new AplicacoesController())->set_status();
+        break;
+    case 'aplicacoes/upload':
+        (new AplicacoesController())->upload();
         break;
     case 'auth/login':
         (new AuthController())->login();

@@ -1,4 +1,4 @@
-<?php /** @var array $app */ /** @var array $consultores */ /** @var array $colabs */ ?>
+<?php /** @var array $app */ /** @var array $consultores */ /** @var array $colabs */ /** @var array $arquivos */ ?>
 <div class="p-6 max-w-3xl">
   <h1 class="text-2xl font-bold text-brand-black mb-2">Editar Tarefa</h1>
   <?php if (!$app): ?>
@@ -139,5 +139,45 @@
         })();
       </script>
     </form>
+    <div class="bg-white shadow rounded p-4 mt-4">
+      <div class="font-semibold mb-3">Arquivos da tarefa</div>
+      <form method="post" action="index.php?route=aplicacoes/upload" enctype="multipart/form-data" class="mb-3 flex items-end gap-3">
+        <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+        <input type="hidden" name="id_aplicacao" value="<?= (int)$app['id'] ?>" />
+        <div class="flex-1">
+          <label class="block text-sm">Enviar arquivo</label>
+          <input type="file" name="arquivo" />
+        </div>
+        <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">Enviar</button>
+      </form>
+      <?php if (!empty($arquivos)): ?>
+        <table class="min-w-full text-sm">
+          <thead>
+            <tr class="text-left border-b">
+              <th class="p-2">Nome</th>
+              <th class="p-2">Tipo</th>
+              <th class="p-2">Tamanho</th>
+              <th class="p-2">Data</th>
+              <th class="p-2">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($arquivos as $f): ?>
+              <tr class="border-b">
+                <td class="p-2"><?= htmlspecialchars($f['nome_original']) ?></td>
+                <td class="p-2"><?= htmlspecialchars($f['mime']) ?></td>
+                <td class="p-2"><?= number_format((int)$f['tamanho'] / 1024, 1) ?> KB</td>
+                <td class="p-2"><?= htmlspecialchars(date('d/m/Y H:i', strtotime($f['uploaded_at']))) ?></td>
+                <td class="p-2">
+                  <a class="text-brand-red hover:underline" target="_blank" href="../<?= htmlspecialchars($f['arquivo_path']) ?>">Abrir</a>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      <?php else: ?>
+        <div class="text-sm text-gray-600">Nenhum arquivo enviado ainda.</div>
+      <?php endif; ?>
+    </div>
   <?php endif; ?>
 </div>

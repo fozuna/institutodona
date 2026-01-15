@@ -38,6 +38,7 @@ $config = require $cfg;
                     <a class="block px-3 py-2 rounded nav-link" href="index.php?route=agenda/index"><span data-feather="calendar" class="inline-block mr-2"></span>Agenda</a>
                     <a class="block px-3 py-2 rounded nav-link" href="index.php?route=consultores/index"><span data-feather="users" class="inline-block mr-2"></span>Consultores</a>
                     <a class="block px-3 py-2 rounded nav-link" href="index.php?route=avaliacoes/index"><span data-feather="check-square" class="inline-block mr-2"></span>Avaliações</a>
+                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=biblioteca/index"><span data-feather="folder" class="inline-block mr-2"></span>Biblioteca</a>
                 </nav>
                 <div class="mt-auto px-4 py-3 border-t border-brand-brown flex items-center justify-between">
                     <button id="themeToggle" class="text-sm flex items-center gap-2">
