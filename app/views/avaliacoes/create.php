@@ -87,16 +87,22 @@
                 </tr>
               <?php endforeach; ?>
               <tr>
-                <td class="p-2 font-semibold">Nota:</td>
-                <td class="p-2"><input type="number" name="nota_<?= $pillar ?>" id="nota_<?= $pillar ?>" min="0" max="7" class="border rounded p-2 w-24" /></td>
+                <td class="p-2 font-semibold" colspan="2">Nota:</td>
               </tr>
               <tr>
-                <td class="p-2 font-semibold">Mundo ideal (100%)</td>
-                <td class="p-2">7</td>
+                <td class="p-2" colspan="2"><input type="number" name="nota_<?= $pillar ?>" id="nota_<?= $pillar ?>" min="0" max="7" class="border rounded p-2 w-full select-none" readonly tabindex="-1" /></td>
               </tr>
               <tr>
-                <td class="p-2 font-semibold">Qual sua realidade? (%)</td>
-                <td class="p-2"><input type="number" name="realidade_<?= $pillar ?>" id="realidade_<?= $pillar ?>" min="0" max="100" class="border rounded p-2 w-28" /></td>
+                <td class="p-2 font-semibold" colspan="2">Mundo ideal (100%)</td>
+              </tr>
+              <tr>
+                <td class="p-2" colspan="2"><input type="number" value="7" class="border rounded p-2 w-full bg-gray-100 select-none" readonly tabindex="-1" /></td>
+              </tr>
+              <tr>
+                <td class="p-2 font-semibold" colspan="2">Qual sua realidade? (%)</td>
+              </tr>
+              <tr>
+                <td class="p-2" colspan="2"><input type="number" name="realidade_<?= $pillar ?>" id="realidade_<?= $pillar ?>" min="0" max="100" class="border rounded p-2 w-full select-none" readonly tabindex="-1" /></td>
               </tr>
               </tbody>
             </table>
@@ -128,17 +134,6 @@
         ['financeiro','mercado','pessoas','processo'].forEach(p=>{
           document.querySelectorAll('input[type="checkbox"][data-pillar="'+p+'"]').forEach(el=>{
             el.addEventListener('change', ()=>recalc(p));
-          });
-          const nota = document.getElementById('nota_'+p);
-          const real = document.getElementById('realidade_'+p);
-          if (nota) nota.addEventListener('input', ()=>{
-            const v = Math.max(0, Math.min(7, parseInt(nota.value||0,10)));
-            nota.value = v;
-            if (real) real.value = Math.round((v / (totals[p]||1)) * 100);
-          });
-          if (real) real.addEventListener('input', ()=>{
-            const v = Math.max(0, Math.min(100, parseInt(real.value||0,10)));
-            real.value = v;
           });
           recalc(p);
         });
