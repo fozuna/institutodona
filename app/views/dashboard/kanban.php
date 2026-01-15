@@ -43,7 +43,7 @@
         ];
         ?>
         <?php foreach ($columns as $status => $color): ?>
-            <div class="kanban-column bg-white shadow rounded border">
+            <div class="kanban-column bg-white shadow rounded border" data-status="<?= $status ?>">
                 <div class="px-4 py-3 border-b flex items-center justify-between">
                     <h2 class="font-semibold">Tarefas — <?= $status ?></h2>
                     <span class="text-xs px-2 py-1 rounded text-white <?= $color ?>"><?= count($kanbanData[$status] ?? []) ?></span>
@@ -51,7 +51,7 @@
                 <div class="p-4 space-y-4">
                     <?php if (!empty($kanbanData[$status])): ?>
                         <?php foreach ($kanbanData[$status] as $card): ?>
-                            <div class="kanban-card bg-white rounded p-3">
+                            <div class="kanban-card bg-white rounded p-3 cursor-move" draggable="true" data-id="<?= (int)$card['id'] ?>" onclick="location.href='index.php?route=aplicacoes/show&id=<?= (int)$card['id'] ?>'">
                                 <div class="flex justify-between items-center mb-1">
                                   <div class="text-sm text-gray-500">Pilar: <?= htmlspecialchars($card['pilar_nome']) ?></div>
                                   <?php if (!empty($card['data_prevista'])): ?>
@@ -83,6 +83,34 @@
             </div>
         <?php endforeach; ?>
     </div>
+    <script>
+      (function(){
+        const cols = document.querySelectorAll('.kanban-column');
+        cols.forEach(col=>{
+          col.addEventListener('dragover', e=>{ e.preventDefault(); });
+          col.addEventListener('drop', async e=>{
+            e.preventDefault();
+            const status = col.getAttribute('data-status');
+            const id = e.dataTransfer.getData('text/plain');
+            if (!id || !status) return;
+            const fd = new FormData();
+            fd.append('id', id);
+            fd.append('status', status);
+            const resp = await fetch('index.php?route=aplicacoes/set_status', { method:'POST', body: fd });
+            const json = await resp.json();
+            if (json.ok) {
+              const card = document.querySelector('.kanban-card[data-id="'+id+'"]');
+              if (card) { col.querySelector('.p-4').appendChild(card); }
+            }
+          });
+        });
+        document.querySelectorAll('.kanban-card').forEach(card=>{
+          card.addEventListener('dragstart', e=>{
+            e.dataTransfer.setData('text/plain', card.getAttribute('data-id'));
+          });
+        });
+      })();
+    </script>
 
     <!-- Dicas removidas -->
 </div>

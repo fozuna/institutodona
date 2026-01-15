@@ -69,4 +69,17 @@ class AplicacoesController extends BaseController
         }
         header('Location: index.php?route=aplicacoes/show&id=' . $idAplicacao);
     }
+
+    public function set_status(): void
+    {
+        $this->requireLogin();
+        header('Content-Type: application/json; charset=utf-8');
+        $id = (int)($_POST['id'] ?? 0);
+        $status = $_POST['status'] ?? '';
+        $ok = false;
+        if ($id && in_array($status, ['A Fazer','Em Andamento','Concluído','Pendente'], true)) {
+            $ok = $this->aplicacoes->updateStatus($id, $status);
+        }
+        echo json_encode(['ok' => $ok]);
+    }
 }

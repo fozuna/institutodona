@@ -124,6 +124,9 @@ switch ($route) {
     case 'aplicacoes/update':
         (new AplicacoesController())->update();
         break;
+    case 'aplicacoes/set_status':
+        (new AplicacoesController())->set_status();
+        break;
     case 'auth/login':
         (new AuthController())->login();
         break;
