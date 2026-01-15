@@ -16,6 +16,25 @@ class AplicacoesController extends BaseController
         $this->aplicacoes = new AplicacaoModel();
     }
 
+    public function create(): void
+    {
+        $this->requireRole('instituto');
+        $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
+        $consultores = (new ConsultorModel())->all();
+        $metModel = new \App\Models\MetodologiaModel();
+        $funModel = new FuncaoModel();
+        $metodologias = $cliente ? $metModel->byCliente($cliente) : $metModel->all();
+        $funcoes = $cliente ? $funModel->allByCliente($cliente) : [];
+        $clientes = (new \App\Models\ClienteModel())->all();
+        $this->render('aplicacoes/create', [
+            'cliente' => $cliente,
+            'clientes' => $clientes,
+            'metodologias' => $metodologias,
+            'funcoes' => $funcoes,
+            'consultores' => $consultores,
+        ]);
+    }
+
     public function show(): void
     {
         $this->requireRole('instituto');

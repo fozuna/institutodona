@@ -118,6 +118,9 @@ switch ($route) {
     case 'aplicacoes/show':
         (new AplicacoesController())->show();
         break;
+    case 'aplicacoes/create':
+        (new AplicacoesController())->create();
+        break;
     case 'aplicacoes/update':
         (new AplicacoesController())->update();
         break;

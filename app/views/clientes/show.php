@@ -128,50 +128,7 @@
     </div>
 
     <div>
-      <div class="bg-white shadow rounded">
-        <div class="px-4 py-3 border-b font-semibold flex justify-between items-center">
-          <span>Aplicar nova tarefa</span>
-          <a class="px-3 py-1 rounded bg-gray-200 text-brand-brown" href="index.php?route=clientes/index">Voltar</a>
-        </div>
-        <div class="p-4">
-          <form method="post" action="index.php?route=clientes/attach" class="space-y-3">
-            <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
-            <input type="hidden" name="id_cliente" value="<?= (int)$item['id'] ?>" />
-            <label class="block text-sm">Tarefa</label>
-            <select name="id_metodologia" class="w-full">
-              <?php foreach ($metodologias as $m): ?>
-                <option value="<?= (int)$m['id'] ?>">[<?= htmlspecialchars($m['pilar_nome']) ?>] <?= htmlspecialchars($m['item_pilar']) ?></option>
-              <?php endforeach; ?>
-            </select>
-            <label class="block text-sm">Funções (pode selecionar várias)</label>
-            <select name="funcao_ids[]" class="w-full" multiple size="6" required>
-              <?php foreach ($funcoes as $fn): ?>
-                <option value="<?= (int)$fn['id'] ?>"><?= htmlspecialchars($fn['departamento'] . ' / ' . $fn['setor'] . ' / ' . $fn['nome']) ?></option>
-              <?php endforeach; ?>
-            </select>
-            <label class="block text-sm">Data prevista</label>
-            <input type="date" name="data_prevista" class="w-full" />
-            <label class="block text-sm">Consultor</label>
-            <select name="consultor_id" class="w-full">
-              <option value="">—</option>
-              <?php foreach ((new \App\Models\ConsultorModel())->all() as $cons): ?>
-                <option value="<?= (int)$cons['id'] ?>"><?= htmlspecialchars($cons['nome']) ?></option>
-              <?php endforeach; ?>
-            </select>
-            <label class="block text-sm">Status inicial</label>
-            <select name="status" class="w-full">
-              <option value="A Fazer">A Fazer</option>
-              <option value="Em Andamento">Em Andamento</option>
-              <option value="Concluído">Concluído</option>
-              <option value="Pendente">Pendente</option>
-            </select>
-            <div class="flex items-center gap-3">
-              <button type="submit" class="icon-btn icon-btn--primary" title="Aplicar" aria-label="Aplicar"><span data-feather="plus"></span></button>
-              <a class="icon-btn icon-btn--muted" href="javascript:history.back()" title="Cancelar" aria-label="Cancelar"><span data-feather="x"></span></a>
-            </div>
-          </form>
-        </div>
-      </div>
+      <!-- Seção de aplicar tarefa movida para o menu (aplicacoes/create) -->
       <div class="bg-white shadow rounded mt-6">
         <div class="px-4 py-3 border-b font-semibold">Criar nova tarefa</div>
         <div class="p-4">
