@@ -141,6 +141,21 @@ class ClientesController extends BaseController
         $filiais = $this->clientes->filiaisByMatriz($id);
         $matrizes = $this->clientes->matrizes();
         $avaliacoes = (new \App\Models\AvaliacaoModel())->byCliente($id);
+        $arquivosCliente = [];
+        foreach ($apps as $row) {
+            foreach ($apl->arquivosForAplicacao((int)$row['id']) as $f) {
+                $arquivosCliente[] = [
+                    'aplicacao_id' => (int)$row['id'],
+                    'pilar' => $row['pilar_nome'],
+                    'tarefa' => $row['item_pilar'],
+                    'nome' => $f['nome_original'],
+                    'path' => $f['arquivo_path'],
+                    'mime' => $f['mime'],
+                    'tamanho' => $f['tamanho'],
+                    'uploaded_at' => $f['uploaded_at'],
+                ];
+            }
+        }
         $this->render('clientes/show', [
             'item' => $item,
             'apps' => $apps,
@@ -152,6 +167,7 @@ class ClientesController extends BaseController
             'avaliacoes' => $avaliacoes,
             'statusFilter' => $statusFilter,
             'consultorFilter' => $consultorFilter,
+            'arquivosCliente' => $arquivosCliente,
         ]);
     }
 

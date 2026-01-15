@@ -161,6 +161,44 @@
         </div>
       </div>
       <div class="bg-white shadow rounded mt-6">
+        <div class="px-4 py-3 border-b font-semibold">Biblioteca de Arquivos</div>
+        <div class="p-4">
+          <?php if (empty($arquivosCliente)): ?>
+            <div class="text-sm text-gray-600">Nenhum arquivo enviado ainda.</div>
+          <?php else: ?>
+            <table class="min-w-full text-sm">
+              <thead>
+                <tr class="text-left border-b">
+                  <th class="p-2">Arquivo</th>
+                  <th class="p-2">Tarefa</th>
+                  <th class="p-2">Pilar</th>
+                  <th class="p-2">Tipo</th>
+                  <th class="p-2">Tamanho</th>
+                  <th class="p-2">Data</th>
+                  <th class="p-2">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php foreach ($arquivosCliente as $it): ?>
+                  <tr class="border-b">
+                    <td class="p-2"><?= htmlspecialchars($it['nome']) ?></td>
+                    <td class="p-2"><?= htmlspecialchars($it['tarefa']) ?> (#<?= (int)$it['aplicacao_id'] ?>)</td>
+                    <td class="p-2"><?= htmlspecialchars($it['pilar']) ?></td>
+                    <td class="p-2"><?= htmlspecialchars($it['mime']) ?></td>
+                    <td class="p-2"><?= number_format((int)$it['tamanho']/1024,1) ?> KB</td>
+                    <td class="p-2"><?= htmlspecialchars(date('d/m/Y H:i', strtotime($it['uploaded_at']))) ?></td>
+                    <td class="p-2">
+                      <a class="text-brand-red hover:underline" target="_blank" href="../<?= htmlspecialchars($it['path']) ?>">Abrir</a>
+                      <a class="ml-2 hover:underline" href="index.php?route=aplicacoes/show&id=<?= (int)$it['aplicacao_id'] ?>">Tarefa</a>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          <?php endif; ?>
+        </div>
+      </div>
+      <div class="bg-white shadow rounded mt-6">
         <div class="px-4 py-3 border-b font-semibold flex justify-between items-center">
           <span>Avaliações</span>
           <a class="px-3 py-1 rounded bg-brand-red text-white" href="index.php?route=avaliacoes/create&cliente=<?= (int)$item['id'] ?>">Nova Avaliação</a>
