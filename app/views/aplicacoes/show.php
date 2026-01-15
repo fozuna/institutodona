@@ -46,15 +46,14 @@
             <?php endforeach; ?>
           </select>
         </div>
-        <div>
-          <label class="block text-sm">Função</label>
-          <select name="funcao_id" required>
-            <option value="">— selecione —</option>
-            <?php foreach ($funcoes as $fn): ?>
-              <option value="<?= (int)$fn['id'] ?>" <?= ((int)($app['funcao_id'] ?? 0) === (int)$fn['id']) ? 'selected' : '' ?>><?= htmlspecialchars(($fn['departamento'] ?? '') . ' / ' . ($fn['setor'] ?? '') . ' / ' . $fn['nome']) ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
+      </div>
+      <div>
+        <label class="block text-sm">Funções vinculadas (controle de acesso aos agendamentos)</label>
+        <select name="funcao_ids[]" class="w-full" multiple size="8" required>
+          <?php foreach ($funcoes as $fn): ?>
+            <option value="<?= (int)$fn['id'] ?>" selected><?= htmlspecialchars(($fn['departamento'] ?? '') . ' / ' . ($fn['setor'] ?? '') . ' / ' . $fn['nome']) ?></option>
+          <?php endforeach; ?>
+        </select>
       </div>
       <div class="flex gap-2">
         <button class="icon-btn icon-btn--primary" type="submit" title="Salvar" aria-label="Salvar"><span data-feather="check"></span></button>

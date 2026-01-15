@@ -57,6 +57,31 @@
       <div class="bg-white shadow rounded">
         <div class="px-4 py-3 border-b font-semibold">Tarefas aplicadas</div>
         <div class="p-4">
+          <form method="get" action="index.php" class="mb-3 grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+            <input type="hidden" name="route" value="clientes/show" />
+            <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
+            <div class="md:col-span-3">
+              <label class="text-sm">Status</label>
+              <select name="status" class="border rounded p-2 w-full">
+                <option value="">Todos</option>
+                <?php foreach (['A Fazer','Em Andamento','Concluído','Pendente'] as $s): ?>
+                  <option value="<?= $s ?>" <?= (($statusFilter ?? '') === $s) ? 'selected' : '' ?>><?= $s ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="md:col-span-3">
+              <label class="text-sm">Consultor</label>
+              <select name="consultor" class="border rounded p-2 w-full">
+                <option value="0">Todos</option>
+                <?php foreach ((new \App\Models\ConsultorModel())->all() as $c): ?>
+                  <option value="<?= (int)$c['id'] ?>" <?= ((int)($consultorFilter ?? 0) === (int)$c['id']) ? 'selected' : '' ?>><?= htmlspecialchars($c['nome']) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="md:col-span-2">
+              <button class="px-4 py-2 rounded bg-brand-red text-white w-full md:w-auto" type="submit">Filtrar</button>
+            </div>
+          </form>
           <?php if (empty($apps)): ?>
             <div class="text-sm text-gray-600">Nenhuma metodologia aplicada ainda.</div>
           <?php else: ?>
@@ -65,7 +90,7 @@
               <tr class="text-left border-b">
                 <th class="p-3">Pilar</th>
                 <th class="p-3">Tarefa</th>
-                <th class="p-3">Função</th>
+                <th class="p-3">Funções</th>
                 <th class="p-3">Manual</th>
                 <th class="p-3">Prevista</th>
                 <th class="p-3">Consultor</th>

@@ -127,7 +127,12 @@ class ClientesController extends BaseController
         $id = (int)($_GET['id'] ?? 0);
         $item = $this->clientes->find($id);
         $apl = new AplicacaoModel();
-        $apps = $apl->byCliente($id);
+        $statusFilter = $_GET['status'] ?? '';
+        $consultorFilter = isset($_GET['consultor']) ? (int)$_GET['consultor'] : 0;
+        $apps = $apl->byClienteWithFilters($id, [
+            'status' => $statusFilter ?: null,
+            'consultor_id' => $consultorFilter ?: null,
+        ]);
         $met = new MetodologiaModel();
         $metodologias = $met->byCliente($id);
         $pilares = (new PilarModel())->all();
@@ -144,6 +149,8 @@ class ClientesController extends BaseController
             'filiais' => $filiais,
             'matrizes' => $matrizes,
             'avaliacoes' => $avaliacoes,
+            'statusFilter' => $statusFilter,
+            'consultorFilter' => $consultorFilter,
         ]);
     }
 

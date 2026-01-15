@@ -39,11 +39,15 @@ class AplicacoesController extends BaseController
         $status = $_POST['status'] ?? 'A Fazer';
         $dataPrevista = $_POST['data_prevista'] ?? null;
         $consultorId = isset($_POST['consultor_id']) ? (int)$_POST['consultor_id'] : null;
-        $funcaoId = isset($_POST['funcao_id']) ? (int)$_POST['funcao_id'] : null;
+        $funcaoIds = isset($_POST['funcao_ids']) ? (array)$_POST['funcao_ids'] : [];
+        $funcaoIds = array_values(array_filter(array_map('intval', $funcaoIds)));
         if ($idAplicacao) {
             $this->aplicacoes->updateStatus($idAplicacao, $status);
             $this->aplicacoes->updateSchedule($idAplicacao, $dataPrevista, $consultorId);
-            $this->aplicacoes->updateAssignment($idAplicacao, $funcaoId);
+            if (!empty($funcaoIds)) {
+                $this->aplicacoes->setFunctions($idAplicacao, $funcaoIds);
+                $this->aplicacoes->updateAssignment($idAplicacao, $funcaoIds[0] ?? null);
+            }
         }
         header('Location: index.php?route=aplicacoes/show&id=' . $idAplicacao);
     }

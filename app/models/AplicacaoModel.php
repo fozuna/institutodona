@@ -194,6 +194,61 @@ class AplicacaoModel extends BaseModel
         return $stmt->fetchAll();
     }
 
+    public function setFunctions(int $aplicacaoId, array $funcaoIds): void
+    {
+        $this->ensureTable();
+        $funcaoIds = array_values(array_unique(array_filter(array_map('intval', $funcaoIds))));
+        // Remove não selecionadas
+        $in = $funcaoIds ? implode(',', $funcaoIds) : 'NULL';
+        $sqlDel = $funcaoIds
+            ? "DELETE FROM aplicacao_funcoes WHERE aplicacao_id = :ap AND funcao_id NOT IN ($in)"
+            : "DELETE FROM aplicacao_funcoes WHERE aplicacao_id = :ap";
+        $stmtDel = $this->db->prepare($sqlDel);
+        $stmtDel->execute(['ap' => $aplicacaoId]);
+        // Adiciona novas
+        $stmtIns = $this->db->prepare('INSERT IGNORE INTO aplicacao_funcoes (aplicacao_id, funcao_id) VALUES (:ap, :fn)');
+        foreach ($funcaoIds as $fid) { if ($fid > 0) { $stmtIns->execute(['ap' => $aplicacaoId, 'fn' => $fid]); } }
+    }
+
+    public function byClienteWithFilters(int $idCliente, array $filters = []): array
+    {
+        $this->ensureTable();
+        $hasConsTbl = \App\Database\Database::tableExists('consultores');
+        $hasPrevistaCol = \App\Database\Database::columnExists('aplicacoes', 'data_prevista');
+        $hasConclusaoCol = \App\Database\Database::columnExists('aplicacoes', 'data_conclusao');
+        $hasConsultorCol = \App\Database\Database::columnExists('aplicacoes', 'consultor_id');
+        $hasTipoCol = \App\Database\Database::columnExists('metodologias', 'tipo');
+        $hasArquivoCol = \App\Database\Database::columnExists('metodologias', 'arquivo_path');
+        $selectPrevista = $hasPrevistaCol ? 'a.data_prevista' : 'NULL AS data_prevista';
+        $selectConclusao = $hasConclusaoCol ? 'a.data_conclusao' : 'NULL AS data_conclusao';
+        $selectConsultorId = $hasConsultorCol ? 'a.consultor_id' : 'NULL AS consultor_id';
+        $selectCons = $hasConsTbl && $hasConsultorCol ? 'c.nome AS consultor_nome' : 'NULL AS consultor_nome';
+        $joinCons = $hasConsTbl && $hasConsultorCol ? 'LEFT JOIN consultores c ON c.id = a.consultor_id' : '';
+        $order = $hasPrevistaCol ? 'ORDER BY a.data_prevista IS NULL, a.data_prevista, p.nome' : 'ORDER BY p.nome';
+        $selectTipo = $hasTipoCol ? 'm.tipo' : 'NULL AS tipo';
+        $selectArquivo = $hasArquivoCol ? 'm.arquivo_path' : 'NULL AS arquivo_path';
+        $conds = ['a.id_cliente = :id_cliente'];
+        $params = ['id_cliente' => $idCliente];
+        if (!empty($filters['status'])) { $conds[] = 'a.status = :status'; $params['status'] = $filters['status']; }
+        if (!empty($filters['consultor_id'])) { $conds[] = 'a.consultor_id = :cid'; $params['cid'] = (int)$filters['consultor_id']; }
+        $sql = "SELECT a.id, a.status, a.id_metodologia, a.id_cliente, $selectPrevista, $selectConclusao, $selectConsultorId,
+                       m.item_pilar, $selectTipo, $selectArquivo, p.nome AS pilar_nome, cli.nome_empresa AS cliente_nome, $selectCons,
+                       GROUP_CONCAT(DISTINCT f.nome ORDER BY f.nome SEPARATOR ', ') AS funcoes_vinculadas
+                FROM aplicacoes a
+                JOIN metodologias m ON m.id = a.id_metodologia
+                JOIN pilares p ON p.id = m.id_pilar
+                JOIN clientes cli ON cli.id = a.id_cliente
+                LEFT JOIN aplicacao_funcoes af ON af.aplicacao_id = a.id
+                LEFT JOIN funcoes f ON f.id = af.funcao_id
+                $joinCons
+                WHERE " . implode(' AND ', $conds) . "
+                GROUP BY a.id, a.status, a.id_metodologia, a.id_cliente, $selectPrevista, $selectConclusao, $selectConsultorId,
+                         m.item_pilar, $selectTipo, $selectArquivo, p.nome, cli.nome_empresa, $selectCons
+                $order";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
     public function updateStatus(int $idAplicacao, string $status): bool
     {
         $this->ensureTable();
