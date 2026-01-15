@@ -6,30 +6,30 @@
   </div>
   <form method="post" action="index.php?route=avaliacoes/store" class="space-y-6">
     <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
-    <?php if ($cliente): ?>
-      <input type="hidden" name="cliente_id" value="<?= (int)$cliente ?>" />
-      <div class="text-xs text-gray-600 mb-2">Vinculada à empresa #<?= (int)$cliente ?></div>
-    <?php else: ?>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm">Empresa (prospect)</label>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div>
+        <label class="block text-sm">Empresa (prospect)</label>
+        <?php if ($cliente): ?>
+          <input type="hidden" name="cliente_id" value="<?= (int)$cliente ?>" />
+          <input class="border rounded p-2 w-full bg-gray-100" value="<?php foreach ($clientes as $cl){ if ((int)$cl['id']===(int)$cliente){ echo htmlspecialchars($cl['nome_empresa']); break; } } ?>" readonly />
+        <?php else: ?>
           <input name="empresa_nome" class="border rounded p-2 w-full" />
-        </div>
-        <div>
-          <label class="block text-sm">Contato</label>
-          <input name="contato" class="border rounded p-2 w-full" />
-        </div>
-        <div>
-          <label class="block text-sm">Ou vincule um cliente existente</label>
-          <select name="cliente_id" class="border rounded p-2 w-full">
-            <option value="">—</option>
-            <?php foreach ($clientes as $cl): ?>
-              <option value="<?= (int)$cl['id'] ?>"><?= htmlspecialchars($cl['nome_empresa']) ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
+        <?php endif; ?>
       </div>
-    <?php endif; ?>
+      <div>
+        <label class="block text-sm">Contato</label>
+        <input name="contato" class="border rounded p-2 w-full" />
+      </div>
+      <div>
+        <label class="block text-sm">Ou vincule um cliente existente</label>
+        <select name="cliente_id" class="border rounded p-2 w-full" <?= $cliente ? 'disabled' : '' ?>>
+          <option value="">—</option>
+          <?php foreach ($clientes as $cl): ?>
+            <option value="<?= (int)$cl['id'] ?>" <?= $cliente === (int)$cl['id'] ? 'selected' : '' ?>><?= htmlspecialchars($cl['nome_empresa']) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+    </div>
     <?php
       $qs = [
         'financeiro' => [
@@ -82,13 +82,13 @@
               <tbody>
               <?php foreach ($questions as $idx => $q): ?>
                 <tr class="border-b">
-                  <td class="p-2 w-8"><input type="checkbox" name="<?= $pillar ?>[]" value="<?= $idx+1 ?>" /></td>
+                  <td class="p-2 w-8"><input type="checkbox" name="<?= $pillar ?>[]" value="<?= $idx+1 ?>" data-pillar="<?= $pillar ?>" /></td>
                   <td class="p-2"><?= htmlspecialchars($q) ?></td>
                 </tr>
               <?php endforeach; ?>
               <tr>
                 <td class="p-2 font-semibold">Nota:</td>
-                <td class="p-2"><input type="number" name="nota_<?= $pillar ?>" min="0" max="7" class="border rounded p-2 w-24" /></td>
+                <td class="p-2"><input type="number" name="nota_<?= $pillar ?>" id="nota_<?= $pillar ?>" min="0" max="7" class="border rounded p-2 w-24" /></td>
               </tr>
               <tr>
                 <td class="p-2 font-semibold">Mundo ideal (100%)</td>
@@ -96,7 +96,7 @@
               </tr>
               <tr>
                 <td class="p-2 font-semibold">Qual sua realidade? (%)</td>
-                <td class="p-2"><input type="number" name="realidade_<?= $pillar ?>" min="0" max="100" class="border rounded p-2 w-28" /></td>
+                <td class="p-2"><input type="number" name="realidade_<?= $pillar ?>" id="realidade_<?= $pillar ?>" min="0" max="100" class="border rounded p-2 w-28" /></td>
               </tr>
               </tbody>
             </table>
@@ -108,5 +108,41 @@
       <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">Salvar</button>
       <button class="px-4 py-2 rounded bg-gray-200 text-brand-brown" type="button" onclick="history.back()">Cancelar</button>
     </div>
+    <script>
+      (function(){
+        const totals = {
+          financeiro: 7,
+          mercado: 7,
+          pessoas: 7,
+          processo: 7
+        };
+        function recalc(p) {
+          const checks = document.querySelectorAll('input[type="checkbox"][data-pillar="'+p+'"]');
+          let count = 0;
+          checks.forEach(c=>{ if (c.checked) count++; });
+          const nota = document.getElementById('nota_'+p);
+          const real = document.getElementById('realidade_'+p);
+          if (nota) nota.value = count;
+          if (real) real.value = Math.round((count / (totals[p]||1)) * 100);
+        }
+        ['financeiro','mercado','pessoas','processo'].forEach(p=>{
+          document.querySelectorAll('input[type="checkbox"][data-pillar="'+p+'"]').forEach(el=>{
+            el.addEventListener('change', ()=>recalc(p));
+          });
+          const nota = document.getElementById('nota_'+p);
+          const real = document.getElementById('realidade_'+p);
+          if (nota) nota.addEventListener('input', ()=>{
+            const v = Math.max(0, Math.min(7, parseInt(nota.value||0,10)));
+            nota.value = v;
+            if (real) real.value = Math.round((v / (totals[p]||1)) * 100);
+          });
+          if (real) real.addEventListener('input', ()=>{
+            const v = Math.max(0, Math.min(100, parseInt(real.value||0,10)));
+            real.value = v;
+          });
+          recalc(p);
+        });
+      })();
+    </script>
   </form>
 </div>
