@@ -25,8 +25,8 @@
           </div>
         </div>
       <?php endif; ?>
-      <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
-        <div class="md:col-span-6">
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+        <div class="md:col-span-7">
           <label class="block text-sm">Tarefa</label>
           <select name="id_metodologia" class="w-full" required>
             <?php foreach ($metodologias as $m): ?>
@@ -34,7 +34,7 @@
             <?php endforeach; ?>
           </select>
         </div>
-        <div class="md:col-span-6">
+        <div class="md:col-span-5">
           <label class="block text-sm">Data prevista</label>
           <input type="date" name="data_prevista" class="w-full" />
         </div>
@@ -47,7 +47,7 @@
             <?php endforeach; ?>
           </select>
         </div>
-        <div class="md:col-span-4">
+        <div class="md:col-span-3">
           <label class="block text-sm">Status inicial</label>
           <select name="status" class="w-full">
             <option value="A Fazer">A Fazer</option>
@@ -56,12 +56,31 @@
             <option value="Pendente">Pendente</option>
           </select>
         </div>
-        <div class="md:col-span-12">
-          <label class="block text-sm">Colaboradores</label>
-          <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
-            <input type="text" id="colabSearch" class="border rounded p-2 w-full md:col-span-4" placeholder="Buscar por nome..." />
-            <div id="colabResults" class="border rounded p-2 max-h-48 overflow-auto text-sm md:col-span-4"></div>
-            <div id="colabSelected" class="flex flex-wrap gap-2 md:col-span-4"></div>
+        <div class="md:col-span-12 grid grid-cols-1 md:grid-cols-12 gap-6">
+          <div class="md:col-span-7">
+            <label class="block text-sm">Colaboradores selecionados</label>
+            <div id="colabSelected" class="flex flex-wrap gap-2"></div>
+          </div>
+          <div class="md:col-span-5">
+            <label class="block text-sm">Lista de Colaboradores</label>
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-end mb-2">
+              <input type="text" id="colabSearch" class="border rounded p-2 w-full md:col-span-9" placeholder="Buscar por nome..." />
+              <button type="button" id="colabSearchBtn" class="px-3 py-2 rounded bg-brand-red text-white md:col-span-3">Filtrar</button>
+            </div>
+            <div class="border rounded overflow-hidden">
+              <table class="min-w-full text-sm">
+                <thead>
+                  <tr class="text-left border-b">
+                    <th class="p-2">Nome</th>
+                    <th class="p-2">E-mail</th>
+                    <th class="p-2">Ação</th>
+                  </tr>
+                </thead>
+                <tbody id="colabTable">
+                  <tr><td class="p-2 text-gray-500" colspan="3">Digite para buscar…</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -75,8 +94,9 @@
     (function(){
       const cliente = <?= (int)$cliente ?> || document.querySelector('select[name="id_cliente"]')?.value || 0;
       const input = document.getElementById('colabSearch');
-      const results = document.getElementById('colabResults');
       const selected = document.getElementById('colabSelected');
+      const tableBody = document.getElementById('colabTable');
+      const searchBtn = document.getElementById('colabSearchBtn');
       const selectedIds = new Set();
       function renderSelected(){
         selected.innerHTML = '';
@@ -87,6 +107,7 @@
           const rm = document.createElement('button');
           rm.className = 'ml-2 text-xs bg-gray-200 text-brand-brown px-1 rounded';
           rm.textContent = 'x';
+          rm.type = 'button';
           rm.onclick = ()=>{ selectedIds.delete(id); renderSelected(); syncHidden(); };
           el.appendChild(rm);
           selected.appendChild(el);
@@ -103,37 +124,38 @@
         });
       }
       let timer; const cache = {};
+      async function runSearch(q){
+        const cid = cliente || (document.querySelector('select[name="id_cliente"]')?.value || 0);
+        if (!cid) { tableBody.innerHTML = '<tr><td class="p-2 text-gray-500" colspan="3">Selecione o cliente</td></tr>'; return; }
+        const resp = await fetch(`index.php?route=colaboradores/search&cliente=${cid}&q=${encodeURIComponent(q)}`);
+        const arr = await resp.json();
+        if (!arr.length) { tableBody.innerHTML = '<tr><td class="p-2 text-gray-500" colspan="3">Nenhum resultado</td></tr>'; return; }
+        tableBody.innerHTML = arr.map(r=>{
+          cache[r.id] = r.nome;
+          const disabled = selectedIds.has(r.id) ? 'disabled' : '';
+          return `<tr class="border-b">
+            <td class="p-2">${r.nome}</td>
+            <td class="p-2">${r.email || '—'}</td>
+            <td class="p-2"><button type="button" data-pick="${r.id}" class="px-2 py-1 rounded bg-brand-red text-white ${disabled}">Selecionar</button></td>
+          </tr>`;
+        }).join('');
+        tableBody.querySelectorAll('button[data-pick]').forEach(btn=>{
+          btn.onclick = ()=>{
+            const id = parseInt(btn.getAttribute('data-pick'),10);
+            if (selectedIds.has(id)) return;
+            selectedIds.add(id);
+            renderSelected(); syncHidden();
+          };
+        });
+      }
       input.addEventListener('input', ()=>{
         const q = input.value.trim();
-        results.innerHTML = '';
-        if (!q) return;
         clearTimeout(timer);
-        timer = setTimeout(async ()=>{
-          const cid = cliente || (document.querySelector('select[name="id_cliente"]')?.value || 0);
-          if (!cid) { results.textContent = 'Selecione o cliente primeiro'; return; }
-          const resp = await fetch(`index.php?route=colaboradores/search&cliente=${cid}&q=${encodeURIComponent(q)}`);
-          const arr = await resp.json();
-          results.innerHTML = arr.map(r=>{
-            cache[r.id] = r.nome;
-            const disabled = selectedIds.has(r.id) ? 'disabled' : '';
-            return `<button type="button" data-id="${r.id}" class="block w-full text-left px-2 py-1 hover:bg-gray-100 ${disabled}">${r.nome}${r.email ? ' • '+r.email : ''}</button>`;
-          }).join('') || '<div class="text-gray-500">Nenhum resultado</div>';
-          results.querySelectorAll('button[data-id]').forEach(btn=>{
-            btn.onclick = ()=>{
-              const id = parseInt(btn.getAttribute('data-id'),10);
-              selectedIds.add(id);
-              renderSelected(); syncHidden();
-            };
-          });
-        }, 300);
+        timer = setTimeout(()=>runSearch(q), 250);
       });
-      // Ensure remove buttons do not submit the form
-      selected.addEventListener('click', (e)=>{
-        const t = e.target;
-        if (t.tagName === 'BUTTON' && t.textContent === 'x') {
-          e.preventDefault();
-        }
-      });
+      searchBtn.addEventListener('click', ()=>runSearch(input.value.trim()));
+      // initial load
+      runSearch('');
     })();
   </script>
 </div>

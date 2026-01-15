@@ -69,8 +69,12 @@ class ColaboradoresController extends BaseController
         $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
         $q = trim($_GET['q'] ?? '');
         $items = [];
-        if ($cliente && $q !== '') {
-            $items = (new \App\Models\ColaboradorModel())->searchByClienteName($cliente, $q, 10);
+        if ($cliente) {
+            if ($q !== '') {
+                $items = (new \App\Models\ColaboradorModel())->searchByClienteName($cliente, $q, 50);
+            } else {
+                $items = (new \App\Models\ColaboradorModel())->allByCliente($cliente);
+            }
         }
         echo json_encode($items);
     }
