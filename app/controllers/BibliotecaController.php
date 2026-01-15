@@ -20,6 +20,8 @@ class BibliotecaController extends BaseController
     {
         $this->requireLogin();
         $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
+        $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+        $perPage = isset($_GET['perPage']) ? max(5, min(50, (int)$_GET['perPage'])) : 20;
         $clientes = $this->clientes->all();
         $items = [];
         if ($cliente) {
@@ -41,6 +43,19 @@ class BibliotecaController extends BaseController
                 }
             }
         }
-        $this->render('biblioteca/index', compact('clientes','cliente','items'));
+        $total = count($items);
+        $pages = max(1, (int)ceil($total / $perPage));
+        $page = min($page, $pages);
+        $offset = ($page - 1) * $perPage;
+        $items = array_slice($items, $offset, $perPage);
+        $this->render('biblioteca/index', [
+            'clientes' => $clientes,
+            'cliente' => $cliente,
+            'items' => $items,
+            'page' => $page,
+            'pages' => $pages,
+            'perPage' => $perPage,
+            'total' => $total,
+        ]);
     }
 }

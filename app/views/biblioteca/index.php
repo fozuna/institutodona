@@ -54,6 +54,16 @@
           <?php endforeach; ?>
         </tbody>
       </table>
+      <div class="mt-3 flex items-center justify-between">
+        <div class="text-xs text-gray-600">Total: <?= (int)$total ?> • Página <?= (int)$page ?>/<?= (int)$pages ?></div>
+        <div class="flex items-center gap-2">
+          <?php
+            $base = 'index.php?route=biblioteca/index&cliente=' . (int)$cliente . '&perPage=' . (int)$perPage . '&page=';
+          ?>
+          <a class="px-3 py-1 rounded bg-gray-200 text-brand-brown <?= $page<=1 ? 'opacity-50 pointer-events-none' : '' ?>" href="<?= $base . max(1, $page-1) ?>">Anterior</a>
+          <a class="px-3 py-1 rounded bg-gray-200 text-brand-brown <?= $page>=$pages ? 'opacity-50 pointer-events-none' : '' ?>" href="<?= $base . min($pages, $page+1) ?>">Próximo</a>
+        </div>
+      </div>
     <?php endif; ?>
   </div>
 </div>

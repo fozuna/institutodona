@@ -191,6 +191,7 @@
                 <td class="p-2"><?= htmlspecialchars(date('d/m/Y H:i', strtotime($f['uploaded_at']))) ?></td>
                 <td class="p-2">
                   <a class="text-brand-red hover:underline" target="_blank" href="../<?= htmlspecialchars($f['arquivo_path']) ?>">Abrir</a>
+                  <button type="button" class="ml-2 px-2 py-1 rounded bg-gray-200 text-brand-brown" data-preview="../<?= htmlspecialchars($f['arquivo_path']) ?>" data-mime="<?= htmlspecialchars($f['mime']) ?>">Preview</button>
                 </td>
               </tr>
             <?php endforeach; ?>
@@ -199,6 +200,28 @@
       <?php else: ?>
         <div class="text-sm text-gray-600">Nenhum arquivo enviado ainda.</div>
       <?php endif; ?>
+      <div class="mt-4">
+        <div class="text-sm text-gray-600 mb-1">Visualização</div>
+        <div id="filePreview" class="border rounded p-2 aspect-video bg-white flex items-center justify-center text-sm text-gray-600">Selecione Preview para visualizar aqui</div>
+      </div>
+      <script>
+        (function(){
+          const preview = document.getElementById('filePreview');
+          document.querySelectorAll('button[data-preview]').forEach(btn=>{
+            btn.addEventListener('click', ()=>{
+              const url = btn.getAttribute('data-preview');
+              const mime = btn.getAttribute('data-mime') || '';
+              if (mime.startsWith('image/')) {
+                preview.innerHTML = '<img src="'+url+'" alt="preview" style="max-width:100%;max-height:100%;">';
+              } else if (mime === 'application/pdf') {
+                preview.innerHTML = '<iframe src="'+url+'" style="width:100%;height:100%;" frameborder="0"></iframe>';
+              } else {
+                preview.innerHTML = '<a class="text-brand-red hover:underline" target="_blank" href="'+url+'">Abrir arquivo</a>';
+              }
+            });
+          });
+        })();
+      </script>
     </div>
   <?php endif; ?>
 </div>

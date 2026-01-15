@@ -130,9 +130,9 @@
       </div>
     </div>
 
-    <div>
+    <div class="self-start">
       <!-- Seção de aplicar tarefa movida para o menu (aplicacoes/create) -->
-      <div class="bg-white shadow rounded mt-6">
+      <div class="bg-white shadow rounded">
         <div class="px-4 py-3 border-b font-semibold">Criar nova tarefa</div>
         <div class="p-4">
           <form method="post" action="index.php?route=metodologias/store" class="space-y-3" enctype="multipart/form-data">
