@@ -28,12 +28,27 @@ class ColaboradoresController extends BaseController
     {
         $this->requireLogin();
         $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
-        $items = $cliente ? $this->colabs->allByCliente($cliente) : [];
+        $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+        $perPage = isset($_GET['per']) ? max(5, min(100, (int)$_GET['per'])) : 20;
+        $items = $cliente ? $this->colabs->paginatedByCliente($cliente, $page, $perPage) : [];
+        $total = $cliente ? $this->colabs->countByCliente($cliente) : 0;
+        $totalPages = $cliente ? max(1, (int)ceil($total / $perPage)) : 1;
         $departamentos = $cliente ? $this->deps->allByCliente($cliente) : $this->deps->all();
         $setores = $cliente ? $this->setores->allByCliente($cliente) : $this->setores->all();
         $funcoes = $cliente ? $this->funcoes->allByCliente($cliente) : [];
         $clientes = (new ClienteModel())->all();
-        $this->render('colaboradores/index', ['items' => $items, 'departamentos' => $departamentos, 'setores' => $setores, 'funcoes' => $funcoes, 'cliente' => $cliente, 'clientes' => $clientes]);
+        $this->render('colaboradores/index', [
+            'items' => $items,
+            'departamentos' => $departamentos,
+            'setores' => $setores,
+            'funcoes' => $funcoes,
+            'cliente' => $cliente,
+            'clientes' => $clientes,
+            'page' => $page,
+            'per' => $perPage,
+            'total' => $total,
+            'total_pages' => $totalPages
+        ]);
     }
 
     public function create(): void

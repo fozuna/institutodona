@@ -42,6 +42,38 @@ class ColaboradorModel extends BaseModel
         return $stmt->fetchAll();
     }
 
+    public function countByCliente(int $clienteId): int
+    {
+        $this->ensureTable();
+        $stmt = $this->db->prepare('SELECT COUNT(*) AS total FROM colaboradores WHERE cliente_id = :cid');
+        $stmt->execute(['cid' => $clienteId]);
+        $row = $stmt->fetch();
+        return (int)($row['total'] ?? 0);
+    }
+
+    public function paginatedByCliente(int $clienteId, int $page, int $perPage): array
+    {
+        $this->ensureTable();
+        $page = max(1, (int)$page);
+        $perPage = max(1, min(200, (int)$perPage));
+        $offset = ($page - 1) * $perPage;
+        $hasIsMatriz = \App\Database\Database::columnExists('clientes', 'is_matriz');
+        $selectUnidade = $hasIsMatriz ? 'cli.is_matriz' : 'NULL AS is_matriz';
+        $sql = 'SELECT col.id, col.nome, col.email, col.funcao_id, col.cliente_id,
+                       ' . $selectUnidade . ', f.nome AS funcao, s.nome AS setor, d.nome AS departamento
+                FROM colaboradores col
+                JOIN funcoes f ON f.id = col.funcao_id
+                JOIN setores s ON s.id = f.setor_id
+                JOIN departamentos d ON d.id = s.departamento_id
+                LEFT JOIN clientes cli ON cli.id = col.cliente_id
+                WHERE col.cliente_id = :cid
+                ORDER BY d.nome, s.nome, f.nome, col.nome
+                LIMIT ' . (int)$perPage . ' OFFSET ' . (int)$offset;
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute(['cid' => $clienteId]);
+        return $stmt->fetchAll();
+    }
+
     public function find(int $id): ?array
     {
         $this->ensureTable();

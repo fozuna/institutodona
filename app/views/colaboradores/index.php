@@ -7,6 +7,25 @@
             <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="javascript:history.back()">Voltar</a>
         </div>
     </div>
+    <form method="get" action="index.php" class="mb-4 flex items-center gap-2">
+        <input type="hidden" name="route" value="colaboradores/index" />
+        <label class="text-sm">Cliente</label>
+        <select name="cliente" class="border rounded p-2 min-w-[16rem]">
+            <option value="">-- Selecione --</option>
+            <?php foreach ($clientes as $cl): ?>
+                <option value="<?= (int)$cl['id'] ?>" <?= ((int)$cliente === (int)$cl['id']) ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($cl['nome_empresa']) ?> <?= ((int)($cl['is_matriz'] ?? 1) === 1) ? '(Matriz)' : '(Filial)' ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+        <label class="text-sm">Por página</label>
+        <select name="per" class="border rounded p-2">
+            <?php foreach ([10,20,50,100] as $opt): ?>
+                <option value="<?= $opt ?>" <?= ((int)($per ?? 20) === $opt) ? 'selected' : '' ?>><?= $opt ?></option>
+            <?php endforeach; ?>
+        </select>
+        <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">Filtrar</button>
+    </form>
     <div class="bg-white shadow rounded">
         <table class="min-w-full">
             <thead>
@@ -38,17 +57,14 @@
             </tbody>
         </table>
     </div>
-    <form method="get" action="index.php" class="mt-4 flex items-center gap-2">
-        <input type="hidden" name="route" value="colaboradores/index" />
-        <label class="text-sm">Cliente</label>
-        <select name="cliente" class="border rounded p-2 min-w-[16rem]">
-            <option value="">-- Selecione --</option>
-            <?php foreach ($clientes as $cl): ?>
-                <option value="<?= (int)$cl['id'] ?>" <?= ((int)$cliente === (int)$cl['id']) ? 'selected' : '' ?>>
-                    <?= htmlspecialchars($cl['nome_empresa']) ?> <?= ((int)($cl['is_matriz'] ?? 1) === 1) ? '(Matriz)' : '(Filial)' ?>
-                </option>
-            <?php endforeach; ?>
-        </select>
-        <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">Filtrar</button>
-    </form>
+    <?php if (($total_pages ?? 1) > 1): ?>
+        <div class="mt-4 flex items-center justify-between">
+            <div class="text-sm text-gray-600">Total: <?= (int)($total ?? 0) ?> • Página <?= (int)($page ?? 1) ?> de <?= (int)($total_pages ?? 1) ?></div>
+            <div class="flex items-center gap-2">
+                <?php $prev = max(1, (int)($page ?? 1) - 1); $next = min((int)($total_pages ?? 1), (int)($page ?? 1) + 1); ?>
+                <a class="px-3 py-1 rounded bg-gray-200 text-brand-brown" href="index.php?route=colaboradores/index&cliente=<?= (int)$cliente ?>&page=<?= $prev ?>&per=<?= (int)($per ?? 20) ?>">◀</a>
+                <a class="px-3 py-1 rounded bg-gray-200 text-brand-brown" href="index.php?route=colaboradores/index&cliente=<?= (int)$cliente ?>&page=<?= $next ?>&per=<?= (int)($per ?? 20) ?>">▶</a>
+            </div>
+        </div>
+    <?php endif; ?>
 </div>
