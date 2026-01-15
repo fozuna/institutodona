@@ -93,7 +93,7 @@
               <tr class="text-left border-b">
                 <th class="p-3">Pilar</th>
                 <th class="p-3">Tarefa</th>
-                <th class="p-3">Funções</th>
+                <th class="p-3">Colaboradores</th>
                 <th class="p-3">Manual</th>
                 <th class="p-3">Prevista</th>
                 <th class="p-3">Consultor</th>
@@ -106,7 +106,7 @@
                 <tr class="border-b">
                   <td class="p-3"><?= htmlspecialchars($a['pilar_nome']) ?></td>
                   <td class="p-3"><a class="text-brand-red hover:underline" href="index.php?route=aplicacoes/show&id=<?= (int)$a['id'] ?>"><?= htmlspecialchars($a['item_pilar']) ?></a></td>
-                  <td class="p-3"><?= htmlspecialchars($a['funcoes_vinculadas'] ?? '') ?></td>
+                  <td class="p-3"><?= htmlspecialchars($a['colabs_vinculados'] ?? '') ?></td>
                   <td class="p-3">
                     <?php if (($a['tipo'] ?? 'tarefa') === 'manual' && !empty($a['arquivo_path'])): ?>
                       <a class="text-brand-red hover:underline" target="_blank" href="../<?= htmlspecialchars($a['arquivo_path']) ?>">baixar</a>

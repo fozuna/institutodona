@@ -62,6 +62,19 @@ class ColaboradoresController extends BaseController
         ]);
     }
 
+    public function search(): void
+    {
+        $this->requireLogin();
+        header('Content-Type: application/json; charset=utf-8');
+        $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
+        $q = trim($_GET['q'] ?? '');
+        $items = [];
+        if ($cliente && $q !== '') {
+            $items = (new \App\Models\ColaboradorModel())->searchByClienteName($cliente, $q, 10);
+        }
+        echo json_encode($items);
+    }
+
     public function create(): void
     {
         $this->requireLogin();

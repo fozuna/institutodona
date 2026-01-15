@@ -235,6 +235,9 @@ switch ($route) {
     case 'colaboradores/delete':
         (new ColaboradoresController())->delete();
         break;
+    case 'colaboradores/search':
+        (new ColaboradoresController())->search();
+        break;
     case 'setup/seedAdmin':
         $token = $_GET['t'] ?? '';
         $expected = getenv('SEED_TOKEN') ?: '';

@@ -159,4 +159,18 @@ class ColaboradorModel extends BaseModel
         $stmt = $this->db->prepare('DELETE FROM colaboradores WHERE id = :id');
         return $stmt->execute(['id' => $id]);
     }
+
+    public function searchByClienteName(int $clienteId, string $q, int $limit = 10): array
+    {
+        $this->ensureTable();
+        $q = trim($q);
+        if ($q === '') { return []; }
+        $stmt = $this->db->prepare('SELECT id, nome, email FROM colaboradores WHERE cliente_id = :cid AND nome LIKE :q ORDER BY nome LIMIT :lim');
+        $like = '%' . $q . '%';
+        $stmt->bindValue(':cid', $clienteId, \PDO::PARAM_INT);
+        $stmt->bindValue(':q', $like, \PDO::PARAM_STR);
+        $stmt->bindValue(':lim', $limit, \PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
 }

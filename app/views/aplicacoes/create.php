@@ -27,12 +27,12 @@
           <option value="<?= (int)$m['id'] ?>">[<?= htmlspecialchars($m['pilar_nome']) ?>] <?= htmlspecialchars($m['item_pilar']) ?></option>
         <?php endforeach; ?>
       </select>
-      <label class="block text-sm">Funções (pode selecionar várias)</label>
-      <select name="funcao_ids[]" class="w-full" multiple size="8" required>
-        <?php foreach ($funcoes as $fn): ?>
-          <option value="<?= (int)$fn['id'] ?>"><?= htmlspecialchars(($fn['departamento'] ?? '') . ' / ' . ($fn['setor'] ?? '') . ' / ' . $fn['nome']) ?></option>
-        <?php endforeach; ?>
-      </select>
+      <label class="block text-sm">Colaboradores</label>
+      <div class="space-y-2">
+        <input type="text" id="colabSearch" class="border rounded p-2 w-full" placeholder="Buscar por nome..." />
+        <div id="colabResults" class="border rounded p-2 max-h-48 overflow-auto text-sm"></div>
+        <div id="colabSelected" class="flex flex-wrap gap-2"></div>
+      </div>
       <label class="block text-sm">Data prevista</label>
       <input type="date" name="data_prevista" class="w-full" />
       <label class="block text-sm">Consultor</label>
@@ -55,4 +55,62 @@
       </div>
     </form>
   </div>
+  <script>
+    (function(){
+      const cliente = <?= (int)$cliente ?> || document.querySelector('select[name="id_cliente"]')?.value || 0;
+      const input = document.getElementById('colabSearch');
+      const results = document.getElementById('colabResults');
+      const selected = document.getElementById('colabSelected');
+      const selectedIds = new Set();
+      function renderSelected(){
+        selected.innerHTML = '';
+        selectedIds.forEach(id=>{
+          const el = document.createElement('span');
+          el.className = 'px-2 py-1 rounded bg-brand-brown text-white text-xs';
+          el.textContent = cache[id] || ('#'+id);
+          const rm = document.createElement('button');
+          rm.className = 'ml-2 text-xs bg-gray-200 text-brand-brown px-1 rounded';
+          rm.textContent = 'x';
+          rm.onclick = ()=>{ selectedIds.delete(id); renderSelected(); syncHidden(); };
+          el.appendChild(rm);
+          selected.appendChild(el);
+        });
+      }
+      function syncHidden(){
+        document.querySelectorAll('input[name="colaborador_ids[]"]').forEach(e=>e.remove());
+        selectedIds.forEach(id=>{
+          const h = document.createElement('input');
+          h.type = 'hidden';
+          h.name = 'colaborador_ids[]';
+          h.value = id;
+          document.forms[0].appendChild(h);
+        });
+      }
+      let timer; const cache = {};
+      input.addEventListener('input', ()=>{
+        const q = input.value.trim();
+        results.innerHTML = '';
+        if (!q) return;
+        clearTimeout(timer);
+        timer = setTimeout(async ()=>{
+          const cid = cliente || (document.querySelector('select[name="id_cliente"]')?.value || 0);
+          if (!cid) { results.textContent = 'Selecione o cliente primeiro'; return; }
+          const resp = await fetch(`index.php?route=colaboradores/search&cliente=${cid}&q=${encodeURIComponent(q)}`);
+          const arr = await resp.json();
+          results.innerHTML = arr.map(r=>{
+            cache[r.id] = r.nome;
+            const disabled = selectedIds.has(r.id) ? 'disabled' : '';
+            return `<button data-id="${r.id}" class="block w-full text-left px-2 py-1 hover:bg-gray-100 ${disabled}">${r.nome}${r.email ? ' • '+r.email : ''}</button>`;
+          }).join('') || '<div class="text-gray-500">Nenhum resultado</div>';
+          results.querySelectorAll('button[data-id]').forEach(btn=>{
+            btn.onclick = ()=>{
+              const id = parseInt(btn.getAttribute('data-id'),10);
+              selectedIds.add(id);
+              renderSelected(); syncHidden();
+            };
+          });
+        }, 300);
+      });
+    })();
+  </script>
 </div>

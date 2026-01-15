@@ -35,6 +35,11 @@ class AplicacaoModel extends BaseModel
                 funcao_id INT NOT NULL,
                 PRIMARY KEY (aplicacao_id, funcao_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            $this->db->exec("CREATE TABLE IF NOT EXISTS aplicacao_colaboradores (
+                aplicacao_id INT NOT NULL,
+                colaborador_id INT NOT NULL,
+                PRIMARY KEY (aplicacao_id, colaborador_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         } catch (\PDOException $e) {}
     }
 
@@ -76,13 +81,13 @@ class AplicacaoModel extends BaseModel
 
         $sql = "SELECT a.id, a.status, a.id_metodologia, a.id_cliente, $selectPrevista, $selectConclusao, $selectConsultorId,
                        m.item_pilar, $selectTipo, $selectArquivo, p.nome AS pilar_nome, cli.nome_empresa AS cliente_nome, $selectCons,
-                       GROUP_CONCAT(DISTINCT f.nome ORDER BY f.nome SEPARATOR ', ') AS funcoes_vinculadas
+                       GROUP_CONCAT(DISTINCT col.nome ORDER BY col.nome SEPARATOR ', ') AS colabs_vinculados
                 FROM aplicacoes a
                 JOIN metodologias m ON m.id = a.id_metodologia
                 JOIN pilares p ON p.id = m.id_pilar
                 JOIN clientes cli ON cli.id = a.id_cliente
-                LEFT JOIN aplicacao_funcoes af ON af.aplicacao_id = a.id
-                LEFT JOIN funcoes f ON f.id = af.funcao_id
+                LEFT JOIN aplicacao_colaboradores ac ON ac.aplicacao_id = a.id
+                LEFT JOIN colaboradores col ON col.id = ac.colaborador_id
                 $joinCons
                 WHERE a.id_cliente = :id_cliente
                 GROUP BY a.id
@@ -193,6 +198,43 @@ class AplicacaoModel extends BaseModel
         return $stmt->fetchAll();
     }
 
+    public function addColaboradores(int $aplicacaoId, array $colabIds): void
+    {
+        $this->ensureTable();
+        $stmt = $this->db->prepare('INSERT IGNORE INTO aplicacao_colaboradores (aplicacao_id, colaborador_id) VALUES (:ap, :cb)');
+        foreach ($colabIds as $cid) {
+            $cid = (int)$cid;
+            if ($cid > 0) { $stmt->execute(['ap' => $aplicacaoId, 'cb' => $cid]); }
+        }
+    }
+
+    public function setColaboradores(int $aplicacaoId, array $colabIds): void
+    {
+        $this->ensureTable();
+        $colabIds = array_values(array_unique(array_filter(array_map('intval', $colabIds))));
+        $in = $colabIds ? implode(',', $colabIds) : 'NULL';
+        $sqlDel = $colabIds
+            ? "DELETE FROM aplicacao_colaboradores WHERE aplicacao_id = :ap AND colaborador_id NOT IN ($in)"
+            : "DELETE FROM aplicacao_colaboradores WHERE aplicacao_id = :ap";
+        $stmtDel = $this->db->prepare($sqlDel);
+        $stmtDel->execute(['ap' => $aplicacaoId]);
+        $stmtIns = $this->db->prepare('INSERT IGNORE INTO aplicacao_colaboradores (aplicacao_id, colaborador_id) VALUES (:ap, :cb)');
+        foreach ($colabIds as $cid) { if ($cid > 0) { $stmtIns->execute(['ap' => $aplicacaoId, 'cb' => $cid]); } }
+    }
+
+    public function colaboradoresForAplicacao(int $aplicacaoId): array
+    {
+        $this->ensureTable();
+        $sql = 'SELECT col.id, col.nome, col.email
+                FROM aplicacao_colaboradores ac
+                JOIN colaboradores col ON col.id = ac.colaborador_id
+                WHERE ac.aplicacao_id = :id
+                ORDER BY col.nome';
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute(['id' => $aplicacaoId]);
+        return $stmt->fetchAll();
+    }
+
     public function setFunctions(int $aplicacaoId, array $funcaoIds): void
     {
         $this->ensureTable();
@@ -232,13 +274,13 @@ class AplicacaoModel extends BaseModel
         if (!empty($filters['consultor_id'])) { $conds[] = 'a.consultor_id = :cid'; $params['cid'] = (int)$filters['consultor_id']; }
         $sql = "SELECT a.id, a.status, a.id_metodologia, a.id_cliente, $selectPrevista, $selectConclusao, $selectConsultorId,
                        m.item_pilar, $selectTipo, $selectArquivo, p.nome AS pilar_nome, cli.nome_empresa AS cliente_nome, $selectCons,
-                       GROUP_CONCAT(DISTINCT f.nome ORDER BY f.nome SEPARATOR ', ') AS funcoes_vinculadas
+                       GROUP_CONCAT(DISTINCT col.nome ORDER BY col.nome SEPARATOR ', ') AS colabs_vinculados
                 FROM aplicacoes a
                 JOIN metodologias m ON m.id = a.id_metodologia
                 JOIN pilares p ON p.id = m.id_pilar
                 JOIN clientes cli ON cli.id = a.id_cliente
-                LEFT JOIN aplicacao_funcoes af ON af.aplicacao_id = a.id
-                LEFT JOIN funcoes f ON f.id = af.funcao_id
+                LEFT JOIN aplicacao_colaboradores ac ON ac.aplicacao_id = a.id
+                LEFT JOIN colaboradores col ON col.id = ac.colaborador_id
                 $joinCons
                 WHERE " . implode(' AND ', $conds) . "
                 GROUP BY a.id

@@ -144,6 +144,14 @@ CREATE TABLE IF NOT EXISTS aplicacao_funcoes (
   CONSTRAINT fk_apf_apl FOREIGN KEY (aplicacao_id) REFERENCES aplicacoes(id) ON DELETE CASCADE,
   CONSTRAINT fk_apf_func FOREIGN KEY (funcao_id) REFERENCES funcoes(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS aplicacao_colaboradores (
+  aplicacao_id INT NOT NULL,
+  colaborador_id INT NOT NULL,
+  PRIMARY KEY (aplicacao_id, colaborador_id),
+  CONSTRAINT fk_apc_apl FOREIGN KEY (aplicacao_id) REFERENCES aplicacoes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_apc_col FOREIGN KEY (colaborador_id) REFERENCES colaboradores(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ALTER TABLE colaboradores
   ADD COLUMN IF NOT EXISTS lider ENUM('não','sim') NOT NULL DEFAULT 'não' AFTER funcao_id;
 

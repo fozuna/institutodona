@@ -183,13 +183,12 @@ class ClientesController extends BaseController
         $status = $_POST['status'] ?? 'A Fazer';
         $consultorId = isset($_POST['consultor_id']) ? (int)$_POST['consultor_id'] : null;
         $dataPrevista = $_POST['data_prevista'] ?? null;
-        $funcaoIds = isset($_POST['funcao_ids']) ? (array)$_POST['funcao_ids'] : [];
-        $funcaoIds = array_values(array_filter(array_map('intval', $funcaoIds)));
-        if (empty($funcaoIds)) { http_response_code(400); echo 'Selecione ao menos uma Função'; return; }
+        $colabIds = isset($_POST['colaborador_ids']) ? (array)$_POST['colaborador_ids'] : [];
+        $colabIds = array_values(array_filter(array_map('intval', $colabIds)));
+        if (empty($colabIds)) { http_response_code(400); echo 'Selecione ao menos um Colaborador'; return; }
         if ($idCliente && $idMetodologia) {
             $aplId = (new AplicacaoModel())->create($idCliente, $idMetodologia, $status, $consultorId, $dataPrevista);
-            (new AplicacaoModel())->addFunctions($aplId, $funcaoIds);
-            (new AplicacaoModel())->updateAssignment($aplId, $funcaoIds[0] ?? null);
+            (new AplicacaoModel())->addColaboradores($aplId, $colabIds);
         }
         header('Location: index.php?route=clientes/show&id=' . $idCliente);
     }
@@ -204,11 +203,12 @@ class ClientesController extends BaseController
         $status = $_POST['status'] ?? 'A Fazer';
         $dataPrevista = $_POST['data_prevista'] ?? null;
         $consultorId = isset($_POST['consultor_id']) ? (int)$_POST['consultor_id'] : null;
-        $funcaoId = isset($_POST['funcao_id']) ? (int)$_POST['funcao_id'] : null;
+        $colabIds = isset($_POST['colaborador_ids']) ? (array)$_POST['colaborador_ids'] : [];
+        $colabIds = array_values(array_filter(array_map('intval', $colabIds)));
         if ($idAplicacao) {
             (new AplicacaoModel())->updateStatus($idAplicacao, $status);
             (new AplicacaoModel())->updateSchedule($idAplicacao, $dataPrevista, $consultorId);
-            (new AplicacaoModel())->updateAssignment($idAplicacao, $funcaoId);
+            if (!empty($colabIds)) { (new AplicacaoModel())->setColaboradores($idAplicacao, $colabIds); }
         }
         header('Location: index.php?route=clientes/show&id=' . $idCliente);
     }
