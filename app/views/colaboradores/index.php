@@ -13,6 +13,7 @@
                 <tr class="text-left border-b">
                     <th class="p-3">Nome</th>
                     <th class="p-3">E-mail</th>
+                    <th class="p-3">Unidade</th>
                     <th class="p-3">Função</th>
                     <th class="p-3">Setor</th>
                     <th class="p-3">Departamento</th>
@@ -24,6 +25,7 @@
                     <tr class="border-b">
                         <td class="p-3"><?= htmlspecialchars($c['nome']) ?></td>
                         <td class="p-3"><?= htmlspecialchars($c['email'] ?? '') ?></td>
+                        <td class="p-3"><?= ((int)($c['is_matriz'] ?? 1) === 1) ? 'Matriz' : 'Filial' ?></td>
                         <td class="p-3"><?= htmlspecialchars($c['funcao'] ?? '') ?></td>
                         <td class="p-3"><?= htmlspecialchars($c['setor'] ?? '') ?></td>
                         <td class="p-3"><?= htmlspecialchars($c['departamento'] ?? '') ?></td>

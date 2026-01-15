@@ -22,12 +22,15 @@ class ColaboradorModel extends BaseModel
     public function allByCliente(int $clienteId): array
     {
         $this->ensureTable();
+        $hasIsMatriz = \App\Database\Database::columnExists('clientes', 'is_matriz');
+        $selectUnidade = $hasIsMatriz ? 'cli.is_matriz' : 'NULL AS is_matriz';
         $sql = 'SELECT col.id, col.nome, col.email, col.funcao_id, col.cliente_id,
-                       f.nome AS funcao, s.nome AS setor, d.nome AS departamento
+                       ' . $selectUnidade . ', f.nome AS funcao, s.nome AS setor, d.nome AS departamento
                 FROM colaboradores col
                 JOIN funcoes f ON f.id = col.funcao_id
                 JOIN setores s ON s.id = f.setor_id
                 JOIN departamentos d ON d.id = s.departamento_id
+                LEFT JOIN clientes cli ON cli.id = col.cliente_id
                 WHERE col.cliente_id = :cid
                 ORDER BY d.nome, s.nome, f.nome, col.nome';
         $stmt = $this->db->prepare($sql);
