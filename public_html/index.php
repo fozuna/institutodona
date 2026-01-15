@@ -19,6 +19,7 @@ use App\Models\ClienteModel;
 use App\Controllers\SetoresController;
 use App\Controllers\FuncoesController;
 use App\Controllers\ColaboradoresController;
+use App\Controllers\AvaliacoesController;
 
 $route = $_GET['route'] ?? 'auth/login';
 
@@ -200,6 +201,18 @@ switch ($route) {
         break;
     case 'funcoes/delete':
         (new FuncoesController())->delete();
+        break;
+    case 'avaliacoes/index':
+        (new AvaliacoesController())->index();
+        break;
+    case 'avaliacoes/create':
+        (new AvaliacoesController())->create();
+        break;
+    case 'avaliacoes/store':
+        (new AvaliacoesController())->store();
+        break;
+    case 'avaliacoes/show':
+        (new AvaliacoesController())->show();
         break;
     case 'colaboradores/index':
         (new ColaboradoresController())->index();

@@ -94,6 +94,20 @@ CREATE TABLE IF NOT EXISTS consultores (
   CONSTRAINT fk_cons_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Avaliações
+CREATE TABLE IF NOT EXISTS avaliacoes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  cliente_id INT NULL,
+  empresa_nome VARCHAR(255) NULL,
+  contato VARCHAR(255) NULL,
+  respostas_json TEXT NULL,
+  nota_financeiro TINYINT NOT NULL DEFAULT 0,
+  nota_mercado TINYINT NOT NULL DEFAULT 0,
+  nota_pessoas TINYINT NOT NULL DEFAULT 0,
+  nota_processo TINYINT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_av_cli FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 -- Alterações para bases já existentes
 ALTER TABLE aplicacoes
   ADD COLUMN IF NOT EXISTS consultor_id INT NULL,

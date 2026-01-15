@@ -171,6 +171,42 @@
           </form>
         </div>
       </div>
+      <div class="bg-white shadow rounded mt-6">
+        <div class="px-4 py-3 border-b font-semibold flex justify-between items-center">
+          <span>Avaliações</span>
+          <a class="px-3 py-1 rounded bg-brand-red text-white" href="index.php?route=avaliacoes/create&cliente=<?= (int)$item['id'] ?>">Nova Avaliação</a>
+        </div>
+        <div class="p-4">
+          <?php if (empty($avaliacoes)): ?>
+            <div class="text-sm text-gray-600">Nenhuma avaliação registrada.</div>
+          <?php else: ?>
+            <table class="min-w-full">
+              <thead>
+                <tr class="text-left border-b">
+                  <th class="p-3">Data</th>
+                  <th class="p-3">Financeiro</th>
+                  <th class="p-3">Mercado</th>
+                  <th class="p-3">Pessoas</th>
+                  <th class="p-3">Processo</th>
+                  <th class="p-3">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php foreach ($avaliacoes as $av): ?>
+                  <tr class="border-b">
+                    <td class="p-3"><?= htmlspecialchars(date('d/m/Y', strtotime($av['created_at']))) ?></td>
+                    <td class="p-3"><?= (int)$av['nota_financeiro'] ?>/7</td>
+                    <td class="p-3"><?= (int)$av['nota_mercado'] ?>/7</td>
+                    <td class="p-3"><?= (int)$av['nota_pessoas'] ?>/7</td>
+                    <td class="p-3"><?= (int)$av['nota_processo'] ?>/7</td>
+                    <td class="p-3"><a class="text-brand-pink icon-action" href="index.php?route=avaliacoes/show&id=<?= (int)$av['id'] ?>" title="Ver" aria-label="Ver"><span data-feather="bar-chart-2"></span></a></td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          <?php endif; ?>
+        </div>
+      </div>
       <?php if ((int)($item['is_matriz'] ?? 1) === 1): ?>
       <div class="bg-white shadow rounded mt-6">
         <div class="px-4 py-3 border-b font-semibold">Filiais</div>

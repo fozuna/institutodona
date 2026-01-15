@@ -134,6 +134,7 @@ class ClientesController extends BaseController
         $funcoes = (new FuncaoModel())->allByCliente($id);
         $filiais = $this->clientes->filiaisByMatriz($id);
         $matrizes = $this->clientes->matrizes();
+        $avaliacoes = (new \App\Models\AvaliacaoModel())->byCliente($id);
         $this->render('clientes/show', [
             'item' => $item,
             'apps' => $apps,
@@ -142,6 +143,7 @@ class ClientesController extends BaseController
             'funcoes' => $funcoes,
             'filiais' => $filiais,
             'matrizes' => $matrizes,
+            'avaliacoes' => $avaliacoes,
         ]);
     }
 
