@@ -135,6 +135,9 @@ switch ($route) {
     case 'aplicacoes/upload':
         (new AplicacoesController())->upload();
         break;
+    case 'aplicacoes/delete_update':
+        (new AplicacoesController())->delete_update();
+        break;
     case 'auth/login':
         (new AuthController())->login();
         break;

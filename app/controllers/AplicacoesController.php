@@ -43,11 +43,13 @@ class AplicacoesController extends BaseController
         $consultores = (new ConsultorModel())->all();
         $colabs = $app ? $this->aplicacoes->colaboradoresForAplicacao((int)$app['id']) : [];
         $arquivos = $app ? $this->aplicacoes->arquivosForAplicacao((int)$app['id']) : [];
+        $updates = $app ? $this->aplicacoes->updatesForAplicacao((int)$app['id']) : [];
         $this->render('aplicacoes/show', [
             'app' => $app,
             'consultores' => $consultores,
             'colabs' => $colabs,
             'arquivos' => $arquivos,
+            'updates' => $updates,
         ]);
     }
 
@@ -62,13 +64,30 @@ class AplicacoesController extends BaseController
         $consultorId = isset($_POST['consultor_id']) ? (int)$_POST['consultor_id'] : null;
         $colabIds = isset($_POST['colaborador_ids']) ? (array)$_POST['colaborador_ids'] : [];
         $colabIds = array_values(array_filter(array_map('intval', $colabIds)));
+        $obs = trim($_POST['observacao_update'] ?? '');
         if ($idAplicacao) {
+            $prev = $this->aplicacoes->find($idAplicacao);
+            $prevCols = array_map(fn($r)=> (int)$r['id'], $this->aplicacoes->colaboradoresForAplicacao($idAplicacao));
             $this->aplicacoes->updateStatus($idAplicacao, $status);
             $this->aplicacoes->updateSchedule($idAplicacao, $dataPrevista, $consultorId);
             if (!empty($colabIds)) {
                 $this->aplicacoes->setColaboradores($idAplicacao, $colabIds);
             }
-            \App\Core\AuditLogger::log('update', 'aplicacao', $idAplicacao, ['status'=>$status,'data_prevista'=>$dataPrevista,'consultor_id'=>$consultorId,'colabs'=>$colabIds]);
+            \App\Core\AuditLogger::log('update', 'aplicacao', $idAplicacao, ['status'=>$status,'data_prevista'=>$dataPrevista,'consultor_id'=>$consultorId,'colabs'=>$colabIds, 'obs'=>$obs]);
+            $changes = [];
+            if (($prev['status'] ?? null) !== $status) { $changes[] = 'Status: ' . ($prev['status'] ?? '—') . ' → ' . $status; }
+            if (($prev['data_prevista'] ?? null) !== $dataPrevista) { $changes[] = 'Data prevista: ' . ($prev['data_prevista'] ?? '—') . ' → ' . ($dataPrevista ?: '—'); }
+            if ((int)($prev['consultor_id'] ?? 0) !== (int)$consultorId) { $changes[] = 'Consultor: ' . (int)($prev['consultor_id'] ?? 0) . ' → ' . (int)$consultorId; }
+            $added = array_values(array_diff($colabIds, $prevCols));
+            $removed = array_values(array_diff($prevCols, $colabIds));
+            if ($added) { $changes[] = 'Colaboradores adicionados: ' . implode(', ', $added); }
+            if ($removed) { $changes[] = 'Colaboradores removidos: ' . implode(', ', $removed); }
+            $summary = ($obs !== '' ? ('Obs: ' . $obs . ' — ') : '') . (empty($changes) ? 'Sem alterações de campos' : implode(' | ', $changes));
+            $user = $_SESSION['user'] ?? [];
+            $this->aplicacoes->addUpdate($idAplicacao, (string)($user['email'] ?? ''), (string)($user['nome'] ?? ''), $summary, [
+                'antes' => ['status'=>$prev['status'] ?? null,'data_prevista'=>$prev['data_prevista'] ?? null,'consultor_id'=>$prev['consultor_id'] ?? null,'colabs'=>$prevCols],
+                'depois' => ['status'=>$status,'data_prevista'=>$dataPrevista,'consultor_id'=>$consultorId,'colabs'=>$colabIds],
+            ]);
         }
         header('Location: index.php?route=aplicacoes/show&id=' . $idAplicacao);
     }
@@ -123,5 +142,14 @@ class AplicacoesController extends BaseController
             }
         }
         header('Location: index.php?route=aplicacoes/show&id=' . $id);
+    }
+
+    public function delete_update(): void
+    {
+        $this->requireRole('instituto');
+        $id = (int)($_GET['id'] ?? 0);
+        $ap = (int)($_GET['ap'] ?? 0);
+        if ($id && $ap) { $this->aplicacoes->deleteUpdate($id, $ap); }
+        header('Location: index.php?route=aplicacoes/show&id=' . $ap);
     }
 }

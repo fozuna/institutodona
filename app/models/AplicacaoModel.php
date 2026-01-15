@@ -43,6 +43,52 @@ class AplicacaoModel extends BaseModel
         } catch (\PDOException $e) {}
     }
 
+    public function addUpdate(int $aplicacaoId, string $userEmail, ?string $userNome, string $summary, array $payload = []): bool
+    {
+        $this->ensureTable();
+        try {
+            $this->db->exec("CREATE TABLE IF NOT EXISTS aplicacao_updates (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                aplicacao_id INT NOT NULL,
+                user_email VARCHAR(255) NULL,
+                user_nome VARCHAR(255) NULL,
+                summary TEXT NOT NULL,
+                payload_json TEXT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            $stmt = $this->db->prepare('INSERT INTO aplicacao_updates (aplicacao_id, user_email, user_nome, summary, payload_json) VALUES (:ap, :em, :nm, :su, :pl)');
+            return $stmt->execute([
+                'ap' => $aplicacaoId,
+                'em' => $userEmail,
+                'nm' => $userNome,
+                'su' => $summary,
+                'pl' => json_encode($payload, JSON_UNESCAPED_UNICODE),
+            ]);
+        } catch (\PDOException $e) { return false; }
+    }
+    public function updatesForAplicacao(int $aplicacaoId): array
+    {
+        $this->ensureTable();
+        $this->db->exec("CREATE TABLE IF NOT EXISTS aplicacao_updates (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            aplicacao_id INT NOT NULL,
+            user_email VARCHAR(255) NULL,
+            user_nome VARCHAR(255) NULL,
+            summary TEXT NOT NULL,
+            payload_json TEXT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $stmt = $this->db->prepare('SELECT id, user_email, user_nome, summary, payload_json, created_at FROM aplicacao_updates WHERE aplicacao_id = :id ORDER BY created_at DESC, id DESC');
+        $stmt->execute(['id' => $aplicacaoId]);
+        return $stmt->fetchAll();
+    }
+    public function deleteUpdate(int $id, int $aplicacaoId): bool
+    {
+        $this->ensureTable();
+        $stmt = $this->db->prepare('DELETE FROM aplicacao_updates WHERE id = :id AND aplicacao_id = :ap');
+        return $stmt->execute(['id' => $id, 'ap' => $aplicacaoId]);
+    }
+
     public function addArquivo(int $aplicacaoId, int $clienteId, string $nomeOriginal, string $path, string $mime, int $size): bool
     {
         $this->ensureTable();
