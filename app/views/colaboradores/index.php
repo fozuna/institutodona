@@ -7,7 +7,7 @@
             <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="javascript:history.back()">Voltar</a>
         </div>
     </div>
-    <form method="get" action="index.php" class="mb-4 flex items-center gap-2">
+    <form method="get" action="index.php" class="mb-4 flex items-center gap-2 flex-wrap">
         <input type="hidden" name="route" value="colaboradores/index" />
         <label class="text-sm">Cliente</label>
         <select name="cliente" class="border rounded p-2 min-w-[16rem]">
@@ -16,6 +16,26 @@
                 <option value="<?= (int)$cl['id'] ?>" <?= ((int)$cliente === (int)$cl['id']) ? 'selected' : '' ?>>
                     <?= htmlspecialchars($cl['nome_empresa']) ?> <?= ((int)($cl['is_matriz'] ?? 1) === 1) ? '(Matriz)' : '(Filial)' ?>
                 </option>
+            <?php endforeach; ?>
+        </select>
+        <label class="text-sm">Líder</label>
+        <select name="lider" class="border rounded p-2">
+            <option value="">Todos</option>
+            <option value="sim" <?= (($filter_lider ?? '') === 'sim') ? 'selected' : '' ?>>Sim</option>
+            <option value="não" <?= (($filter_lider ?? '') === 'não') ? 'selected' : '' ?>>Não</option>
+        </select>
+        <label class="text-sm">Departamento</label>
+        <select name="departamento" class="border rounded p-2 min-w-[12rem]">
+            <option value="0">Todos</option>
+            <?php foreach ($departamentos as $d): ?>
+                <option value="<?= (int)$d['id'] ?>" <?= ((int)($filter_departamento ?? 0) === (int)$d['id']) ? 'selected' : '' ?>><?= htmlspecialchars($d['nome']) ?></option>
+            <?php endforeach; ?>
+        </select>
+        <label class="text-sm">Função</label>
+        <select name="funcao" class="border rounded p-2 min-w-[12rem]">
+            <option value="0">Todas</option>
+            <?php foreach ($funcoes as $f): ?>
+                <option value="<?= (int)$f['id'] ?>" <?= ((int)($filter_funcao ?? 0) === (int)$f['id']) ? 'selected' : '' ?>><?= htmlspecialchars($f['nome']) ?></option>
             <?php endforeach; ?>
         </select>
         <label class="text-sm">Por página</label>

@@ -49,6 +49,26 @@ class ColaboradorModel extends BaseModel
         return (int)($row['total'] ?? 0);
     }
 
+    public function countByClienteWithFilters(int $clienteId, array $filters): int
+    {
+        $this->ensureTable();
+        $conds = ['col.cliente_id = :cid'];
+        $params = ['cid' => $clienteId];
+        if (!empty($filters['lider'])) { $conds[] = 'col.lider = :lider'; $params['lider'] = $filters['lider']; }
+        if (!empty($filters['departamento_id'])) { $conds[] = 'd.id = :dep'; $params['dep'] = (int)$filters['departamento_id']; }
+        if (!empty($filters['funcao_id'])) { $conds[] = 'f.id = :func'; $params['func'] = (int)$filters['funcao_id']; }
+        $sql = 'SELECT COUNT(*) AS total
+                FROM colaboradores col
+                JOIN funcoes f ON f.id = col.funcao_id
+                JOIN setores s ON s.id = f.setor_id
+                JOIN departamentos d ON d.id = s.departamento_id
+                WHERE ' . implode(' AND ', $conds);
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $row = $stmt->fetch();
+        return (int)($row['total'] ?? 0);
+    }
+
     public function paginatedByCliente(int $clienteId, int $page, int $perPage): array
     {
         $this->ensureTable();
@@ -67,6 +87,32 @@ class ColaboradorModel extends BaseModel
                 LIMIT ' . (int)$perPage . ' OFFSET ' . (int)$offset;
         $stmt = $this->db->prepare($sql);
         $stmt->execute(['cid' => $clienteId]);
+        return $stmt->fetchAll();
+    }
+
+    public function paginatedByClienteWithFilters(int $clienteId, int $page, int $perPage, array $filters): array
+    {
+        $this->ensureTable();
+        $page = max(1, (int)$page);
+        $perPage = max(1, min(200, (int)$perPage));
+        $offset = ($page - 1) * $perPage;
+        $conds = ['col.cliente_id = :cid'];
+        $params = ['cid' => $clienteId];
+        if (!empty($filters['lider'])) { $conds[] = 'col.lider = :lider'; $params['lider'] = $filters['lider']; }
+        if (!empty($filters['departamento_id'])) { $conds[] = 'd.id = :dep'; $params['dep'] = (int)$filters['departamento_id']; }
+        if (!empty($filters['funcao_id'])) { $conds[] = 'f.id = :func'; $params['func'] = (int)$filters['funcao_id']; }
+        $sql = 'SELECT col.id, col.nome, col.email, col.funcao_id, col.cliente_id,
+                       cli.nome_empresa AS unidade, f.nome AS funcao, s.nome AS setor, d.nome AS departamento
+                FROM colaboradores col
+                JOIN funcoes f ON f.id = col.funcao_id
+                JOIN setores s ON s.id = f.setor_id
+                JOIN departamentos d ON d.id = s.departamento_id
+                LEFT JOIN clientes cli ON cli.id = col.cliente_id
+                WHERE ' . implode(' AND ', $conds) . '
+                ORDER BY d.nome, s.nome, f.nome, col.nome
+                LIMIT ' . (int)$perPage . ' OFFSET ' . (int)$offset;
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 

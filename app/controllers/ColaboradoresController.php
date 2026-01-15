@@ -30,8 +30,16 @@ class ColaboradoresController extends BaseController
         $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
         $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
         $perPage = isset($_GET['per']) ? max(5, min(100, (int)$_GET['per'])) : 20;
-        $items = $cliente ? $this->colabs->paginatedByCliente($cliente, $page, $perPage) : [];
-        $total = $cliente ? $this->colabs->countByCliente($cliente) : 0;
+        $lider = isset($_GET['lider']) && in_array($_GET['lider'], ['sim','não'], true) ? $_GET['lider'] : '';
+        $departamentoId = isset($_GET['departamento']) ? (int)$_GET['departamento'] : 0;
+        $funcaoId = isset($_GET['funcao']) ? (int)$_GET['funcao'] : 0;
+        $filters = [
+            'lider' => $lider,
+            'departamento_id' => $departamentoId ?: null,
+            'funcao_id' => $funcaoId ?: null,
+        ];
+        $items = $cliente ? $this->colabs->paginatedByClienteWithFilters($cliente, $page, $perPage, $filters) : [];
+        $total = $cliente ? $this->colabs->countByClienteWithFilters($cliente, $filters) : 0;
         $totalPages = $cliente ? max(1, (int)ceil($total / $perPage)) : 1;
         $departamentos = $cliente ? $this->deps->allByCliente($cliente) : $this->deps->all();
         $setores = $cliente ? $this->setores->allByCliente($cliente) : $this->setores->all();
@@ -47,7 +55,10 @@ class ColaboradoresController extends BaseController
             'page' => $page,
             'per' => $perPage,
             'total' => $total,
-            'total_pages' => $totalPages
+            'total_pages' => $totalPages,
+            'filter_lider' => $lider,
+            'filter_departamento' => $departamentoId,
+            'filter_funcao' => $funcaoId
         ]);
     }
 
