@@ -45,7 +45,7 @@ class ColaboradorModel extends BaseModel
     public function find(int $id): ?array
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('SELECT id, nome, email, funcao_id FROM colaboradores WHERE id = :id');
+        $stmt = $this->db->prepare('SELECT id, nome, email, funcao_id, cliente_id, lider FROM colaboradores WHERE id = :id');
         $stmt->execute(['id' => $id]);
         $row = $stmt->fetch();
         return $row ?: null;
@@ -54,16 +54,29 @@ class ColaboradorModel extends BaseModel
     public function create(array $data): int
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('INSERT INTO colaboradores (nome, email, funcao_id, cliente_id) VALUES (:nome, :email, :funcao_id, :cliente_id)');
-        $stmt->execute(['nome' => $data['nome'], 'email' => $data['email'] ?? null, 'funcao_id' => (int)$data['funcao_id'], 'cliente_id' => $data['cliente_id'] ?? null]);
+        $stmt = $this->db->prepare('INSERT INTO colaboradores (nome, email, funcao_id, lider, cliente_id) VALUES (:nome, :email, :funcao_id, :lider, :cliente_id)');
+        $stmt->execute([
+            'nome' => $data['nome'],
+            'email' => $data['email'] ?? null,
+            'funcao_id' => (int)$data['funcao_id'],
+            'lider' => ($data['lider'] ?? 'não') === 'sim' ? 'sim' : 'não',
+            'cliente_id' => $data['cliente_id'] ?? null
+        ]);
         return (int)$this->db->lastInsertId();
     }
 
     public function update(int $id, array $data): bool
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('UPDATE colaboradores SET nome = :nome, email = :email, funcao_id = :funcao_id, cliente_id = :cliente_id WHERE id = :id');
-        return $stmt->execute(['nome' => $data['nome'], 'email' => $data['email'] ?? null, 'funcao_id' => (int)$data['funcao_id'], 'cliente_id' => $data['cliente_id'] ?? null, 'id' => $id]);
+        $stmt = $this->db->prepare('UPDATE colaboradores SET nome = :nome, email = :email, funcao_id = :funcao_id, lider = :lider, cliente_id = :cliente_id WHERE id = :id');
+        return $stmt->execute([
+            'nome' => $data['nome'],
+            'email' => $data['email'] ?? null,
+            'funcao_id' => (int)$data['funcao_id'],
+            'lider' => ($data['lider'] ?? 'não') === 'sim' ? 'sim' : 'não',
+            'cliente_id' => $data['cliente_id'] ?? null,
+            'id' => $id
+        ]);
     }
 
     public function delete(int $id): bool

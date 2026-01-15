@@ -20,6 +20,13 @@
                 <?php endforeach; ?>
             </select>
         </div>
+        <div>
+            <label class="block text-sm">Líder</label>
+            <select name="lider" class="border rounded p-2 w-40">
+                <option value="não" selected>Não</option>
+                <option value="sim">Sim</option>
+            </select>
+        </div>
         <div class="flex items-center gap-3">
             <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">Salvar</button>
             <button class="px-4 py-2 rounded bg-gray-200 text-brand-brown" type="button" onclick="history.back()">Cancelar</button>
