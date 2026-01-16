@@ -124,8 +124,15 @@ class ClientesController extends BaseController
 
     public function show(): void
     {
-        $this->requireRole('instituto');
+        $this->requireLogin();
+        $user = $_SESSION['user'] ?? [];
         $id = (int)($_GET['id'] ?? 0);
+        $tipo = $user['tipo_acesso'] ?? null;
+        if ($tipo === 'cliente' && (int)($user['id_cliente'] ?? 0) !== $id) {
+            http_response_code(403);
+            echo 'Acesso negado';
+            return;
+        }
         $item = $this->clientes->find($id);
         $apl = new AplicacaoModel();
         $statusFilter = $_GET['status'] ?? '';
