@@ -68,6 +68,9 @@ class AplicacoesController extends BaseController
         if ($idAplicacao) {
             $prev = $this->aplicacoes->find($idAplicacao);
             $prevCols = array_map(fn($r)=> (int)$r['id'], $this->aplicacoes->colaboradoresForAplicacao($idAplicacao));
+            // Normaliza valores vazios
+            $dataPrevista = ($dataPrevista === '' ? null : $dataPrevista);
+            $consultorId = ($consultorId === 0 ? null : $consultorId);
             $this->aplicacoes->updateStatus($idAplicacao, $status);
             $this->aplicacoes->updateSchedule($idAplicacao, $dataPrevista, $consultorId);
             if (!empty($colabIds)) {
@@ -75,13 +78,22 @@ class AplicacoesController extends BaseController
             }
             \App\Core\AuditLogger::log('update', 'aplicacao', $idAplicacao, ['status'=>$status,'data_prevista'=>$dataPrevista,'consultor_id'=>$consultorId,'colabs'=>$colabIds, 'obs'=>$obs]);
             $changes = [];
-            if (($prev['status'] ?? null) !== $status) { $changes[] = 'Status: ' . ($prev['status'] ?? '—') . ' → ' . $status; }
-            if (($prev['data_prevista'] ?? null) !== $dataPrevista) { $changes[] = 'Data prevista: ' . ($prev['data_prevista'] ?? '—') . ' → ' . ($dataPrevista ?: '—'); }
-            if ((int)($prev['consultor_id'] ?? 0) !== (int)$consultorId) { $changes[] = 'Consultor: ' . (int)($prev['consultor_id'] ?? 0) . ' → ' . (int)$consultorId; }
+            if (($prev['status'] ?? null) !== $status) { $changes[] = 'Status: ' . (($prev['status'] ?? '') !== '' ? $prev['status'] : '—') . ' → ' . ($status !== '' ? $status : '—'); }
+            $prevData = $prev['data_prevista'] ?? null;
+            if ($prevData === '') $prevData = null;
+            if ($prevData !== $dataPrevista) { $changes[] = 'Data prevista: ' . ($prevData ?: '—') . ' → ' . ($dataPrevista ?: '—'); }
+            $prevConsultor = isset($prev['consultor_id']) ? (int)$prev['consultor_id'] : null;
+            if ($prevConsultor === 0) $prevConsultor = null;
+            if ($prevConsultor !== $consultorId) { $changes[] = 'Consultor: ' . ($prevConsultor ?? '—') . ' → ' . ($consultorId ?? '—'); }
             $added = array_values(array_diff($colabIds, $prevCols));
             $removed = array_values(array_diff($prevCols, $colabIds));
-            if ($added) { $changes[] = 'Colaboradores adicionados: ' . implode(', ', $added); }
-            if ($removed) { $changes[] = 'Colaboradores removidos: ' . implode(', ', $removed); }
+            if ($added || $removed) {
+                // Mapeia nomes para melhorar leitura
+                $mapNames = [];
+                foreach ($this->aplicacoes->colaboradoresForAplicacao($idAplicacao) as $c) { $mapNames[(int)$c['id']] = $c['nome']; }
+                if ($added) { $changes[] = 'Colaboradores adicionados: ' . implode(', ', array_map(fn($id)=> $mapNames[$id] ?? $id, $added)); }
+                if ($removed) { $changes[] = 'Colaboradores removidos: ' . implode(', ', array_map(fn($id)=> $mapNames[$id] ?? $id, $removed)); }
+            }
             $summary = ($obs !== '' ? ('Obs: ' . $obs . ' — ') : '') . (empty($changes) ? 'Sem alterações de campos' : implode(' | ', $changes));
             $user = $_SESSION['user'] ?? [];
             $this->aplicacoes->addUpdate($idAplicacao, (string)($user['email'] ?? ''), (string)($user['nome'] ?? ''), $summary, [
