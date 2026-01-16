@@ -9,6 +9,20 @@ class AboutController extends BaseController
     {
         $this->requireLogin();
         $version = \App\Core\AppVersion::get();
-        $this->render('about/index', ['version' => $version]);
+        $changelog = [];
+        try {
+            $cmd = 'git log -n 12 --pretty=format:"%h|%ad|%s" --date=short';
+            $out = @shell_exec($cmd);
+            if ($out) {
+                $lines = explode("\n", trim($out));
+                foreach ($lines as $ln) {
+                    $parts = explode('|', $ln, 3);
+                    if (count($parts) === 3) {
+                        $changelog[] = ['hash' => $parts[0], 'date' => $parts[1], 'subject' => $parts[2]];
+                    }
+                }
+            }
+        } catch (\Throwable $e) {}
+        $this->render('about/index', ['version' => $version, 'changelog' => $changelog]);
     }
 }

@@ -1,4 +1,4 @@
-<?php /** @var string $version */ ?>
+<?php /** @var string $version */ /** @var array $changelog */ ?>
 <div class="p-6">
   <div class="flex justify-between items-center mb-4">
     <h1 class="text-2xl font-bold">Sobre e Manual de Uso</h1>
@@ -41,6 +41,31 @@
     <div class="bg-white shadow rounded p-4 md:col-span-2">
       <div class="font-semibold mb-2">Sobre</div>
       <p class="text-sm text-gray-700">Desenvolvido por Traxter — Sistemas e Automações.</p>
+    </div>
+    <div class="bg-white shadow rounded p-4 md:col-span-2">
+      <div class="font-semibold mb-2">Novidades</div>
+      <?php if (!empty($changelog)): ?>
+        <table class="min-w-full text-sm">
+          <thead>
+            <tr class="text-left border-b">
+              <th class="p-2">Data</th>
+              <th class="p-2">Resumo</th>
+              <th class="p-2">Commit</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($changelog as $c): ?>
+              <tr class="border-b">
+                <td class="p-2 whitespace-nowrap"><?= htmlspecialchars($c['date']) ?></td>
+                <td class="p-2"><?= htmlspecialchars($c['subject']) ?></td>
+                <td class="p-2 text-gray-500"><?= htmlspecialchars($c['hash']) ?></td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      <?php else: ?>
+        <div class="text-sm text-gray-600">Sem novidades disponíveis no momento.</div>
+      <?php endif; ?>
     </div>
   </div>
 </div>
