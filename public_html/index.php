@@ -136,6 +136,9 @@ switch ($route) {
     case 'aplicacoes/upload':
         (new AplicacoesController())->upload();
         break;
+    case 'about/index':
+        (new AboutController())->index();
+        break;
     case 'aplicacoes/delete_update':
         (new AplicacoesController())->delete_update();
         break;
@@ -314,7 +317,6 @@ switch ($route) {
     case 'dashboard/index':
     case 'logs/index':
         if ($route === 'logs/index') { (new LogsController())->index(); break; }
-        if ($route === 'about/index') { (new AboutController())->index(); break; }
     default:
         (new DashboardController())->index();
         break;
