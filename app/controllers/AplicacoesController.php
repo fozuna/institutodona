@@ -68,6 +68,11 @@ class AplicacoesController extends BaseController
         if ($idAplicacao) {
             $prev = $this->aplicacoes->find($idAplicacao);
             $prevCols = array_map(fn($r)=> (int)$r['id'], $this->aplicacoes->colaboradoresForAplicacao($idAplicacao));
+            if (in_array($status, ['Em Andamento','Concluído'], true) && (!$consultorId || $consultorId === 0)) {
+                http_response_code(400);
+                echo 'Selecione um consultor para iniciar/avançar a tarefa.';
+                return;
+            }
             // Normaliza valores vazios
             $dataPrevista = ($dataPrevista === '' ? null : $dataPrevista);
             $consultorId = ($consultorId === 0 ? null : $consultorId);
@@ -111,11 +116,19 @@ class AplicacoesController extends BaseController
         $id = (int)($_POST['id'] ?? 0);
         $status = $_POST['status'] ?? '';
         $ok = false;
+        $error = null;
         if ($id && in_array($status, ['A Fazer','Em Andamento','Concluído','Pendente'], true)) {
-            $ok = $this->aplicacoes->updateStatus($id, $status);
-            if ($ok) { \App\Core\AuditLogger::log('update', 'aplicacao', $id, ['status'=>$status]); }
+            $app = $this->aplicacoes->find($id);
+            $needsConsultor = in_array($status, ['Em Andamento','Concluído'], true);
+            $hasConsultor = isset($app['consultor_id']) && (int)$app['consultor_id'] > 0;
+            if ($needsConsultor && !$hasConsultor) {
+                $error = 'Para iniciar/avançar a tarefa, selecione um consultor.';
+            } else {
+                $ok = $this->aplicacoes->updateStatus($id, $status);
+                if ($ok) { \App\Core\AuditLogger::log('update', 'aplicacao', $id, ['status'=>$status]); }
+            }
         }
-        echo json_encode(['ok' => $ok]);
+        echo json_encode(['ok' => $ok, 'error' => $error]);
     }
 
     public function upload(): void

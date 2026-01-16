@@ -210,6 +210,9 @@ class ClientesController extends BaseController
         $colabIds = isset($_POST['colaborador_ids']) ? (array)$_POST['colaborador_ids'] : [];
         $colabIds = array_values(array_filter(array_map('intval', $colabIds)));
         if (empty($colabIds)) { http_response_code(400); echo 'Selecione ao menos um Colaborador'; return; }
+        if (in_array($status, ['Em Andamento','Concluído'], true) && (!$consultorId || $consultorId === 0)) {
+            http_response_code(400); echo 'Selecione um consultor para iniciar a tarefa'; return;
+        }
         if ($idCliente && $idMetodologia) {
             $aplId = (new AplicacaoModel())->create($idCliente, $idMetodologia, $status, $consultorId, $dataPrevista);
             (new AplicacaoModel())->addColaboradores($aplId, $colabIds);
@@ -230,6 +233,9 @@ class ClientesController extends BaseController
         $consultorId = isset($_POST['consultor_id']) ? (int)$_POST['consultor_id'] : null;
         $colabIds = isset($_POST['colaborador_ids']) ? (array)$_POST['colaborador_ids'] : [];
         $colabIds = array_values(array_filter(array_map('intval', $colabIds)));
+        if (in_array($status, ['Em Andamento','Concluído'], true) && (!$consultorId || $consultorId === 0)) {
+            http_response_code(400); echo 'Selecione um consultor para iniciar/avançar a tarefa'; return;
+        }
         if ($idAplicacao) {
             (new AplicacaoModel())->updateStatus($idAplicacao, $status);
             (new AplicacaoModel())->updateSchedule($idAplicacao, $dataPrevista, $consultorId);
