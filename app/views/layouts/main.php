@@ -41,6 +41,7 @@ $config = require $cfg;
                     <?php if (($user['email'] ?? '') === 'admin@agencialester.com.br'): ?>
                     <a class="block px-3 py-2 rounded nav-link" href="index.php?route=logs/index"><span data-feather="file-text" class="inline-block mr-2"></span>Logs</a>
                     <?php endif; ?>
+                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=about/index"><span data-feather="book" class="inline-block mr-2"></span>Sobre & Manual</a>
                 </nav>
                 <div class="mt-auto px-4 py-3 border-t border-brand-brown flex items-center justify-between">
                     <button id="themeToggle" class="text-sm flex items-center gap-2">
