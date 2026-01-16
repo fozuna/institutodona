@@ -18,68 +18,7 @@
           <div class="text-sm text-gray-500">Tarefa</div>
           <div class="font-semibold"><?= htmlspecialchars($app['item_pilar'] ?? '') ?></div>
         </div>
-        <div class="bg-white shadow rounded p-4 mt-4">
-          <div class="font-semibold mb-3">Observações e atualizações</div>
-          <form method="post" action="index.php?route=aplicacoes/update" class="mb-3">
-            <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
-            <input type="hidden" name="id_aplicacao" value="<?= (int)$app['id'] ?>" />
-            <input type="hidden" name="status" value="<?= htmlspecialchars($app['status'] ?? 'A Fazer') ?>" />
-            <input type="hidden" name="data_prevista" value="<?= htmlspecialchars($app['data_prevista'] ?? '') ?>" />
-            <input type="hidden" name="consultor_id" value="<?= (int)($app['consultor_id'] ?? 0) ?>" />
-            <?php foreach ($colabs as $c): ?>
-              <input type="hidden" name="colaborador_ids[]" value="<?= (int)$c['id'] ?>" />
-            <?php endforeach; ?>
-            <label class="block text-sm mb-1">Observação desta atualização</label>
-            <textarea name="observacao_update" class="border rounded p-2 w-full" rows="3" placeholder="Descreva a alteração realizada..."></textarea>
-            <div class="mt-2">
-              <button class="px-3 py-2 rounded bg-brand-red text-white" type="submit">Registrar observação</button>
-            </div>
-          </form>
-          <?php if (!empty($updates)): ?>
-            <table class="min-w-full text-sm">
-              <thead>
-                <tr class="text-left border-b">
-                  <th class="p-2">Data/Hora</th>
-                  <th class="p-2">Usuário</th>
-                  <th class="p-2">Resumo</th>
-                  <th class="p-2">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                <?php foreach ($updates as $up): ?>
-                  <tr class="border-b">
-                    <td class="p-2"><?= htmlspecialchars(date('d/m/Y H:i', strtotime($up['created_at']))) ?></td>
-                    <td class="p-2"><?= htmlspecialchars(($up['user_nome'] ?? '') . ' <' . ($up['user_email'] ?? '') . '>') ?></td>
-                    <td class="p-2"><?= htmlspecialchars($up['summary'] ?? '') ?></td>
-                    <td class="p-2 whitespace-nowrap">
-                      <button type="button" class="px-2 py-1 rounded bg-gray-200 text-brand-brown" data-toggle="u<?= (int)$up['id'] ?>">Ver</button>
-                      <a class="ml-2 text-brand-red hover:underline" href="index.php?route=aplicacoes/delete_update&id=<?= (int)$up['id'] ?>&ap=<?= (int)$app['id'] ?>" onclick="return confirm('Excluir este registro de atualização?')">Excluir</a>
-                    </td>
-                  </tr>
-                  <tr class="border-b">
-                    <td class="p-2" colspan="4">
-                      <pre id="u<?= (int)$up['id'] ?>" class="hidden whitespace-pre-wrap text-xs bg-gray-50 p-2 rounded"><?= htmlspecialchars(json_encode(@json_decode($up['payload_json'] ?? '[]', true), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) ?></pre>
-                    </td>
-                  </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
-            <script>
-              (function(){
-                document.querySelectorAll('button[data-toggle]').forEach(btn=>{
-                  btn.addEventListener('click', ()=>{
-                    const id = btn.getAttribute('data-toggle');
-                    const el = document.getElementById(id);
-                    if (!el) return;
-                    el.classList.toggle('hidden');
-                  });
-                });
-              })();
-            </script>
-          <?php else: ?>
-            <div class="text-sm text-gray-600">Nenhuma atualização registrada.</div>
-          <?php endif; ?>
-        </div>
+        
       </div>
     </div>
 
@@ -128,6 +67,68 @@
             <a class="px-4 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?route=clientes/show&id=<?= (int)$app['id_cliente'] ?>">CANCELAR</a>
           </div>
         </form>
+        <div class="bg-white shadow rounded p-4 mt-4">
+          <div class="font-semibold mb-3">Observações e atualizações</div>
+          <form method="post" action="index.php?route=aplicacoes/update" class="mb-3">
+            <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+            <input type="hidden" name="id_aplicacao" value="<?= (int)$app['id'] ?>" />
+            <input type="hidden" name="status" value="<?= htmlspecialchars($app['status'] ?? 'A Fazer') ?>" />
+            <input type="hidden" name="data_prevista" value="<?= htmlspecialchars($app['data_prevista'] ?? '') ?>" />
+            <input type="hidden" name="consultor_id" value="<?= (int)($app['consultor_id'] ?? 0) ?>" />
+            <?php foreach ($colabs as $c): ?>
+              <input type="hidden" name="colaborador_ids[]" value="<?= (int)$c['id'] ?>" />
+            <?php endforeach; ?>
+            <label class="block text-sm mb-1">Observação desta atualização</label>
+            <textarea name="observacao_update" class="border rounded p-2 w-full" rows="3" placeholder="Descreva a alteração realizada..."></textarea>
+            <div class="mt-2">
+              <button class="px-3 py-2 rounded bg-brand-red text-white" type="submit">Registrar observação</button>
+            </div>
+          </form>
+          <?php if (!empty($updates)): ?>
+            <table class="min-w-full text-sm">
+              <thead>
+                <tr class="text-left border-b">
+                  <th class="p-2">Data/Hora</th>
+                  <th class="p-2">Usuário</th>
+                  <th class="p-2">Resumo</th>
+                  <th class="p-2">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php foreach ($updates as $up): ?>
+                  <tr class="border-b">
+                    <td class="p-2"><?= htmlspecialchars(date('d/m/Y H:i', strtotime($up['created_at']))) ?></td>
+                    <td class="p-2"><?= htmlspecialchars($up['user_nome'] ?? '') ?></td>
+                    <td class="p-2"><?= htmlspecialchars($up['summary'] ?? '') ?></td>
+                    <td class="p-2 whitespace-nowrap">
+                      <button type="button" class="px-2 py-1 rounded bg-gray-200 text-brand-brown" data-toggle="u<?= (int)$up['id'] ?>">Ver</button>
+                      <a class="ml-2 text-brand-red hover:underline" href="index.php?route=aplicacoes/delete_update&id=<?= (int)$up['id'] ?>&ap=<?= (int)$app['id'] ?>" onclick="return confirm('Excluir este registro de atualização?')">Excluir</a>
+                    </td>
+                  </tr>
+                  <tr class="border-b">
+                    <td class="p-2" colspan="4">
+                      <pre id="u<?= (int)$up['id'] ?>" class="hidden whitespace-pre-wrap text-xs bg-gray-50 p-2 rounded"><?= htmlspecialchars(json_encode(@json_decode($up['payload_json'] ?? '[]', true), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) ?></pre>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+            <script>
+              (function(){
+                document.querySelectorAll('button[data-toggle]').forEach(btn=>{
+                  btn.addEventListener('click', ()=>{
+                    const id = btn.getAttribute('data-toggle');
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    el.classList.toggle('hidden');
+                  });
+                });
+              })();
+            </script>
+          <?php else: ?>
+            <div class="text-sm text-gray-600">Nenhuma atualização registrada.</div>
+          <?php endif; ?>
+        </div>
       </div>
       <div class="md:basis-1/2">
         <div class="bg-white shadow rounded p-4">
