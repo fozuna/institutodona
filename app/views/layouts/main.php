@@ -62,7 +62,7 @@ $config = require $cfg;
             </div>
             <?php if ($user): ?>
             <footer class="border-t bg-white text-center text-xs text-gray-500 py-3 px-6">
-                &copy; <?php echo date('Y'); ?> MENTORIA VIVA+. Todos os direitos reservados. <span class="opacity-70">v1.23.25</span>
+                &copy; <?php echo date('Y'); ?> MENTORIA VIVA+. Todos os direitos reservados. <span class="opacity-70"><?php echo htmlspecialchars($config['app']['version'] ?? 'v1.24.0'); ?></span>
             </footer>
             <?php endif; ?>
         </main>

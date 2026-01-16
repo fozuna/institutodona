@@ -9,5 +9,6 @@ return [
     ],
     'app' => [
         'base_url' => '/',
+        'version' => 'v1.24.0',
     ],
 ];
