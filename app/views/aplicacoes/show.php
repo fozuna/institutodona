@@ -225,15 +225,21 @@
     </script>
     <div class="bg-white shadow rounded p-4 mt-4">
       <div class="font-semibold mb-3">Arquivos da tarefa</div>
-      <form method="post" action="index.php?route=aplicacoes/upload" enctype="multipart/form-data" class="mb-3 flex items-end gap-3">
-        <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
-        <input type="hidden" name="id_aplicacao" value="<?= (int)$app['id'] ?>" />
-        <div class="flex-1">
-          <label class="block text-sm">Enviar arquivo</label>
-          <input type="file" name="arquivo" />
+      <div class="mb-3">
+        <div id="uploadZone" class="border-2 border-dashed border-brand-brown rounded p-4 text-center text-sm text-gray-600">
+          Arraste e solte arquivos aqui ou selecione abaixo
         </div>
-        <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">Enviar</button>
-      </form>
+        <div class="mt-3 flex items-end gap-3">
+          <input type="hidden" id="csrfUpload" value="<?= \App\Core\Security::csrfToken() ?>" />
+          <input type="hidden" id="uploadAplicacaoId" value="<?= (int)$app['id'] ?>" />
+          <div class="flex-1">
+            <label class="block text-sm">Selecionar arquivos</label>
+            <input type="file" id="fileInput" multiple />
+          </div>
+          <button id="sendFilesBtn" class="px-4 py-2 rounded bg-brand-red text-white" type="button">Enviar</button>
+        </div>
+        <div id="uploadList" class="mt-3 space-y-2"></div>
+      </div>
       <?php if (!empty($arquivos)): ?>
         <table class="min-w-full text-sm">
           <thead>
@@ -270,6 +276,12 @@
       <script>
         (function(){
           const preview = document.getElementById('filePreview');
+          const zone = document.getElementById('uploadZone');
+          const input = document.getElementById('fileInput');
+          const list = document.getElementById('uploadList');
+          const btn = document.getElementById('sendFilesBtn');
+          const csrf = document.getElementById('csrfUpload').value;
+          const apid = document.getElementById('uploadAplicacaoId').value;
           document.querySelectorAll('button[data-preview]').forEach(btn=>{
             btn.addEventListener('click', ()=>{
               const url = btn.getAttribute('data-preview');
@@ -283,6 +295,51 @@
               }
             });
           });
+          function addProgressItem(file) {
+            const row = document.createElement('div');
+            row.className = 'border rounded p-2';
+            row.innerHTML = '<div class="text-sm">'+file.name+' ('+Math.round(file.size/1024)+' KB)</div><div class="w-full h-2 bg-gray-200 rounded mt-2"><div class="h-2 bg-brand-red rounded" style="width:0%" ></div></div>';
+            list.appendChild(row);
+            return row.querySelector('div > div');
+          }
+          function uploadFiles(files) {
+            if (!files || !files.length) return;
+            Array.from(files).forEach(file=>{
+              const bar = addProgressItem(file);
+              const fd = new FormData();
+              fd.append('csrf', csrf);
+              fd.append('id_aplicacao', apid);
+              fd.append('arquivo', file);
+              const xhr = new XMLHttpRequest();
+              xhr.open('POST', 'index.php?route=aplicacoes/upload&ajax=1');
+              xhr.upload.onprogress = (e)=>{
+                if (e.lengthComputable) {
+                  const pct = Math.round((e.loaded / e.total) * 100);
+                  bar.style.width = pct + '%';
+                }
+              };
+              xhr.onload = ()=>{
+                try {
+                  const json = JSON.parse(xhr.responseText || '{}');
+                  if (json.ok && json.files && json.files.length) {
+                    const f = json.files[0];
+                    const tbody = document.querySelector('table tbody');
+                    if (tbody) {
+                      const tr = document.createElement('tr');
+                      tr.className = 'border-b';
+                      tr.innerHTML = '<td class="p-2">'+(f.nome_original || file.name)+'</td><td class="p-2">'+(f.mime || file.type || '—')+'</td><td class="p-2">'+Math.round((f.tamanho||file.size)/1024)+' KB</td><td class="p-2">'+(f.uploaded_at || '')+'</td><td class="p-2"><a class="text-brand-red hover:underline" target="_blank" href="../'+f.arquivo_path+'">Abrir</a> <button type="button" class="ml-2 px-2 py-1 rounded bg-gray-200 text-brand-brown" data-preview="../'+f.arquivo_path+'" data-mime="'+(f.mime||'')+'">Preview</button></td>';
+                      tbody.appendChild(tr);
+                    }
+                  }
+                } catch (e) {}
+              };
+              xhr.send(fd);
+            });
+          }
+          zone.addEventListener('dragover', (e)=>{ e.preventDefault(); zone.classList.add('bg-gray-50'); });
+          zone.addEventListener('dragleave', ()=> zone.classList.remove('bg-gray-50'));
+          zone.addEventListener('drop', (e)=>{ e.preventDefault(); zone.classList.remove('bg-gray-50'); uploadFiles(e.dataTransfer.files); });
+          btn.addEventListener('click', ()=> uploadFiles(input.files));
         })();
       </script>
     </div>
