@@ -1,6 +1,6 @@
 <?php
-// Redirect root to public_html to ensure correct asset paths
-$target = 'public_html/';
+// Redireciona explicitamente para o index do public_html
+$target = 'public_html/index.php';
 if (!headers_sent()) {
     header('Location: ' . $target);
     exit;
@@ -9,9 +9,9 @@ if (!headers_sent()) {
 <!doctype html>
 <html lang="pt-br">
 <meta charset="utf-8">
-<meta http-equiv="refresh" content="0;url=public_html/">
+<meta http-equiv="refresh" content="0;url=public_html/index.php">
 <title>Redirecionando…</title>
 <body>
-Se não for redirecionado automaticamente, <a href="public_html/">clique aqui</a>.
+Se não for redirecionado automaticamente, <a href="public_html/index.php">clique aqui</a>.
 </body>
 </html>
