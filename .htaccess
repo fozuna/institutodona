@@ -1,25 +1,4 @@
 Options -Indexes
 DirectoryIndex public_html/index.php
-RewriteEngine On
 
-# Redireciona acessos explícitos a /public_html para a raiz
-RewriteRule ^public_html/(.*)$ /$1 [R=301,L]
-
-# Se o recurso existir dentro de /public_html, serve diretamente (assets, imagens, etc.)
-RewriteCond %{DOCUMENT_ROOT}/public_html%{REQUEST_URI} -f [OR]
-RewriteCond %{DOCUMENT_ROOT}/public_html%{REQUEST_URI} -d
-RewriteRule ^ - [L]
-
-# URLs amigáveis opcionais
-RewriteRule ^$ public_html/index.php?route=auth/login [L,QSA]
-RewriteRule ^dashboard/?$ public_html/index.php?route=dashboard/index [L,QSA]
-RewriteRule ^clientes/(index|create|store|edit|update|delete|show)/?$ public_html/index.php?route=clientes/$1 [L,QSA]
-RewriteRule ^metodologias/(index|create|store|edit|update|delete)/?$ public_html/index.php?route=metodologias/$1 [L,QSA]
-RewriteRule ^pilares/(index|create|store|edit|update|delete)/?$ public_html/index.php?route=pilares/$1 [L,QSA]
-RewriteRule ^avaliacao/(create|store)/?$ public_html/index.php?route=avaliacao/$1 [L,QSA]
-RewriteRule ^login/?$ public_html/index.php?route=auth/login [L,QSA]
-RewriteRule ^login/do/?$ public_html/index.php?route=auth/doLogin [L,QSA]
-RewriteRule ^logout/?$ public_html/index.php?route=auth/logout [L,QSA]
-
-# Fallback: envia qualquer outra rota para o front-controller
-RewriteRule ^(.*)$ public_html/index.php [L,QSA]
+# Mantemos o roteamento dentro de public_html/.htaccess

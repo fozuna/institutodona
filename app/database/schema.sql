@@ -43,6 +43,28 @@ CREATE TABLE IF NOT EXISTS usuarios (
   CONSTRAINT fk_usr_cliente FOREIGN KEY (id_cliente) REFERENCES clientes(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Cronogramas e eventos (agenda mensal por cliente)
+CREATE TABLE IF NOT EXISTS cronogramas (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  id_cliente INT NOT NULL,
+  nome VARCHAR(255) NULL,
+  ano INT NOT NULL,
+  CONSTRAINT fk_crono_cliente FOREIGN KEY (id_cliente) REFERENCES clientes(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS cronograma_eventos (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  id_cronograma INT NOT NULL,
+  data DATE NOT NULL,
+  topico VARCHAR(120) NOT NULL,
+  unidade VARCHAR(120) NULL,
+  atividade VARCHAR(255) NOT NULL,
+  responsavel VARCHAR(255) NULL,
+  modelo ENUM('Online','Presencial') NULL,
+  status ENUM('Planejado','Realizado','Não Realizado') NOT NULL DEFAULT 'Planejado',
+  CONSTRAINT fk_crono_ev_crono FOREIGN KEY (id_cronograma) REFERENCES cronogramas(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Estrutura organizacional
 CREATE TABLE IF NOT EXISTS departamentos (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -161,3 +183,49 @@ INSERT INTO pilares (nome) VALUES
 ON DUPLICATE KEY UPDATE nome = VALUES(nome);
 ALTER TABLE clientes
   ADD COLUMN IF NOT EXISTS logo_path VARCHAR(255) NULL;
+
+-- PDCA core
+CREATE TABLE IF NOT EXISTS pdca_tasks (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  id_cliente INT NOT NULL,
+  titulo VARCHAR(255) NOT NULL,
+  descricao TEXT NULL,
+  meta_valor DECIMAL(12,2) NULL,
+  meta_unidade VARCHAR(32) NULL,
+  prazo DATE NULL,
+  responsavel VARCHAR(120) NULL,
+  fase ENUM('PLAN','DO','CHECK','ACT') NOT NULL DEFAULT 'PLAN',
+  status ENUM('A Fazer','Em Andamento','Concluído','Pendente') NOT NULL DEFAULT 'A Fazer',
+  progresso TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_pdca_task_cliente FOREIGN KEY (id_cliente) REFERENCES clientes(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS pdca_metrics (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  task_id INT NOT NULL,
+  nome VARCHAR(120) NOT NULL,
+  planejado DECIMAL(12,2) NULL,
+  realizado DECIMAL(12,2) NULL,
+  unidade VARCHAR(32) NULL,
+  CONSTRAINT fk_pdca_metric_task FOREIGN KEY (task_id) REFERENCES pdca_tasks(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS pdca_checks (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  task_id INT NOT NULL,
+  gap DECIMAL(12,2) NULL,
+  analise TEXT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_pdca_check_task FOREIGN KEY (task_id) REFERENCES pdca_tasks(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS pdca_actions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  task_id INT NOT NULL,
+  titulo VARCHAR(255) NOT NULL,
+  owner VARCHAR(120) NULL,
+  due_date DATE NULL,
+  status ENUM('Planejado','Em Execução','Concluído') NOT NULL DEFAULT 'Planejado',
+  CONSTRAINT fk_pdca_action_task FOREIGN KEY (task_id) REFERENCES pdca_tasks(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

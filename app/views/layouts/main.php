@@ -11,9 +11,17 @@ $config = require $cfg;
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Instituto Dona - Gestão de Processos</title>
+    <?php
+        $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+        $baseUrl = rtrim(dirname($scriptName), '/\\'); // e.g., /institutodona/public_html
+        if ($baseUrl === '/' || $baseUrl === '\\') { $baseUrl = ''; }
+        $assetsUrl = $baseUrl . '/assets';
+        $appRootUrl = rtrim(dirname($baseUrl), '/\\'); // e.g., /institutodona
+        $publicUrl = $appRootUrl . '/public';
+    ?>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/feather-icons"></script>
-    <link rel="stylesheet" href="assets/css/theme.css" />
+    <link rel="stylesheet" href="<?= $assetsUrl ?>/css/theme.css" />
 </head>
 <body class="bg-brand-gray-50 text-brand-black">
     <?php $user = $_SESSION['user'] ?? null; ?>
@@ -23,7 +31,7 @@ $config = require $cfg;
             <aside class="w-72 shrink-0 bg-brand-brown text-white fixed h-screen desktop:relative desktop:block flex flex-col">
                 <div class="px-6 py-3 border-b border-brand-brown">
                     <div class="flex flex-col items-start gap-2">
-                        <img src="../public/assets/img/logobco.png" alt="Logo" class="h-8 md:h-10 w-auto" />
+                        <img src="<?= $publicUrl ?>/assets/img/logobco.png" alt="Logo" class="h-8 md:h-10 w-auto" />
                         <div class="leading-tight">
                             <div class="font-bold text-sm">Instituto Dona</div>
                             <div class="text-[11px] opacity-80">Gestão de Processos</div>
@@ -37,7 +45,9 @@ $config = require $cfg;
                     <a class="block px-3 py-2 rounded nav-link" href="index.php?route=pilares/index"><span data-feather="layers" class="inline-block mr-2"></span>Pilares</a>
                     <a class="block px-3 py-2 rounded nav-link" href="index.php?route=agenda/index"><span data-feather="calendar" class="inline-block mr-2"></span>Agenda</a>
                     <a class="block px-3 py-2 rounded nav-link" href="index.php?route=consultores/index"><span data-feather="users" class="inline-block mr-2"></span>Consultores</a>
+                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=cronograma/index"><span data-feather="calendar" class="inline-block mr-2"></span>Cronograma</a>
                     <a class="block px-3 py-2 rounded nav-link" href="index.php?route=avaliacoes/index"><span data-feather="check-square" class="inline-block mr-2"></span>Avaliações</a>
+                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=pdca/index"><span data-feather="activity" class="inline-block mr-2"></span>PDCA</a>
                     <?php if (($user['email'] ?? '') === 'admin@agencialester.com.br'): ?>
                     <a class="block px-3 py-2 rounded nav-link" href="index.php?route=logs/index"><span data-feather="file-text" class="inline-block mr-2"></span>Logs</a>
                     <?php endif; ?>
@@ -68,6 +78,6 @@ $config = require $cfg;
             <?php endif; ?>
         </main>
     </div>
-    <script src="assets/js/app.js"></script>
+    <script src="<?= $assetsUrl ?>/js/app.js"></script>
 </body>
 </html>

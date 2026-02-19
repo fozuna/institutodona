@@ -171,15 +171,17 @@ class AplicacaoModel extends BaseModel
         $selectTipo = $hasTipoCol ? 'm.tipo' : 'NULL AS tipo';
         $selectArquivo = $hasArquivoCol ? 'm.arquivo_path' : 'NULL AS arquivo_path';
 
+        $hasColabTbl = \App\Database\Database::tableExists('colaboradores');
+        $selectColabs = $hasColabTbl ? "GROUP_CONCAT(DISTINCT col.nome ORDER BY col.nome SEPARATOR ', ') AS colabs_vinculados" : "NULL AS colabs_vinculados";
+        $joinColabs = $hasColabTbl ? "LEFT JOIN aplicacao_colaboradores ac ON ac.aplicacao_id = a.id LEFT JOIN colaboradores col ON col.id = ac.colaborador_id" : "";
         $sql = "SELECT a.id, a.status, a.id_metodologia, a.id_cliente, $selectPrevista, $selectConclusao, $selectConsultorId,
                        m.item_pilar, $selectTipo, $selectArquivo, p.nome AS pilar_nome, cli.nome_empresa AS cliente_nome, $selectCons,
-                       GROUP_CONCAT(DISTINCT col.nome ORDER BY col.nome SEPARATOR ', ') AS colabs_vinculados
+                       $selectColabs
                 FROM aplicacoes a
                 JOIN metodologias m ON m.id = a.id_metodologia
                 JOIN pilares p ON p.id = m.id_pilar
                 JOIN clientes cli ON cli.id = a.id_cliente
-                LEFT JOIN aplicacao_colaboradores ac ON ac.aplicacao_id = a.id
-                LEFT JOIN colaboradores col ON col.id = ac.colaborador_id
+                $joinColabs
                 $joinCons
                 WHERE a.id_cliente = :id_cliente
                 GROUP BY a.id
@@ -317,6 +319,7 @@ class AplicacaoModel extends BaseModel
     public function colaboradoresForAplicacao(int $aplicacaoId): array
     {
         $this->ensureTable();
+        if (!\App\Database\Database::tableExists('colaboradores')) { return []; }
         $sql = 'SELECT col.id, col.nome, col.email
                 FROM aplicacao_colaboradores ac
                 JOIN colaboradores col ON col.id = ac.colaborador_id
@@ -364,15 +367,17 @@ class AplicacaoModel extends BaseModel
         $params = ['id_cliente' => $idCliente];
         if (!empty($filters['status'])) { $conds[] = 'a.status = :status'; $params['status'] = $filters['status']; }
         if (!empty($filters['consultor_id'])) { $conds[] = 'a.consultor_id = :cid'; $params['cid'] = (int)$filters['consultor_id']; }
+        $hasColabTbl = \App\Database\Database::tableExists('colaboradores');
+        $selectColabs = $hasColabTbl ? "GROUP_CONCAT(DISTINCT col.nome ORDER BY col.nome SEPARATOR ', ') AS colabs_vinculados" : "NULL AS colabs_vinculados";
+        $joinColabs = $hasColabTbl ? "LEFT JOIN aplicacao_colaboradores ac ON ac.aplicacao_id = a.id LEFT JOIN colaboradores col ON col.id = ac.colaborador_id" : "";
         $sql = "SELECT a.id, a.status, a.id_metodologia, a.id_cliente, $selectPrevista, $selectConclusao, $selectConsultorId,
                        m.item_pilar, $selectTipo, $selectArquivo, p.nome AS pilar_nome, cli.nome_empresa AS cliente_nome, $selectCons,
-                       GROUP_CONCAT(DISTINCT col.nome ORDER BY col.nome SEPARATOR ', ') AS colabs_vinculados
+                       $selectColabs
                 FROM aplicacoes a
                 JOIN metodologias m ON m.id = a.id_metodologia
                 JOIN pilares p ON p.id = m.id_pilar
                 JOIN clientes cli ON cli.id = a.id_cliente
-                LEFT JOIN aplicacao_colaboradores ac ON ac.aplicacao_id = a.id
-                LEFT JOIN colaboradores col ON col.id = ac.colaborador_id
+                $joinColabs
                 $joinCons
                 WHERE " . implode(' AND ', $conds) . "
                 GROUP BY a.id

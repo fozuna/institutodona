@@ -11,6 +11,8 @@ use App\Controllers\PilaresController;
 use App\Controllers\AgendaController;
 use App\Controllers\ConsultoresController;
 use App\Controllers\AplicacoesController;
+use App\Controllers\CronogramaController;
+use App\Controllers\PdcaController;
 use App\Controllers\BibliotecaController;
 use App\Models\UsuarioModel;
 use App\Controllers\UsuariosController;
@@ -129,6 +131,54 @@ switch ($route) {
         break;
     case 'aplicacoes/update':
         (new AplicacoesController())->update();
+        break;
+    case 'cronograma/index':
+        (new CronogramaController())->index();
+        break;
+    case 'cronograma/selectCliente':
+        (new CronogramaController())->selectCliente();
+        break;
+    case 'cronograma/create':
+        (new CronogramaController())->create();
+        break;
+    case 'cronograma/store':
+        (new CronogramaController())->store();
+        break;
+    case 'cronograma/show':
+        (new CronogramaController())->show();
+        break;
+    case 'cronograma/addEvento':
+        (new CronogramaController())->addEvento();
+        break;
+    case 'cronograma/addEventoForm':
+        (new CronogramaController())->addEventoForm();
+        break;
+    case 'cronograma/updateEvento':
+        (new CronogramaController())->updateEvento();
+        break;
+    case 'cronograma/deleteEvento':
+        (new CronogramaController())->deleteEvento();
+        break;
+    case 'pdca/index':
+        (new PdcaController())->index();
+        break;
+    case 'pdca/create':
+        (new PdcaController())->create();
+        break;
+    case 'pdca/store':
+        (new PdcaController())->store();
+        break;
+    case 'pdca/show':
+        (new PdcaController())->show();
+        break;
+    case 'pdca/upsertMetric':
+        (new PdcaController())->upsertMetric();
+        break;
+    case 'pdca/addCheck':
+        (new PdcaController())->addCheck();
+        break;
+    case 'pdca/createAction':
+        (new PdcaController())->createAction();
         break;
     case 'aplicacoes/set_status':
         (new AplicacoesController())->set_status();
