@@ -3,9 +3,23 @@ namespace App\Models;
 
 class MetodologiaModel extends BaseModel
 {
+    private function ensureTable(): void
+    {
+        try {
+            if (!\App\Database\Database::tableExists('metodologias')) {
+                $this->db->exec('CREATE TABLE IF NOT EXISTS metodologias (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    id_pilar INT NOT NULL,
+                    item_pilar VARCHAR(255) NOT NULL,
+                    CONSTRAINT fk_met_pilar FOREIGN KEY (id_pilar) REFERENCES pilares(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+            }
+        } catch (\PDOException $e) {}
+    }
     private function ensureColumns(): void
     {
         try {
+            $this->ensureTable();
             if (!\App\Database\Database::columnExists('metodologias', 'tipo')) {
                 $this->db->exec("ALTER TABLE metodologias ADD COLUMN tipo VARCHAR(20) NOT NULL DEFAULT 'tarefa'");
             }

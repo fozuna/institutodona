@@ -368,8 +368,9 @@ class AplicacaoModel extends BaseModel
         if (!empty($filters['status'])) { $conds[] = 'a.status = :status'; $params['status'] = $filters['status']; }
         if (!empty($filters['consultor_id'])) { $conds[] = 'a.consultor_id = :cid'; $params['cid'] = (int)$filters['consultor_id']; }
         $hasColabTbl = \App\Database\Database::tableExists('colaboradores');
-        $selectColabs = $hasColabTbl ? "GROUP_CONCAT(DISTINCT col.nome ORDER BY col.nome SEPARATOR ', ') AS colabs_vinculados" : "NULL AS colabs_vinculados";
-        $joinColabs = $hasColabTbl ? "LEFT JOIN aplicacao_colaboradores ac ON ac.aplicacao_id = a.id LEFT JOIN colaboradores col ON col.id = ac.colaborador_id" : "";
+        $selectColabs = $hasColabTbl
+            ? "(SELECT GROUP_CONCAT(DISTINCT col.nome ORDER BY col.nome SEPARATOR ', ') FROM aplicacao_colaboradores ac LEFT JOIN colaboradores col ON col.id = ac.colaborador_id WHERE ac.aplicacao_id = a.id) AS colabs_vinculados"
+            : "NULL AS colabs_vinculados";
         $sql = "SELECT a.id, a.status, a.id_metodologia, a.id_cliente, $selectPrevista, $selectConclusao, $selectConsultorId,
                        m.item_pilar, $selectTipo, $selectArquivo, p.nome AS pilar_nome, cli.nome_empresa AS cliente_nome, $selectCons,
                        $selectColabs
@@ -377,10 +378,8 @@ class AplicacaoModel extends BaseModel
                 JOIN metodologias m ON m.id = a.id_metodologia
                 JOIN pilares p ON p.id = m.id_pilar
                 JOIN clientes cli ON cli.id = a.id_cliente
-                $joinColabs
                 $joinCons
                 WHERE " . implode(' AND ', $conds) . "
-                GROUP BY a.id
                 $order";
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);

@@ -106,6 +106,46 @@ class IndicadoresController extends BaseController
         $this->render('indicadores/realizado', compact('clientes','cliente','items'));
     }
 
+    public function painel(): void
+    {
+        $this->requireLogin();
+        $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
+        $ano = isset($_GET['ano']) ? (int)$_GET['ano'] : (int)date('Y');
+        $clientes = (new ClienteModel())->all();
+        $items = $cliente ? $this->model->byCliente($cliente) : [];
+        $months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+        $rows = [];
+        foreach ($items as $it) {
+            $ref = $it['referencia'] ?? '';
+            $y = $ref ? (int)substr($ref,0,4) : null;
+            if ($y !== null && $y !== $ano) continue;
+            $m = $ref ? (int)substr($ref,5,2) : null;
+            $name = $it['nome'];
+            if (!isset($rows[$name])) {
+                $rows[$name] = [
+                    'nome' => $name,
+                    'meses' => array_fill(1, 12, ['meta'=>0.0,'real'=>0.0]),
+                    'total_meta' => 0.0,
+                    'total_real' => 0.0,
+                ];
+            }
+            if ($m && $m>=1 && $m<=12) {
+                $rows[$name]['meses'][$m]['meta'] = (float)$it['meta'];
+                $rows[$name]['meses'][$m]['real'] = (float)$it['realizado'];
+                $rows[$name]['total_meta'] += (float)$it['meta'];
+                $rows[$name]['total_real'] += (float)$it['realizado'];
+            }
+        }
+        $this->render('indicadores/painel', [
+            'cliente' => $cliente,
+            'clientes' => $clientes,
+            'ano' => $ano,
+            'months' => $months,
+            'rows' => $rows,
+        ]);
+    }
+
+
     public function update(): void
     {
         $this->requireRole('instituto');

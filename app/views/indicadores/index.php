@@ -22,6 +22,7 @@
       <button class="px-4 py-2 rounded bg-brand-red text-white">Filtrar</button>
       <?php if ($cliente): ?>
         <a class="px-4 py-2 rounded bg-brand-brown text-white" href="index.php?route=indicadores/realizado&cliente=<?= (int)$cliente ?>">Lançar Realizado</a>
+        <a class="px-4 py-2 rounded bg-brand-brown text-white" href="index.php?route=indicadores/painel&cliente=<?= (int)$cliente ?>&ano=<?= (int)date('Y') ?>">Painel</a>
         <a class="px-4 py-2 rounded bg-brand-brown text-white" href="index.php?route=indicadores/charts&cliente=<?= (int)$cliente ?>">Gráficos</a>
       <?php endif; ?>
     </form>
