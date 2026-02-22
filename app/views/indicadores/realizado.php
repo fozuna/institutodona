@@ -50,7 +50,7 @@
                 <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
                 <input type="hidden" name="id" value="<?= (int)$it['id'] ?>" />
                 <input type="hidden" name="cliente" value="<?= (int)$cliente ?>" />
-                <input type="number" step="0.01" name="realizado" class="border rounded p-1 w-28" placeholder="Valor (R$)" required />
+                <input type="text" name="realizado" class="border rounded p-1 w-28" placeholder="R$ 0,00" data-money required />
                 <button class="icon-btn icon-btn--primary" title="Salvar" aria-label="Salvar"><span data-feather="check"></span></button>
               </form>
             </td>
@@ -60,4 +60,28 @@
       </table>
     </div>
   <?php endif; ?>
+  <script>
+    (function(){
+      function fmt(i){
+        let v = i.value.replace(/\D/g,'');
+        if (!v) { i.value = ''; return; }
+        let n = parseInt(v,10);
+        i.value = 'R$ ' + (n/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+      }
+      function norm(s){
+        s = String(s||'').replace(/[^\d,.-]/g,'').replace(/\./g,'').replace(',', '.');
+        let n = parseFloat(s);
+        if (isNaN(n) || n < 0) n = 0;
+        return String(n);
+      }
+      document.querySelectorAll('input[data-money]').forEach(i=>{
+        i.addEventListener('input', ()=>fmt(i));
+      });
+      document.querySelectorAll('form[action*="indicadores/updateRealizado"]').forEach(f=>{
+        f.addEventListener('submit', ()=>{
+          f.querySelectorAll('input[data-money]').forEach(i=>{ i.value = norm(i.value); });
+        });
+      });
+    })();
+  </script>
 </div>

@@ -22,11 +22,7 @@
         <label class="block text-sm">Indicador</label>
         <input type="text" name="nome" value="<?= htmlspecialchars($item['nome'] ?? '') ?>" required />
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm">Unidade</label>
-          <input type="text" value="R$" class="border rounded p-2 w-full bg-gray-100" readonly />
-        </div>
+      <div class="grid grid-cols-1 md:grid-cols-1 gap-4">
         <div>
           <label class="block text-sm">Referência (data)</label>
           <input type="date" name="referencia" value="<?= htmlspecialchars($item['referencia'] ?? '') ?>" />
@@ -34,11 +30,37 @@
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm">Meta</label>
-          <input type="number" step="0.01" name="meta" value="<?= htmlspecialchars((string)($item['meta'] ?? '0')) ?>" required />
+          <label class="block text-sm">Meta R$</label>
+          <input type="text" name="meta" value="<?= htmlspecialchars((string)($item['meta'] ?? '0')) ?>" placeholder="R$ 0,00" data-money required />
         </div>
       </div>
       <button class="icon-btn icon-btn--primary" type="submit" title="Salvar" aria-label="Salvar"><span data-feather="check"></span></button>
     </form>
   <?php endif; ?>
+  <script>
+    (function(){
+      function fmt(i){
+        let v = i.value.replace(/\D/g,'');
+        if (!v) { i.value = ''; return; }
+        let n = parseInt(v,10);
+        i.value = 'R$ ' + (n/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+      }
+      function norm(s){
+        s = String(s||'').replace(/[^\d,.-]/g,'').replace(/\./g,'').replace(',', '.');
+        let n = parseFloat(s);
+        if (isNaN(n) || n < 0) n = 0;
+        return String(n);
+      }
+      document.querySelectorAll('input[data-money]').forEach(i=>{
+        i.addEventListener('input', ()=>fmt(i));
+        fmt(i);
+      });
+      const form = document.querySelector('form[action*="indicadores/update"]');
+      if (form) {
+        form.addEventListener('submit', ()=>{
+          form.querySelectorAll('input[data-money]').forEach(i=>{ i.value = norm(i.value); });
+        });
+      }
+    })();
+  </script>
 </div>

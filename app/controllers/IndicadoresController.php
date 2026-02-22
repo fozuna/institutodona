@@ -44,6 +44,7 @@ class IndicadoresController extends BaseController
             'meta' => isset($_POST['meta']) ? (float)$_POST['meta'] : 0,
             'realizado' => 0,
         ];
+        if ($data['meta'] < 0) $data['meta'] = 0;
         if ($data['cliente_id'] && $data['nome'] !== '') {
             $id = $this->model->create($data);
             header('Location: index.php?route=indicadores/edit&id=' . $id);
@@ -119,6 +120,7 @@ class IndicadoresController extends BaseController
             'meta' => isset($_POST['meta']) ? (float)$_POST['meta'] : 0,
             'realizado' => null,
         ];
+        if ($data['meta'] < 0) $data['meta'] = 0;
         if ($id && $data['cliente_id'] && $data['nome'] !== '') {
             // Mantém realizado atual (não editável aqui)
             $curr = $this->model->find($id);
@@ -135,6 +137,7 @@ class IndicadoresController extends BaseController
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
         $id = (int)($_POST['id'] ?? 0);
         $real = isset($_POST['realizado']) ? (float)$_POST['realizado'] : null;
+        if ($real !== null && $real < 0) $real = 0;
         $cliente = (int)($_POST['cliente'] ?? 0);
         if ($id && $real !== null) { $this->model->updateRealizado($id, $real); }
         header('Location: index.php?route=indicadores/index&cliente=' . $cliente);
