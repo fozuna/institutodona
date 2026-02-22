@@ -15,24 +15,20 @@
       <label class="block text-sm">Indicador</label>
       <input type="text" name="nome" required />
     </div>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
         <label class="block text-sm">Unidade</label>
-        <input type="text" name="unidade" placeholder="% ou R$" />
+        <input type="text" value="R$" class="border rounded p-2 w-full bg-gray-100" readonly />
       </div>
       <div>
-        <label class="block text-sm">Referência (mês)</label>
-        <input type="month" name="referencia" />
+        <label class="block text-sm">Referência (data)</label>
+        <input type="date" name="referencia" />
       </div>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
         <label class="block text-sm">Meta</label>
         <input type="number" step="0.01" name="meta" required />
-      </div>
-      <div>
-        <label class="block text-sm">Realizado</label>
-        <input type="number" step="0.01" name="realizado" required />
       </div>
     </div>
     <button class="icon-btn icon-btn--primary" type="submit" title="Salvar" aria-label="Salvar"><span data-feather="check"></span></button>

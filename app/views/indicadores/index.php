@@ -21,6 +21,7 @@
       </div>
       <button class="px-4 py-2 rounded bg-brand-red text-white">Filtrar</button>
       <?php if ($cliente): ?>
+        <a class="px-4 py-2 rounded bg-brand-brown text-white" href="index.php?route=indicadores/realizado&cliente=<?= (int)$cliente ?>">Lançar Realizado</a>
         <a class="px-4 py-2 rounded bg-brand-brown text-white" href="index.php?route=indicadores/charts&cliente=<?= (int)$cliente ?>">Gráficos</a>
       <?php endif; ?>
     </form>
@@ -50,18 +51,7 @@
               <td class="p-2"><?= htmlspecialchars($it['unidade'] ?? '') ?></td>
               <td class="p-2"><?= htmlspecialchars($it['referencia'] ?? '') ?></td>
               <td class="p-2"><?= number_format((float)$it['meta'], 2, ',', '.') ?></td>
-              <td class="p-2">
-                <div class="flex items-center gap-2">
-                  <span><?= number_format((float)$it['realizado'], 2, ',', '.') ?></span>
-                  <form method="post" action="index.php?route=indicadores/updateRealizado" class="flex items-center gap-2">
-                    <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
-                    <input type="hidden" name="id" value="<?= (int)$it['id'] ?>" />
-                    <input type="hidden" name="cliente" value="<?= (int)$cliente ?>" />
-                    <input type="number" step="0.01" name="realizado" class="border rounded p-1 w-24" placeholder="Atualizar" />
-                    <button class="icon-btn icon-btn--primary" title="Atualizar" aria-label="Atualizar"><span data-feather="refresh-ccw"></span></button>
-                  </form>
-                </div>
-              </td>
+              <td class="p-2"><?= number_format((float)$it['realizado'], 2, ',', '.') ?></td>
               <?php $diff = (float)$it['realizado'] - (float)$it['meta']; $pos = $diff >= 0; ?>
               <td class="p-2 <?= $pos ? 'text-green-700' : 'text-brand-red' ?>"><?= number_format($diff, 2, ',', '.') ?></td>
               <td class="p-2 whitespace-nowrap">

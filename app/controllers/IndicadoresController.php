@@ -39,10 +39,10 @@ class IndicadoresController extends BaseController
         $data = [
             'cliente_id' => (int)($_POST['cliente_id'] ?? 0),
             'nome' => trim($_POST['nome'] ?? ''),
-            'unidade' => trim($_POST['unidade'] ?? ''),
+            'unidade' => 'R$',
             'referencia' => $_POST['referencia'] ?? null,
             'meta' => isset($_POST['meta']) ? (float)$_POST['meta'] : 0,
-            'realizado' => isset($_POST['realizado']) ? (float)$_POST['realizado'] : 0,
+            'realizado' => 0,
         ];
         if ($data['cliente_id'] && $data['nome'] !== '') {
             $id = $this->model->create($data);
@@ -96,6 +96,15 @@ class IndicadoresController extends BaseController
         ]);
     }
 
+    public function realizado(): void
+    {
+        $this->requireLogin();
+        $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
+        $clientes = (new ClienteModel())->all();
+        $items = $cliente ? $this->model->byCliente($cliente) : [];
+        $this->render('indicadores/realizado', compact('clientes','cliente','items'));
+    }
+
     public function update(): void
     {
         $this->requireRole('instituto');
@@ -105,12 +114,15 @@ class IndicadoresController extends BaseController
         $data = [
             'cliente_id' => (int)($_POST['cliente_id'] ?? 0),
             'nome' => trim($_POST['nome'] ?? ''),
-            'unidade' => trim($_POST['unidade'] ?? 'R$'),
+            'unidade' => 'R$',
             'referencia' => $_POST['referencia'] ?? null,
             'meta' => isset($_POST['meta']) ? (float)$_POST['meta'] : 0,
-            'realizado' => isset($_POST['realizado']) ? (float)$_POST['realizado'] : 0,
+            'realizado' => null,
         ];
         if ($id && $data['cliente_id'] && $data['nome'] !== '') {
+            // Mantém realizado atual (não editável aqui)
+            $curr = $this->model->find($id);
+            $data['realizado'] = (float)($curr['realizado'] ?? 0);
             $this->model->update($id, $data);
         }
         header('Location: index.php?route=indicadores/edit&id=' . $id);

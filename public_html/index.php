@@ -129,6 +129,9 @@ switch ($route) {
     case 'indicadores/updateRealizado':
         (new \App\Controllers\IndicadoresController())->updateRealizado();
         break;
+    case 'indicadores/realizado':
+        (new \App\Controllers\IndicadoresController())->realizado();
+        break;
     case 'biblioteca/index':
         (new BibliotecaController())->index();
         break;
