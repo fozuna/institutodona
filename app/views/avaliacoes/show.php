@@ -2,7 +2,12 @@
 <div class="p-6">
   <div class="flex justify-between items-center mb-4">
     <h1 class="text-2xl font-bold">Avaliação</h1>
-    <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="javascript:history.back()">Voltar</a>
+    <div class="flex items-center gap-2">
+      <?php if ($item): ?>
+        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=avaliacoes/pdca&id=<?= (int)$item['id'] ?>">Plano de Ação</a>
+      <?php endif; ?>
+      <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="javascript:history.back()">Voltar</a>
+    </div>
   </div>
   <?php if (!$item): ?>
     <div class="bg-white shadow rounded p-4">Registro não encontrado.</div>

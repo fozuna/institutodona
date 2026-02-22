@@ -285,6 +285,9 @@ switch ($route) {
     case 'avaliacoes/show':
         (new AvaliacoesController())->show();
         break;
+    case 'avaliacoes/pdca':
+        (new AvaliacoesController())->pdca();
+        break;
     case 'colaboradores/index':
         (new ColaboradoresController())->index();
         break;

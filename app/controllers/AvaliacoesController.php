@@ -81,4 +81,18 @@ class AvaliacoesController extends BaseController
         $item = $this->model->find($id);
         $this->render('avaliacoes/show', compact('item'));
     }
+
+    public function pdca(): void
+    {
+        $this->requireLogin();
+        $id = (int)($_GET['id'] ?? 0);
+        $item = $this->model->find($id);
+        if (!$item) {
+            http_response_code(404);
+            echo 'Avaliação não encontrada.';
+            return;
+        }
+        $respostas = json_decode($item['respostas_json'] ?? '{}', true) ?: [];
+        $this->render('avaliacoes/pdca', compact('item', 'respostas'));
+    }
 }
