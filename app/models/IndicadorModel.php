@@ -74,6 +74,13 @@ class IndicadorModel extends BaseModel
         ]);
     }
 
+    public function updateRealizado(int $id, float $realizado): bool
+    {
+        $this->ensure();
+        $stmt = $this->db->prepare('UPDATE indicadores SET realizado = :realizado WHERE id = :id');
+        return $stmt->execute(['realizado' => $realizado, 'id' => $id]);
+    }
+
     public function delete(int $id): bool
     {
         $this->ensure();

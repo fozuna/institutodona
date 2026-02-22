@@ -43,6 +43,7 @@
           const xs = points.map(p=>p.month || 0).filter(m=>m>0);
           const metas = points.map(p=>p.meta||0);
           const reals = points.map(p=>p.realizado||0);
+          const diffs = points.map((p,i)=> (reals[i]-metas[i]) );
           const maxVal = Math.max( ...metas, ...reals, 1 );
           // axes
           ctx.strokeStyle = '#ccc';
@@ -54,6 +55,7 @@
           const n = points.length;
           function x(i){ return pad + ((W-2*pad) * (i/(Math.max(n-1,1)))); }
           function y(v){ return H-pad - ((H-2*pad) * (v / maxVal)); }
+          const barWidth = (W-2*pad) / Math.max(n,1) * 0.4;
           // grid and labels
           ctx.fillStyle = '#666';
           ctx.font = '10px sans-serif';
@@ -64,6 +66,16 @@
           }
           ctx.fillText(String(maxVal.toFixed(2)), 5, y(maxVal)+3);
           ctx.fillText('0', 15, H-pad+3);
+          // diff bars (green for positive, red for negative)
+          for(let i=0;i<n;i++){
+            const d = diffs[i];
+            const xi = x(i) - barWidth/2;
+            const yi = y(Math.max(0, d));
+            const y0 = y(0);
+            const height = Math.abs(y0 - y(d));
+            ctx.fillStyle = d >= 0 ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.35)';
+            ctx.fillRect(xi, d>=0 ? yi : y0, barWidth, height);
+          }
           // meta line (blue)
           ctx.strokeStyle = '#1e3a8a';
           ctx.beginPath();

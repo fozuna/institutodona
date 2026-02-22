@@ -105,7 +105,7 @@ class IndicadoresController extends BaseController
         $data = [
             'cliente_id' => (int)($_POST['cliente_id'] ?? 0),
             'nome' => trim($_POST['nome'] ?? ''),
-            'unidade' => trim($_POST['unidade'] ?? ''),
+            'unidade' => trim($_POST['unidade'] ?? 'R$'),
             'referencia' => $_POST['referencia'] ?? null,
             'meta' => isset($_POST['meta']) ? (float)$_POST['meta'] : 0,
             'realizado' => isset($_POST['realizado']) ? (float)$_POST['realizado'] : 0,
@@ -114,6 +114,18 @@ class IndicadoresController extends BaseController
             $this->model->update($id, $data);
         }
         header('Location: index.php?route=indicadores/edit&id=' . $id);
+    }
+
+    public function updateRealizado(): void
+    {
+        $this->requireLogin();
+        $csrf = $_POST['csrf'] ?? null;
+        if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
+        $id = (int)($_POST['id'] ?? 0);
+        $real = isset($_POST['realizado']) ? (float)$_POST['realizado'] : null;
+        $cliente = (int)($_POST['cliente'] ?? 0);
+        if ($id && $real !== null) { $this->model->updateRealizado($id, $real); }
+        header('Location: index.php?route=indicadores/index&cliente=' . $cliente);
     }
 
     public function delete(): void
