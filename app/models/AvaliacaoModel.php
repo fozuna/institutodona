@@ -22,6 +22,18 @@ class AvaliacaoModel extends BaseModel
                 realidade_processo TINYINT NULL,
                 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+            if (!\App\Database\Database::columnExists('avaliacoes', 'cliente_id')) {
+                $this->db->exec('ALTER TABLE avaliacoes ADD COLUMN cliente_id INT NULL AFTER id');
+            }
+            if (!\App\Database\Database::columnExists('avaliacoes', 'empresa_nome')) {
+                $this->db->exec('ALTER TABLE avaliacoes ADD COLUMN empresa_nome VARCHAR(255) NULL AFTER cliente_id');
+            }
+            if (!\App\Database\Database::columnExists('avaliacoes', 'contato')) {
+                $this->db->exec('ALTER TABLE avaliacoes ADD COLUMN contato VARCHAR(255) NULL AFTER empresa_nome');
+            }
+            if (!\App\Database\Database::columnExists('avaliacoes', 'respostas_json')) {
+                $this->db->exec('ALTER TABLE avaliacoes ADD COLUMN respostas_json TEXT NULL AFTER contato');
+            }
             if (!\App\Database\Database::columnExists('avaliacoes', 'realidade_financeiro')) {
                 $this->db->exec('ALTER TABLE avaliacoes ADD COLUMN realidade_financeiro TINYINT NULL AFTER nota_processo');
             }
@@ -33,6 +45,9 @@ class AvaliacaoModel extends BaseModel
             }
             if (!\App\Database\Database::columnExists('avaliacoes', 'realidade_processo')) {
                 $this->db->exec('ALTER TABLE avaliacoes ADD COLUMN realidade_processo TINYINT NULL AFTER realidade_pessoas');
+            }
+            if (!\App\Database\Database::columnExists('avaliacoes', 'created_at')) {
+                $this->db->exec('ALTER TABLE avaliacoes ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP');
             }
         } catch (\PDOException $e) {}
     }
