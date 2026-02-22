@@ -2,11 +2,8 @@
 <div class="p-6 space-y-6">
   <div class="flex items-start justify-between gap-6">
     <div>
-      <h1 class="text-2xl font-bold">PDCA</h1>
-      <p class="text-sm text-gray-600">Selecione o cliente para visualizar e planejar tarefas</p>
-      <div class="prose mt-2">
-        <p><strong>PDCA</strong> é um ciclo de melhoria contínua com quatro etapas: <em>Planejar</em>, <em>Executar</em>, <em>Verificar</em> e <em>Agir</em>. Ele organiza metas, execução, análise de resultados e ações de melhoria para elevar a qualidade e a eficiência dos processos.</p>
-      </div>
+      <h1 class="text-2xl font-bold">Plano de Ação</h1>
+      <p class="text-sm text-gray-600">Selecione o cliente para visualizar e criar planos de ação</p>
     </div>
     <form method="get" class="toolbar">
       <input type="hidden" name="route" value="pdca/index" />
@@ -17,7 +14,7 @@
           <option value="<?= (int)$c['id'] ?>" <?= $selectedCliente === (int)$c['id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['nome_empresa']) ?></option>
         <?php endforeach; ?>
       </select>
-      <a class="btn btn-primary" href="index.php?route=pdca/create">Nova Tarefa</a>
+      <a class="btn btn-primary" href="index.php?route=pdca/create">Novo Plano de Ação</a>
     </form>
   </div>
 

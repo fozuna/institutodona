@@ -105,6 +105,27 @@ switch ($route) {
     case 'consultores/index':
         (new ConsultoresController())->index();
         break;
+    case 'indicadores/index':
+        (new \App\Controllers\IndicadoresController())->index();
+        break;
+    case 'indicadores/create':
+        (new \App\Controllers\IndicadoresController())->create();
+        break;
+    case 'indicadores/store':
+        (new \App\Controllers\IndicadoresController())->store();
+        break;
+    case 'indicadores/edit':
+        (new \App\Controllers\IndicadoresController())->edit();
+        break;
+    case 'indicadores/update':
+        (new \App\Controllers\IndicadoresController())->update();
+        break;
+    case 'indicadores/delete':
+        (new \App\Controllers\IndicadoresController())->delete();
+        break;
+    case 'indicadores/charts':
+        (new \App\Controllers\IndicadoresController())->charts();
+        break;
     case 'biblioteca/index':
         (new BibliotecaController())->index();
         break;
