@@ -134,6 +134,8 @@ class ClientesController extends BaseController
             return;
         }
         $item = $this->clientes->find($id);
+        // Garante que a tabela de pilares exista antes dos JOINs em aplicacoes
+        $pilares = (new PilarModel())->all();
         $apl = new AplicacaoModel();
         $statusFilter = $_GET['status'] ?? '';
         $consultorFilter = isset($_GET['consultor']) ? (int)$_GET['consultor'] : 0;
@@ -143,7 +145,6 @@ class ClientesController extends BaseController
         ]);
         $met = new MetodologiaModel();
         $metodologias = $met->byCliente($id);
-        $pilares = (new PilarModel())->all();
         $funcoes = (new FuncaoModel())->allByCliente($id);
         $filiais = $this->clientes->filiaisByMatriz($id);
         $matrizes = $this->clientes->matrizes();
