@@ -1,10 +1,10 @@
 <?php
 return [
     'db' => [
-        'host' => 'donaconsultorias_database',
-        'dbname' => 'institutodona',
-        'user' => 'institutodona230825',
-        'pass' => 'd54fc3f4c3a877fc2af7',
+        'host' => 'database',
+        'dbname' => 'dbinstituto',
+        'user' => 'usuario123',
+        'pass' => 'd54fc3f4c3adkfalkdhfie',
         'charset' => 'utf8mb4',
     ],
     'app' => [
