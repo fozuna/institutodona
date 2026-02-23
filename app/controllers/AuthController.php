@@ -4,6 +4,7 @@ namespace App\Controllers;
 use App\Core\BaseController;
 use App\Core\Auth;
 use App\Core\Security;
+use App\Core\AuditLogger;
 use App\Models\UsuarioModel;
 
 class AuthController extends BaseController
@@ -22,12 +23,20 @@ class AuthController extends BaseController
 
     public function doLogin(): void
     {
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+            header('Location: index.php?route=auth/login');
+            return;
+        }
+
         $email = trim($_POST['email'] ?? '');
         $senha = $_POST['senha'] ?? '';
         $csrf = $_POST['csrf'] ?? null;
 
         if (!Security::verifyCsrf($csrf)) {
             http_response_code(400);
+            AuditLogger::log('auth_login_csrf_fail', 'usuario', null, [
+                'has_session_csrf' => isset($_SESSION['csrf']),
+            ]);
             $this->render('auth/login', ['error' => 'Sessão expirada ou CSRF inválido. Tente novamente.']);
             return;
         }

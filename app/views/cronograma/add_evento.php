@@ -6,20 +6,20 @@
       <div class="text-sm text-gray-600"><?= htmlspecialchars($crono['cliente'] ?? '') ?> · Ano <?= (int)($crono['ano'] ?? date('Y')) ?></div>
       <?php if (!empty($crono['nome'])): ?><div class="text-sm text-gray-600">Cronograma: <?= htmlspecialchars($crono['nome']) ?></div><?php endif; ?>
     </div>
-    <a class="px-3 py-2 rounded bg-brand-brown text-white" href="index.php?route=cronograma/show&id=<?= (int)$crono['id'] ?>">Voltar</a>
+    <a class="px-3 py-2 rounded bg-brand-brown text-white" href="index.php?route=clientes/show&id=<?= (int)($crono['id_cliente'] ?? 0) ?>">Voltar</a>
   </div>
   <div class="bg-white shadow rounded p-4">
     <form method="post" action="index.php?route=cronograma/addEvento" class="space-y-3">
       <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
       <input type="hidden" name="id_cronograma" value="<?= (int)$crono['id'] ?>" />
       <label class="block text-sm">Data</label>
-      <input type="date" name="data" />
+      <input type="date" name="data" required />
       <label class="block text-sm">Tópico</label>
-      <input type="text" name="topico" />
+      <input type="text" name="topico" required />
       <label class="block text-sm">Unidade</label>
       <input type="text" name="unidade" />
       <label class="block text-sm">Atividade</label>
-      <input type="text" name="atividade" />
+      <input type="text" name="atividade" required />
       <label class="block text-sm">Responsável</label>
       <input type="text" name="responsavel" />
       <label class="block text-sm">Modelo</label>

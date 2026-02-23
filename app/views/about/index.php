@@ -10,8 +10,8 @@
       <p class="text-sm text-gray-700">Sistema de gestão de processos com cadastro de clientes, aplicação de tarefas, avaliação e biblioteca de arquivos.</p>
     </div>
     <div class="bg-white shadow rounded p-4">
-      <div class="font-semibold mb-2">Dashboard (Kanban)</div>
-      <p class="text-sm text-gray-700">Arraste e solte tarefas entre colunas para alterar o status. Clique no card para abrir a edição.</p>
+      <div class="font-semibold mb-2">Painel (Kanban)</div>
+      <p class="text-sm text-gray-700">Arrastar e soltar tarefas entre colunas para alterar o status. Clique no cartão para abrir a edição.</p>
     </div>
     <div class="bg-white shadow rounded p-4">
       <div class="font-semibold mb-2">Aplicar/Editar Tarefa</div>
@@ -19,7 +19,7 @@
         <li>Defina data prevista, consultor e status.</li>
         <li>Selecione colaboradores na lista à direita.</li>
         <li>Registre observações e acompanhe o histórico de atualizações.</li>
-        <li>Anexe arquivos (drag & drop ou seleção múltipla), com Preview integrado.</li>
+        <li>Anexe arquivos (arrastar e soltar ou seleção múltipla), com pré-visualização integrada.</li>
       </ul>
     </div>
     <div class="bg-white shadow rounded p-4">
@@ -31,12 +31,42 @@
       </ul>
     </div>
     <div class="bg-white shadow rounded p-4">
+      <div class="font-semibold mb-2">PDCA – Planos de Ação</div>
+      <ul class="text-sm text-gray-700 list-disc pl-5">
+        <li>Cadastro permanece na mesma tela após salvar.</li>
+        <li>Lista de planos abaixo do formulário com filtros por Status, Fase e Busca (título/responsável).</li>
+        <li>Métricas (indicadores), Verificações (Check) e Ações de melhoria (Act) agrupadas na tarefa.</li>
+      </ul>
+    </div>
+    <div class="bg-white shadow rounded p-4">
+      <div class="font-semibold mb-2">Cronograma</div>
+      <ul class="text-sm text-gray-700 list-disc pl-5">
+        <li>Seleção prévia do cliente para criar cronogramas.</li>
+        <li>Eventos mensais por tópico/unidade/atividade com marcação no grid (J–D).</li>
+        <li>Botão “Voltar” retorna ao perfil do cliente mantendo o contexto.</li>
+      </ul>
+    </div>
+    <div class="bg-white shadow rounded p-4">
+      <div class="font-semibold mb-2">Perfil do Cliente</div>
+      <ul class="text-sm text-gray-700 list-disc pl-5">
+        <li>Dois cartões: “Cronograma” e “PDCA”, com contadores e acesso rápido.</li>
+        <li>Navegação contextual e estados de carregamento para melhor usabilidade.</li>
+      </ul>
+    </div>
+    <div class="bg-white shadow rounded p-4">
       <div class="font-semibold mb-2">Biblioteca de Arquivos</div>
       <p class="text-sm text-gray-700">No perfil do cliente, lista arquivos anexados nas tarefas do cliente, com links Abrir e acesso à tarefa.</p>
     </div>
     <div class="bg-white shadow rounded p-4">
       <div class="font-semibold mb-2">Logs de Auditoria</div>
-      <p class="text-sm text-gray-700">Admins podem acessar: registros de criação, edição, exclusão e uploads com data/hora e usuário.</p>
+      <p class="text-sm text-gray-700">Administradores podem acessar: registros de criação, edição, exclusão e uploads com data/hora e usuário. Inclui logs de depuração para eventos do cronograma e tentativas de login.</p>
+    </div>
+    <div class="bg-white shadow rounded p-4">
+      <div class="font-semibold mb-2">Segurança e Sessão</div>
+      <ul class="text-sm text-gray-700 list-disc pl-5">
+        <li>Proteção contra CSRF em formulários.</li>
+        <li>Acesso direto à ação de login redireciona para a tela de autenticação.</li>
+      </ul>
     </div>
     <div class="bg-white shadow rounded p-4 md:col-span-2">
       <div class="font-semibold mb-2">Sobre</div>

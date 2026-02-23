@@ -6,7 +6,7 @@
       <div class="text-sm text-gray-600"><?= htmlspecialchars($crono['cliente'] ?? '') ?> · Ano <?= (int)($crono['ano'] ?? date('Y')) ?></div>
       <?php if (!empty($crono['nome'])): ?><div class="text-sm text-gray-600">Nome: <?= htmlspecialchars($crono['nome']) ?></div><?php endif; ?>
     </div>
-    <a class="px-3 py-2 rounded bg-brand-brown text-white" href="index.php?route=cronograma/index">Voltar</a>
+    <a class="px-3 py-2 rounded bg-brand-brown text-white" href="index.php?route=clientes/show&id=<?= (int)($crono['id_cliente'] ?? 0) ?>">Voltar</a>
   </div>
 
   <!-- Grid estilo planilha por meses -->

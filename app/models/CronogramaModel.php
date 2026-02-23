@@ -27,7 +27,7 @@ class CronogramaModel extends BaseModel
     public function byCliente(int $idCliente): array
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('SELECT id, nome, ano FROM cronogramas WHERE id_cliente = :id ORDER BY ano DESC');
+        $stmt = $this->db->prepare('SELECT c.id, c.nome, c.ano, cli.nome_empresa AS cliente, c.id_cliente FROM cronogramas c JOIN clientes cli ON cli.id = c.id_cliente WHERE c.id_cliente = :id ORDER BY c.ano DESC');
         $stmt->execute(['id' => $idCliente]);
         return $stmt->fetchAll();
     }

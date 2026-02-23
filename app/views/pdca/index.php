@@ -21,6 +21,9 @@
   <?php if (!$selectedCliente): ?>
     <div class="bg-white shadow rounded p-6 text-gray-600">Escolha um cliente para ver as tarefas.</div>
   <?php else: ?>
+    <div class="flex justify-end">
+      <a class="btn btn-neutral" href="index.php?route=clientes/show&id=<?= (int)$selectedCliente ?>">Voltar ao perfil</a>
+    </div>
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <?php foreach ($items as $t): ?>
         <?php $p = max(0, min(100, (int)$t['progresso'])); ?>

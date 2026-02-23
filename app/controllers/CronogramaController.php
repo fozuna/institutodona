@@ -3,6 +3,7 @@ namespace App\Controllers;
 
 use App\Core\BaseController;
 use App\Core\Security;
+use App\Core\AuditLogger;
 use App\Models\CronogramaModel;
 use App\Models\CronogramaEventoModel;
 use App\Models\ClienteModel;
@@ -21,7 +22,8 @@ class CronogramaController extends BaseController
     public function index(): void
     {
         $this->requireRole('instituto');
-        $items = $this->cronogramas->all();
+        $cid = (int)($_GET['id_cliente'] ?? 0);
+        $items = $cid ? $this->cronogramas->byCliente($cid) : $this->cronogramas->all();
         $this->render('cronograma/index', ['items' => $items]);
     }
 
@@ -65,6 +67,11 @@ class CronogramaController extends BaseController
         $crono = $this->cronogramas->find($id);
         $events = $this->eventos->byCronograma($id);
 
+        AuditLogger::log('cronograma_show', 'cronograma', $id, [
+            'cronograma_found' => (bool)$crono,
+            'events_count' => count($events),
+        ]);
+
         // Monta grid por linha (tópico/unidade/atividade/responsável/modelo) x meses
         $grid = [];
         foreach ($events as $ev) {
@@ -107,8 +114,20 @@ class CronogramaController extends BaseController
             'modelo' => $_POST['modelo'] ?? null,
             'status' => $_POST['status'] ?? 'Planejado',
         ];
-        if ($idCronograma && $data['data'] && $data['topico'] && $data['atividade']) {
-            $this->eventos->create($idCronograma, $data);
+        $isValid = $idCronograma && $data['data'] && $data['topico'] && $data['atividade'];
+        AuditLogger::log('cronograma_add_evento_attempt', 'cronograma_evento', null, [
+            'id_cronograma' => $idCronograma,
+            'is_valid' => (bool)$isValid,
+        ]);
+        if ($isValid) {
+            $newId = $this->eventos->create($idCronograma, $data);
+            AuditLogger::log('cronograma_add_evento_success', 'cronograma_evento', $newId, [
+                'id_cronograma' => $idCronograma,
+            ]);
+        } else {
+            AuditLogger::log('cronograma_add_evento_invalid', 'cronograma_evento', null, [
+                'id_cronograma' => $idCronograma,
+            ]);
         }
         header('Location: index.php?route=cronograma/show&id=' . $idCronograma);
     }

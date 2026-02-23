@@ -41,7 +41,37 @@ class PdcaController extends BaseController
     {
         $this->requireRole('instituto');
         $clientes = (new ClienteModel())->all();
-        $this->render('pdca/create', ['clientes' => $clientes]);
+        $selectedCliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : null;
+        $statusFilter = $_GET['status'] ?? '';
+        $faseFilter = $_GET['fase'] ?? '';
+        $search = trim($_GET['q'] ?? '');
+        $items = [];
+        if ($selectedCliente) {
+            $items = $this->tasks->byCliente($selectedCliente);
+            $items = array_values(array_filter($items, function(array $row) use ($statusFilter, $faseFilter, $search): bool {
+                if ($statusFilter !== '' && ($row['status'] ?? '') !== $statusFilter) {
+                    return false;
+                }
+                if ($faseFilter !== '' && ($row['fase'] ?? '') !== $faseFilter) {
+                    return false;
+                }
+                if ($search !== '') {
+                    $hay = mb_strtolower(($row['titulo'] ?? '') . ' ' . ($row['responsavel'] ?? ''));
+                    if (mb_strpos($hay, mb_strtolower($search)) === false) {
+                        return false;
+                    }
+                }
+                return true;
+            }));
+        }
+        $this->render('pdca/create', [
+            'clientes' => $clientes,
+            'selectedCliente' => $selectedCliente,
+            'items' => $items,
+            'statusFilter' => $statusFilter,
+            'faseFilter' => $faseFilter,
+            'search' => $search,
+        ]);
     }
 
     public function store(): void
@@ -53,20 +83,20 @@ class PdcaController extends BaseController
             'id_cliente' => (int)($_POST['id_cliente'] ?? 0),
             'titulo' => trim($_POST['titulo'] ?? ''),
             'descricao' => trim($_POST['descricao'] ?? ''),
-            'meta_valor' => null,
-            'meta_unidade' => null,
+            'meta_valor' => $_POST['meta_valor'] ?? null,
+            'meta_unidade' => $_POST['meta_unidade'] ?? null,
             'prazo' => $_POST['prazo'] ?? null,
             'responsavel' => trim($_POST['responsavel'] ?? ''),
-            'fase' => 'PLAN',
-            'status' => 'A Fazer',
-            'progresso' => 0,
+            'fase' => $_POST['fase'] ?? 'PLAN',
+            'status' => $_POST['status'] ?? 'A Fazer',
+            'progresso' => (int)($_POST['progresso'] ?? 0),
         ];
-        if ($data['id_cliente'] && $data['titulo'] && $data['responsavel'] && $data['prazo']) {
-            $id = $this->tasks->create($data);
-            header('Location: index.php?route=pdca/show&id=' . $id);
+        if ($data['id_cliente'] && $data['titulo']) {
+            $this->tasks->create($data);
+            header('Location: index.php?route=pdca/create&cliente=' . $data['id_cliente']);
             return;
         }
-        header('Location: index.php?route=pdca/index');
+        header('Location: index.php?route=pdca/create');
     }
 
     public function show(): void
@@ -74,8 +104,10 @@ class PdcaController extends BaseController
         $this->requireLogin();
         $id = (int)($_GET['id'] ?? 0);
         $task = $this->tasks->find($id);
+        $metrics = $this->metrics->byTask($id);
+        $checks = $this->checks->byTask($id);
         $actions = $this->actions->byTask($id);
-        $this->render('pdca/show', compact('task','actions'));
+        $this->render('pdca/show', compact('task','metrics','checks','actions'));
     }
 
     public function upsertMetric(): void

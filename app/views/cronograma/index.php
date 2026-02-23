@@ -17,7 +17,7 @@
       <tbody>
         <?php foreach ($items as $c): ?>
           <tr class="border-b">
-            <td class="p-3"><?= htmlspecialchars($c['cliente']) ?></td>
+            <td class="p-3"><?= htmlspecialchars($c['cliente'] ?? '') ?></td>
             <td class="p-3"><?= htmlspecialchars($c['nome'] ?? '') ?></td>
             <td class="p-3"><?= (int)$c['ano'] ?></td>
             <td class="p-3">

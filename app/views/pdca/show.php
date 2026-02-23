@@ -6,7 +6,7 @@
       <?php $faseMap = ['PLAN' => 'Planejar','DO' => 'Executar','CHECK' => 'Verificar','ACT' => 'Agir']; $faseNome = $faseMap[$task['fase'] ?? 'PLAN'] ?? ($task['fase'] ?? ''); ?>
       <p class="text-sm text-gray-600">Fase: <?= htmlspecialchars($faseNome) ?> · Prazo: <?= htmlspecialchars($task['prazo'] ?? '—') ?> · Resp.: <?= htmlspecialchars($task['responsavel'] ?? '—') ?></p>
     </div>
-    <a class="px-3 py-2 rounded bg-brand-brown text-white" href="index.php?route=pdca/index">Voltar</a>
+    <a class="px-3 py-2 rounded bg-brand-brown text-white" href="index.php?route=clientes/show&id=<?= (int)($task['id_cliente'] ?? 0) ?>">Voltar</a>
   </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">

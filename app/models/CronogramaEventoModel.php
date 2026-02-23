@@ -1,6 +1,8 @@
 <?php
 namespace App\Models;
 
+use App\Core\AuditLogger;
+
 class CronogramaEventoModel extends BaseModel
 {
     private function ensureTables(): void
@@ -39,18 +41,30 @@ class CronogramaEventoModel extends BaseModel
     public function create(int $idCronograma, array $data): int
     {
         $this->ensureTables();
-        $stmt = $this->db->prepare('INSERT INTO cronograma_eventos (id_cronograma, data, topico, unidade, atividade, responsavel, modelo, status) VALUES (:id_cronograma, :data, :topico, :unidade, :atividade, :responsavel, :modelo, :status)');
-        $stmt->execute([
-            'id_cronograma' => $idCronograma,
-            'data' => $data['data'],
-            'topico' => $data['topico'],
-            'unidade' => $data['unidade'] ?? null,
-            'atividade' => $data['atividade'],
-            'responsavel' => $data['responsavel'] ?? null,
-            'modelo' => $data['modelo'] ?? null,
-            'status' => $data['status'] ?? 'Planejado',
-        ]);
-        return (int)$this->db->lastInsertId();
+        try {
+            $stmt = $this->db->prepare('INSERT INTO cronograma_eventos (id_cronograma, data, topico, unidade, atividade, responsavel, modelo, status) VALUES (:id_cronograma, :data, :topico, :unidade, :atividade, :responsavel, :modelo, :status)');
+            $stmt->execute([
+                'id_cronograma' => $idCronograma,
+                'data' => $data['data'],
+                'topico' => $data['topico'],
+                'unidade' => $data['unidade'] ?? null,
+                'atividade' => $data['atividade'],
+                'responsavel' => $data['responsavel'] ?? null,
+                'modelo' => $data['modelo'] ?? null,
+                'status' => $data['status'] ?? 'Planejado',
+            ]);
+            $id = (int)$this->db->lastInsertId();
+            AuditLogger::log('cronograma_evento_created', 'cronograma_evento', $id, [
+                'id_cronograma' => $idCronograma,
+            ]);
+            return $id;
+        } catch (\PDOException $e) {
+            AuditLogger::log('cronograma_evento_create_error', 'cronograma_evento', null, [
+                'id_cronograma' => $idCronograma,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
     }
 
     public function update(int $id, array $data): bool
