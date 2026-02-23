@@ -29,6 +29,7 @@
 .nav-link { transition: background-color .2s ease, box-shadow .2s ease; }
 .nav-link:hover { background-color: rgba(255,255,255,0.08); box-shadow: inset 4px 0 0 var(--brand-red); }
 .nav-link:focus { outline: 2px solid var(--brand-red); outline-offset: 2px; }
+.nav-link.is-active { background-color: rgba(255,255,255,0.12); box-shadow: inset 4px 0 0 var(--brand-red); }
 
 /* Botões/links de ação com ícones */
 .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; border-radius: 0.25rem; }

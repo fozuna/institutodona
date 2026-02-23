@@ -38,21 +38,22 @@ $config = require $cfg;
                         </div>
                     </div>
                 </div>
+                <?php $r = $_GET['route'] ?? ''; ?>
                 <nav class="px-4 py-4 space-y-1">
-                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=dashboard/index"><span data-feather="home" class="inline-block mr-2"></span>Dashboard</a>
-                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=clientes/index"><span data-feather="users" class="inline-block mr-2"></span>Clientes</a>
-                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=usuarios/index"><span data-feather="user" class="inline-block mr-2"></span>Usuários</a>
-                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=pilares/index"><span data-feather="layers" class="inline-block mr-2"></span>Pilares</a>
-                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=agenda/index"><span data-feather="calendar" class="inline-block mr-2"></span>Agenda</a>
-                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=consultores/index"><span data-feather="users" class="inline-block mr-2"></span>Consultores</a>
-                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=cronograma/index"><span data-feather="calendar" class="inline-block mr-2"></span>Cronograma</a>
-                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=avaliacoes/index"><span data-feather="check-square" class="inline-block mr-2"></span>Avaliações</a>
-                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=pdca/index"><span data-feather="activity" class="inline-block mr-2"></span>Plano de Ação</a>
-                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=indicadores/index"><span data-feather="bar-chart-2" class="inline-block mr-2"></span>Indicadores</a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'dashboard/')===0?'is-active':'' ?>" href="index.php?route=dashboard/index"><span data-feather="home" class="inline-block mr-2"></span>Dashboard</a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'clientes/')===0?'is-active':'' ?>" href="index.php?route=clientes/index"><span data-feather="users" class="inline-block mr-2"></span>Clientes</a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'usuarios/')===0?'is-active':'' ?>" href="index.php?route=usuarios/index"><span data-feather="user" class="inline-block mr-2"></span>Usuários</a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'pilares/')===0?'is-active':'' ?>" href="index.php?route=pilares/index"><span data-feather="layers" class="inline-block mr-2"></span>Pilares</a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'agenda/')===0?'is-active':'' ?>" href="index.php?route=agenda/index"><span data-feather="calendar" class="inline-block mr-2"></span>Agenda</a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'consultores/')===0?'is-active':'' ?>" href="index.php?route=consultores/index"><span data-feather="users" class="inline-block mr-2"></span>Consultores</a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'cronograma/')===0?'is-active':'' ?>" href="index.php?route=cronograma/index"><span data-feather="calendar" class="inline-block mr-2"></span>Cronograma</a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'avaliacoes/')===0?'is-active':'' ?>" href="index.php?route=avaliacoes/index"><span data-feather="check-square" class="inline-block mr-2"></span>Avaliações</a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'pdca/')===0?'is-active':'' ?>" href="index.php?route=pdca/index"><span data-feather="activity" class="inline-block mr-2"></span>Plano de Ação</a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'indicadores/')===0?'is-active':'' ?>" href="index.php?route=indicadores/index"><span data-feather="bar-chart-2" class="inline-block mr-2"></span>Indicadores</a>
                     <?php if (($user['email'] ?? '') === 'admin@agencialester.com.br'): ?>
-                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=logs/index"><span data-feather="file-text" class="inline-block mr-2"></span>Logs</a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'logs/')===0?'is-active':'' ?>" href="index.php?route=logs/index"><span data-feather="file-text" class="inline-block mr-2"></span>Logs</a>
                     <?php endif; ?>
-                    <a class="block px-3 py-2 rounded nav-link" href="index.php?route=about/index"><span data-feather="book" class="inline-block mr-2"></span>Sobre & Manual</a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'about/')===0?'is-active':'' ?>" href="index.php?route=about/index"><span data-feather="book" class="inline-block mr-2"></span>Sobre & Manual</a>
                 </nav>
                 <div class="mt-auto px-4 py-3 border-t border-brand-brown flex items-center justify-between">
                     <button id="themeToggle" class="text-sm flex items-center gap-2">
