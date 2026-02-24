@@ -38,6 +38,32 @@ class PlanoAcaoController extends BaseController
         ]);
     }
 
+    public function apiList(): void
+    {
+        $this->requireLogin();
+        header('Content-Type: application/json');
+        
+        $clienteId = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
+        
+        if (!$clienteId) {
+            echo json_encode(['success' => false, 'error' => 'Cliente não informado']);
+            return;
+        }
+
+        try {
+            // Simulate network delay for loading indicator demonstration if needed, but keeping it fast
+            // usleep(300000); 
+            
+            $items = $this->tasks->byCliente($clienteId);
+            
+            // Format items for frontend if necessary, but raw data seems fine based on current view usage
+            echo json_encode(['success' => true, 'data' => $items]);
+        } catch (\Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+    }
+
     public function create(): void
     {
         $this->requireRole('instituto');

@@ -192,6 +192,9 @@ switch ($route) {
     case 'planoacao/index':
         (new PlanoAcaoController())->index();
         break;
+    case 'planoacao/api_list':
+        (new PlanoAcaoController())->apiList();
+        break;
     case 'planoacao/create':
         (new PlanoAcaoController())->create();
         break;
