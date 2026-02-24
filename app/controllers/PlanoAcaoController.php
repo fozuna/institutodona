@@ -71,27 +71,41 @@ class PlanoAcaoController extends BaseController
 
     public function store(): void
     {
-        $this->requireRole('instituto');
-        $csrf = $_POST['csrf'] ?? null;
-        if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
-        $data = [
-            'id_cliente' => (int)($_POST['id_cliente'] ?? 0),
-            'titulo' => trim($_POST['titulo'] ?? ''),
-            'descricao' => trim($_POST['descricao'] ?? ''),
-            'meta_valor' => $_POST['meta_valor'] ?? null,
-            'meta_unidade' => $_POST['meta_unidade'] ?? null,
-            'prazo' => $_POST['prazo'] ?? null,
-            'responsavel' => trim($_POST['responsavel'] ?? ''),
-            'fase' => 'DO',
-            'status' => $_POST['status'] ?? 'A Fazer',
-            'progresso' => (int)($_POST['progresso'] ?? 0),
-        ];
-        if ($data['id_cliente'] && $data['titulo']) {
-            $this->tasks->create($data);
-            header('Location: index.php?route=planoacao/create&cliente=' . $data['id_cliente']);
-            return;
+        try {
+            $this->requireRole('instituto');
+            $csrf = $_POST['csrf'] ?? null;
+            if (!Security::verifyCsrf($csrf)) { 
+                http_response_code(400); 
+                echo 'CSRF inválido'; 
+                return; 
+            }
+            $data = [
+                'id_cliente' => (int)($_POST['id_cliente'] ?? 0),
+                'titulo' => trim($_POST['titulo'] ?? ''),
+                'descricao' => trim($_POST['descricao'] ?? ''),
+                'meta_valor' => $_POST['meta_valor'] ?? null,
+                'meta_unidade' => $_POST['meta_unidade'] ?? null,
+                'prazo' => $_POST['prazo'] ?? null,
+                'responsavel' => trim($_POST['responsavel'] ?? ''),
+                'fase' => 'DO',
+                'status' => $_POST['status'] ?? 'A Fazer',
+                'progresso' => (int)($_POST['progresso'] ?? 0),
+            ];
+            if ($data['id_cliente'] && $data['titulo']) {
+                $this->tasks->create($data);
+                header('Location: index.php?route=planoacao/create&cliente=' . $data['id_cliente']);
+                return;
+            }
+            header('Location: index.php?route=planoacao/create');
+        } catch (\Throwable $e) {
+            echo '<div style="padding:20px; font-family:monospace; background:#ffebeb; color:#900;">';
+            echo '<strong>Erro ao salvar plano de ação:</strong><br>';
+            echo htmlspecialchars($e->getMessage()) . '<br><br>';
+            echo '<strong>Arquivo:</strong> ' . $e->getFile() . ' (Linha ' . $e->getLine() . ')<br><br>';
+            echo '<strong>Trace:</strong><pre>' . htmlspecialchars($e->getTraceAsString()) . '</pre>';
+            echo '</div>';
+            exit;
         }
-        header('Location: index.php?route=planoacao/create');
     }
 
     public function show(): void
