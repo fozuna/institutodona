@@ -7,6 +7,7 @@ use App\Models\PlanoAcaoTaskModel;
 use App\Models\PlanoAcaoMetricModel;
 use App\Models\PlanoAcaoCheckModel;
 use App\Models\PlanoAcaoActionModel;
+use App\Models\PlanoAcaoHistoryModel;
 use App\Models\ClienteModel;
 
 class PlanoAcaoController extends BaseController
@@ -113,11 +114,66 @@ class PlanoAcaoController extends BaseController
         $this->requireLogin();
         $id = (int)($_GET['id'] ?? 0);
         $filterStatus = $_GET['filter_status'] ?? null;
+        $historyFilters = [
+            'user_id' => $_GET['h_user'] ?? null,
+            'action_type' => $_GET['h_action'] ?? null,
+            'date_start' => $_GET['h_start'] ?? null,
+            'date_end' => $_GET['h_end'] ?? null,
+        ];
+
         $task = $this->tasks->find($id);
         $metrics = $this->metrics->byTask($id);
         $checks = $this->checks->byTask($id);
         $actions = $this->actions->byTask($id, $filterStatus);
-        $this->render('planoacao/show', compact('task','metrics','checks','actions','filterStatus'));
+        $history = (new PlanoAcaoHistoryModel())->getByTask($id, $historyFilters);
+        $users = (new \App\Models\UsuarioModel())->all(); // Assuming UsuarioModel exists and has all()
+        
+        $this->render('planoacao/show', compact('task','metrics','checks','actions','filterStatus','history','historyFilters','users'));
+    }
+
+    public function updateTask(): void
+    {
+        $this->requireRole('instituto');
+        $csrf = $_POST['csrf'] ?? null;
+        if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
+        
+        $id = (int)($_POST['id'] ?? 0);
+        if (!$id) { header('Location: index.php?route=planoacao/index'); return; }
+
+        $data = [
+            'titulo' => trim($_POST['titulo'] ?? ''),
+            'descricao' => trim($_POST['descricao'] ?? ''),
+            'prazo' => $_POST['prazo'] ?? null,
+            'responsavel' => trim($_POST['responsavel'] ?? ''),
+            'status' => $_POST['status'] ?? 'A Fazer',
+        ];
+        
+        $this->tasks->update($id, $data);
+        $_SESSION['flash_success'] = 'Dados atualizados com sucesso';
+        header('Location: index.php?route=planoacao/show&id=' . $id);
+    }
+
+    public function updateAction(): void
+    {
+        $this->requireRole('instituto');
+        $csrf = $_POST['csrf'] ?? null;
+        if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
+
+        $id = (int)($_POST['id'] ?? 0);
+        $taskId = (int)($_POST['task_id'] ?? 0);
+        
+        if ($id && $taskId) {
+            $data = [
+                'titulo' => trim($_POST['titulo'] ?? ''),
+                'owner' => trim($_POST['owner'] ?? ''),
+                'due_date' => $_POST['due_date'] ?? null,
+                'status' => $_POST['status'] ?? 'Planejado',
+            ];
+            $this->actions->update($id, $data);
+            $_SESSION['flash_success'] = 'Ação atualizada com sucesso';
+        }
+        
+        header('Location: index.php?route=planoacao/show&id=' . $taskId);
     }
 
     public function upsertMetric(): void

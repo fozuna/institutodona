@@ -32,6 +32,15 @@ class PlanoAcaoActionModel extends BaseModel
         return $stmt->fetchAll();
     }
 
+    public function find(int $id): ?array
+    {
+        $this->ensure();
+        $stmt = $this->db->prepare('SELECT * FROM pdca_actions WHERE id = :id');
+        $stmt->execute(['id' => $id]);
+        $row = $stmt->fetch();
+        return $row ?: null;
+    }
+
     public function create(int $taskId, array $data): int
     {
         $this->ensure();
@@ -43,19 +52,42 @@ class PlanoAcaoActionModel extends BaseModel
             'due_date' => $data['due_date'] ?? null,
             'status' => $data['status'] ?? 'Planejado',
         ]);
-        return (int)$this->db->lastInsertId();
+        $id = (int)$this->db->lastInsertId();
+        
+        // Log creation
+        (new PlanoAcaoHistoryModel())->log('action', $id, 'create', $data);
+        
+        return $id;
     }
 
     public function update(int $id, array $data): bool
     {
         $this->ensure();
+        $old = $this->find($id);
+        if (!$old) return false;
+
         $stmt = $this->db->prepare('UPDATE pdca_actions SET titulo=:titulo, owner=:owner, due_date=:due_date, status=:status WHERE id=:id');
-        return $stmt->execute([
+        $res = $stmt->execute([
             'titulo' => $data['titulo'],
             'owner' => $data['owner'] ?? null,
             'due_date' => $data['due_date'] ?? null,
             'status' => $data['status'] ?? 'Planejado',
             'id' => $id,
         ]);
+
+        if ($res) {
+            $changes = [];
+            foreach (['titulo', 'owner', 'due_date', 'status'] as $f) {
+                $vOld = $old[$f] ?? null;
+                $vNew = $data[$f] ?? null;
+                if ($vOld != $vNew) {
+                    $changes[$f] = ['old' => $vOld, 'new' => $vNew];
+                }
+            }
+            if (!empty($changes)) {
+                (new PlanoAcaoHistoryModel())->log('action', $id, 'update', $changes);
+            }
+        }
+        return $res;
     }
 }

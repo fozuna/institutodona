@@ -3,7 +3,6 @@
   $selectedCliente = $selectedCliente ?? null;
   $items = $items ?? [];
   $statusFilter = $statusFilter ?? '';
-  $faseFilter = $faseFilter ?? '';
   $search = $search ?? '';
 ?>
 <div class="p-6 space-y-6">

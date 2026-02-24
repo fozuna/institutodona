@@ -35,29 +35,51 @@ class PlanoAcaoTaskModel extends BaseModel
             'meta_unidade' => $data['meta_unidade'] ?? null,
             'prazo' => $data['prazo'] ?? null,
             'responsavel' => $data['responsavel'] ?? null,
-            'fase' => $data['fase'] ?? 'PLAN',
+            'fase' => 'DO', // Force execution phase
             'status' => $data['status'] ?? 'A Fazer',
             'progresso' => (int)($data['progresso'] ?? 0),
         ]);
-        return (int)$this->db->lastInsertId();
+        $id = (int)$this->db->lastInsertId();
+        
+        // Log creation
+        (new PlanoAcaoHistoryModel())->log('task', $id, 'create', $data);
+        
+        return $id;
     }
 
     public function update(int $id, array $data): bool
     {
         $this->ensure();
-        $stmt = $this->db->prepare('UPDATE pdca_tasks SET titulo=:titulo, descricao=:descricao, meta_valor=:meta_valor, meta_unidade=:meta_unidade, prazo=:prazo, responsavel=:responsavel, fase=:fase, status=:status, progresso=:progresso WHERE id=:id');
-        return $stmt->execute([
+        $old = $this->find($id);
+        if (!$old) return false;
+
+        $stmt = $this->db->prepare('UPDATE pdca_tasks SET titulo=:titulo, descricao=:descricao, meta_valor=:meta_valor, meta_unidade=:meta_unidade, prazo=:prazo, responsavel=:responsavel, status=:status, progresso=:progresso WHERE id=:id');
+        $res = $stmt->execute([
             'titulo' => $data['titulo'],
             'descricao' => $data['descricao'] ?? null,
             'meta_valor' => $data['meta_valor'] ?? null,
             'meta_unidade' => $data['meta_unidade'] ?? null,
             'prazo' => $data['prazo'] ?? null,
             'responsavel' => $data['responsavel'] ?? null,
-            'fase' => $data['fase'] ?? 'PLAN',
             'status' => $data['status'] ?? 'A Fazer',
             'progresso' => (int)($data['progresso'] ?? 0),
             'id' => $id,
         ]);
+
+        if ($res) {
+            $changes = [];
+            foreach (['titulo', 'descricao', 'meta_valor', 'meta_unidade', 'prazo', 'responsavel', 'status', 'progresso'] as $f) {
+                $vOld = $old[$f] ?? null;
+                $vNew = $data[$f] ?? null;
+                if ($vOld != $vNew) {
+                    $changes[$f] = ['old' => $vOld, 'new' => $vNew];
+                }
+            }
+            if (!empty($changes)) {
+                (new PlanoAcaoHistoryModel())->log('task', $id, 'update', $changes);
+            }
+        }
+        return $res;
     }
 
     public function byCliente(int $idCliente): array

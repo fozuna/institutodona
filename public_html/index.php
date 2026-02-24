@@ -210,6 +210,12 @@ switch ($route) {
     case 'planoacao/createAction':
         (new PlanoAcaoController())->createAction();
         break;
+    case 'planoacao/updateTask':
+        (new PlanoAcaoController())->updateTask();
+        break;
+    case 'planoacao/updateAction':
+        (new PlanoAcaoController())->updateAction();
+        break;
     case 'aplicacoes/set_status':
         (new AplicacoesController())->set_status();
         break;
