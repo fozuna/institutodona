@@ -3,7 +3,16 @@
   <div class="mb-4">
     <div class="flex justify-between items-center">
       <h1 class="text-2xl font-bold text-brand-black">Perfil do Cliente</h1>
-      <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=metodologias/create&cliente=<?= (int)$item['id'] ?>">Criar Tarefa</a>
+      <div class="flex items-center gap-2">
+        <?php if (($_SESSION['user']['tipo_acesso'] ?? '') === 'instituto'): ?>
+          <a class="px-3 py-2 rounded bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors flex items-center gap-2" href="index.php?route=clientes/edit&id=<?= (int)$item['id'] ?>">
+            <span data-feather="edit" class="w-4 h-4"></span> Editar
+          </a>
+        <?php endif; ?>
+        <a class="px-3 py-2 rounded bg-brand-red text-white flex items-center gap-2" href="index.php?route=metodologias/create&cliente=<?= (int)$item['id'] ?>">
+          <span data-feather="plus" class="w-4 h-4"></span> Criar Tarefa
+        </a>
+      </div>
     </div>
     <div class="mt-2 bg-white shadow rounded p-4">
       <?php if (!empty($item['logo_path'])): ?>

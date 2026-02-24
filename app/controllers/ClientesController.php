@@ -84,6 +84,9 @@ class ClientesController extends BaseController
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
         $id = (int)($_POST['id'] ?? 0);
+        $current = $this->clientes->find($id);
+        if (!$current) { header('Location: index.php?route=clientes/index'); return; }
+
         $data = [
             'nome_empresa' => trim($_POST['nome_empresa'] ?? ''),
             'CNPJ' => trim($_POST['CNPJ'] ?? ''),
@@ -93,7 +96,10 @@ class ClientesController extends BaseController
         $matrizId = isset($_POST['matriz_id']) ? (int)$_POST['matriz_id'] : null;
         $data['is_matriz'] = $tipo === 'matriz' ? 1 : 0;
         $data['matriz_id'] = $tipo === 'filial' ? $matrizId : null;
-        $data['logo_path'] = null;
+        
+        // Mantém logo atual por padrão
+        $data['logo_path'] = $current['logo_path'];
+
         if (!empty($_FILES['logo']['name']) && is_uploaded_file($_FILES['logo']['tmp_name'])) {
             $allow = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/webp' => 'webp', 'image/svg+xml' => 'svg'];
             $type = $_FILES['logo']['type'] ?? '';
