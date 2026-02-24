@@ -3,8 +3,7 @@
   <div class="flex items-center justify-between">
     <div>
       <h1 class="text-2xl font-bold"><?= htmlspecialchars($task['titulo'] ?? '') ?></h1>
-      <?php $faseMap = ['PLAN' => 'Planejar','DO' => 'Executar','CHECK' => 'Verificar','ACT' => 'Agir']; $faseNome = $faseMap[$task['fase'] ?? 'PLAN'] ?? ($task['fase'] ?? ''); ?>
-      <p class="text-sm text-gray-600">Fase: <?= htmlspecialchars($faseNome) ?> · Prazo: <?= htmlspecialchars($task['prazo'] ?? '—') ?> · Resp.: <?= htmlspecialchars($task['responsavel'] ?? '—') ?></p>
+      <p class="text-sm text-gray-600">Prazo: <?= htmlspecialchars($task['prazo'] ?? '—') ?> · Resp.: <?= htmlspecialchars($task['responsavel'] ?? '—') ?></p>
     </div>
     <a class="px-3 py-2 rounded bg-brand-brown text-white" href="index.php?route=clientes/show&id=<?= (int)($task['id_cliente'] ?? 0) ?>">Voltar</a>
   </div>
@@ -19,7 +18,21 @@
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
     <div class="bg-white shadow rounded p-4">
       <div class="font-semibold mb-2">Planos de Ação</div>
-      <form method="post" action="index.php?route=pdca/createAction" class="flex items-center gap-2 mb-3">
+      
+      <!-- Filtros -->
+      <form method="get" class="mb-3 flex items-center gap-2 text-sm bg-gray-50 p-2 rounded">
+        <input type="hidden" name="route" value="planoacao/show" />
+        <input type="hidden" name="id" value="<?= (int)$task['id'] ?>" />
+        <label>Filtrar por Status:</label>
+        <select name="filter_status" class="border rounded px-2 py-1" onchange="this.form.submit()">
+          <option value="">Todos</option>
+          <option value="Planejado" <?= ($filterStatus ?? '') === 'Planejado' ? 'selected' : '' ?>>Planejado</option>
+          <option value="Em Execução" <?= ($filterStatus ?? '') === 'Em Execução' ? 'selected' : '' ?>>Em Execução</option>
+          <option value="Concluído" <?= ($filterStatus ?? '') === 'Concluído' ? 'selected' : '' ?>>Concluído</option>
+        </select>
+      </form>
+
+      <form method="post" action="index.php?route=planoacao/createAction" class="flex items-center gap-2 mb-3">
         <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
         <input type="hidden" name="task_id" value="<?= (int)$task['id'] ?>" />
         <input type="text" name="titulo" placeholder="Plano de ação" class="w-48" required />

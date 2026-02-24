@@ -82,7 +82,7 @@ class AvaliacoesController extends BaseController
         $this->render('avaliacoes/show', compact('item'));
     }
 
-    public function pdca(): void
+    public function planoacao(): void
     {
         $this->requireLogin();
         $id = (int)($_GET['id'] ?? 0);
@@ -93,6 +93,6 @@ class AvaliacoesController extends BaseController
             return;
         }
         $respostas = json_decode($item['respostas_json'] ?? '{}', true) ?: [];
-        $this->render('avaliacoes/pdca', compact('item', 'respostas'));
+        $this->render('avaliacoes/planoacao', compact('item', 'respostas'));
     }
 }

@@ -57,9 +57,9 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <?php
           $cronCount = count((new \App\Models\CronogramaModel())->byCliente((int)$item['id']));
-          $pdcaTasks = (new \App\Models\PdcaTaskModel())->byCliente((int)$item['id']);
-          $pdcaCount = count($pdcaTasks);
-          $pdcaDone = array_reduce($pdcaTasks, function($acc,$t){ return $acc + ((($t['status'] ?? '') === 'Concluído') ? 1 : 0); }, 0);
+          $planoTasks = (new \App\Models\PlanoAcaoTaskModel())->byCliente((int)$item['id']);
+          $planoCount = count($planoTasks);
+          $planoDone = array_reduce($planoTasks, function($acc,$t){ return $acc + ((($t['status'] ?? '') === 'Concluído') ? 1 : 0); }, 0);
         ?>
         <a class="card p-4 block" href="index.php?route=cronograma/index&id_cliente=<?= (int)$item['id'] ?>" data-loading>
           <div class="flex items-center justify-between">
@@ -69,13 +69,13 @@
           <div class="text-sm text-gray-600 mt-2">Cronogramas: <?= $cronCount ?></div>
           <div class="text-xs text-gray-500 mt-1">Clique para abrir cronogramas do cliente</div>
         </a>
-        <a class="card p-4 block" href="index.php?route=pdca/index&cliente=<?= (int)$item['id'] ?>" data-loading>
+        <a class="card p-4 block" href="index.php?route=planoacao/index&cliente=<?= (int)$item['id'] ?>" data-loading>
           <div class="flex items-center justify-between">
-            <div class="font-semibold">PDCA</div>
+            <div class="font-semibold">Planos de Ação</div>
             <span class="badge"><span data-feather="activity"></span></span>
           </div>
-          <div class="text-sm text-gray-600 mt-2">Tarefas: <?= $pdcaCount ?> · Concluídas: <?= $pdcaDone ?></div>
-          <div class="text-xs text-gray-500 mt-1">Clique para abrir tarefas PDCA do cliente</div>
+          <div class="text-sm text-gray-600 mt-2">Planos: <?= $planoCount ?> · Concluídos: <?= $planoDone ?></div>
+          <div class="text-xs text-gray-500 mt-1">Clique para abrir planos de ação do cliente</div>
         </a>
       </div>
       <script>

@@ -189,26 +189,26 @@ switch ($route) {
     case 'cronograma/deleteEvento':
         (new CronogramaController())->deleteEvento();
         break;
-    case 'pdca/index':
-        (new PdcaController())->index();
+    case 'planoacao/index':
+        (new PlanoAcaoController())->index();
         break;
-    case 'pdca/create':
-        (new PdcaController())->create();
+    case 'planoacao/create':
+        (new PlanoAcaoController())->create();
         break;
-    case 'pdca/store':
-        (new PdcaController())->store();
+    case 'planoacao/store':
+        (new PlanoAcaoController())->store();
         break;
-    case 'pdca/show':
-        (new PdcaController())->show();
+    case 'planoacao/show':
+        (new PlanoAcaoController())->show();
         break;
-    case 'pdca/upsertMetric':
-        (new PdcaController())->upsertMetric();
+    case 'planoacao/upsertMetric':
+        (new PlanoAcaoController())->upsertMetric();
         break;
-    case 'pdca/addCheck':
-        (new PdcaController())->addCheck();
+    case 'planoacao/addCheck':
+        (new PlanoAcaoController())->addCheck();
         break;
-    case 'pdca/createAction':
-        (new PdcaController())->createAction();
+    case 'planoacao/createAction':
+        (new PlanoAcaoController())->createAction();
         break;
     case 'aplicacoes/set_status':
         (new AplicacoesController())->set_status();
@@ -315,8 +315,8 @@ switch ($route) {
     case 'avaliacoes/show':
         (new AvaliacoesController())->show();
         break;
-    case 'avaliacoes/pdca':
-        (new AvaliacoesController())->pdca();
+    case 'avaliacoes/planoacao':
+        (new AvaliacoesController())->planoacao();
         break;
     case 'colaboradores/index':
         (new ColaboradoresController())->index();

@@ -1,7 +1,7 @@
 <?php
 namespace App\Models;
 
-class PdcaMetricModel extends BaseModel
+class PlanoAcaoMetricModel extends BaseModel
 {
     private function ensure(): void
     {

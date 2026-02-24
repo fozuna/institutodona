@@ -6,7 +6,7 @@
       <p class="text-sm text-gray-600">Selecione o cliente para visualizar e criar planos de ação</p>
     </div>
     <form method="get" class="toolbar">
-      <input type="hidden" name="route" value="pdca/index" />
+      <input type="hidden" name="route" value="planoacao/index" />
       <label class="text-sm">Cliente</label>
       <select name="cliente" class="min-w-[16rem]">
         <option value="">-- Selecione --</option>
@@ -14,7 +14,7 @@
           <option value="<?= (int)$c['id'] ?>" <?= $selectedCliente === (int)$c['id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['nome_empresa']) ?></option>
         <?php endforeach; ?>
       </select>
-      <a class="btn btn-primary" href="index.php?route=pdca/create">Novo Plano de Ação</a>
+      <a class="btn btn-primary" href="index.php?route=planoacao/create">Novo Plano de Ação</a>
     </form>
   </div>
 
@@ -27,14 +27,9 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <?php foreach ($items as $t): ?>
         <?php $p = max(0, min(100, (int)$t['progresso'])); ?>
-        <?php
-          $faseMap = ['PLAN' => 'Planejar','DO' => 'Executar','CHECK' => 'Verificar','ACT' => 'Agir'];
-          $faseNome = $faseMap[$t['fase']] ?? $t['fase'];
-        ?>
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div class="font-semibold"><?= htmlspecialchars($t['titulo']) ?></div>
-            <span class="badge"><?= htmlspecialchars($faseNome) ?></span>
           </div>
           <div class="text-xs text-gray-500 mt-1">Prazo: <?= htmlspecialchars($t['prazo'] ?? '—') ?> · Resp.: <?= htmlspecialchars($t['responsavel'] ?? '—') ?></div>
           <div class="flex items-center gap-3 mt-3">
@@ -45,7 +40,7 @@
             </div>
           </div>
           <div class="mt-3">
-            <a class="text-brand-red hover:underline" href="index.php?route=pdca/show&id=<?= (int)$t['id'] ?>">Abrir</a>
+            <a class="text-brand-red hover:underline" href="index.php?route=planoacao/show&id=<?= (int)$t['id'] ?>">Abrir</a>
           </div>
         </div>
       <?php endforeach; ?>

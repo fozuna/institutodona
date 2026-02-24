@@ -31,11 +31,11 @@
       </ul>
     </div>
     <div class="bg-white shadow rounded p-4">
-      <div class="font-semibold mb-2">PDCA – Planos de Ação</div>
+      <div class="font-semibold mb-2">Planos de Ação</div>
       <ul class="text-sm text-gray-700 list-disc pl-5">
-        <li>Cadastro permanece na mesma tela após salvar.</li>
-        <li>Lista de planos abaixo do formulário com filtros por Status, Fase e Busca (título/responsável).</li>
-        <li>Métricas (indicadores), Verificações (Check) e Ações de melhoria (Act) agrupadas na tarefa.</li>
+        <li>Cadastro de planos de ação diretos.</li>
+        <li>Lista de planos abaixo do formulário com filtros por Status e Busca.</li>
+        <li>Acompanhamento de progresso e status.</li>
       </ul>
     </div>
     <div class="bg-white shadow rounded p-4">
@@ -49,7 +49,7 @@
     <div class="bg-white shadow rounded p-4">
       <div class="font-semibold mb-2">Perfil do Cliente</div>
       <ul class="text-sm text-gray-700 list-disc pl-5">
-        <li>Dois cartões: “Cronograma” e “PDCA”, com contadores e acesso rápido.</li>
+        <li>Dois cartões: “Cronograma” e “Planos de Ação”, com contadores e acesso rápido.</li>
         <li>Navegação contextual e estados de carregamento para melhor usabilidade.</li>
       </ul>
     </div>

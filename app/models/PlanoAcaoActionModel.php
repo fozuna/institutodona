@@ -1,7 +1,7 @@
 <?php
 namespace App\Models;
 
-class PdcaActionModel extends BaseModel
+class PlanoAcaoActionModel extends BaseModel
 {
     private function ensure(): void
     {
@@ -17,11 +17,18 @@ class PdcaActionModel extends BaseModel
         } catch (\PDOException $e) {}
     }
 
-    public function byTask(int $taskId): array
+    public function byTask(int $taskId, ?string $status = null): array
     {
         $this->ensure();
-        $stmt = $this->db->prepare('SELECT * FROM pdca_actions WHERE task_id = :id ORDER BY due_date IS NULL, due_date');
-        $stmt->execute(['id' => $taskId]);
+        $sql = 'SELECT * FROM pdca_actions WHERE task_id = :id';
+        $params = ['id' => $taskId];
+        if ($status) {
+            $sql .= ' AND status = :status';
+            $params['status'] = $status;
+        }
+        $sql .= ' ORDER BY due_date IS NULL, due_date';
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 
