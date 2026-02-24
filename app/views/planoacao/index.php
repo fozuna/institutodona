@@ -20,8 +20,17 @@
 
   <?php if (!$selectedCliente): ?>
     <div class="bg-white shadow rounded p-6 text-gray-600">Escolha um cliente para ver as tarefas.</div>
+  <?php elseif (empty($items)): ?>
+    <div class="flex justify-end mb-6">
+      <a class="btn btn-neutral" href="index.php?route=clientes/show&id=<?= (int)$selectedCliente ?>">Voltar ao perfil</a>
+    </div>
+    <div class="bg-white shadow rounded p-10 text-center text-gray-500">
+      <div class="mb-3"><span data-feather="clipboard" class="w-12 h-12 mx-auto text-gray-300"></span></div>
+      <p>Nenhum plano de ação encontrado para este cliente.</p>
+      <a href="index.php?route=planoacao/create&cliente=<?= (int)$selectedCliente ?>" class="text-brand-red hover:underline mt-2 inline-block">Criar o primeiro plano</a>
+    </div>
   <?php else: ?>
-    <div class="flex justify-end">
+    <div class="flex justify-end mb-6">
       <a class="btn btn-neutral" href="index.php?route=clientes/show&id=<?= (int)$selectedCliente ?>">Voltar ao perfil</a>
     </div>
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
