@@ -155,25 +155,61 @@ class PlanoAcaoController extends BaseController
 
     public function updateAction(): void
     {
+        try {
+            $this->requireRole('instituto');
+            $csrf = $_POST['csrf'] ?? null;
+            if (!Security::verifyCsrf($csrf)) {
+                http_response_code(400);
+                echo 'CSRF inválido';
+                return;
+            }
+            
+            $id = (int)($_POST['id'] ?? 0);
+            $taskId = (int)($_POST['task_id'] ?? 0);
+            
+            if ($id) {
+                $data = [
+                    'titulo' => trim($_POST['titulo'] ?? ''),
+                    'owner' => trim($_POST['owner'] ?? ''),
+                    'due_date' => $_POST['due_date'] ?? null,
+                    'status' => $_POST['status'] ?? 'Planejado',
+                ];
+                
+                $this->actions->update($id, $data);
+            }
+            
+            header('Location: index.php?route=planoacao/show&id=' . $taskId);
+        } catch (\Exception $e) {
+            error_log($e->getMessage());
+            header('Location: index.php?route=planoacao/show&id=' . $taskId . '&error=1');
+        }
+    }
+
+    public function delete(): void
+    {
         $this->requireRole('instituto');
         $csrf = $_POST['csrf'] ?? null;
-        if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
+        if (!Security::verifyCsrf($csrf)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
 
         $id = (int)($_POST['id'] ?? 0);
-        $taskId = (int)($_POST['task_id'] ?? 0);
+        $task = $this->tasks->find($id);
         
-        if ($id && $taskId) {
-            $data = [
-                'titulo' => trim($_POST['titulo'] ?? ''),
-                'owner' => trim($_POST['owner'] ?? ''),
-                'due_date' => $_POST['due_date'] ?? null,
-                'status' => $_POST['status'] ?? 'Planejado',
-            ];
-            $this->actions->update($id, $data);
-            $_SESSION['flash_success'] = 'Ação atualizada com sucesso';
+        if ($task) {
+            $this->tasks->delete($id);
+            // Optionally delete related actions, metrics, etc.
+            // Ideally use foreign keys with ON DELETE CASCADE or handle here
+            
+            // Log deletion
+            (new PlanoAcaoHistoryModel())->log('task', $id, 'delete', [], $_SESSION['user']['id'] ?? null);
+            
+            header('Location: index.php?route=planoacao/index&cliente=' . $task['id_cliente']);
+        } else {
+            header('Location: index.php?route=planoacao/index');
         }
-        
-        header('Location: index.php?route=planoacao/show&id=' . $taskId);
     }
 
     public function upsertMetric(): void

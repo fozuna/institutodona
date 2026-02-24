@@ -98,4 +98,11 @@ class PlanoAcaoTaskModel extends BaseModel
         $row = $stmt->fetch();
         return $row ?: null;
     }
+
+    public function delete(int $id): bool
+    {
+        $this->ensure();
+        $stmt = $this->db->prepare('DELETE FROM pdca_tasks WHERE id = :id');
+        return $stmt->execute(['id' => $id]);
+    }
 }
