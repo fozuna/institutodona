@@ -16,8 +16,6 @@ $config = require $cfg;
         $baseUrl = rtrim(dirname($scriptName), '/\\'); // e.g., /institutodona/public_html
         if ($baseUrl === '/' || $baseUrl === '\\') { $baseUrl = ''; }
         $assetsUrl = $baseUrl . '/assets';
-        $appRootUrl = rtrim(dirname($baseUrl), '/\\'); // e.g., /institutodona
-        $publicUrl = $appRootUrl . '/public';
     ?>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/feather-icons"></script>
@@ -31,7 +29,7 @@ $config = require $cfg;
             <aside class="w-72 shrink-0 bg-brand-brown text-white fixed h-screen desktop:relative desktop:block flex flex-col">
                 <div class="px-6 py-3 border-b border-brand-brown">
                     <div class="flex flex-col items-start gap-2">
-                        <img src="<?= $publicUrl ?>/assets/img/logobco.png" alt="Logo" class="h-8 md:h-10 w-auto" />
+                        <img src="<?= $assetsUrl ?>/img/logobco.png" alt="Logo" class="h-8 md:h-10 w-auto" />
                         <div class="leading-tight">
                             <div class="font-bold text-sm">Instituto Dona</div>
                             <div class="text-[11px] opacity-80">Gestão de Processos</div>

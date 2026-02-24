@@ -52,14 +52,14 @@ class ClientesController extends BaseController
             $type = $_FILES['logo']['type'] ?? '';
             $ext = $allow[$type] ?? null;
             if ($ext) {
-                $dir = __DIR__ . '/../../public/assets/img/clients';
+                $dir = __DIR__ . '/../../public_html/assets/img/clients';
                 if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
                 $safe = preg_replace('/[^a-zA-Z0-9_-]+/', '-', strtolower($data['nome_empresa']));
                 $name = $safe ? $safe : 'cliente';
                 $file = $name . '-' . uniqid() . '.' . $ext;
                 $dest = $dir . '/' . $file;
                 if (@move_uploaded_file($_FILES['logo']['tmp_name'], $dest)) {
-                    $data['logo_path'] = 'public/assets/img/clients/' . $file;
+                    $data['logo_path'] = 'assets/img/clients/' . $file;
                 }
             }
         }
@@ -105,14 +105,14 @@ class ClientesController extends BaseController
             $type = $_FILES['logo']['type'] ?? '';
             $ext = $allow[$type] ?? null;
             if ($ext) {
-                $dir = __DIR__ . '/../../public/assets/img/clients';
+                $dir = __DIR__ . '/../../public_html/assets/img/clients';
                 if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
                 $safe = preg_replace('/[^a-zA-Z0-9_-]+/', '-', strtolower($data['nome_empresa']));
                 $name = $safe ? $safe : 'cliente';
                 $file = $name . '-' . uniqid() . '.' . $ext;
                 $dest = $dir . '/' . $file;
                 if (@move_uploaded_file($_FILES['logo']['tmp_name'], $dest)) {
-                    $data['logo_path'] = 'public/assets/img/clients/' . $file;
+                    $data['logo_path'] = 'assets/img/clients/' . $file;
                 }
             }
         }

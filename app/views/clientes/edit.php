@@ -44,7 +44,7 @@
                 <input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" />
                 <?php if (!empty($item['logo_path'])): ?>
                   <div class="mt-2">
-                    <img src="../<?= htmlspecialchars($item['logo_path']) ?>" alt="Logo atual" class="h-10 w-auto" />
+                    <img src="<?= htmlspecialchars($item['logo_path']) ?>" alt="Logo atual" class="h-10 w-auto" />
                   </div>
                 <?php endif; ?>
             </div>

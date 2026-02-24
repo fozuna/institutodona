@@ -17,7 +17,7 @@
     <div class="mt-2 bg-white shadow rounded p-4">
       <?php if (!empty($item['logo_path'])): ?>
         <div class="mb-3">
-          <img src="../<?= htmlspecialchars($item['logo_path']) ?>" alt="Logo do cliente" class="h-12 w-auto" />
+          <img src="<?= htmlspecialchars($item['logo_path']) ?>" alt="Logo do cliente" class="h-12 w-auto" />
         </div>
       <?php endif; ?>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
