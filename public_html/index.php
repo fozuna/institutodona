@@ -12,7 +12,7 @@ use App\Controllers\AgendaController;
 use App\Controllers\ConsultoresController;
 use App\Controllers\AplicacoesController;
 use App\Controllers\CronogramaController;
-use App\Controllers\PdcaController;
+use App\Controllers\PlanoAcaoController;
 use App\Controllers\BibliotecaController;
 use App\Models\UsuarioModel;
 use App\Controllers\UsuariosController;
