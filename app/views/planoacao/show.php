@@ -30,15 +30,15 @@
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div class="lg:col-span-3 bg-white shadow rounded p-4 space-y-4">
       <div>
-        <div class="font-semibold mb-1 text-gray-900">O Quê? (Problema)</div>
+        <div class="font-semibold mb-1 text-gray-900">Título do Plano</div>
         <div class="text-gray-700 text-lg"><?= htmlspecialchars($task['titulo'] ?? '') ?></div>
       </div>
       <div>
-        <div class="font-semibold mb-1 text-gray-900">Por que?</div>
+        <div class="font-semibold mb-1 text-gray-900">Descrição/Justificativa</div>
         <div class="text-sm text-gray-700 bg-gray-50 p-3 rounded"><?= nl2br(htmlspecialchars($task['descricao'] ?? '—')) ?></div>
       </div>
       <div>
-        <div class="font-semibold mb-1 text-gray-900">Como (Solução)</div>
+        <div class="font-semibold mb-1 text-gray-900">Meta/Objetivo</div>
         <div class="text-sm text-gray-700 bg-gray-50 p-3 rounded"><?= nl2br(htmlspecialchars($task['meta_valor'] ?? '—')) ?></div>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -56,59 +56,6 @@
     </div>
   </div>
 
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-    <div class="bg-white shadow rounded p-4">
-      <div class="font-semibold mb-2">Planos de Ação</div>
-      
-      <!-- Filtros -->
-      <form method="get" class="mb-3 flex items-center gap-2 text-sm bg-gray-50 p-2 rounded">
-        <input type="hidden" name="route" value="planoacao/show" />
-        <input type="hidden" name="id" value="<?= (int)$task['id'] ?>" />
-        <label>Filtrar por Status:</label>
-        <select name="filter_status" class="border rounded px-2 py-1" onchange="this.form.submit()">
-          <option value="">Todos</option>
-          <option value="Planejado" <?= ($filterStatus ?? '') === 'Planejado' ? 'selected' : '' ?>>Planejado</option>
-          <option value="Em Execução" <?= ($filterStatus ?? '') === 'Em Execução' ? 'selected' : '' ?>>Em Execução</option>
-          <option value="Concluído" <?= ($filterStatus ?? '') === 'Concluído' ? 'selected' : '' ?>>Concluído</option>
-        </select>
-      </form>
-
-      <form method="post" action="index.php?route=planoacao/createAction" class="flex items-center gap-2 mb-3">
-        <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
-        <input type="hidden" name="task_id" value="<?= (int)$task['id'] ?>" />
-        <input type="text" name="titulo" placeholder="Plano de ação" class="w-48" required />
-        <input type="text" name="owner" placeholder="Responsável" class="w-32" required />
-        <input type="date" name="due_date" required />
-        <select name="status">
-          <option value="Planejado">Planejado</option>
-          <option value="Em Execução">Em Execução</option>
-          <option value="Concluído">Concluído</option>
-        </select>
-        <button class="icon-btn icon-btn--primary" title="Adicionar"><span data-feather="plus"></span></button>
-      </form>
-      <table class="min-w-full">
-        <thead><tr class="text-left border-b"><th class="p-3">Plano de ação</th><th class="p-3">Responsável</th><th class="p-3">Data de término</th><th class="p-3">Status</th><th class="p-3">Ações</th></tr></thead>
-        <tbody>
-          <?php foreach ($actions as $a): ?>
-            <tr class="border-b hover:bg-gray-50 cursor-pointer" onclick="openActionModal(<?= htmlspecialchars(json_encode($a)) ?>)">
-              <td class="p-3"><?= htmlspecialchars($a['titulo']) ?></td>
-              <td class="p-3"><?= htmlspecialchars($a['owner'] ?? '') ?></td>
-              <td class="p-3"><?= htmlspecialchars($a['due_date'] ?? '') ?></td>
-              <td class="p-3">
-                <span class="px-2 py-1 rounded text-xs font-semibold
-                  <?= $a['status'] === 'Concluído' ? 'bg-green-100 text-green-800' : 
-                     ($a['status'] === 'Em Execução' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800') ?>">
-                  <?= htmlspecialchars($a['status']) ?>
-                </span>
-              </td>
-              <td class="p-3 text-blue-600 hover:text-blue-800"><span data-feather="edit-2" class="w-4 h-4"></span></td>
-            </tr>
-          <?php endforeach; ?>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
   <!-- Histórico de Alterações -->
   <div class="bg-white shadow rounded p-4 mt-6">
       <h3 class="font-semibold mb-4 text-lg border-b pb-2">Histórico de Alterações</h3>
@@ -117,7 +64,6 @@
       <form method="get" class="mb-4 bg-gray-50 p-3 rounded flex flex-wrap gap-3 items-end">
         <input type="hidden" name="route" value="planoacao/show">
         <input type="hidden" name="id" value="<?= $task['id'] ?>">
-        <input type="hidden" name="filter_status" value="<?= $filterStatus ?>">
         
         <div>
             <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Usuário</label>
@@ -151,7 +97,7 @@
 
         <button type="submit" class="px-3 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm font-medium transition-colors">Filtrar</button>
         <?php if (!empty(array_filter($historyFilters))): ?>
-            <a href="index.php?route=planoacao/show&id=<?= $task['id'] ?>&filter_status=<?= $filterStatus ?>" class="px-3 py-2 text-red-600 hover:text-red-800 text-sm font-medium">Limpar</a>
+            <a href="index.php?route=planoacao/show&id=<?= $task['id'] ?>" class="px-3 py-2 text-red-600 hover:text-red-800 text-sm font-medium">Limpar</a>
         <?php endif; ?>
       </form>
 
@@ -170,15 +116,15 @@
                       <tr><td colspan="4" class="p-4 text-center text-gray-500">Nenhum histórico registrado ainda.</td></tr>
                   <?php else: ?>
                       <?php foreach ($history as $h): ?>
+                          <?php if ($h['item_type'] !== 'task') continue; // Hide sub-action history ?>
                           <tr class="hover:bg-gray-50">
                               <td class="p-3 whitespace-nowrap text-gray-600"><?= date('d/m/Y H:i', strtotime($h['created_at'])) ?></td>
                               <td class="p-3 font-medium"><?= htmlspecialchars($h['user_name'] ?? 'Sistema') ?></td>
                               <td class="p-3">
                                   <?php
-                                  $type = $h['item_type'] === 'task' ? 'Plano Principal' : 'Item de Ação';
                                   $actMap = ['create' => 'Criou', 'update' => 'Alterou', 'delete' => 'Removeu'];
                                   $act = $actMap[$h['action_type']] ?? $h['action_type'];
-                                  echo "<span class='font-semibold'>$act</span> <span class='text-gray-500 text-xs'>($type)</span>";
+                                  echo "<span class='font-semibold'>$act</span>";
                                   ?>
                               </td>
                               <td class="p-3">
@@ -209,52 +155,67 @@
   </div>
 </div>
 
-<!-- Modal Edit Action -->
-<div id="editActionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden transform transition-all">
-        <div class="bg-gray-50 px-4 py-3 border-b flex justify-between items-center">
-            <h3 class="text-lg font-medium text-gray-900">Editar Item do Plano</h3>
-            <button onclick="closeActionModal()" class="text-gray-400 hover:text-gray-600">&times;</button>
-        </div>
-        <form method="post" action="index.php?route=planoacao/updateAction" class="p-6 space-y-4">
-            <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>">
-            <input type="hidden" name="task_id" value="<?= $task['id'] ?>">
-            <input type="hidden" name="id" id="modal_action_id">
-            
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">O que será feito (Título)</label>
-                <input type="text" name="titulo" id="modal_action_titulo" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50" required>
-            </div>
-            
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Responsável</label>
-                    <input type="text" name="owner" id="modal_action_owner" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Prazo</label>
-                    <input type="date" name="due_date" id="modal_action_due_date" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
-                </div>
-            </div>
-            
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select name="status" id="modal_action_status" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
-                    <option value="Planejado">Planejado</option>
-                    <option value="Em Execução">Em Execução</option>
-                    <option value="Concluído">Concluído</option>
-                </select>
-            </div>
-
-            <div class="flex justify-end pt-4 gap-2">
-                <button type="button" onclick="closeActionModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">Cancelar</button>
-                <button type="submit" class="px-4 py-2 bg-brand-orange text-white rounded hover:bg-brand-orange-dark">Salvar Alterações</button>
-            </div>
-        </form>
-    </div>
-</div>
-
 <script>
+// Handle Task Submit with Loading State and Validation
+function handleTaskSubmit(form) {
+    const titulo = document.getElementById('modal_task_titulo');
+    const tituloError = document.getElementById('task_titulo_error');
+    const responsavel = document.getElementById('modal_task_responsavel');
+    const responsavelError = document.getElementById('task_responsavel_error');
+    const prazo = document.getElementById('modal_task_prazo');
+    const prazoError = document.getElementById('task_prazo_error');
+    
+    const btnSave = document.getElementById('btn_save_task');
+    const btnCancel = document.getElementById('btn_cancel_task');
+    
+    let isValid = true;
+
+    // Validate Titulo
+    if (!titulo.value.trim()) {
+        titulo.classList.add('border-red-500');
+        tituloError.classList.remove('hidden');
+        if (isValid) titulo.focus();
+        isValid = false;
+    } else {
+        titulo.classList.remove('border-red-500');
+        tituloError.classList.add('hidden');
+    }
+
+    // Validate Responsavel
+    if (!responsavel.value.trim()) {
+        responsavel.classList.add('border-red-500');
+        responsavelError.classList.remove('hidden');
+        if (isValid) responsavel.focus();
+        isValid = false;
+    } else {
+        responsavel.classList.remove('border-red-500');
+        responsavelError.classList.add('hidden');
+    }
+
+    // Validate Prazo
+    if (!prazo.value) {
+        prazo.classList.add('border-red-500');
+        prazoError.classList.remove('hidden');
+        if (isValid) prazo.focus();
+        isValid = false;
+    } else {
+        prazo.classList.remove('border-red-500');
+        prazoError.classList.add('hidden');
+    }
+
+    if (!isValid) return false;
+    
+    // Loading State
+    btnSave.disabled = true;
+    btnCancel.disabled = true;
+    const originalText = btnSave.innerHTML;
+    btnSave.innerHTML = `<span class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2"></span> Salvando...`;
+    btnSave.classList.add('opacity-75', 'cursor-not-allowed');
+    
+    // Allow form submission
+    return true;
+}
+
 // Task Modal Logic
 function openTaskModal() {
     document.getElementById('editTaskModal').classList.remove('hidden');
@@ -263,25 +224,7 @@ function closeTaskModal() {
     document.getElementById('editTaskModal').classList.add('hidden');
 }
 
-// Action Modal Logic
-function openActionModal(data) {
-    document.getElementById('modal_action_id').value = data.id;
-    document.getElementById('modal_action_titulo').value = data.titulo;
-    document.getElementById('modal_action_owner').value = data.owner || '';
-    document.getElementById('modal_action_due_date').value = data.due_date || '';
-    document.getElementById('modal_action_status').value = data.status;
-    
-    document.getElementById('editActionModal').classList.remove('hidden');
-}
-
-function closeActionModal() {
-    document.getElementById('editActionModal').classList.add('hidden');
-}
-
 // Close on outside click
-document.getElementById('editActionModal').addEventListener('click', function(e) {
-    if (e.target === this) closeActionModal();
-});
 document.getElementById('editTaskModal').addEventListener('click', function(e) {
     if (e.target === this) closeTaskModal();
 });
@@ -294,51 +237,54 @@ document.getElementById('editTaskModal').addEventListener('click', function(e) {
             <h3 class="text-lg font-medium text-gray-900">Editar Detalhes do Plano</h3>
             <button onclick="closeTaskModal()" class="text-gray-400 hover:text-gray-600">&times;</button>
         </div>
-        <form method="post" action="index.php?route=planoacao/updateTask" class="p-6 space-y-4">
+        <form method="post" action="index.php?route=planoacao/updateTask" class="p-6 space-y-4" onsubmit="return handleTaskSubmit(this)">
             <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>">
             <input type="hidden" name="id" value="<?= $task['id'] ?>">
             
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">O Quê? (Problema)</label>
-                <input type="text" name="titulo" value="<?= htmlspecialchars($task['titulo'] ?? '') ?>" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50" required>
+                <label class="block text-sm font-medium text-gray-700 mb-1">O Quê? (Problema) <span class="text-red-500">*</span></label>
+                <input type="text" name="titulo" id="modal_task_titulo" value="<?= htmlspecialchars($task['titulo'] ?? '') ?>" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50" required placeholder="Título do Plano">
+                <p class="text-xs text-red-500 mt-1 hidden" id="task_titulo_error">Este campo é obrigatório.</p>
             </div>
             
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Por que?</label>
-                <textarea name="descricao" rows="3" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50"><?= htmlspecialchars($task['descricao'] ?? '') ?></textarea>
+                <textarea name="descricao" rows="3" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50" placeholder="Descrição detalhada"><?= htmlspecialchars($task['descricao'] ?? '') ?></textarea>
             </div>
 
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Como (Solução)</label>
-                <textarea name="meta_valor" rows="3" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50"><?= htmlspecialchars($task['meta_valor'] ?? '') ?></textarea>
+                <textarea name="meta_valor" rows="3" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50" placeholder="Objetivo a alcançar"><?= htmlspecialchars($task['meta_valor'] ?? '') ?></textarea>
             </div>
 
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Origem</label>
-                    <input type="text" name="meta_unidade" value="<?= htmlspecialchars($task['meta_unidade'] ?? '') ?>" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
+                    <input type="text" name="meta_unidade" value="<?= htmlspecialchars($task['meta_unidade'] ?? '') ?>" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50" placeholder="Origem da demanda">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Prazo</label>
-                    <input type="date" name="prazo" value="<?= htmlspecialchars($task['prazo'] ?? '') ?>" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Prazo <span class="text-red-500">*</span></label>
+                    <input type="date" name="prazo" id="modal_task_prazo" value="<?= htmlspecialchars($task['prazo'] ?? '') ?>" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50" required>
+                    <p class="text-xs text-red-500 mt-1 hidden" id="task_prazo_error">Informe o prazo.</p>
                 </div>
             </div>
             
             <div class="grid grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Responsável Geral</label>
-                    <input type="text" name="responsavel" value="<?= htmlspecialchars($task['responsavel'] ?? '') ?>" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Responsável <span class="text-red-500">*</span></label>
+                    <input type="text" name="responsavel" id="modal_task_responsavel" value="<?= htmlspecialchars($task['responsavel'] ?? '') ?>" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50" placeholder="Nome do responsável" required>
+                    <p class="text-xs text-red-500 mt-1 hidden" id="task_responsavel_error">Informe o responsável.</p>
                 </div>
                 <div class="flex items-end pb-2">
                      <label class="flex items-center space-x-2 cursor-pointer">
                         <input type="checkbox" name="concluido" value="1" <?= ((int)($task['progresso']??0) >= 100) ? 'checked' : '' ?> class="form-checkbox h-5 w-5 text-brand-orange">
-                        <span class="text-sm font-medium text-gray-700">Concluído</span>
+                        <span class="text-sm font-medium text-gray-700">Marcar como Concluído</span>
                     </label>
                 </div>
             </div>
 
              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Status Geral</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
                 <select name="status" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
                     <option value="A Fazer" <?= ($task['status']??'') == 'A Fazer' ? 'selected' : '' ?>>A Fazer</option>
                     <option value="Em Andamento" <?= ($task['status']??'') == 'Em Andamento' ? 'selected' : '' ?>>Em Andamento</option>
@@ -348,10 +294,12 @@ document.getElementById('editTaskModal').addEventListener('click', function(e) {
             </div>
 
             <div class="flex justify-end pt-4 gap-2">
-                <button type="button" onclick="closeTaskModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">Cancelar</button>
-                <button type="submit" class="px-4 py-2 bg-brand-orange text-white rounded hover:bg-brand-orange-dark">Salvar Alterações</button>
+                <button type="button" onclick="closeTaskModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors" id="btn_cancel_task">Cancelar</button>
+                <button type="submit" class="px-4 py-2 bg-brand-orange text-white rounded hover:bg-orange-700 transition-colors flex items-center gap-2" id="btn_save_task">
+                    <span data-feather="save" class="w-4 h-4"></span>
+                    <span>Salvar Alterações</span>
+                </button>
             </div>
         </form>
     </div>
 </div>
-

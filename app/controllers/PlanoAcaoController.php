@@ -17,6 +17,16 @@ class PlanoAcaoController extends BaseController
     private PlanoAcaoCheckModel $checks;
     private PlanoAcaoActionModel $actions;
 
+    public function setActionsModel(PlanoAcaoActionModel $actions): void
+    {
+        $this->actions = $actions;
+    }
+
+    public function setTaskModel(PlanoAcaoTaskModel $tasks): void
+    {
+        $this->tasks = $tasks;
+    }
+
     public function __construct()
     {
         $this->tasks = new PlanoAcaoTaskModel();
@@ -123,7 +133,7 @@ class PlanoAcaoController extends BaseController
                 'descricao' => trim($_POST['descricao'] ?? ''),
                 'meta_valor' => trim($_POST['meta_valor'] ?? ''), // Now text
                 'meta_unidade' => trim($_POST['meta_unidade'] ?? ''), // Now text
-                'prazo' => $_POST['prazo'] ?: null, // Date or null
+                'prazo' => !empty($_POST['prazo']) ? $_POST['prazo'] : null, // Date or null
                 'responsavel' => trim($_POST['responsavel'] ?? ''),
                 'fase' => 'DO',
                 'status' => $status,
@@ -175,7 +185,7 @@ class PlanoAcaoController extends BaseController
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
         
         $id = (int)($_POST['id'] ?? 0);
-        if (!$id) { header('Location: index.php?route=planoacao/index'); return; }
+        if (!$id) { $this->redirect('index.php?route=planoacao/index'); return; }
 
         // Checkbox handling for updates
         $isConcluido = isset($_POST['concluido']);
@@ -191,15 +201,21 @@ class PlanoAcaoController extends BaseController
             'descricao' => trim($_POST['descricao'] ?? ''),
             'meta_valor' => trim($_POST['meta_valor'] ?? ''),
             'meta_unidade' => trim($_POST['meta_unidade'] ?? ''),
-            'prazo' => $_POST['prazo'] ?: null,
+            'prazo' => !empty($_POST['prazo']) ? $_POST['prazo'] : null,
             'responsavel' => trim($_POST['responsavel'] ?? ''),
             'status' => $status,
             'progresso' => $progresso,
         ];
         
-        $this->tasks->update($id, $data);
-        $_SESSION['flash_success'] = 'Dados atualizados com sucesso';
-        header('Location: index.php?route=planoacao/show&id=' . $id);
+        try {
+            $this->tasks->update($id, $data);
+            $_SESSION['flash_success'] = 'Dados atualizados com sucesso';
+        } catch (\Exception $e) {
+            error_log($e->getMessage());
+            $_SESSION['flash_error'] = 'Erro ao atualizar: ' . $e->getMessage();
+        }
+        
+        $this->redirect('index.php?route=planoacao/show&id=' . $id);
     }
 
     public function updateAction(): void
@@ -225,12 +241,14 @@ class PlanoAcaoController extends BaseController
                 ];
                 
                 $this->actions->update($id, $data);
+                $_SESSION['flash_success'] = 'Item atualizado com sucesso';
             }
             
-            header('Location: index.php?route=planoacao/show&id=' . $taskId);
+            $this->redirect('index.php?route=planoacao/show&id=' . $taskId);
         } catch (\Exception $e) {
             error_log($e->getMessage());
-            header('Location: index.php?route=planoacao/show&id=' . $taskId . '&error=1');
+            $_SESSION['flash_error'] = 'Erro ao atualizar item: ' . $e->getMessage();
+            $this->redirect('index.php?route=planoacao/show&id=' . $taskId);
         }
     }
 

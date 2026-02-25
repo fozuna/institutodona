@@ -1,61 +1,91 @@
 <?php /** @var array $clientes */ /** @var int|null $selectedCliente */ /** @var array $items */ ?>
 <div class="p-6 space-y-6">
-  <div class="flex items-start justify-between gap-6">
+  <!-- Header Section -->
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
     <div>
       <h1 class="text-2xl font-bold">Plano de Ação</h1>
       <p class="text-sm text-gray-600">Selecione o cliente para visualizar e criar planos de ação</p>
     </div>
-    <form method="get" class="toolbar" id="searchForm">
-      <input type="hidden" name="route" value="planoacao/index" />
-      <label class="text-sm">Cliente</label>
-      <div class="flex items-center gap-2">
-          <select name="cliente" id="clienteSelect" class="min-w-[16rem]">
-            <option value="">-- Selecione --</option>
+    
+    <div class="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+      <form method="get" class="flex items-center gap-2 w-full md:w-auto" id="searchForm">
+        <input type="hidden" name="route" value="planoacao/index" />
+        <div class="flex items-center gap-2 w-full md:w-auto">
+          <select name="cliente" id="clienteSelect" class="w-full md:w-64 border-gray-300 rounded-md shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
+            <option value="">-- Selecione o Cliente --</option>
             <?php foreach ($clientes as $c): ?>
               <option value="<?= (int)$c['id'] ?>" <?= $selectedCliente === (int)$c['id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['nome_empresa']) ?></option>
             <?php endforeach; ?>
           </select>
-          <button type="submit" class="btn btn-neutral p-2 h-10 w-10 flex items-center justify-center" title="Buscar agora">
+          <button type="submit" class="p-2 h-10 w-10 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 flex items-center justify-center transition-colors" title="Buscar agora">
             <span data-feather="search" class="w-4 h-4"></span>
           </button>
+        </div>
+      </form>
+
+      <div class="flex items-center gap-2 w-full md:w-auto">
+          <a id="createBtn" class="px-4 py-2 bg-brand-orange text-white rounded hover:bg-orange-700 transition-colors whitespace-nowrap text-center flex-1 md:flex-none" href="index.php?route=planoacao/create<?= $selectedCliente ? '&cliente=' . $selectedCliente : '' ?>">Novo Plano de Ação</a>
+          
+          <a id="backBtn" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors whitespace-nowrap text-center flex-1 md:flex-none <?= $selectedCliente ? '' : 'hidden' ?>" href="index.php?route=clientes/show&id=<?= (int)$selectedCliente ?>">Voltar ao perfil</a>
       </div>
-      <a id="createBtn" class="btn btn-primary" href="index.php?route=planoacao/create<?= $selectedCliente ? '&cliente=' . $selectedCliente : '' ?>">Novo Plano de Ação</a>
-    </form>
+    </div>
   </div>
 
+  <!-- Results Section -->
   <div id="resultsContainer">
       <?php if (!$selectedCliente): ?>
-        <div class="bg-white shadow rounded p-6 text-gray-600">Escolha um cliente para ver as tarefas.</div>
-      <?php elseif (empty($items)): ?>
-        <div class="flex justify-end mb-6">
-          <a class="btn btn-neutral" href="index.php?route=clientes/show&id=<?= (int)$selectedCliente ?>">Voltar ao perfil</a>
+        <div class="bg-white shadow rounded p-6 text-gray-600 text-center">
+            <span data-feather="arrow-up" class="w-6 h-6 mx-auto mb-2 text-gray-400 md:hidden"></span>
+            <span data-feather="arrow-up-right" class="w-6 h-6 mx-auto mb-2 text-gray-400 hidden md:block"></span>
+            Escolha um cliente acima para ver as tarefas.
         </div>
+      <?php elseif (empty($items)): ?>
         <div class="bg-white shadow rounded p-10 text-center text-gray-500">
           <div class="mb-3"><span data-feather="clipboard" class="w-12 h-12 mx-auto text-gray-300"></span></div>
           <p>Nenhum plano de ação encontrado para este cliente.</p>
-          <a href="index.php?route=planoacao/create&cliente=<?= (int)$selectedCliente ?>" class="text-brand-red hover:underline mt-2 inline-block">Criar o primeiro plano</a>
+          <a href="index.php?route=planoacao/create&cliente=<?= (int)$selectedCliente ?>" class="text-brand-orange hover:underline mt-2 inline-block">Criar o primeiro plano</a>
         </div>
       <?php else: ?>
-        <div class="flex justify-end mb-6">
-          <a class="btn btn-neutral" href="index.php?route=clientes/show&id=<?= (int)$selectedCliente ?>">Voltar ao perfil</a>
-        </div>
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <?php foreach ($items as $t): ?>
-            <?php $p = max(0, min(100, (int)$t['progresso'])); ?>
-            <div class="card p-4">
+            <div class="card bg-white shadow rounded p-4 border border-gray-100 hover:shadow-md transition-shadow">
               <div class="flex items-center justify-between">
-                <div class="font-semibold"><?= htmlspecialchars($t['titulo']) ?></div>
+                <div class="font-semibold text-gray-900"><?= htmlspecialchars($t['titulo']) ?></div>
               </div>
-              <div class="text-xs text-gray-500 mt-1">Prazo: <?= htmlspecialchars($t['prazo'] ?? '—') ?> · Resp.: <?= htmlspecialchars($t['responsavel'] ?? '—') ?></div>
-              <div class="flex items-center gap-3 mt-3">
-                <div class="progress-circle" data-progress="<?= $p ?>" style="--p: <?= $p ?>"></div>
-                <div class="text-sm">
-                  <div>Status: <?= htmlspecialchars($t['status']) ?></div>
-                  <div>Progresso: <?= $p ?>%</div>
-                </div>
+              <div class="text-xs text-gray-500 mt-2 flex flex-wrap items-center gap-2">
+                 <?php 
+                    // Logic for traffic light
+                    $prazoDate = ($t['prazo'] && $t['prazo'] !== '0000-00-00') ? $t['prazo'] : null;
+                    $colorClass = 'bg-gray-300';
+                    if ($t['status'] !== 'Concluído' && $prazoDate) {
+                        $deadline = new DateTime($prazoDate);
+                        $today = new DateTime('today');
+                        if ($deadline < $today) {
+                            $colorClass = 'bg-red-500';
+                        } else {
+                            $diff = $today->diff($deadline);
+                            if ($diff->days <= 2 && $diff->invert == 0) {
+                                $colorClass = 'bg-yellow-400';
+                            } else {
+                                $colorClass = 'bg-green-500';
+                            }
+                        }
+                    }
+                    $prazoDisplay = $prazoDate ? date('d/m/Y', strtotime($prazoDate)) : '—';
+                 ?>
+                <span class="w-3 h-3 rounded-full <?= $colorClass ?>" title="Status do Prazo"></span>
+                <span>Prazo: <?= $prazoDisplay ?></span>
+                <span class="text-gray-300">|</span>
+                <span>Resp.: <?= htmlspecialchars($t['responsavel'] ?? '—') ?></span>
               </div>
-              <div class="mt-3">
-                <a class="text-brand-red hover:underline" href="index.php?route=planoacao/show&id=<?= (int)$t['id'] ?>">Abrir</a>
+              
+              <div class="mt-4 flex items-center justify-between">
+                  <div class="text-sm font-medium text-gray-700">
+                      Status: <span class="text-gray-900"><?= htmlspecialchars($t['status']) ?></span>
+                  </div>
+                  <a class="text-brand-orange hover:text-orange-800 text-sm font-semibold flex items-center gap-1 transition-colors" href="index.php?route=planoacao/show&id=<?= (int)$t['id'] ?>">
+                      Abrir <span data-feather="chevron-right" class="w-4 h-4"></span>
+                  </a>
               </div>
             </div>
           <?php endforeach; ?>
@@ -70,16 +100,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const select = document.getElementById('clienteSelect');
     const container = document.getElementById('resultsContainer');
     const createBtn = document.getElementById('createBtn');
+    const backBtn = document.getElementById('backBtn');
     
     // Simple in-memory cache for this session
     const localCache = {};
 
     async function fetchPlans(clienteId) {
+        // Update UI controls immediately
+        updateUrl(clienteId);
+        updateButtons(clienteId);
+
         // If no client selected, show empty state
         if (!clienteId) {
-            container.innerHTML = '<div class="bg-white shadow rounded p-6 text-gray-600">Escolha um cliente para ver as tarefas.</div>';
-            updateUrl(clienteId);
-            updateCreateLink(clienteId);
+            container.innerHTML = `
+                <div class="bg-white shadow rounded p-6 text-gray-600 text-center">
+                    <span data-feather="arrow-up" class="w-6 h-6 mx-auto mb-2 text-gray-400 md:hidden"></span>
+                    <span data-feather="arrow-up-right" class="w-6 h-6 mx-auto mb-2 text-gray-400 hidden md:block"></span>
+                    Escolha um cliente acima para ver as tarefas.
+                </div>`;
+            feather.replace();
             return;
         }
 
@@ -87,28 +126,21 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Check cache
         if (localCache[clienteId]) {
-            console.log(`[Cache] Hit for cliente ${clienteId}`);
             renderResults(localCache[clienteId], clienteId);
-            updateUrl(clienteId);
-            updateCreateLink(clienteId);
-            const duration = (performance.now() - start).toFixed(2);
-            console.log(`[Performance] Rendered from cache in ${duration}ms`);
             return;
         }
 
         // Show loading state
         container.innerHTML = `
             <div class="flex flex-col justify-center items-center p-12">
-                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-red mb-3"></div>
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-orange mb-3"></div>
                 <span class="text-gray-600">Carregando planos de ação...</span>
             </div>
         `;
 
         try {
             const response = await fetch(`index.php?route=planoacao/api_list&cliente=${clienteId}`, {
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
             });
             
             if (!response.ok) throw new Error('Falha na comunicação com o servidor');
@@ -124,40 +156,33 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Fetch error:', error);
             showError('Não foi possível carregar os planos de ação. Verifique sua conexão.');
-        } finally {
-             const duration = (performance.now() - start).toFixed(2);
-             console.log(`[Performance] Fetch and render completed in ${duration}ms`);
-             updateUrl(clienteId);
-             updateCreateLink(clienteId);
         }
     }
 
     function renderResults(items, clienteId) {
         if (!items || items.length === 0) {
             container.innerHTML = `
-                <div class="flex justify-end mb-6">
-                  <a class="btn btn-neutral" href="index.php?route=clientes/show&id=${clienteId}">Voltar ao perfil</a>
-                </div>
                 <div class="bg-white shadow rounded p-10 text-center text-gray-500">
                   <div class="mb-3"><span data-feather="clipboard" class="w-12 h-12 mx-auto text-gray-300"></span></div>
                   <p>Nenhum plano de ação encontrado para este cliente.</p>
-                  <a href="index.php?route=planoacao/create&cliente=${clienteId}" class="text-brand-red hover:underline mt-2 inline-block">Criar o primeiro plano</a>
+                  <a href="index.php?route=planoacao/create&cliente=${clienteId}" class="text-brand-orange hover:underline mt-2 inline-block">Criar o primeiro plano</a>
                 </div>`;
-            if (window.feather) feather.replace();
+            feather.replace();
             return;
         }
 
         const escapeHtml = (str) => str ? String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : '';
 
         const cards = items.map(t => {
-            const p = Math.max(0, Math.min(100, parseInt(t.progresso || 0)));
-            
             // Logic for traffic light (replicated from PHP logic)
             let colorClass = 'bg-gray-300';
+            let deadlineDate = null;
+            
             if (t.status !== 'Concluído' && t.prazo && t.prazo !== '0000-00-00') {
                 const deadline = new Date(t.prazo + 'T00:00:00'); // Ensure local time
                 const today = new Date();
                 today.setHours(0,0,0,0);
+                deadlineDate = deadline;
                 
                 if (deadline < today) {
                     colorClass = 'bg-red-500';
@@ -175,36 +200,33 @@ document.addEventListener('DOMContentLoaded', () => {
             const prazoDisplay = (t.prazo && t.prazo !== '0000-00-00') ? new Date(t.prazo + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
 
             return `
-            <div class="card p-4">
+            <div class="card bg-white shadow rounded p-4 border border-gray-100 hover:shadow-md transition-shadow">
               <div class="flex items-center justify-between">
-                <div class="font-semibold">${escapeHtml(t.titulo)}</div>
+                <div class="font-semibold text-gray-900">${escapeHtml(t.titulo)}</div>
               </div>
-              <div class="text-xs text-gray-500 mt-1 flex items-center gap-2">
+              <div class="text-xs text-gray-500 mt-2 flex flex-wrap items-center gap-2">
                 <span class="w-3 h-3 rounded-full ${colorClass}" title="Status do Prazo"></span>
-                Prazo: ${prazoDisplay} · Resp.: ${escapeHtml(t.responsavel || '—')}
+                <span>Prazo: ${prazoDisplay}</span>
+                <span class="text-gray-300">|</span>
+                <span>Resp.: ${escapeHtml(t.responsavel || '—')}</span>
               </div>
-              <div class="flex items-center gap-3 mt-3">
-                <div class="progress-circle" data-progress="${p}" style="--p: ${p}"></div>
-                <div class="text-sm">
-                  <div>Status: ${escapeHtml(t.status)}</div>
-                  <div>Progresso: ${p}%</div>
-                </div>
-              </div>
-              <div class="mt-3">
-                <a class="text-brand-red hover:underline" href="index.php?route=planoacao/show&id=${t.id}">Abrir</a>
+              <div class="mt-4 flex items-center justify-between">
+                  <div class="text-sm font-medium text-gray-700">
+                      Status: <span class="text-gray-900">${escapeHtml(t.status)}</span>
+                  </div>
+                  <a class="text-brand-orange hover:text-orange-800 text-sm font-semibold flex items-center gap-1 transition-colors" href="index.php?route=planoacao/show&id=${t.id}">
+                      Abrir <span data-feather="chevron-right" class="w-4 h-4"></span>
+                  </a>
               </div>
             </div>`;
         }).join('');
 
         container.innerHTML = `
-            <div class="flex justify-end mb-6">
-              <a class="btn btn-neutral" href="index.php?route=clientes/show&id=${clienteId}">Voltar ao perfil</a>
-            </div>
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 ${cards}
             </div>`;
         
-        if (window.feather) feather.replace();
+        feather.replace();
     }
 
     function showError(msg) {
@@ -214,7 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <span>${msg}</span>
             </div>
         `;
-        if (window.feather) feather.replace();
+        feather.replace();
     }
 
     function updateUrl(clienteId) {
@@ -224,14 +246,21 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             url.searchParams.delete('cliente');
         }
-        // Use pushState to update URL without reload
         window.history.pushState({}, '', url);
     }
     
-    function updateCreateLink(clienteId) {
+    function updateButtons(clienteId) {
         if (createBtn) {
             const baseUrl = 'index.php?route=planoacao/create';
             createBtn.href = clienteId ? `${baseUrl}&cliente=${clienteId}` : baseUrl;
+        }
+        if (backBtn) {
+            if (clienteId) {
+                backBtn.classList.remove('hidden');
+                backBtn.href = `index.php?route=clientes/show&id=${clienteId}`;
+            } else {
+                backBtn.classList.add('hidden');
+            }
         }
     }
 

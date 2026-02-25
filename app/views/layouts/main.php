@@ -69,6 +69,20 @@ $config = require $cfg;
         <!-- Container principal -->
         <main class="flex-1 <?php echo $user ? 'ml-72' : ''; ?> flex flex-col min-h-screen">
             <div class="flex-1 <?php echo $user ? 'p-6' : 'p-0'; ?>">
+                <?php if (!empty($_SESSION['flash_success'])): ?>
+                    <div class="mb-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative" role="alert">
+                        <strong class="font-bold">Sucesso!</strong>
+                        <span class="block sm:inline"><?= htmlspecialchars($_SESSION['flash_success']) ?></span>
+                        <?php unset($_SESSION['flash_success']); ?>
+                    </div>
+                <?php endif; ?>
+                <?php if (!empty($_SESSION['flash_error'])): ?>
+                    <div class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                        <strong class="font-bold">Erro!</strong>
+                        <span class="block sm:inline"><?= htmlspecialchars($_SESSION['flash_error']) ?></span>
+                        <?php unset($_SESSION['flash_error']); ?>
+                    </div>
+                <?php endif; ?>
                 <?= $content ?>
             </div>
             <?php if ($user): ?>

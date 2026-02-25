@@ -31,6 +31,12 @@ class BaseController
         }
     }
 
+    protected function redirect(string $url): void
+    {
+        header('Location: ' . $url);
+        exit;
+    }
+
     private function autoTitle(string $view): string
     {
         $parts = explode('/', $view);
