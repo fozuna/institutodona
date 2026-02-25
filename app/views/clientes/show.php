@@ -70,7 +70,7 @@
           $planoCount = count($planoTasks);
           $planoDone = array_reduce($planoTasks, function($acc,$t){ return $acc + ((($t['status'] ?? '') === 'Concluído') ? 1 : 0); }, 0);
         ?>
-        <a class="card p-4 block" href="index.php?route=cronograma/index&id_cliente=<?= (int)$item['id'] ?>" data-loading>
+        <a class="bg-white shadow rounded p-4 block hover:shadow-md transition-shadow" href="index.php?route=cronograma/index&id_cliente=<?= (int)$item['id'] ?>" data-loading>
           <div class="flex items-center justify-between">
             <div class="font-semibold">Cronograma</div>
             <span class="badge"><span data-feather="calendar"></span></span>
@@ -78,7 +78,7 @@
           <div class="text-sm text-gray-600 mt-2">Cronogramas: <?= $cronCount ?></div>
           <div class="text-xs text-gray-500 mt-1">Clique para abrir cronogramas do cliente</div>
         </a>
-        <a class="card p-4 block" href="index.php?route=planoacao/index&cliente=<?= (int)$item['id'] ?>" data-loading>
+        <a class="bg-white shadow rounded p-4 block hover:shadow-md transition-shadow" href="index.php?route=planoacao/index&cliente=<?= (int)$item['id'] ?>" data-loading>
           <div class="flex items-center justify-between">
             <div class="font-semibold">Planos de Ação</div>
             <span class="badge"><span data-feather="activity"></span></span>
@@ -156,9 +156,14 @@
                     </td>
                     <td class="p-3 text-right">
                       <div class="flex items-center justify-end gap-2">
-                        <a class="text-brand-blue hover:bg-blue-50 p-1.5 rounded transition-colors" href="index.php?route=planoacao/show&id=<?= $pt['id'] ?>" title="Ver/Editar">
-                          <span data-feather="edit-2" class="w-4 h-4"></span>
+                        <a class="text-brand-blue hover:bg-blue-50 p-1.5 rounded transition-colors" href="index.php?route=planoacao/show&id=<?= $pt['id'] ?>" title="Visualizar Detalhes">
+                          <span data-feather="eye" class="w-4 h-4"></span>
                         </a>
+                        <?php if (($_SESSION['user']['tipo_acesso'] ?? '') === 'instituto'): ?>
+                        <button type="button" onclick='openQuickEdit(<?= htmlspecialchars(json_encode($pt), ENT_QUOTES, "UTF-8") ?>)' class="text-brand-orange hover:bg-orange-50 p-1.5 rounded transition-colors" title="Edição Rápida">
+                          <span data-feather="edit" class="w-4 h-4"></span>
+                        </button>
+                        <?php endif; ?>
                         <form method="post" action="index.php?route=planoacao/delete" onsubmit="return confirm('Tem certeza que deseja excluir este plano de ação?');" style="display:inline;">
                             <input type="hidden" name="id" value="<?= $pt['id'] ?>">
                             <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>">
@@ -310,4 +315,141 @@
       <?php endif; ?>
     </div>
   </div>
+
+<!-- Quick Edit Modal -->
+<div id="quickEditModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 overflow-hidden">
+        <div class="bg-gray-50 px-4 py-3 border-b flex justify-between items-center">
+            <h3 class="text-lg font-medium text-gray-900">Edição Rápida</h3>
+            <button onclick="closeQuickEdit()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+        </div>
+        <form id="quickEditForm" method="post" action="index.php?route=planoacao/updateTask" class="p-6 space-y-4">
+            <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>">
+            <input type="hidden" name="id" id="qe_id">
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">O Quê? (Problema) <span class="text-red-500">*</span></label>
+                <input type="text" name="titulo" id="qe_titulo" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50" required>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Por que?</label>
+                <textarea name="descricao" id="qe_descricao" rows="3" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50"></textarea>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Como (Solução)</label>
+                <textarea name="meta_valor" id="qe_meta_valor" rows="3" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50"></textarea>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Origem</label>
+                    <input type="text" name="meta_unidade" id="qe_meta_unidade" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Prazo <span class="text-red-500">*</span></label>
+                    <input type="date" name="prazo" id="qe_prazo" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50" required>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Responsável <span class="text-red-500">*</span></label>
+                    <input type="text" name="responsavel" id="qe_responsavel" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50" required>
+                </div>
+                <div class="flex items-end pb-2">
+                     <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" name="concluido" id="qe_concluido" value="1" class="form-checkbox h-5 w-5 text-brand-orange">
+                        <span class="text-sm font-medium text-gray-700">Marcar como Concluído</span>
+                    </label>
+                </div>
+            </div>
+
+             <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select name="status" id="qe_status" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
+                    <option value="A Fazer">A Fazer</option>
+                    <option value="Em Andamento">Em Andamento</option>
+                    <option value="Concluído">Concluído</option>
+                    <option value="Pendente">Pendente</option>
+                </select>
+            </div>
+
+            <div class="flex justify-end pt-4 gap-2">
+                <button type="button" onclick="closeQuickEdit()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors">Cancelar</button>
+                <button type="submit" class="px-4 py-2 bg-brand-orange text-white rounded hover:bg-orange-700 transition-colors flex items-center gap-2">
+                    <span data-feather="save" class="w-4 h-4"></span>
+                    <span>Salvar Alterações</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openQuickEdit(task) {
+    document.getElementById('qe_id').value = task.id;
+    document.getElementById('qe_titulo').value = task.titulo || '';
+    document.getElementById('qe_descricao').value = task.descricao || '';
+    document.getElementById('qe_meta_valor').value = task.meta_valor || '';
+    document.getElementById('qe_meta_unidade').value = task.meta_unidade || '';
+    document.getElementById('qe_prazo').value = task.prazo || '';
+    document.getElementById('qe_responsavel').value = task.responsavel || '';
+    document.getElementById('qe_status').value = task.status || 'A Fazer';
+    
+    // Checkbox logic
+    const isDone = (parseInt(task.progresso) || 0) >= 100 || task.status === 'Concluído';
+    document.getElementById('qe_concluido').checked = isDone;
+
+    document.getElementById('quickEditModal').classList.remove('hidden');
+    if (typeof feather !== 'undefined') feather.replace();
+}
+
+function closeQuickEdit() {
+    document.getElementById('quickEditModal').classList.add('hidden');
+}
+
+document.getElementById('quickEditForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const form = e.target;
+    const btn = form.querySelector('button[type="submit"]');
+    const originalText = btn.innerHTML;
+    
+    btn.disabled = true;
+    btn.innerHTML = '<span class="animate-spin mr-2">⟳</span> Salvando...';
+
+    const formData = new FormData(form);
+
+    fetch(form.action, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => { throw new Error(data.message || 'Erro HTTP ' + response.status); });
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert(data.message || 'Erro ao salvar alterações');
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Ocorreu um erro ao salvar as alterações: ' + error.message);
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    });
+});
+</script>
+
 </div>

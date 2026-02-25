@@ -209,9 +209,24 @@ class PlanoAcaoController extends BaseController
         
         try {
             $this->tasks->update($id, $data);
+            
+            if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => true, 'message' => 'Dados atualizados com sucesso']);
+                return;
+            }
+
             $_SESSION['flash_success'] = 'Dados atualizados com sucesso';
         } catch (\Exception $e) {
             error_log($e->getMessage());
+            
+            if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
+                header('Content-Type: application/json');
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Erro ao atualizar: ' . $e->getMessage()]);
+                return;
+            }
+
             $_SESSION['flash_error'] = 'Erro ao atualizar: ' . $e->getMessage();
         }
         
