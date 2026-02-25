@@ -94,91 +94,82 @@
           });
         });
       </script>
-    </div>
 
-    <!-- Seção de Planos de Ação Detalhada -->
-    <div class="bg-white shadow rounded mt-6 lg:col-span-2">
-      <div class="px-4 py-3 border-b font-semibold flex justify-between items-center">
-        <span>Planos de Ação</span>
-        <a class="px-3 py-1 rounded bg-brand-red text-white text-sm" href="index.php?route=planoacao/create&cliente=<?= (int)$item['id'] ?>">Novo Plano</a>
-      </div>
-      <div class="p-4">
-        <?php if (empty($planoTasks)): ?>
-          <div class="text-sm text-gray-600 text-center py-4">Nenhum plano de ação registrado.</div>
-        <?php else: ?>
-          <div class="overflow-x-auto">
-            <table class="min-w-full text-sm">
-              <thead>
-                <tr class="text-left border-b bg-gray-50">
-                  <th class="p-3 font-semibold text-gray-600">Título</th>
-                  <th class="p-3 font-semibold text-gray-600">Responsável</th>
-                  <th class="p-3 font-semibold text-gray-600">Prazo</th>
-                  <th class="p-3 font-semibold text-gray-600">Status</th>
-                  <th class="p-3 font-semibold text-gray-600">Progresso</th>
-                  <th class="p-3 font-semibold text-gray-600 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                <?php 
-                $taskModel = new \App\Models\PlanoAcaoTaskModel();
-                foreach ($planoTasks as $pt): 
-                  $prazoStatus = $taskModel->getPrazoStatus($pt['prazo'] ?? null, $pt['status'] ?? '');
-                  $colorClass = match($prazoStatus) {
-                      'red' => 'bg-red-500',
-                      'yellow' => 'bg-yellow-400',
-                      'green' => 'bg-green-500',
-                      default => 'bg-gray-300'
-                  };
-                  $prazoDisplay = (!empty($pt['prazo']) && $pt['prazo'] !== '0000-00-00') ? date('d/m/Y', strtotime($pt['prazo'])) : '—';
-                ?>
-                  <tr class="border-b hover:bg-gray-50 transition-colors">
-                    <td class="p-3 font-medium text-gray-800"><?= htmlspecialchars($pt['titulo']) ?></td>
-                    <td class="p-3 text-gray-600"><?= htmlspecialchars($pt['responsavel'] ?? '—') ?></td>
-                    <td class="p-3 flex items-center gap-2 text-gray-600">
-                        <span class="w-3 h-3 rounded-full <?= $colorClass ?>" title="Status do Prazo"></span>
-                        <?= $prazoDisplay ?>
-                    </td>
-                    <td class="p-3">
-                      <span class="px-2 py-1 rounded-full text-xs font-semibold
-                        <?= $pt['status'] === 'Concluído' ? 'bg-green-100 text-green-800' :
-                           ($pt['status'] === 'Em Andamento' ? 'bg-blue-100 text-blue-800' :
-                           ($pt['status'] === 'Atrasado' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800')) ?>">
-                        <?= htmlspecialchars($pt['status']) ?>
-                      </span>
-                    </td>
-                    <td class="p-3">
-                      <div class="flex items-center gap-2">
-                        <div class="w-16 bg-gray-200 rounded-full h-1.5">
-                          <div class="bg-brand-orange h-1.5 rounded-full" style="width: <?= (int)$pt['progresso'] ?>%"></div>
-                        </div>
-                        <span class="text-xs text-gray-500"><?= (int)$pt['progresso'] ?>%</span>
-                      </div>
-                    </td>
-                    <td class="p-3 text-right">
-                      <div class="flex items-center justify-end gap-2">
-                        <a class="text-brand-blue hover:bg-blue-50 p-1.5 rounded transition-colors" href="index.php?route=planoacao/show&id=<?= $pt['id'] ?>" title="Visualizar Detalhes">
-                          <span data-feather="eye" class="w-4 h-4"></span>
-                        </a>
-                        <?php if (($_SESSION['user']['tipo_acesso'] ?? '') === 'instituto'): ?>
-                        <button type="button" onclick='openQuickEdit(<?= htmlspecialchars(json_encode($pt), ENT_QUOTES, "UTF-8") ?>)' class="text-brand-orange hover:bg-orange-50 p-1.5 rounded transition-colors" title="Edição Rápida">
-                          <span data-feather="edit" class="w-4 h-4"></span>
-                        </button>
-                        <?php endif; ?>
-                        <form method="post" action="index.php?route=planoacao/delete" onsubmit="return confirm('Tem certeza que deseja excluir este plano de ação?');" style="display:inline;">
-                            <input type="hidden" name="id" value="<?= $pt['id'] ?>">
-                            <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>">
-                            <button type="submit" class="text-red-600 hover:bg-red-50 p-1.5 rounded transition-colors" title="Excluir">
-                                <span data-feather="trash-2" class="w-4 h-4"></span>
-                            </button>
-                        </form>
-                      </div>
-                    </td>
+      <!-- Seção de Planos de Ação Detalhada -->
+      <div class="bg-white shadow rounded mt-6">
+        <div class="px-4 py-3 border-b font-semibold flex justify-between items-center">
+          <span>Planos de Ação</span>
+          <a class="px-3 py-1 rounded bg-brand-red text-white text-sm" href="index.php?route=planoacao/create&cliente=<?= (int)$item['id'] ?>">Novo Plano</a>
+        </div>
+        <div class="p-4">
+          <?php if (empty($planoTasks)): ?>
+            <div class="text-sm text-gray-600 text-center py-4">Nenhum plano de ação registrado.</div>
+          <?php else: ?>
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-sm">
+                <thead>
+                  <tr class="text-left border-b bg-gray-50">
+                    <th class="p-3 font-semibold text-gray-600">Título</th>
+                    <th class="p-3 font-semibold text-gray-600">Responsável</th>
+                    <th class="p-3 font-semibold text-gray-600">Prazo</th>
+                    <th class="p-3 font-semibold text-gray-600">Status</th>
+                    <th class="p-3 font-semibold text-gray-600 text-right">Ações</th>
                   </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
-          </div>
-        <?php endif; ?>
+                </thead>
+                <tbody>
+                  <?php 
+                  $taskModel = new \App\Models\PlanoAcaoTaskModel();
+                  foreach ($planoTasks as $pt): 
+                    $prazoStatus = $taskModel->getPrazoStatus($pt['prazo'] ?? null, $pt['status'] ?? '');
+                    $colorClass = match($prazoStatus) {
+                        'red' => 'bg-red-500',
+                        'yellow' => 'bg-yellow-400',
+                        'green' => 'bg-green-500',
+                        default => 'bg-gray-300'
+                    };
+                    $prazoDisplay = (!empty($pt['prazo']) && $pt['prazo'] !== '0000-00-00') ? date('d/m/Y', strtotime($pt['prazo'])) : '—';
+                  ?>
+                    <tr class="border-b hover:bg-gray-50 transition-colors">
+                      <td class="p-3 font-medium text-gray-800"><?= htmlspecialchars($pt['titulo']) ?></td>
+                      <td class="p-3 text-gray-600"><?= htmlspecialchars($pt['responsavel'] ?? '—') ?></td>
+                      <td class="p-3 flex items-center gap-2 text-gray-600">
+                          <span class="w-3 h-3 rounded-full <?= $colorClass ?>" title="Status do Prazo"></span>
+                          <?= $prazoDisplay ?>
+                      </td>
+                      <td class="p-3">
+                        <span class="px-2 py-1 rounded-full text-xs font-semibold
+                          <?= $pt['status'] === 'Concluído' ? 'bg-green-100 text-green-800' :
+                             ($pt['status'] === 'Em Andamento' ? 'bg-blue-100 text-blue-800' :
+                             ($pt['status'] === 'Atrasado' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800')) ?>">
+                          <?= htmlspecialchars($pt['status']) ?>
+                        </span>
+                      </td>
+                      <td class="p-3 text-right">
+                        <div class="flex items-center justify-end gap-2">
+                          <a class="text-brand-blue hover:bg-blue-50 p-1.5 rounded transition-colors" href="index.php?route=planoacao/show&id=<?= $pt['id'] ?>" title="Visualizar Detalhes">
+                            <span data-feather="eye" class="w-4 h-4"></span>
+                          </a>
+                          <?php if (($_SESSION['user']['tipo_acesso'] ?? '') === 'instituto'): ?>
+                          <button type="button" onclick='openQuickEdit(<?= htmlspecialchars(json_encode($pt), ENT_QUOTES, "UTF-8") ?>)' class="text-brand-orange hover:bg-orange-50 p-1.5 rounded transition-colors" title="Edição Rápida">
+                            <span data-feather="edit" class="w-4 h-4"></span>
+                          </button>
+                          <?php endif; ?>
+                          <form method="post" action="index.php?route=planoacao/delete" onsubmit="return confirm('Tem certeza que deseja excluir este plano de ação?');" style="display:inline;">
+                              <input type="hidden" name="id" value="<?= $pt['id'] ?>">
+                              <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>">
+                              <button type="submit" class="text-red-600 hover:bg-red-50 p-1.5 rounded transition-colors" title="Excluir">
+                                  <span data-feather="trash-2" class="w-4 h-4"></span>
+                              </button>
+                          </form>
+                        </div>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
+          <?php endif; ?>
+        </div>
       </div>
     </div>
 

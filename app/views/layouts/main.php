@@ -86,8 +86,23 @@ $config = require $cfg;
                 <?= $content ?>
             </div>
             <?php if ($user): ?>
-            <footer class="border-t bg-white text-center text-xs text-gray-500 py-3 px-6">
-                &copy; <?php echo date('Y'); ?> MENTORIA VIVA+. Todos os direitos reservados. <span class="opacity-70"><?php echo htmlspecialchars(\App\Core\AppVersion::get()); ?></span>
+            <footer class="border-t bg-white text-xs text-gray-500 py-3 px-6">
+                <div class="flex items-center justify-between">
+                    
+                    <!-- Espaço vazio para equilibrar o centro -->
+                    <div class="w-1/3"></div>
+
+                    <!-- Copy centralizada -->
+                    <div class="w-1/3 text-center">
+                        &copy; <?php echo date('Y'); ?> MENTORIA VIVA+. Todos os direitos reservados.
+                    </div>
+
+                    <!-- Versão alinhada à direita -->
+                    <div class="w-1/3 text-right opacity-70">
+                        <?php echo htmlspecialchars(\App\Core\AppVersion::get()); ?>
+                    </div>
+
+                </div>
             </footer>
             <?php endif; ?>
         </main>
