@@ -106,17 +106,28 @@ class PlanoAcaoController extends BaseController
                 echo 'CSRF inválido'; 
                 return; 
             }
+            
+            // Checkbox handling: if 'concluido' is present, progress is 100, else 0
+            $isConcluido = isset($_POST['concluido']);
+            $progresso = $isConcluido ? 100 : 0;
+            $status = $_POST['status'] ?? 'A Fazer';
+            
+            // Auto-update status based on completion if needed, or trust user input
+            if ($isConcluido && $status !== 'Concluído') {
+                $status = 'Concluído';
+            }
+
             $data = [
                 'id_cliente' => (int)($_POST['id_cliente'] ?? 0),
                 'titulo' => trim($_POST['titulo'] ?? ''),
                 'descricao' => trim($_POST['descricao'] ?? ''),
-                'meta_valor' => $_POST['meta_valor'] ?? null,
-                'meta_unidade' => $_POST['meta_unidade'] ?? null,
-                'prazo' => $_POST['prazo'] ?? null,
+                'meta_valor' => trim($_POST['meta_valor'] ?? ''), // Now text
+                'meta_unidade' => trim($_POST['meta_unidade'] ?? ''), // Now text
+                'prazo' => $_POST['prazo'] ?: null, // Date or null
                 'responsavel' => trim($_POST['responsavel'] ?? ''),
                 'fase' => 'DO',
-                'status' => $_POST['status'] ?? 'A Fazer',
-                'progresso' => (int)($_POST['progresso'] ?? 0),
+                'status' => $status,
+                'progresso' => $progresso,
             ];
             if ($data['id_cliente'] && $data['titulo']) {
                 $this->tasks->create($data);
@@ -166,12 +177,24 @@ class PlanoAcaoController extends BaseController
         $id = (int)($_POST['id'] ?? 0);
         if (!$id) { header('Location: index.php?route=planoacao/index'); return; }
 
+        // Checkbox handling for updates
+        $isConcluido = isset($_POST['concluido']);
+        $progresso = $isConcluido ? 100 : 0;
+        $status = $_POST['status'] ?? 'A Fazer';
+        
+        if ($isConcluido && $status !== 'Concluído') {
+            $status = 'Concluído';
+        }
+
         $data = [
             'titulo' => trim($_POST['titulo'] ?? ''),
             'descricao' => trim($_POST['descricao'] ?? ''),
-            'prazo' => $_POST['prazo'] ?? null,
+            'meta_valor' => trim($_POST['meta_valor'] ?? ''),
+            'meta_unidade' => trim($_POST['meta_unidade'] ?? ''),
+            'prazo' => $_POST['prazo'] ?: null,
             'responsavel' => trim($_POST['responsavel'] ?? ''),
-            'status' => $_POST['status'] ?? 'A Fazer',
+            'status' => $status,
+            'progresso' => $progresso,
         ];
         
         $this->tasks->update($id, $data);

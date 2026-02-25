@@ -11,8 +11,8 @@ class PlanoAcaoTaskModel extends BaseModel
               id_cliente INT NOT NULL,
               titulo VARCHAR(255) NOT NULL,
               descricao TEXT NULL,
-              meta_valor DECIMAL(12,2) NULL,
-              meta_unidade VARCHAR(32) NULL,
+              meta_valor TEXT NULL,
+              meta_unidade VARCHAR(255) NULL,
               prazo DATE NULL,
               responsavel VARCHAR(120) NULL,
               fase ENUM('PLAN','DO','CHECK','ACT') NOT NULL DEFAULT 'PLAN',
@@ -20,7 +20,59 @@ class PlanoAcaoTaskModel extends BaseModel
               progresso TINYINT UNSIGNED NOT NULL DEFAULT 0,
               created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+            // Migrations for existing tables
+            // Check and modify prazo back to DATE if it was changed to VARCHAR
+            try {
+                // First try to clean up any invalid date strings if possible or just force conversion (invalid dates become NULL or 0000-00-00)
+                $this->db->exec("UPDATE pdca_tasks SET prazo = NULL WHERE STR_TO_DATE(prazo, '%Y-%m-%d') IS NULL");
+                $this->db->exec("ALTER TABLE pdca_tasks MODIFY COLUMN prazo DATE NULL");
+                // Keep other text fields as TEXT/VARCHAR
+                $this->db->exec("ALTER TABLE pdca_tasks MODIFY COLUMN meta_valor TEXT NULL");
+                $this->db->exec("ALTER TABLE pdca_tasks MODIFY COLUMN meta_unidade VARCHAR(255) NULL");
+            } catch (\Exception $e) {
+                // Ignore if already altered
+            }
+
         } catch (\PDOException $e) { }
+    }
+
+    /**
+     * Calculates the traffic light status for a deadline.
+     * 
+     * @param string|null $prazo YYYY-MM-DD
+     * @param string $status Current task status
+     * @return string 'red'|'yellow'|'green'|'gray'
+     */
+    public function getPrazoStatus(?string $prazo, string $status = ''): string
+    {
+        if ($status === 'Concluído') {
+            return 'gray'; // Completed tasks don't need traffic light or can be gray/green
+        }
+        
+        if (!$prazo || $prazo === '0000-00-00') {
+            return 'gray'; // No deadline
+        }
+
+        try {
+            $deadline = new \DateTime($prazo);
+            $today = new \DateTime('today'); // midnight
+            
+            if ($deadline < $today) {
+                return 'red'; // Overdue
+            }
+            
+            $diff = $today->diff($deadline);
+            $days = (int)$diff->format('%a'); // Total days
+            
+            if ($days <= 2) {
+                return 'yellow'; // 2 days or less remaining (including today as 0 days diff if same day, but logic above covers past)
+            }
+            
+            return 'green'; // More than 2 days
+        } catch (\Exception $e) {
+            return 'gray';
+        }
     }
 
     public function create(array $data): int

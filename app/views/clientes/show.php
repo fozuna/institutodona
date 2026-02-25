@@ -119,11 +119,25 @@
                 </tr>
               </thead>
               <tbody>
-                <?php foreach ($planoTasks as $pt): ?>
+                <?php 
+                $taskModel = new \App\Models\PlanoAcaoTaskModel();
+                foreach ($planoTasks as $pt): 
+                  $prazoStatus = $taskModel->getPrazoStatus($pt['prazo'] ?? null, $pt['status'] ?? '');
+                  $colorClass = match($prazoStatus) {
+                      'red' => 'bg-red-500',
+                      'yellow' => 'bg-yellow-400',
+                      'green' => 'bg-green-500',
+                      default => 'bg-gray-300'
+                  };
+                  $prazoDisplay = (!empty($pt['prazo']) && $pt['prazo'] !== '0000-00-00') ? date('d/m/Y', strtotime($pt['prazo'])) : '—';
+                ?>
                   <tr class="border-b hover:bg-gray-50 transition-colors">
                     <td class="p-3 font-medium text-gray-800"><?= htmlspecialchars($pt['titulo']) ?></td>
                     <td class="p-3 text-gray-600"><?= htmlspecialchars($pt['responsavel'] ?? '—') ?></td>
-                    <td class="p-3 text-gray-600"><?= $pt['prazo'] ? date('d/m/Y', strtotime($pt['prazo'])) : '—' ?></td>
+                    <td class="p-3 flex items-center gap-2 text-gray-600">
+                        <span class="w-3 h-3 rounded-full <?= $colorClass ?>" title="Status do Prazo"></span>
+                        <?= $prazoDisplay ?>
+                    </td>
                     <td class="p-3">
                       <span class="px-2 py-1 rounded-full text-xs font-semibold
                         <?= $pt['status'] === 'Concluído' ? 'bg-green-100 text-green-800' :

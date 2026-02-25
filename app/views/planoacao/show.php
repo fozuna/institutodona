@@ -3,20 +3,56 @@
   <div class="flex items-center justify-between">
     <div>
       <div class="flex items-center gap-3">
-        <h1 class="text-2xl font-bold"><?= htmlspecialchars($task['titulo'] ?? '') ?></h1>
+        <h1 class="text-2xl font-bold"><?= htmlspecialchars($task['titulo'] ?? 'Plano de Ação') ?></h1>
         <button onclick="openTaskModal()" class="text-gray-400 hover:text-brand-orange" title="Editar Título/Descrição">
            <span data-feather="edit-3" class="w-5 h-5"></span>
         </button>
       </div>
-      <p class="text-sm text-gray-600">Prazo: <?= htmlspecialchars($task['prazo'] ?? '—') ?> · Resp.: <?= htmlspecialchars($task['responsavel'] ?? '—') ?></p>
+      <?php 
+          $taskModel = new \App\Models\PlanoAcaoTaskModel();
+          $prazoStatus = $taskModel->getPrazoStatus($task['prazo'] ?? null, $task['status'] ?? '');
+          $colorClass = match($prazoStatus) {
+              'red' => 'bg-red-500',
+              'yellow' => 'bg-yellow-400',
+              'green' => 'bg-green-500',
+              default => 'bg-gray-300'
+          };
+          $prazoDisplay = (!empty($task['prazo']) && $task['prazo'] !== '0000-00-00') ? date('d/m/Y', strtotime($task['prazo'])) : '—';
+      ?>
+      <div class="flex items-center gap-2 mt-1">
+          <span class="w-3 h-3 rounded-full <?= $colorClass ?>" title="Status do Prazo"></span>
+          <p class="text-sm text-gray-600">Prazo: <?= htmlspecialchars($prazoDisplay) ?> · Resp.: <?= htmlspecialchars($task['responsavel'] ?? '—') ?></p>
+      </div>
     </div>
     <a class="px-3 py-2 rounded bg-brand-brown text-white" href="index.php?route=clientes/show&id=<?= (int)($task['id_cliente'] ?? 0) ?>">Voltar</a>
   </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    <div class="lg:col-span-3 bg-white shadow rounded p-4">
-      <div class="font-semibold mb-2">Descrição</div>
-      <div class="text-sm text-gray-700"><?= nl2br(htmlspecialchars($task['descricao'] ?? '—')) ?></div>
+    <div class="lg:col-span-3 bg-white shadow rounded p-4 space-y-4">
+      <div>
+        <div class="font-semibold mb-1 text-gray-900">O Quê? (Problema)</div>
+        <div class="text-gray-700 text-lg"><?= htmlspecialchars($task['titulo'] ?? '') ?></div>
+      </div>
+      <div>
+        <div class="font-semibold mb-1 text-gray-900">Por que?</div>
+        <div class="text-sm text-gray-700 bg-gray-50 p-3 rounded"><?= nl2br(htmlspecialchars($task['descricao'] ?? '—')) ?></div>
+      </div>
+      <div>
+        <div class="font-semibold mb-1 text-gray-900">Como (Solução)</div>
+        <div class="text-sm text-gray-700 bg-gray-50 p-3 rounded"><?= nl2br(htmlspecialchars($task['meta_valor'] ?? '—')) ?></div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <div class="font-semibold mb-1 text-gray-900">Origem</div>
+            <div class="text-sm text-gray-700"><?= htmlspecialchars($task['meta_unidade'] ?? '—') ?></div>
+          </div>
+          <div>
+             <div class="font-semibold mb-1 text-gray-900">Concluído?</div>
+             <div class="text-sm text-gray-700">
+                <?= ((int)($task['progresso'] ?? 0) >= 100) ? '<span class="text-green-600 font-bold">Sim</span>' : '<span class="text-gray-500">Não</span>' ?>
+             </div>
+          </div>
+      </div>
     </div>
   </div>
 
@@ -263,13 +299,29 @@ document.getElementById('editTaskModal').addEventListener('click', function(e) {
             <input type="hidden" name="id" value="<?= $task['id'] ?>">
             
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Título</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">O Quê? (Problema)</label>
                 <input type="text" name="titulo" value="<?= htmlspecialchars($task['titulo'] ?? '') ?>" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50" required>
             </div>
             
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
-                <textarea name="descricao" rows="4" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50"><?= htmlspecialchars($task['descricao'] ?? '') ?></textarea>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Por que?</label>
+                <textarea name="descricao" rows="3" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50"><?= htmlspecialchars($task['descricao'] ?? '') ?></textarea>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Como (Solução)</label>
+                <textarea name="meta_valor" rows="3" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50"><?= htmlspecialchars($task['meta_valor'] ?? '') ?></textarea>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Origem</label>
+                    <input type="text" name="meta_unidade" value="<?= htmlspecialchars($task['meta_unidade'] ?? '') ?>" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Prazo</label>
+                    <input type="date" name="prazo" value="<?= htmlspecialchars($task['prazo'] ?? '') ?>" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
+                </div>
             </div>
             
             <div class="grid grid-cols-2 gap-4">
@@ -277,9 +329,11 @@ document.getElementById('editTaskModal').addEventListener('click', function(e) {
                     <label class="block text-sm font-medium text-gray-700 mb-1">Responsável Geral</label>
                     <input type="text" name="responsavel" value="<?= htmlspecialchars($task['responsavel'] ?? '') ?>" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Prazo Geral</label>
-                    <input type="date" name="prazo" value="<?= htmlspecialchars($task['prazo'] ?? '') ?>" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
+                <div class="flex items-end pb-2">
+                     <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" name="concluido" value="1" <?= ((int)($task['progresso']??0) >= 100) ? 'checked' : '' ?> class="form-checkbox h-5 w-5 text-brand-orange">
+                        <span class="text-sm font-medium text-gray-700">Concluído</span>
+                    </label>
                 </div>
             </div>
 

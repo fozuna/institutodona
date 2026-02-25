@@ -19,35 +19,37 @@
         </select>
       </div>
       <div>
-        <label class="block text-sm">Título</label>
+        <label class="block text-sm">O Quê? (Problema)</label>
         <input type="text" name="titulo" required />
       </div>
       <div>
-        <label class="block text-sm">Descrição</label>
+        <label class="block text-sm">Por que?</label>
         <textarea name="descricao" rows="3"></textarea>
+      </div>
+      <div>
+        <label class="block text-sm">Como (Solução)</label>
+        <textarea name="meta_valor" rows="3"></textarea>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <label class="block text-sm">Meta (quantitativa/qualitativa)</label>
-          <input type="number" step="0.01" name="meta_valor" />
-        </div>
-        <div>
-          <label class="block text-sm">Indicador/Unidade</label>
+          <label class="block text-sm">Origem</label>
           <input type="text" name="meta_unidade" />
         </div>
         <div>
           <label class="block text-sm">Prazo</label>
           <input type="date" name="prazo" />
         </div>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <label class="block text-sm">Responsável</label>
           <input type="text" name="responsavel" />
         </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
         <div>
-          <label class="block text-sm">Progresso (%)</label>
-          <input type="number" name="progresso" min="0" max="100" value="0" />
+            <label class="flex items-center space-x-2 cursor-pointer mt-4">
+                <input type="checkbox" name="concluido" value="1" class="form-checkbox h-5 w-5 text-brand-orange">
+                <span class="text-sm font-medium text-gray-700">Concluído</span>
+            </label>
         </div>
       </div>
       <div>
@@ -94,11 +96,25 @@
           </tr>
         </thead>
         <tbody>
-          <?php foreach ($items as $t): ?>
+          <?php 
+          $taskModel = new \App\Models\PlanoAcaoTaskModel();
+          foreach ($items as $t): 
+            $prazoStatus = $taskModel->getPrazoStatus($t['prazo'] ?? null, $t['status'] ?? '');
+            $colorClass = match($prazoStatus) {
+                'red' => 'bg-red-500',
+                'yellow' => 'bg-yellow-400',
+                'green' => 'bg-green-500',
+                default => 'bg-gray-300'
+            };
+            $prazoDisplay = (!empty($t['prazo']) && $t['prazo'] !== '0000-00-00') ? date('d/m/Y', strtotime($t['prazo'])) : '—';
+          ?>
             <tr class="border-b">
               <td class="p-3"><?= htmlspecialchars($t['titulo']) ?></td>
               <td class="p-3"><?= htmlspecialchars($t['responsavel'] ?? '—') ?></td>
-              <td class="p-3"><?= htmlspecialchars($t['prazo'] ?? '—') ?></td>
+              <td class="p-3 flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full <?= $colorClass ?>" title="Status do Prazo"></span>
+                <?= htmlspecialchars($prazoDisplay) ?>
+              </td>
               <td class="p-3"><?= htmlspecialchars($t['status'] ?? 'A Fazer') ?></td>
               <td class="p-3">
                 <a class="text-brand-red hover:underline" href="index.php?route=planoacao/show&id=<?= (int)$t['id'] ?>">Abrir</a>

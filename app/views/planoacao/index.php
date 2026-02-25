@@ -142,46 +142,68 @@ document.addEventListener('DOMContentLoaded', () => {
                   <div class="mb-3"><span data-feather="clipboard" class="w-12 h-12 mx-auto text-gray-300"></span></div>
                   <p>Nenhum plano de ação encontrado para este cliente.</p>
                   <a href="index.php?route=planoacao/create&cliente=${clienteId}" class="text-brand-red hover:underline mt-2 inline-block">Criar o primeiro plano</a>
-                </div>
-            `;
-        } else {
-            let html = `
-                <div class="flex justify-end mb-6">
-                  <a class="btn btn-neutral" href="index.php?route=clientes/show&id=${clienteId}">Voltar ao perfil</a>
-                </div>
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            `;
-            
-            items.forEach(t => {
-                const p = Math.max(0, Math.min(100, parseInt(t.progresso) || 0));
-                // Basic HTML escaping
-                const safe = (str) => str ? String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : '';
-                
-                html += `
-                    <div class="card p-4">
-                      <div class="flex items-center justify-between">
-                        <div class="font-semibold">${safe(t.titulo)}</div>
-                      </div>
-                      <div class="text-xs text-gray-500 mt-1">Prazo: ${safe(t.prazo) || '—'} · Resp.: ${safe(t.responsavel) || '—'}</div>
-                      <div class="flex items-center gap-3 mt-3">
-                        <div class="progress-circle" data-progress="${p}" style="--p: ${p}"></div>
-                        <div class="text-sm">
-                          <div>Status: ${safe(t.status)}</div>
-                          <div>Progresso: ${p}%</div>
-                        </div>
-                      </div>
-                      <div class="mt-3">
-                        <a class="text-brand-red hover:underline" href="index.php?route=planoacao/show&id=${t.id}">Abrir</a>
-                      </div>
-                    </div>
-                `;
-            });
-            
-            html += '</div>';
-            container.innerHTML = html;
+                </div>`;
+            if (window.feather) feather.replace();
+            return;
         }
+
+        const escapeHtml = (str) => str ? String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : '';
+
+        const cards = items.map(t => {
+            const p = Math.max(0, Math.min(100, parseInt(t.progresso || 0)));
+            
+            // Logic for traffic light (replicated from PHP logic)
+            let colorClass = 'bg-gray-300';
+            if (t.status !== 'Concluído' && t.prazo && t.prazo !== '0000-00-00') {
+                const deadline = new Date(t.prazo + 'T00:00:00'); // Ensure local time
+                const today = new Date();
+                today.setHours(0,0,0,0);
+                
+                if (deadline < today) {
+                    colorClass = 'bg-red-500';
+                } else {
+                    const diffTime = deadline - today;
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                    if (diffDays <= 2) {
+                        colorClass = 'bg-yellow-400';
+                    } else {
+                        colorClass = 'bg-green-500';
+                    }
+                }
+            }
+
+            const prazoDisplay = (t.prazo && t.prazo !== '0000-00-00') ? new Date(t.prazo + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+
+            return `
+            <div class="card p-4">
+              <div class="flex items-center justify-between">
+                <div class="font-semibold">${escapeHtml(t.titulo)}</div>
+              </div>
+              <div class="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full ${colorClass}" title="Status do Prazo"></span>
+                Prazo: ${prazoDisplay} · Resp.: ${escapeHtml(t.responsavel || '—')}
+              </div>
+              <div class="flex items-center gap-3 mt-3">
+                <div class="progress-circle" data-progress="${p}" style="--p: ${p}"></div>
+                <div class="text-sm">
+                  <div>Status: ${escapeHtml(t.status)}</div>
+                  <div>Progresso: ${p}%</div>
+                </div>
+              </div>
+              <div class="mt-3">
+                <a class="text-brand-red hover:underline" href="index.php?route=planoacao/show&id=${t.id}">Abrir</a>
+              </div>
+            </div>`;
+        }).join('');
+
+        container.innerHTML = `
+            <div class="flex justify-end mb-6">
+              <a class="btn btn-neutral" href="index.php?route=clientes/show&id=${clienteId}">Voltar ao perfil</a>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                ${cards}
+            </div>`;
         
-        // Re-initialize icons
         if (window.feather) feather.replace();
     }
 
