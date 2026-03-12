@@ -117,6 +117,24 @@
               }, 8000);
             });
           }
+          // Auto-submit on checkbox change + selecionar todos
+          const form = document.getElementById('planoFilterForm');
+          const all = document.getElementById('planoStAll');
+          const items = document.querySelectorAll('#planoFilterForm .st-item');
+          if (form) {
+            items.forEach(cb => cb.addEventListener('change', () => form.submit()));
+          }
+          if (all) {
+            all.addEventListener('change', () => {
+              const checked = all.checked;
+              items.forEach(cb => { cb.checked = checked; });
+              form.submit();
+            });
+            // Define estado inicial do "Selecionar Todos"
+            let allOn = true;
+            items.forEach(cb => { if (!cb.checked) allOn = false; });
+            all.checked = allOn;
+          }
         })();
       </script>
 
@@ -148,19 +166,26 @@
           </div>
         </div>
         <div class="p-4">
-          <form method="get" class="flex flex-wrap items-center gap-2 mb-3">
+          <form method="get" class="flex flex-wrap items-center gap-3 mb-3" id="planoFilterForm">
             <input type="hidden" name="route" value="clientes/show" />
             <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
-            <select name="plano_status[]" multiple size="3" class="border rounded px-2 py-1 text-xs min-w-[12rem]">
+            <div class="flex flex-wrap items-center gap-3 text-xs">
               <?php
                 $allStatusOptions = ['Planejado','Em Andamento','Concluído','Pendente','Atrasado'];
                 $selStatuses = $planoStatusFilters ?? [];
-                foreach ($allStatusOptions as $opt):
-                  $sel = in_array($opt, $selStatuses, true) ? 'selected' : '';
               ?>
-                <option value="<?= $opt ?>" <?= $sel ?>><?= $opt ?></option>
+              <label class="inline-flex items-center gap-1 cursor-pointer">
+                <input type="checkbox" id="planoStAll" class="form-checkbox">
+                <span>Selecionar Todos</span>
+              </label>
+              <?php foreach ($allStatusOptions as $opt): ?>
+                <label class="inline-flex items-center gap-1 cursor-pointer">
+                  <input type="checkbox" name="plano_status[]" value="<?= $opt ?>" class="form-checkbox st-item"
+                    <?= in_array($opt, $selStatuses, true) ? 'checked' : '' ?>>
+                  <span><?= $opt ?></span>
+                </label>
               <?php endforeach; ?>
-            </select>
+            </div>
             <select name="plano_per" class="text-xs border rounded px-2 py-1">
               <?php foreach ([10,20,50,100] as $opt): ?>
                 <option value="<?= $opt ?>" <?= ((int)($planoPer ?? 20) === $opt) ? 'selected' : '' ?>><?= $opt ?> por página</option>

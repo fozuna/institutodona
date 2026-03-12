@@ -6,6 +6,7 @@
   $per = $per ?? 20;
   $total = $total ?? 0;
   $totalPages = $totalPages ?? 1;
+  $statusFilters = $statusFilters ?? [];
 ?>
 <div class="p-6 space-y-6">
   <!-- Header Section -->
@@ -43,6 +44,33 @@
           <a id="backBtn" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors whitespace-nowrap text-center flex-1 md:flex-none <?= $selectedCliente ? '' : 'hidden' ?>" href="index.php?route=clientes/show&id=<?= (int)$selectedCliente ?>">Voltar ao perfil</a>
       </div>
     </div>
+
+  <?php if ($selectedCliente): ?>
+  <form method="get" class="flex flex-wrap items-center gap-3" id="statusFilterForm">
+    <input type="hidden" name="route" value="planoacao/index" />
+    <input type="hidden" name="cliente" value="<?= (int)$selectedCliente ?>" />
+    <div class="flex flex-wrap items-center gap-3 text-xs">
+      <?php $allStatusOptions = ['Planejado','Em Andamento','Concluído','Pendente','Atrasado']; ?>
+      <label class="inline-flex items-center gap-1 cursor-pointer">
+        <input type="checkbox" id="idxStAll" class="form-checkbox">
+        <span>Selecionar Todos</span>
+      </label>
+      <?php foreach ($allStatusOptions as $opt): ?>
+        <label class="inline-flex items-center gap-1 cursor-pointer">
+          <input type="checkbox" name="status[]" value="<?= $opt ?>" class="form-checkbox idx-st-item"
+            <?= in_array($opt, $statusFilters ?? [], true) ? 'checked' : '' ?>>
+          <span><?= $opt ?></span>
+        </label>
+      <?php endforeach; ?>
+    </div>
+    <select name="per" class="text-xs border rounded px-2 py-1">
+      <?php foreach ([10,20,50,100] as $opt): ?>
+        <option value="<?= $opt ?>" <?= ((int)($per ?? 20) === $opt) ? 'selected' : '' ?>><?= $opt ?> por página</option>
+      <?php endforeach; ?>
+    </select>
+    <button type="submit" class="px-2 py-1 rounded bg-gray-200 text-xs text-brand-brown">Aplicar</button>
+  </form>
+  <?php endif; ?>
   </div>
 
   <!-- Results Section -->
@@ -110,6 +138,7 @@
           <div class="flex items-center gap-2">
             <?php
               $base = 'index.php?route=planoacao/index&cliente=' . (int)$selectedCliente
+                . (empty($statusFilters) ? '' : '&' . http_build_query(['status' => $statusFilters]))
                 . '&per=' . (int)$per
                 . '&page=';
               $prev = max(1, (int)$page - 1);
@@ -462,6 +491,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (shouldOpenImport && importOpenBtn) {
         openImportModal();
+    }
+    // Status checkboxes auto-submit
+    const idxForm = document.getElementById('statusFilterForm');
+    const idxAll = document.getElementById('idxStAll');
+    const idxItems = document.querySelectorAll('#statusFilterForm .idx-st-item');
+    if (idxForm) {
+      idxItems.forEach(cb => cb.addEventListener('change', () => idxForm.submit()));
+    }
+    if (idxAll) {
+      idxAll.addEventListener('change', () => {
+        const checked = idxAll.checked;
+        idxItems.forEach(cb => { cb.checked = checked; });
+        idxForm.submit();
+      });
+      let allOn = true;
+      idxItems.forEach(cb => { if (!cb.checked) allOn = false; });
+      idxAll.checked = allOn;
     }
 });
 </script>

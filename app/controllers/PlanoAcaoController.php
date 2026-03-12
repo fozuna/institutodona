@@ -44,12 +44,22 @@ class PlanoAcaoController extends BaseController
         $selectedCliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : null;
         $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
         $per = isset($_GET['per']) ? max(1, (int)$_GET['per']) : 20;
+        $statusFilters = $_GET['status'] ?? [];
+        if (!is_array($statusFilters)) {
+            $statusFilters = [$statusFilters];
+        }
+        $statusFilters = array_values(array_filter(array_map('trim', $statusFilters)));
         $items = [];
         $total = 0;
         $totalPages = 1;
         if ($selectedCliente) {
-            $total = $this->tasks->countByCliente($selectedCliente);
-            $items = $this->tasks->paginateByCliente($selectedCliente, $page, $per);
+            if (!empty($statusFilters)) {
+                $total = $this->tasks->countByClienteMulti($selectedCliente, $statusFilters);
+                $items = $this->tasks->paginateByClienteMulti($selectedCliente, $page, $per, $statusFilters);
+            } else {
+                $total = $this->tasks->countByCliente($selectedCliente);
+                $items = $this->tasks->paginateByCliente($selectedCliente, $page, $per);
+            }
             $totalPages = max(1, (int)ceil($total / $per));
         }
         $this->render('planoacao/index', [
@@ -60,6 +70,7 @@ class PlanoAcaoController extends BaseController
             'per' => $per,
             'total' => $total,
             'totalPages' => $totalPages,
+            'statusFilters' => $statusFilters,
             'importEnabled' => getenv('PLANOACAO_IMPORT_ENABLED') === '1',
             'importAlreadyRun' => is_file(__DIR__ . '/../../storage/imports/planoacao_import_done.flag'),
         ]);
@@ -83,8 +94,18 @@ class PlanoAcaoController extends BaseController
             
             $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
             $per = isset($_GET['per']) ? max(1, (int)$_GET['per']) : 20;
-            $total = $this->tasks->countByCliente($clienteId);
-            $items = $this->tasks->paginateByCliente($clienteId, $page, $per);
+            $statusFilters = $_GET['status'] ?? [];
+            if (!is_array($statusFilters)) {
+                $statusFilters = [$statusFilters];
+            }
+            $statusFilters = array_values(array_filter(array_map('trim', $statusFilters)));
+            if (!empty($statusFilters)) {
+                $total = $this->tasks->countByClienteMulti($clienteId, $statusFilters);
+                $items = $this->tasks->paginateByClienteMulti($clienteId, $page, $per, $statusFilters);
+            } else {
+                $total = $this->tasks->countByCliente($clienteId);
+                $items = $this->tasks->paginateByCliente($clienteId, $page, $per);
+            }
             echo json_encode([
                 'success' => true,
                 'data' => $items,
@@ -94,6 +115,7 @@ class PlanoAcaoController extends BaseController
                     'total' => $total,
                     'totalPages' => max(1, (int)ceil($total / $per)),
                 ],
+                'filters' => ['status' => $statusFilters],
             ]);
         } catch (\Exception $e) {
             http_response_code(500);
@@ -106,14 +128,29 @@ class PlanoAcaoController extends BaseController
         $this->requireRole('instituto');
         $clientes = (new ClienteModel())->all();
         $selectedCliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : null;
-        $statusFilter = $_GET['status'] ?? '';
+        $statusFilters = $_GET['status'] ?? [];
+        if (!is_array($statusFilters)) {
+            $statusFilters = [$statusFilters];
+        }
+        $statusFilters = array_values(array_filter(array_map('trim', $statusFilters)));
         $search = trim($_GET['q'] ?? '');
         $items = [];
         if ($selectedCliente) {
             $items = $this->tasks->byCliente($selectedCliente);
-            $items = array_values(array_filter($items, function(array $row) use ($statusFilter, $search): bool {
-                if ($statusFilter !== '' && ($row['status'] ?? '') !== $statusFilter) {
-                    return false;
+            $items = array_values(array_filter($items, function(array $row) use ($statusFilters, $search): bool {
+                if (!empty($statusFilters)) {
+                    $match = false;
+                    foreach ($statusFilters as $st) {
+                        if ($st === 'Atrasado') {
+                            $prazo = $row['prazo'] ?? null;
+                            if (!empty($prazo) && $prazo < date('Y-m-d') && ($row['status'] ?? '') !== 'Concluído') {
+                                $match = true;
+                            }
+                        } elseif (($row['status'] ?? '') === $st) {
+                            $match = true;
+                        }
+                    }
+                    if (!$match) return false;
                 }
                 if ($search !== '') {
                     $hay = mb_strtolower(($row['titulo'] ?? '') . ' ' . ($row['responsavel'] ?? ''));
@@ -128,7 +165,7 @@ class PlanoAcaoController extends BaseController
             'clientes' => $clientes,
             'selectedCliente' => $selectedCliente,
             'items' => $items,
-            'statusFilter' => $statusFilter,
+            'statusFilters' => $statusFilters,
             'search' => $search,
         ]);
     }

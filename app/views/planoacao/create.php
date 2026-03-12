@@ -2,7 +2,7 @@
 <?php
   $selectedCliente = $selectedCliente ?? null;
   $items = $items ?? [];
-  $statusFilter = $statusFilter ?? '';
+  $statusFilters = $statusFilters ?? [];
   $search = $search ?? '';
   $page = $page ?? 1;
   $per = $per ?? 20;
@@ -90,16 +90,26 @@
           <div class="font-bold text-lg text-gray-800">Planos de ação do cliente</div>
           <div class="text-xs text-gray-500">Gerencie os planos cadastrados</div>
         </div>
-        <form method="get" class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+        <form method="get" class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
           <input type="hidden" name="route" value="planoacao/create" />
           <input type="hidden" name="cliente" value="<?= (int)$selectedCliente ?>" />
-          
-          <select name="status" class="text-sm border rounded px-2 py-1.5 focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
-            <option value="">Todos os Status</option>
-            <?php foreach (['Planejado','Em Andamento','Concluído','Pendente'] as $st): ?>
-              <option value="<?= $st ?>" <?= $statusFilter === $st ? 'selected' : '' ?>><?= $st ?></option>
+          <div class="flex flex-wrap items-center gap-3 text-xs">
+            <?php 
+            $allSt = ['Planejado','Em Andamento','Concluído','Pendente','Atrasado'];
+            $selSt = $statusFilters;
+            ?>
+            <label class="inline-flex items-center gap-1 cursor-pointer">
+              <input type="checkbox" id="st_all" class="form-checkbox">
+              <span>Selecionar Todos</span>
+            </label>
+            <?php foreach ($allSt as $st): ?>
+              <label class="inline-flex items-center gap-1 cursor-pointer">
+                <input type="checkbox" name="status[]" value="<?= $st ?>" class="form-checkbox st-item"
+                  <?= in_array($st, $selSt ?? [], true) ? 'checked' : '' ?>>
+                <span><?= $st ?></span>
+              </label>
             <?php endforeach; ?>
-          </select>
+          </div>
           
           <div class="flex-1 sm:flex-none flex gap-2">
               <input type="text" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Buscar..." class="text-sm border rounded px-2 py-1.5 w-full sm:w-40 focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50" />
@@ -180,7 +190,7 @@
         <div class="flex items-center gap-2">
           <?php
             $base = 'index.php?route=planoacao/create&cliente=' . (int)$selectedCliente
-              . '&status=' . urlencode($statusFilter)
+              . (empty($statusFilters) ? '' : '&' . http_build_query(['status' => $statusFilters]))
               . '&q=' . urlencode($search)
               . '&per=' . (int)$per
               . '&page=';
