@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS aplicacoes (
   id INT AUTO_INCREMENT PRIMARY KEY,
   id_cliente INT NOT NULL,
   id_metodologia INT NOT NULL,
-  status ENUM('A Fazer','Em Andamento','Concluído','Pendente') NOT NULL DEFAULT 'A Fazer',
+  status ENUM('Planejado','Em Andamento','Concluído','Pendente') NOT NULL DEFAULT 'Planejado',
   consultor_id INT NULL,
   data_prevista DATE NULL,
   data_conclusao DATE NULL,
@@ -195,7 +195,7 @@ CREATE TABLE IF NOT EXISTS pdca_tasks (
   prazo DATE NULL,
   responsavel VARCHAR(120) NULL,
   fase ENUM('PLAN','DO','CHECK','ACT') NOT NULL DEFAULT 'PLAN',
-  status ENUM('A Fazer','Em Andamento','Concluído','Pendente') NOT NULL DEFAULT 'A Fazer',
+  status ENUM('Planejado','Em Andamento','Concluído','Pendente') NOT NULL DEFAULT 'Planejado',
   progresso TINYINT UNSIGNED NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_pdca_task_cliente FOREIGN KEY (id_cliente) REFERENCES clientes(id) ON DELETE CASCADE

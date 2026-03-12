@@ -222,6 +222,15 @@ switch ($route) {
     case 'planoacao/delete':
         (new PlanoAcaoController())->delete();
         break;
+    case 'planoacao/import':
+        (new PlanoAcaoController())->importForm();
+        break;
+    case 'planoacao/importRun':
+        (new PlanoAcaoController())->importRun();
+        break;
+    case 'clientes/exportPlanos':
+        (new ClientesController())->exportPlanos();
+        break;
     case 'aplicacoes/set_status':
         (new AplicacoesController())->set_status();
         break;

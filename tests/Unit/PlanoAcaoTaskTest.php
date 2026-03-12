@@ -19,35 +19,35 @@ class PlanoAcaoTaskTest extends TestCase
     public function testPrazoStatusRed()
     {
         $yesterday = (new \DateTime('yesterday'))->format('Y-m-d');
-        $status = $this->model->getPrazoStatus($yesterday, 'A Fazer');
+        $status = $this->model->getPrazoStatus($yesterday, 'Planejado');
         $this->assertEquals('red', $status, "Yesterday should be red");
     }
 
     public function testPrazoStatusYellowToday()
     {
         $today = (new \DateTime('today'))->format('Y-m-d');
-        $status = $this->model->getPrazoStatus($today, 'A Fazer');
+        $status = $this->model->getPrazoStatus($today, 'Planejado');
         $this->assertEquals('yellow', $status, "Today should be yellow (<= 2 days)");
     }
 
     public function testPrazoStatusYellowTomorrow()
     {
         $tomorrow = (new \DateTime('+1 day'))->format('Y-m-d');
-        $status = $this->model->getPrazoStatus($tomorrow, 'A Fazer');
+        $status = $this->model->getPrazoStatus($tomorrow, 'Planejado');
         $this->assertEquals('yellow', $status, "Tomorrow should be yellow (<= 2 days)");
     }
 
     public function testPrazoStatusYellowNextDay()
     {
         $nextDay = (new \DateTime('+2 days'))->format('Y-m-d');
-        $status = $this->model->getPrazoStatus($nextDay, 'A Fazer');
+        $status = $this->model->getPrazoStatus($nextDay, 'Planejado');
         $this->assertEquals('yellow', $status, "Day after tomorrow should be yellow (<= 2 days)");
     }
 
     public function testPrazoStatusGreen()
     {
         $future = (new \DateTime('+3 days'))->format('Y-m-d');
-        $status = $this->model->getPrazoStatus($future, 'A Fazer');
+        $status = $this->model->getPrazoStatus($future, 'Planejado');
         $this->assertEquals('green', $status, "3 days from now should be green");
     }
 
@@ -60,7 +60,7 @@ class PlanoAcaoTaskTest extends TestCase
 
     public function testPrazoStatusGrayNoDate()
     {
-        $status = $this->model->getPrazoStatus(null, 'A Fazer');
+        $status = $this->model->getPrazoStatus(null, 'Planejado');
         $this->assertEquals('gray', $status, "Tasks without date should be gray");
     }
 }

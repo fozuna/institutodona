@@ -1,4 +1,8 @@
 <?php /** @var array $item */ /** @var array $apps */ /** @var array $metodologias */ ?>
+<?php
+  $importEnabled = getenv('PLANOACAO_IMPORT_ENABLED') === '1';
+  $importAlreadyRun = is_file(__DIR__ . '/../../storage/imports/planoacao_import_done.flag');
+?>
 <div class="p-6">
   <div class="mb-4">
     <div class="flex justify-between items-center">
@@ -66,9 +70,15 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <?php
           $cronCount = count((new \App\Models\CronogramaModel())->byCliente((int)$item['id']));
-          $planoTasks = (new \App\Models\PlanoAcaoTaskModel())->byCliente((int)$item['id']);
-          $planoCount = count($planoTasks);
-          $planoDone = array_reduce($planoTasks, function($acc,$t){ return $acc + ((($t['status'] ?? '') === 'Concluído') ? 1 : 0); }, 0);
+          $planoCount = (int)($planoTotal ?? 0);
+          $planoDone = 0;
+          if (!empty($planoTasks)) {
+              foreach ($planoTasks as $t) {
+                  if (($t['status'] ?? '') === 'Concluído') {
+                      $planoDone++;
+                  }
+              }
+          }
         ?>
         <a class="bg-white shadow rounded p-4 block hover:shadow-md transition-shadow" href="index.php?route=cronograma/index&id_cliente=<?= (int)$item['id'] ?>" data-loading>
           <div class="flex items-center justify-between">
@@ -93,15 +103,71 @@
             el.setAttribute('aria-busy','true');
           });
         });
+        (function(){
+          const exportForm = document.getElementById('planoExportForm');
+          const exportBtn = document.getElementById('planoExportBtn');
+          if (exportForm && exportBtn) {
+            exportForm.addEventListener('submit', function(){
+              exportBtn.disabled = true;
+              exportBtn.innerHTML = '<span class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span><span>Gerando...</span>';
+              setTimeout(()=>{ 
+                exportBtn.disabled = false; 
+                exportBtn.innerHTML = '<span data-feather="download" class="w-4 h-4"></span><span>Exportar Excel</span>'; 
+                if (typeof feather !== 'undefined') feather.replace();
+              }, 8000);
+            });
+          }
+        })();
       </script>
 
       <!-- Seção de Planos de Ação Detalhada -->
       <div class="bg-white shadow rounded mt-6">
-        <div class="px-4 py-3 border-b font-semibold flex justify-between items-center">
+        <div class="px-4 py-3 border-b font-semibold flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <span>Planos de Ação</span>
-          <a class="px-3 py-1 rounded bg-brand-red text-white text-sm" href="index.php?route=planoacao/create&cliente=<?= (int)$item['id'] ?>">Novo Plano</a>
+          <div class="flex items-center gap-2">
+            <?php if ($importEnabled && !$importAlreadyRun && (($_SESSION['user']['tipo_acesso'] ?? '') === 'instituto')): ?>
+              <button type="button" id="clienteImportOpenBtn" class="px-3 py-1 rounded bg-brand-brown text-white text-sm flex items-center gap-2 hover:bg-gray-800">
+                <span data-feather="upload-cloud" class="w-4 h-4"></span>
+                <span>Importar planos</span>
+              </button>
+            <?php endif; ?>
+            <?php if (($_SESSION['user']['tipo_acesso'] ?? '') === 'instituto'): ?>
+            <form method="get" action="index.php" id="planoExportForm" class="inline">
+              <input type="hidden" name="route" value="clientes/exportPlanos" />
+              <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
+              <?php foreach (($planoStatusFilters ?? []) as $st): ?>
+                <input type="hidden" name="plano_status[]" value="<?= htmlspecialchars($st) ?>" />
+              <?php endforeach; ?>
+              <button type="submit" aria-label="Exportar planos para Excel" class="px-3 py-1 rounded bg-brand-brown text-white text-sm flex items-center gap-2 hover:bg-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange shadow-sm" id="planoExportBtn">
+                <span data-feather="download" class="w-4 h-4"></span>
+                <span>Exportar Excel</span>
+              </button>
+            </form>
+            <?php endif; ?>
+            <a class="px-3 py-1 rounded bg-brand-red text-white text-sm" href="index.php?route=planoacao/create&cliente=<?= (int)$item['id'] ?>">Novo Plano</a>
+          </div>
         </div>
         <div class="p-4">
+          <form method="get" class="flex flex-wrap items-center gap-2 mb-3">
+            <input type="hidden" name="route" value="clientes/show" />
+            <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
+            <select name="plano_status[]" multiple size="3" class="border rounded px-2 py-1 text-xs min-w-[12rem]">
+              <?php
+                $allStatusOptions = ['Planejado','Em Andamento','Concluído','Pendente','Atrasado'];
+                $selStatuses = $planoStatusFilters ?? [];
+                foreach ($allStatusOptions as $opt):
+                  $sel = in_array($opt, $selStatuses, true) ? 'selected' : '';
+              ?>
+                <option value="<?= $opt ?>" <?= $sel ?>><?= $opt ?></option>
+              <?php endforeach; ?>
+            </select>
+            <select name="plano_per" class="text-xs border rounded px-2 py-1">
+              <?php foreach ([10,20,50,100] as $opt): ?>
+                <option value="<?= $opt ?>" <?= ((int)($planoPer ?? 20) === $opt) ? 'selected' : '' ?>><?= $opt ?> por página</option>
+              <?php endforeach; ?>
+            </select>
+            <button type="submit" class="px-2 py-1 rounded bg-gray-200 text-xs text-brand-brown">Aplicar</button>
+          </form>
           <?php if (empty($planoTasks)): ?>
             <div class="text-sm text-gray-600 text-center py-4">Nenhum plano de ação registrado.</div>
           <?php else: ?>
@@ -154,7 +220,7 @@
                             <span data-feather="edit" class="w-4 h-4"></span>
                           </button>
                           <?php endif; ?>
-                          <form method="post" action="index.php?route=planoacao/delete" onsubmit="return confirm('Tem certeza que deseja excluir este plano de ação?');" style="display:inline;">
+        <form method="post" action="index.php?route=planoacao/delete" onsubmit="return confirm('Tem certeza que deseja excluir este plano de ação?');" style="display:inline;">
                               <input type="hidden" name="id" value="<?= $pt['id'] ?>">
                               <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>">
                               <button type="submit" class="text-red-600 hover:bg-red-50 p-1.5 rounded transition-colors" title="Excluir">
@@ -168,10 +234,62 @@
                 </tbody>
               </table>
             </div>
+            <?php if (($planoTotalPages ?? 1) > 1): ?>
+            <div class="mt-4 flex items-center justify-between text-xs text-gray-600">
+              <div>Total: <?= (int)($planoTotal ?? 0) ?> • Página <?= (int)($planoPage ?? 1) ?> de <?= (int)($planoTotalPages ?? 1) ?></div>
+              <div class="flex items-center gap-2">
+                <?php
+                  $base = 'index.php?route=clientes/show&id=' . (int)$item['id']
+                    . '&plano_per=' . (int)($planoPer ?? 20)
+                    . '&plano_page=';
+                  $prev = max(1, (int)($planoPage ?? 1) - 1);
+                  $next = min((int)($planoTotalPages ?? 1), (int)($planoPage ?? 1) + 1);
+                ?>
+                <a href="<?= ($planoPage ?? 1) > 1 ? $base . $prev : '#' ?>" class="px-2 py-1 rounded bg-gray-200 text-brand-brown <?= ($planoPage ?? 1) <= 1 ? 'opacity-50 pointer-events-none' : '' ?>">Anterior</a>
+                <a href="<?= ($planoPage ?? 1) < ($planoTotalPages ?? 1) ? $base . $next : '#' ?>" class="px-2 py-1 rounded bg-gray-200 text-brand-brown <?= ($planoPage ?? 1) >= ($planoTotalPages ?? 1) ? 'opacity-50 pointer-events-none' : '' ?>">Próximo</a>
+              </div>
+            </div>
+            <?php endif; ?>
           <?php endif; ?>
         </div>
       </div>
     </div>
+
+    <?php if ($importEnabled && !$importAlreadyRun && (($_SESSION['user']['tipo_acesso'] ?? '') === 'instituto')): ?>
+    <div id="clienteImportModal" class="fixed inset-0 z-40 hidden items-center justify-center">
+      <div id="clienteImportOverlay" class="absolute inset-0 bg-black bg-opacity-40"></div>
+      <div class="relative bg-white rounded shadow-lg max-w-lg w-full mx-4 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <div class="text-lg font-semibold text-gray-900">Importar planos de ação</div>
+            <div class="text-xs text-gray-500">Selecione a planilha para importar planos de ação para este cliente.</div>
+          </div>
+          <button type="button" id="clienteImportCloseBtn" class="text-gray-500 hover:text-gray-800">
+            <span data-feather="x" class="w-4 h-4"></span>
+          </button>
+        </div>
+        <form id="clienteImportForm" class="space-y-4">
+          <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+          <input type="hidden" name="id_cliente" value="<?= (int)$item['id'] ?>" />
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Arquivo da planilha</label>
+            <input type="file" name="arquivo" id="clienteImportFile" accept=".xlsx,.csv" class="border rounded p-2 w-full text-sm" />
+            <div class="text-xs text-gray-500 mt-1">
+              Formatos aceitos: XLSX ou CSV. A primeira linha deve conter os cabeçalhos.
+            </div>
+          </div>
+          <div id="clienteImportStatus" class="text-xs mt-1 min-h-[1.25rem]"></div>
+          <div class="flex items-center justify-end gap-2 pt-2">
+            <button type="button" id="clienteImportCancelBtn" class="px-3 py-1.5 rounded border border-gray-300 text-sm text-gray-700 hover:bg-gray-100">Cancelar</button>
+            <button type="submit" id="clienteImportSubmitBtn" class="px-4 py-1.5 rounded bg-brand-red text-white text-sm font-semibold hover:bg-red-700 flex items-center gap-2">
+              <span data-feather="play" class="w-4 h-4"></span>
+              <span>Executar importação</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <?php endif; ?>
 
     <div class="self-start">
       <!-- Seção de aplicar tarefa movida para o menu (aplicacoes/create) -->
@@ -360,7 +478,7 @@
              <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
                 <select name="status" id="qe_status" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
-                    <option value="A Fazer">A Fazer</option>
+                    <option value="Planejado">Planejado</option>
                     <option value="Em Andamento">Em Andamento</option>
                     <option value="Concluído">Concluído</option>
                     <option value="Pendente">Pendente</option>
@@ -378,6 +496,120 @@
     </div>
 </div>
 
+<?php if ($importEnabled && !$importAlreadyRun && (($_SESSION['user']['tipo_acesso'] ?? '') === 'instituto')): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var openBtn = document.getElementById('clienteImportOpenBtn');
+  var modal = document.getElementById('clienteImportModal');
+  var overlay = document.getElementById('clienteImportOverlay');
+  var closeBtn = document.getElementById('clienteImportCloseBtn');
+  var cancelBtn = document.getElementById('clienteImportCancelBtn');
+  var form = document.getElementById('clienteImportForm');
+  var fileInput = document.getElementById('clienteImportFile');
+  var statusEl = document.getElementById('clienteImportStatus');
+  var submitBtn = document.getElementById('clienteImportSubmitBtn');
+
+  function openModal() {
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    if (statusEl) {
+      statusEl.textContent = '';
+      statusEl.className = 'text-xs mt-1 min-h-[1.25rem]';
+    }
+    if (fileInput) {
+      fileInput.value = '';
+    }
+    if (submitBtn) {
+      submitBtn.disabled = false;
+    }
+    if (window.feather) {
+      window.feather.replace();
+    }
+  }
+
+  function closeModal() {
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!form || !fileInput || !submitBtn || !statusEl) return;
+    if (!fileInput.files || !fileInput.files.length) {
+      statusEl.textContent = 'Selecione um arquivo para importação.';
+      statusEl.className = 'text-xs mt-1 text-red-700';
+      return;
+    }
+    var file = fileInput.files[0];
+    var parts = file.name.split('.');
+    var ext = parts.length > 1 ? parts.pop().toLowerCase() : '';
+    if (ext !== 'xlsx' && ext !== 'csv') {
+      statusEl.textContent = 'Apenas arquivos XLSX ou CSV são aceitos.';
+      statusEl.className = 'text-xs mt-1 text-red-700';
+      return;
+    }
+    var fd = new FormData(form);
+    submitBtn.disabled = true;
+    statusEl.innerHTML = '<span class="inline-flex items-center gap-2 text-gray-700"><span class="animate-spin rounded-full h-4 w-4 border-b-2 border-brand-orange"></span><span>Processando importação, aguarde...</span></span>';
+    statusEl.className = 'text-xs mt-1';
+    try {
+      var resp = await fetch('index.php?route=planoacao/importRun&ajax=1', {
+        method: 'POST',
+        body: fd,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      });
+      var ct = resp.headers.get('Content-Type') || '';
+      var isJson = ct.indexOf('application/json') !== -1;
+      var data = null;
+      if (isJson) {
+        data = await resp.json();
+      } else {
+        var text = await resp.text();
+        data = { success: resp.ok, message: text };
+      }
+      if (!data.success) {
+        statusEl.textContent = data.message || 'Falha ao realizar importação.';
+        statusEl.className = 'text-xs mt-1 text-red-700';
+        submitBtn.disabled = false;
+        return;
+      }
+      var report = data.report || {};
+      var imported = report.imported || 0;
+      var ignored = report.ignored || 0;
+      var errors = report.errors || 0;
+      statusEl.textContent = 'Importação concluída. Importados: ' + imported + ', ignorados: ' + ignored + ', com erro: ' + errors + '.';
+      statusEl.className = 'text-xs mt-1 text-green-700';
+      setTimeout(function () {
+        window.location.reload();
+      }, 2000);
+    } catch (err) {
+      statusEl.textContent = 'Erro inesperado ao realizar importação.';
+      statusEl.className = 'text-xs mt-1 text-red-700';
+      submitBtn.disabled = false;
+    }
+  }
+
+  if (openBtn) {
+    openBtn.addEventListener('click', openModal);
+  }
+  if (overlay) {
+    overlay.addEventListener('click', closeModal);
+  }
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closeModal);
+  }
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', closeModal);
+  }
+  if (form) {
+    form.addEventListener('submit', handleSubmit);
+  }
+});
+</script>
+<?php endif; ?>
+
 <script>
 function openQuickEdit(task) {
     document.getElementById('qe_id').value = task.id;
@@ -387,7 +619,7 @@ function openQuickEdit(task) {
     document.getElementById('qe_meta_unidade').value = task.meta_unidade || '';
     document.getElementById('qe_prazo').value = task.prazo || '';
     document.getElementById('qe_responsavel').value = task.responsavel || '';
-    document.getElementById('qe_status').value = task.status || 'A Fazer';
+    document.getElementById('qe_status').value = task.status || 'Planejado';
     
     // Checkbox logic
     const isDone = (parseInt(task.progresso) || 0) >= 100 || task.status === 'Concluído';

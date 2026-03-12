@@ -10,7 +10,7 @@ class AplicacaoModel extends BaseModel
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 id_cliente INT NOT NULL,
                 id_metodologia INT NOT NULL,
-                status ENUM('A Fazer','Em Andamento','Concluído','Pendente') NOT NULL DEFAULT 'A Fazer',
+                status ENUM('Planejado','Em Andamento','Concluído','Pendente') NOT NULL DEFAULT 'Planejado',
                 consultor_id INT NULL,
                 data_prevista DATE NULL,
                 data_conclusao DATE NULL,
@@ -40,6 +40,10 @@ class AplicacaoModel extends BaseModel
                 colaborador_id INT NOT NULL,
                 PRIMARY KEY (aplicacao_id, colaborador_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            try {
+                $this->db->exec("UPDATE aplicacoes SET status = 'Planejado' WHERE status = 'A Fazer'");
+                $this->db->exec("ALTER TABLE aplicacoes MODIFY COLUMN status ENUM('Planejado','Em Andamento','Concluído','Pendente') NOT NULL DEFAULT 'Planejado'");
+            } catch (\PDOException $e) {}
         } catch (\PDOException $e) {}
     }
 

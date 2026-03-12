@@ -30,13 +30,13 @@ class DashboardController extends BaseController
 
         $clientes = $this->clientes->all();
         $kanbanData = [
-            'A Fazer' => [],
+            'Planejado' => [],
             'Em Andamento' => [],
             'Concluído' => [],
         ];
 
         $stats = $this->aplicacoes->statsByPilar($selectedCliente);
-        $totalsByStatus = ['A Fazer' => 0, 'Em Andamento' => 0, 'Concluído' => 0];
+        $totalsByStatus = ['Planejado' => 0, 'Em Andamento' => 0, 'Concluído' => 0];
         foreach ($stats as $s) {
             $st = $s['status'];
             $totalsByStatus[$st] = ($totalsByStatus[$st] ?? 0) + (int)$s['total'];

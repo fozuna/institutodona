@@ -52,7 +52,7 @@
         <div class="md:col-span-3">
           <label class="block text-sm">Status inicial</label>
           <select name="status" class="w-full">
-            <option value="A Fazer">A Fazer</option>
+            <option value="Planejado">Planejado</option>
             <option value="Em Andamento">Em Andamento</option>
             <option value="Concluído">Concluído</option>
             <option value="Pendente">Pendente</option>

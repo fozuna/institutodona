@@ -59,7 +59,7 @@ class AplicacoesController extends BaseController
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
         $idAplicacao = (int)($_POST['id_aplicacao'] ?? 0);
-        $status = $_POST['status'] ?? 'A Fazer';
+        $status = $_POST['status'] ?? 'Planejado';
         $dataPrevista = $_POST['data_prevista'] ?? null;
         $consultorId = isset($_POST['consultor_id']) ? (int)$_POST['consultor_id'] : null;
         $colabIds = isset($_POST['colaborador_ids']) ? (array)$_POST['colaborador_ids'] : [];
@@ -117,7 +117,7 @@ class AplicacoesController extends BaseController
         $status = $_POST['status'] ?? '';
         $ok = false;
         $error = null;
-        if ($id && in_array($status, ['A Fazer','Em Andamento','Concluído','Pendente'], true)) {
+        if ($id && in_array($status, ['Planejado','Em Andamento','Concluído','Pendente'], true)) {
             $app = $this->aplicacoes->find($id);
             $needsConsultor = in_array($status, ['Em Andamento','Concluído'], true);
             $hasConsultor = isset($app['consultor_id']) && (int)$app['consultor_id'] > 0;

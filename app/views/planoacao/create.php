@@ -4,6 +4,10 @@
   $items = $items ?? [];
   $statusFilter = $statusFilter ?? '';
   $search = $search ?? '';
+  $page = $page ?? 1;
+  $per = $per ?? 20;
+  $total = $total ?? 0;
+  $totalPages = $totalPages ?? 1;
 ?>
 <div class="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
   <!-- Coluna Esquerda: Formulário -->
@@ -56,7 +60,7 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
                 <select name="status" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
-                  <option value="A Fazer">A Fazer</option>
+                  <option value="Planejado">Planejado</option>
                   <option value="Em Andamento">Em Andamento</option>
                   <option value="Concluído">Concluído</option>
                   <option value="Pendente">Pendente</option>
@@ -92,7 +96,7 @@
           
           <select name="status" class="text-sm border rounded px-2 py-1.5 focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
             <option value="">Todos os Status</option>
-            <?php foreach (['A Fazer','Em Andamento','Concluído','Pendente'] as $st): ?>
+            <?php foreach (['Planejado','Em Andamento','Concluído','Pendente'] as $st): ?>
               <option value="<?= $st ?>" <?= $statusFilter === $st ? 'selected' : '' ?>><?= $st ?></option>
             <?php endforeach; ?>
           </select>
@@ -101,6 +105,11 @@
               <input type="text" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Buscar..." class="text-sm border rounded px-2 py-1.5 w-full sm:w-40 focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50" />
               <button class="btn btn-neutral text-sm px-3 py-1.5" type="submit" title="Filtrar"><span data-feather="search" class="w-4 h-4"></span></button>
           </div>
+          <select name="per" class="text-xs border rounded px-2 py-1.5">
+            <?php foreach ([10,20,50,100] as $opt): ?>
+              <option value="<?= $opt ?>" <?= ((int)$per === $opt) ? 'selected' : '' ?>><?= $opt ?> por página</option>
+            <?php endforeach; ?>
+          </select>
         </form>
       </div>
       
@@ -144,7 +153,7 @@
                         <?= ($t['status'] === 'Concluído') ? 'bg-green-50 text-green-700 border-green-200' : 
                            (($t['status'] === 'Em Andamento') ? 'bg-blue-50 text-blue-700 border-blue-200' : 
                            'bg-gray-50 text-gray-600 border-gray-200') ?>">
-                        <?= htmlspecialchars($t['status'] ?? 'A Fazer') ?>
+                        <?= htmlspecialchars($t['status'] ?? 'Planejado') ?>
                     </span>
                   </td>
                   <td class="p-3 text-right whitespace-nowrap">
@@ -165,6 +174,24 @@
             </tbody>
           </table>
       </div>
+      <?php if ($totalPages > 1): ?>
+      <div class="mt-4 flex items-center justify-between text-xs text-gray-600">
+        <div>Total: <?= (int)$total ?> • Página <?= (int)$page ?> de <?= (int)$totalPages ?></div>
+        <div class="flex items-center gap-2">
+          <?php
+            $base = 'index.php?route=planoacao/create&cliente=' . (int)$selectedCliente
+              . '&status=' . urlencode($statusFilter)
+              . '&q=' . urlencode($search)
+              . '&per=' . (int)$per
+              . '&page=';
+            $prev = max(1, (int)$page - 1);
+            $next = min((int)$totalPages, (int)$page + 1);
+          ?>
+          <a href="<?= $page > 1 ? $base . $prev : '#' ?>" class="px-2 py-1 rounded bg-gray-200 text-brand-brown <?= $page <= 1 ? 'opacity-50 pointer-events-none' : '' ?>">Anterior</a>
+          <a href="<?= $page < $totalPages ? $base . $next : '#' ?>" class="px-2 py-1 rounded bg-gray-200 text-brand-brown <?= $page >= $totalPages ? 'opacity-50 pointer-events-none' : '' ?>">Próximo</a>
+        </div>
+      </div>
+      <?php endif; ?>
     </div>
   <?php else: ?>
     <div class="bg-white shadow rounded p-12 text-center border-2 border-dashed border-gray-200 h-full flex flex-col items-center justify-center text-gray-500">

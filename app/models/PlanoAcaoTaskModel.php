@@ -16,7 +16,7 @@ class PlanoAcaoTaskModel extends BaseModel
               prazo DATE NULL,
               responsavel VARCHAR(120) NULL,
               fase ENUM('PLAN','DO','CHECK','ACT') NOT NULL DEFAULT 'PLAN',
-              status ENUM('A Fazer','Em Andamento','Concluído','Pendente') NOT NULL DEFAULT 'A Fazer',
+              status ENUM('Planejado','Em Andamento','Concluído','Pendente') NOT NULL DEFAULT 'Planejado',
               progresso TINYINT UNSIGNED NOT NULL DEFAULT 0,
               created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
@@ -30,6 +30,8 @@ class PlanoAcaoTaskModel extends BaseModel
                 // Keep other text fields as TEXT/VARCHAR
                 $this->db->exec("ALTER TABLE pdca_tasks MODIFY COLUMN meta_valor TEXT NULL");
                 $this->db->exec("ALTER TABLE pdca_tasks MODIFY COLUMN meta_unidade VARCHAR(255) NULL");
+                $this->db->exec("UPDATE pdca_tasks SET status = 'Planejado' WHERE status = 'A Fazer'");
+                $this->db->exec("ALTER TABLE pdca_tasks MODIFY COLUMN status ENUM('Planejado','Em Andamento','Concluído','Pendente') NOT NULL DEFAULT 'Planejado'");
             } catch (\Exception $e) {
                 // Ignore if already altered
             }
@@ -88,7 +90,7 @@ class PlanoAcaoTaskModel extends BaseModel
             'prazo' => $data['prazo'] ?? null,
             'responsavel' => $data['responsavel'] ?? null,
             'fase' => 'DO', // Force execution phase
-            'status' => $data['status'] ?? 'A Fazer',
+            'status' => $data['status'] ?? 'Planejado',
             'progresso' => (int)($data['progresso'] ?? 0),
         ]);
         $id = (int)$this->db->lastInsertId();
@@ -113,7 +115,7 @@ class PlanoAcaoTaskModel extends BaseModel
             'meta_unidade' => $data['meta_unidade'] ?? null,
             'prazo' => $data['prazo'] ?? null,
             'responsavel' => $data['responsavel'] ?? null,
-            'status' => $data['status'] ?? 'A Fazer',
+            'status' => $data['status'] ?? 'Planejado',
             'progresso' => (int)($data['progresso'] ?? 0),
             'id' => $id,
         ]);
@@ -139,6 +141,174 @@ class PlanoAcaoTaskModel extends BaseModel
         $this->ensure();
         $stmt = $this->db->prepare('SELECT * FROM pdca_tasks WHERE id_cliente = :id ORDER BY prazo IS NULL, prazo, created_at DESC');
         $stmt->execute(['id' => $idCliente]);
+        return $stmt->fetchAll();
+    }
+
+    public function countByCliente(int $idCliente, ?string $statusFilter = null, string $search = ''): int
+    {
+        $this->ensure();
+        $sql = 'SELECT COUNT(*) AS total FROM pdca_tasks WHERE id_cliente = :id';
+        $params = ['id' => $idCliente];
+        if ($statusFilter !== null && $statusFilter !== '') {
+            $sql .= ' AND status = :status';
+            $params['status'] = $statusFilter;
+        }
+        if ($search !== '') {
+            $sql .= ' AND (titulo LIKE :q OR responsavel LIKE :q)';
+            $params['q'] = '%' . $search . '%';
+        }
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return (int)$stmt->fetchColumn();
+    }
+
+    public function paginateByCliente(int $idCliente, int $page = 1, int $perPage = 20, ?string $statusFilter = null, string $search = ''): array
+    {
+        $this->ensure();
+        $page = max(1, $page);
+        $perPage = max(1, $perPage);
+        $offset = ($page - 1) * $perPage;
+        $sql = 'SELECT * FROM pdca_tasks WHERE id_cliente = :id';
+        $params = ['id' => $idCliente];
+        if ($statusFilter !== null && $statusFilter !== '') {
+            $sql .= ' AND status = :status';
+            $params['status'] = $statusFilter;
+        }
+        if ($search !== '') {
+            $sql .= ' AND (titulo LIKE :q OR responsavel LIKE :q)';
+            $params['q'] = '%' . $search . '%';
+        }
+        $sql .= ' ORDER BY prazo IS NULL, prazo, created_at DESC LIMIT :limit OFFSET :offset';
+        $stmt = $this->db->prepare($sql);
+        foreach ($params as $k => $v) {
+            $stmt->bindValue(':' . $k, $v);
+        }
+        $stmt->bindValue(':limit', $perPage, \PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, \PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function countByClienteMulti(int $idCliente, array $statuses = [], string $search = ''): int
+    {
+        $this->ensure();
+        $sql = 'SELECT COUNT(*) AS total FROM pdca_tasks WHERE id_cliente = :id';
+        $params = ['id' => $idCliente];
+
+        $realStatuses = [];
+        $includeOverdue = false;
+        foreach ($statuses as $st) {
+            if ($st === 'Atrasado') {
+                $includeOverdue = true;
+            } elseif (in_array($st, ['Planejado','Em Andamento','Concluído','Pendente'], true)) {
+                $realStatuses[] = $st;
+            }
+        }
+        if (!empty($realStatuses)) {
+            $placeholders = [];
+            foreach ($realStatuses as $i => $st) {
+                $ph = 'st' . $i; // store without leading colon
+                $placeholders[] = ':' . $ph;
+                $params[$ph] = $st;
+            }
+            $sql .= ' AND status IN (' . implode(',', $placeholders) . ')';
+        }
+        if ($includeOverdue) {
+            $sql .= ' AND (prazo IS NOT NULL AND prazo < CURRENT_DATE AND status <> \'Concluído\')';
+        }
+        if ($search !== '') {
+            $sql .= ' AND (titulo LIKE :q OR responsavel LIKE :q)';
+            $params['q'] = '%' . $search . '%';
+        }
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return (int)$stmt->fetchColumn();
+    }
+
+    public function paginateByClienteMulti(int $idCliente, int $page = 1, int $perPage = 20, array $statuses = [], string $search = ''): array
+    {
+        $this->ensure();
+        $page = max(1, $page);
+        $perPage = max(1, $perPage);
+        $offset = ($page - 1) * $perPage;
+        $sql = 'SELECT * FROM pdca_tasks WHERE id_cliente = :id';
+        $params = ['id' => $idCliente];
+
+        $realStatuses = [];
+        $includeOverdue = false;
+        foreach ($statuses as $st) {
+            if ($st === 'Atrasado') {
+                $includeOverdue = true;
+            } elseif (in_array($st, ['Planejado','Em Andamento','Concluído','Pendente'], true)) {
+                $realStatuses[] = $st;
+            }
+        }
+        if (!empty($realStatuses)) {
+            $placeholders = [];
+            foreach ($realStatuses as $i => $st) {
+                $ph = 'st' . $i; // store without leading colon
+                $placeholders[] = ':' . $ph;
+                $params[$ph] = $st;
+            }
+            $sql .= ' AND status IN (' . implode(',', $placeholders) . ')';
+        }
+        if ($includeOverdue) {
+            $sql .= ' AND (prazo IS NOT NULL AND prazo < CURRENT_DATE AND status <> \'Concluído\')';
+        }
+        if ($search !== '') {
+            $sql .= ' AND (titulo LIKE :q OR responsavel LIKE :q)';
+            $params['q'] = '%' . $search . '%';
+        }
+
+        $sql .= ' ORDER BY prazo IS NULL, prazo, created_at DESC LIMIT :limit OFFSET :offset';
+        $stmt = $this->db->prepare($sql);
+        foreach ($params as $k => $v) {
+            $name = (str_starts_with($k, ':')) ? $k : ':' . $k;
+            $stmt->bindValue($name, $v);
+        }
+        $stmt->bindValue(':limit', $perPage, \PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, \PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function filterForExport(int $idCliente, array $statuses = [], string $search = ''): array
+    {
+        // Return all rows that match filters (no pagination)
+        $this->ensure();
+        $sql = 'SELECT id, id_cliente, titulo, descricao, meta_valor, meta_unidade, prazo, responsavel, status, progresso, created_at
+                FROM pdca_tasks WHERE id_cliente = :id';
+        $params = ['id' => $idCliente];
+
+        $realStatuses = [];
+        $includeOverdue = false;
+        foreach ($statuses as $st) {
+            if ($st === 'Atrasado') {
+                $includeOverdue = true;
+            } elseif (in_array($st, ['Planejado','Em Andamento','Concluído','Pendente'], true)) {
+                $realStatuses[] = $st;
+            }
+        }
+        if (!empty($realStatuses)) {
+            $placeholders = [];
+            foreach ($realStatuses as $i => $st) {
+                $ph = 'st' . $i; // store without leading colon
+                $placeholders[] = ':' . $ph;
+                $params[$ph] = $st;
+            }
+            $sql .= ' AND status IN (' . implode(',', $placeholders) . ')';
+        }
+        if ($includeOverdue) {
+            $sql .= ' AND (prazo IS NOT NULL AND prazo < CURRENT_DATE AND status <> \'Concluído\')';
+        }
+        if ($search !== '') {
+            $sql .= ' AND (titulo LIKE :q OR responsavel LIKE :q)';
+            $params['q'] = '%' . $search . '%';
+        }
+        $sql .= ' ORDER BY prazo IS NULL, prazo, created_at DESC';
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 

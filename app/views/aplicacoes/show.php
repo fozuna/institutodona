@@ -44,7 +44,7 @@
             <div class="md:col-span-3">
               <label class="block text-sm">Status</label>
               <select name="status">
-                <?php foreach (['A Fazer','Em Andamento','Concluído','Pendente'] as $s): ?>
+                <?php foreach (['Planejado','Em Andamento','Concluído','Pendente'] as $s): ?>
                   <option value="<?= $s ?>" <?= ($app['status'] ?? '') === $s ? 'selected' : '' ?>><?= $s ?></option>
                 <?php endforeach; ?>
               </select>
@@ -72,7 +72,7 @@
           <form method="post" action="index.php?route=aplicacoes/update" class="mb-3">
             <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
             <input type="hidden" name="id_aplicacao" value="<?= (int)$app['id'] ?>" />
-            <input type="hidden" name="status" value="<?= htmlspecialchars($app['status'] ?? 'A Fazer') ?>" />
+            <input type="hidden" name="status" value="<?= htmlspecialchars($app['status'] ?? 'Planejado') ?>" />
             <input type="hidden" name="data_prevista" value="<?= htmlspecialchars($app['data_prevista'] ?? '') ?>" />
             <input type="hidden" name="consultor_id" value="<?= (int)($app['consultor_id'] ?? 0) ?>" />
             <?php foreach ($colabs as $c): ?>

@@ -27,7 +27,7 @@ $taskId = $tasks->create([
   'prazo' => date('Y-m-d', strtotime('+7 days')),
   'responsavel' => 'Tester',
   'fase' => 'DO',
-  'status' => 'A Fazer',
+  'status' => 'Planejado',
   'progresso' => 0,
 ]);
 assert_true($taskId > 0, 'Criou tarefa Plano de Ação');

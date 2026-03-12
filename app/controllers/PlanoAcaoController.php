@@ -3,6 +3,8 @@ namespace App\Controllers;
 
 use App\Core\BaseController;
 use App\Core\Security;
+use App\Core\PlanoAcaoImportService;
+use App\Core\AuditLogger;
 use App\Models\PlanoAcaoTaskModel;
 use App\Models\PlanoAcaoMetricModel;
 use App\Models\PlanoAcaoCheckModel;
@@ -40,11 +42,26 @@ class PlanoAcaoController extends BaseController
         $this->requireLogin();
         $clientes = (new ClienteModel())->all();
         $selectedCliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : null;
-        $items = $selectedCliente ? $this->tasks->byCliente($selectedCliente) : [];
+        $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+        $per = isset($_GET['per']) ? max(1, (int)$_GET['per']) : 20;
+        $items = [];
+        $total = 0;
+        $totalPages = 1;
+        if ($selectedCliente) {
+            $total = $this->tasks->countByCliente($selectedCliente);
+            $items = $this->tasks->paginateByCliente($selectedCliente, $page, $per);
+            $totalPages = max(1, (int)ceil($total / $per));
+        }
         $this->render('planoacao/index', [
             'clientes' => $clientes,
             'selectedCliente' => $selectedCliente,
             'items' => $items,
+            'page' => $page,
+            'per' => $per,
+            'total' => $total,
+            'totalPages' => $totalPages,
+            'importEnabled' => getenv('PLANOACAO_IMPORT_ENABLED') === '1',
+            'importAlreadyRun' => is_file(__DIR__ . '/../../storage/imports/planoacao_import_done.flag'),
         ]);
     }
 
@@ -64,10 +81,20 @@ class PlanoAcaoController extends BaseController
             // Simulate network delay for loading indicator demonstration if needed, but keeping it fast
             // usleep(300000); 
             
-            $items = $this->tasks->byCliente($clienteId);
-            
-            // Format items for frontend if necessary, but raw data seems fine based on current view usage
-            echo json_encode(['success' => true, 'data' => $items]);
+            $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+            $per = isset($_GET['per']) ? max(1, (int)$_GET['per']) : 20;
+            $total = $this->tasks->countByCliente($clienteId);
+            $items = $this->tasks->paginateByCliente($clienteId, $page, $per);
+            echo json_encode([
+                'success' => true,
+                'data' => $items,
+                'pagination' => [
+                    'page' => $page,
+                    'per' => $per,
+                    'total' => $total,
+                    'totalPages' => max(1, (int)ceil($total / $per)),
+                ],
+            ]);
         } catch (\Exception $e) {
             http_response_code(500);
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
@@ -120,7 +147,7 @@ class PlanoAcaoController extends BaseController
             // Checkbox handling: if 'concluido' is present, progress is 100, else 0
             $isConcluido = isset($_POST['concluido']);
             $progresso = $isConcluido ? 100 : 0;
-            $status = $_POST['status'] ?? 'A Fazer';
+            $status = $_POST['status'] ?? 'Planejado';
             
             // Auto-update status based on completion if needed, or trust user input
             if ($isConcluido && $status !== 'Concluído') {
@@ -190,7 +217,7 @@ class PlanoAcaoController extends BaseController
         // Checkbox handling for updates
         $isConcluido = isset($_POST['concluido']);
         $progresso = $isConcluido ? 100 : 0;
-        $status = $_POST['status'] ?? 'A Fazer';
+        $status = $_POST['status'] ?? 'Planejado';
         
         if ($isConcluido && $status !== 'Concluído') {
             $status = 'Concluído';
@@ -340,5 +367,147 @@ class PlanoAcaoController extends BaseController
         }
         // Redirect to prevent form resubmission and show flash message
         header('Location: index.php?route=planoacao/show&id=' . $taskId);
+    }
+
+    public function importForm(): void
+    {
+        $this->requireRole('instituto');
+        $enabled = getenv('PLANOACAO_IMPORT_ENABLED') === '1';
+        $flagPath = __DIR__ . '/../../storage/imports/planoacao_import_done.flag';
+        $alreadyRun = is_file($flagPath);
+        if (!$enabled) {
+            http_response_code(403);
+            echo 'Ferramenta de importação desativada.';
+            return;
+        }
+        $clientes = (new ClienteModel())->all();
+        $this->render('planoacao/import', [
+            'clientes' => $clientes,
+            'alreadyRun' => $alreadyRun,
+        ]);
+    }
+
+    public function importRun(): void
+    {
+        $this->requireRole('instituto');
+        $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') || (isset($_GET['ajax']) && $_GET['ajax'] === '1');
+        $enabled = getenv('PLANOACAO_IMPORT_ENABLED') === '1';
+        $flagDir = __DIR__ . '/../../storage/imports';
+        $flagPath = $flagDir . '/planoacao_import_done.flag';
+        if (!$enabled) {
+            http_response_code(403);
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Ferramenta de importação desativada.']);
+            } else {
+                echo 'Ferramenta de importação desativada.';
+            }
+            return;
+        }
+        if (is_file($flagPath)) {
+            http_response_code(403);
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Importação já foi executada anteriormente.']);
+            } else {
+                echo 'Importação já foi executada anteriormente.';
+            }
+            return;
+        }
+        $csrf = $_POST['csrf'] ?? null;
+        if (!Security::verifyCsrf($csrf)) {
+            http_response_code(400);
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'CSRF inválido']);
+            } else {
+                echo 'CSRF inválido';
+            }
+            return;
+        }
+        if (empty($_FILES['arquivo']) || ($_FILES['arquivo']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            http_response_code(400);
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Arquivo não enviado ou inválido.']);
+            } else {
+                echo 'Arquivo não enviado ou inválido.';
+            }
+            return;
+        }
+        $defaultClienteId = (int)($_POST['id_cliente'] ?? 0);
+        $tmpName = $_FILES['arquivo']['tmp_name'];
+        $origName = $_FILES['arquivo']['name'] ?? 'planilha';
+        $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+        if (!in_array($ext, ['xlsx', 'csv'], true)) {
+            http_response_code(400);
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Apenas arquivos XLSX ou CSV são aceitos.']);
+            } else {
+                echo 'Apenas arquivos XLSX ou CSV são aceitos.';
+            }
+            return;
+        }
+        if (!is_dir($flagDir)) {
+            @mkdir($flagDir, 0775, true);
+        }
+        $destName = date('Ymd_His') . '_planoacao_import.' . $ext;
+        $destPath = $flagDir . '/' . $destName;
+        if (!@move_uploaded_file($tmpName, $destPath)) {
+            http_response_code(500);
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Falha ao salvar arquivo enviado.']);
+            } else {
+                echo 'Falha ao salvar arquivo enviado.';
+            }
+            return;
+        }
+        $service = new PlanoAcaoImportService();
+        AuditLogger::log('planoacao_import_start', 'pdca_tasks', null, [
+            'file' => $origName,
+            'stored_as' => $destName,
+            'default_cliente_id' => $defaultClienteId ?: null,
+        ]);
+        try {
+            $stats = $service->import($destPath, $defaultClienteId ?: null);
+            if (($stats['imported'] ?? 0) > 0) {
+                @file_put_contents($flagPath, json_encode([
+                    'file' => $destName,
+                    'executed_at' => date('c'),
+                    'stats' => $stats,
+                ], JSON_UNESCAPED_UNICODE));
+            }
+            AuditLogger::log('planoacao_import_finished', 'pdca_tasks', null, $stats);
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'success' => true,
+                    'report' => $stats,
+                    'uploadedFile' => $origName,
+                    'alreadyRun' => true,
+                ]);
+            } else {
+                $clientes = (new ClienteModel())->all();
+                $this->render('planoacao/import', [
+                    'clientes' => $clientes,
+                    'alreadyRun' => true,
+                    'report' => $stats,
+                    'uploadedFile' => $origName,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            AuditLogger::log('planoacao_import_failed', 'pdca_tasks', null, [
+                'message' => $e->getMessage(),
+            ]);
+            http_response_code(500);
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Erro ao processar importação: ' . $e->getMessage()]);
+            } else {
+                echo 'Erro ao processar importação: ' . htmlspecialchars($e->getMessage());
+            }
+        }
     }
 }

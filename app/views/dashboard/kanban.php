@@ -37,7 +37,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <?php
         $columns = [
-            'A Fazer' => 'bg-brand-pink',
+            'Planejado' => 'bg-brand-pink',
             'Em Andamento' => 'bg-brand-red',
             'Concluído' => 'bg-green-600',
         ];

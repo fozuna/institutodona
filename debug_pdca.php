@@ -13,7 +13,7 @@ try {
         'titulo' => 'Teste Debug ' . time(),
         'descricao' => 'Debug insert',
         'fase' => 'DO',
-        'status' => 'A Fazer',
+        'status' => 'Planejado',
         'progresso' => 0
     ];
     

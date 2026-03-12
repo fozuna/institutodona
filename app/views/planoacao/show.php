@@ -286,7 +286,7 @@ document.getElementById('editTaskModal').addEventListener('click', function(e) {
              <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
                 <select name="status" class="w-full rounded border-gray-300 shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
-                    <option value="A Fazer" <?= ($task['status']??'') == 'A Fazer' ? 'selected' : '' ?>>A Fazer</option>
+                    <option value="Planejado" <?= ($task['status']??'') == 'Planejado' ? 'selected' : '' ?>>Planejado</option>
                     <option value="Em Andamento" <?= ($task['status']??'') == 'Em Andamento' ? 'selected' : '' ?>>Em Andamento</option>
                     <option value="Concluído" <?= ($task['status']??'') == 'Concluído' ? 'selected' : '' ?>>Concluído</option>
                     <option value="Pendente" <?= ($task['status']??'') == 'Pendente' ? 'selected' : '' ?>>Pendente</option>

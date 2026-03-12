@@ -155,6 +155,17 @@ class ClientesController extends BaseController
         $filiais = $this->clientes->filiaisByMatriz($id);
         $matrizes = $this->clientes->matrizes();
         $avaliacoes = (new \App\Models\AvaliacaoModel())->byCliente($id);
+        $planoPage = isset($_GET['plano_page']) ? max(1, (int)$_GET['plano_page']) : 1;
+        $planoPer = isset($_GET['plano_per']) ? max(1, (int)$_GET['plano_per']) : 20;
+        $planoStatusFilters = $_GET['plano_status'] ?? [];
+        if (!is_array($planoStatusFilters)) {
+            $planoStatusFilters = [$planoStatusFilters];
+        }
+        $planoStatusFilters = array_values(array_filter(array_map('trim', $planoStatusFilters)));
+        $taskModel = new \App\Models\PlanoAcaoTaskModel();
+        $planoTotal = $taskModel->countByClienteMulti($id, $planoStatusFilters);
+        $planoTasks = $taskModel->paginateByClienteMulti($id, $planoPage, $planoPer, $planoStatusFilters);
+        $planoTotalPages = max(1, (int)ceil($planoTotal / $planoPer));
         $arquivosCliente = [];
         foreach ($apps as $row) {
             foreach ($apl->arquivosForAplicacao((int)$row['id']) as $f) {
@@ -179,10 +190,61 @@ class ClientesController extends BaseController
             'filiais' => $filiais,
             'matrizes' => $matrizes,
             'avaliacoes' => $avaliacoes,
+            'planoTasks' => $planoTasks,
+            'planoTotal' => $planoTotal,
+            'planoPage' => $planoPage,
+            'planoPer' => $planoPer,
+            'planoTotalPages' => $planoTotalPages,
+            'planoStatusFilters' => $planoStatusFilters,
             'statusFilter' => $statusFilter,
             'consultorFilter' => $consultorFilter,
             'arquivosCliente' => $arquivosCliente,
         ]);
+    }
+
+    public function exportPlanos(): void
+    {
+        $this->requireLogin();
+        $user = $_SESSION['user'] ?? [];
+        $id = (int)($_GET['id'] ?? 0);
+        $tipo = $user['tipo_acesso'] ?? null;
+        if ($tipo === 'cliente' && (int)($user['id_cliente'] ?? 0) !== $id) {
+            http_response_code(403);
+            echo 'Acesso negado';
+            return;
+        }
+        if ($tipo !== 'instituto' && $tipo !== 'cliente') {
+            http_response_code(403);
+            echo 'Acesso negado';
+            return;
+        }
+        $statusFilters = $_GET['plano_status'] ?? [];
+        if (!is_array($statusFilters)) {
+            $statusFilters = [$statusFilters];
+        }
+        $statusFilters = array_values(array_filter(array_map('trim', $statusFilters)));
+
+        $taskModel = new \App\Models\PlanoAcaoTaskModel();
+        $rows = $taskModel->filterForExport($id, $statusFilters);
+        if (empty($rows)) {
+            http_response_code(400);
+            echo 'Nenhum plano de ação encontrado para os filtros selecionados.';
+            return;
+        }
+        $filename = 'planos_acao_cliente_' . $id . '_' . date('Ymd_His') . '.xlsx';
+        $path = \App\Core\XlsxExport::exportPlanos($rows, $filename);
+        \App\Core\AuditLogger::log('planoacao_export', 'pdca_tasks', null, [
+            'cliente_id' => $id,
+            'status_filters' => $statusFilters,
+            'count' => count($rows),
+            'file' => $filename,
+        ]);
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Length: ' . filesize($path));
+        readfile($path);
+        @unlink($path);
+        exit;
     }
 
     public function storeFilial(): void
@@ -211,7 +273,7 @@ class ClientesController extends BaseController
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
         $idCliente = (int)($_POST['id_cliente'] ?? 0);
         $idMetodologia = (int)($_POST['id_metodologia'] ?? 0);
-        $status = $_POST['status'] ?? 'A Fazer';
+        $status = $_POST['status'] ?? 'Planejado';
         $consultorId = isset($_POST['consultor_id']) ? (int)$_POST['consultor_id'] : null;
         $dataPrevista = $_POST['data_prevista'] ?? null;
         $colabIds = isset($_POST['colaborador_ids']) ? (array)$_POST['colaborador_ids'] : [];
@@ -235,7 +297,7 @@ class ClientesController extends BaseController
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
         $idCliente = (int)($_POST['id_cliente'] ?? 0);
         $idAplicacao = (int)($_POST['id_aplicacao'] ?? 0);
-        $status = $_POST['status'] ?? 'A Fazer';
+        $status = $_POST['status'] ?? 'Planejado';
         $dataPrevista = $_POST['data_prevista'] ?? null;
         $consultorId = isset($_POST['consultor_id']) ? (int)$_POST['consultor_id'] : null;
         $colabIds = isset($_POST['colaborador_ids']) ? (array)$_POST['colaborador_ids'] : [];
