@@ -195,4 +195,25 @@ class ColaboradorModel extends BaseModel
         $stmt->execute();
         return $stmt->fetchAll();
     }
+
+    public function allBySetor(int $setorId, ?int $clienteId = null): array
+    {
+        $this->ensureTable();
+        $params = ['sid' => $setorId];
+        $conds = ['s.id = :sid'];
+        if ($clienteId !== null && $clienteId > 0) {
+            $conds[] = 'col.cliente_id = :cid';
+            $params['cid'] = $clienteId;
+        }
+        $conds[] = $this->tenantInCondition('col.cliente_id', $params, 'cset');
+        $sql = 'SELECT col.id, col.nome, col.email, col.cliente_id, f.id AS funcao_id, s.id AS setor_id
+                FROM colaboradores col
+                JOIN funcoes f ON f.id = col.funcao_id
+                JOIN setores s ON s.id = f.setor_id
+                WHERE ' . implode(' AND ', $conds) . '
+                ORDER BY col.nome';
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
 }

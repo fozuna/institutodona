@@ -25,6 +25,7 @@ use App\Controllers\ColaboradoresController;
 use App\Controllers\AvaliacoesController;
 use App\Controllers\LogsController;
 use App\Controllers\AboutController;
+use App\Controllers\AuditoriasController;
 
 $route = $_GET['route'] ?? 'auth/login';
 
@@ -239,6 +240,48 @@ switch ($route) {
         break;
     case 'about/index':
         (new AboutController())->index();
+        break;
+    case 'auditorias/index':
+        (new AuditoriasController())->index();
+        break;
+    case 'auditorias/create':
+        (new AuditoriasController())->create();
+        break;
+    case 'auditorias/store':
+        (new AuditoriasController())->store();
+        break;
+    case 'auditorias/edit':
+        (new AuditoriasController())->edit();
+        break;
+    case 'auditorias/update':
+        (new AuditoriasController())->update();
+        break;
+    case 'auditorias/delete':
+        (new AuditoriasController())->delete();
+        break;
+    case 'auditorias/auditar':
+        (new AuditoriasController())->auditar();
+        break;
+    case 'auditorias/api_setores':
+        (new AuditoriasController())->apiSetores();
+        break;
+    case 'auditorias/api_responsaveis':
+        (new AuditoriasController())->apiResponsaveis();
+        break;
+    case 'auditorias/api_list':
+        (new AuditoriasController())->apiList();
+        break;
+    case 'auditorias/api_store':
+        (new AuditoriasController())->apiStore();
+        break;
+    case 'auditorias/api_update':
+        (new AuditoriasController())->apiUpdate();
+        break;
+    case 'auditorias/api_delete':
+        (new AuditoriasController())->apiDelete();
+        break;
+    case 'auditorias/api_auditar':
+        (new AuditoriasController())->apiAuditar();
         break;
     case 'aplicacoes/delete_update':
         (new AplicacoesController())->delete_update();

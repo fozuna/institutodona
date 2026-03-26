@@ -229,3 +229,36 @@ CREATE TABLE IF NOT EXISTS pdca_actions (
   status ENUM('Planejado','Em Execução','Concluído') NOT NULL DEFAULT 'Planejado',
   CONSTRAINT fk_pdca_action_task FOREIGN KEY (task_id) REFERENCES pdca_tasks(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS auditorias (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  cliente_id INT NOT NULL,
+  setor_id INT NOT NULL,
+  responsavel_id INT NOT NULL,
+  data_auditoria DATE NOT NULL,
+  pergunta VARCHAR(500) NOT NULL,
+  objetivo TEXT NOT NULL,
+  referencia_esperada VARCHAR(255) NOT NULL,
+  status ENUM('Agendada','Realizada') NOT NULL DEFAULT 'Agendada',
+  avaliacao TEXT NULL,
+  obs TEXT NULL,
+  realizada_at DATETIME NULL,
+  created_by INT NULL,
+  updated_by INT NULL,
+  deleted_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at DATETIME NULL,
+  CONSTRAINT fk_auditorias_cliente FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_auditorias_setor FOREIGN KEY (setor_id) REFERENCES setores(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_auditorias_responsavel FOREIGN KEY (responsavel_id) REFERENCES colaboradores(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS auditoria_relatorios (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  auditoria_id INT NOT NULL,
+  relatorio_ref VARCHAR(120) NOT NULL,
+  ativo TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_auditoria_relatorios_auditoria FOREIGN KEY (auditoria_id) REFERENCES auditorias(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -49,6 +49,7 @@ $config = require $cfg;
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'avaliacoes/')===0?'is-active':'' ?>" href="index.php?route=avaliacoes/index"><span data-feather="check-square" class="inline-block mr-2"></span>Avaliações</a>
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'planoacao/')===0?'is-active':'' ?>" href="index.php?route=planoacao/index"><span data-feather="activity" class="inline-block mr-2"></span>Plano de Ação</a>
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'indicadores/')===0?'is-active':'' ?>" href="index.php?route=indicadores/index"><span data-feather="bar-chart-2" class="inline-block mr-2"></span>Indicadores</a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'auditorias/')===0?'is-active':'' ?>" href="index.php?route=auditorias/index"><span data-feather="clipboard" class="inline-block mr-2"></span>Auditorias</a>
                     <?php if (($user['email'] ?? '') === 'admin@agencialester.com.br'): ?>
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'logs/')===0?'is-active':'' ?>" href="index.php?route=logs/index"><span data-feather="file-text" class="inline-block mr-2"></span>Logs</a>
                     <?php endif; ?>

@@ -7,7 +7,8 @@ class BaseController
         'store', 'update', 'delete', 'attach', 'upload', 'set_status',
         'upsertmetric', 'addcheck', 'createaction', 'updatetask',
         'updateaction', 'importrun', 'delete_update', 'storefilial',
-        'updateaplicacao', 'deleteaplicacao',
+        'updateaplicacao', 'deleteaplicacao', 'auditar',
+        'api_store', 'api_update', 'api_delete', 'api_auditar',
     ];
 
     protected function render(string $view, array $params = []): void
