@@ -20,23 +20,30 @@ class CronogramaModel extends BaseModel
     public function all(): array
     {
         $this->ensureTable();
-        $stmt = $this->db->query('SELECT c.id, c.nome, c.ano, cli.nome_empresa AS cliente, c.id_cliente FROM cronogramas c JOIN clientes cli ON cli.id = c.id_cliente ORDER BY cli.nome_empresa, c.ano DESC');
+        $params = [];
+        $scope = $this->tenantInCondition('c.id_cliente', $params, 'cra');
+        $stmt = $this->db->prepare("SELECT c.id, c.nome, c.ano, cli.nome_empresa AS cliente, c.id_cliente FROM cronogramas c JOIN clientes cli ON cli.id = c.id_cliente WHERE $scope ORDER BY cli.nome_empresa, c.ano DESC");
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 
     public function byCliente(int $idCliente): array
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('SELECT c.id, c.nome, c.ano, cli.nome_empresa AS cliente, c.id_cliente FROM cronogramas c JOIN clientes cli ON cli.id = c.id_cliente WHERE c.id_cliente = :id ORDER BY c.ano DESC');
-        $stmt->execute(['id' => $idCliente]);
+        $params = ['id' => $idCliente];
+        $scope = $this->tenantInCondition('c.id_cliente', $params, 'crb');
+        $stmt = $this->db->prepare("SELECT c.id, c.nome, c.ano, cli.nome_empresa AS cliente, c.id_cliente FROM cronogramas c JOIN clientes cli ON cli.id = c.id_cliente WHERE c.id_cliente = :id AND $scope ORDER BY c.ano DESC");
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 
     public function find(int $id): ?array
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('SELECT c.id, c.nome, c.ano, c.id_cliente, cli.nome_empresa AS cliente FROM cronogramas c JOIN clientes cli ON cli.id = c.id_cliente WHERE c.id = :id');
-        $stmt->execute(['id' => $id]);
+        $params = ['id' => $id];
+        $scope = $this->tenantInCondition('c.id_cliente', $params, 'crf');
+        $stmt = $this->db->prepare("SELECT c.id, c.nome, c.ano, c.id_cliente, cli.nome_empresa AS cliente FROM cronogramas c JOIN clientes cli ON cli.id = c.id_cliente WHERE c.id = :id AND $scope");
+        $stmt->execute($params);
         $row = $stmt->fetch();
         return $row ?: null;
     }
@@ -44,6 +51,10 @@ class CronogramaModel extends BaseModel
     public function create(array $data): int
     {
         $this->ensureTable();
+        $data['id_cliente'] = (int)$this->normalizeScopedClienteId(isset($data['id_cliente']) ? (int)$data['id_cliente'] : null);
+        if (($data['id_cliente'] ?? 0) <= 0 || !$this->canAccessClienteId((int)$data['id_cliente'])) {
+            return 0;
+        }
         $stmt = $this->db->prepare('INSERT INTO cronogramas (id_cliente, nome, ano) VALUES (:id_cliente, :nome, :ano)');
         $stmt->execute([
             'id_cliente' => $data['id_cliente'],

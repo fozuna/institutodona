@@ -6,18 +6,21 @@ use App\Core\Security;
 use App\Models\UsuarioModel;
 use App\Models\ClienteModel;
 use App\Models\ConsultorModel;
+use App\Models\UsuarioEmpresaModel;
 
 class UsuariosController extends BaseController
 {
     private UsuarioModel $usuarios;
     private ClienteModel $clientes;
     private ConsultorModel $consultores;
+    private UsuarioEmpresaModel $usuarioEmpresas;
 
     public function __construct()
     {
         $this->usuarios = new UsuarioModel();
         $this->clientes = new ClienteModel();
         $this->consultores = new ConsultorModel();
+        $this->usuarioEmpresas = new UsuarioEmpresaModel();
     }
 
     public function index(): void
@@ -35,7 +38,12 @@ class UsuariosController extends BaseController
         }
         foreach ($items as &$u) {
             if ($u['tipo_acesso'] === 'cliente' && !empty($u['id_cliente'])) {
-                $u['pertence'] = $mapClientes[(int)$u['id_cliente']] ?? 'Cliente';
+                $assigned = $this->usuarioEmpresas->allForUser((int)$u['id']);
+                if (!empty($assigned)) {
+                    $u['pertence'] = implode(', ', array_map(static fn(array $r): string => (string)$r['nome_empresa'], $assigned));
+                } else {
+                    $u['pertence'] = $mapClientes[(int)$u['id_cliente']] ?? 'Cliente';
+                }
             } elseif ($u['tipo_acesso'] === 'consultor') {
                 $urow = $this->usuarios->find((int)$u['id']);
                 $u['pertence'] = $mapConsultoresEmailNome[$urow['email']] ?? 'Consultor';
@@ -51,7 +59,7 @@ class UsuariosController extends BaseController
         $this->requireLogin();
         $clientes = $this->clientes->all();
         $consultores = $this->consultores->all();
-        $this->render('usuarios/create', ['clientes' => $clientes, 'consultores' => $consultores]);
+        $this->render('usuarios/create', ['clientes' => $clientes, 'consultores' => $consultores, 'selectedClientes' => []]);
     }
 
     public function store(): void
@@ -67,11 +75,16 @@ class UsuariosController extends BaseController
         $email = trim($_POST['email'] ?? '');
         $senha = $_POST['senha'] ?? '';
         $tipo = $_POST['tipo_acesso'] ?? 'cliente';
-        $idCliente = $_POST['id_cliente'] ?? null;
+        $selectedClientes = $this->parseSelectedClientes($_POST);
         $idConsultor = $_POST['id_consultor'] ?? null;
         if (!$nome || !$email || !$senha) {
             http_response_code(400);
             echo 'Campos obrigatórios faltando';
+            return;
+        }
+        if ($tipo === 'cliente' && empty($selectedClientes)) {
+            http_response_code(400);
+            echo 'Selecione ao menos uma empresa para o usuário cliente';
             return;
         }
         $hash = password_hash($senha, PASSWORD_DEFAULT);
@@ -80,8 +93,18 @@ class UsuariosController extends BaseController
             'email' => $email,
             'senha_hash' => $hash,
             'tipo_acesso' => $tipo,
-            'id_cliente' => $tipo === 'cliente' ? ($idCliente ? (int)$idCliente : null) : null,
+            'id_cliente' => $tipo === 'cliente' ? (int)($selectedClientes[0] ?? 0) : null,
         ]);
+        if ($tipo === 'cliente' && $id > 0) {
+            $allAllowed = $this->usuarioEmpresas->syncForUser($id, $selectedClientes);
+            if (empty($allAllowed)) {
+                http_response_code(400);
+                echo 'Nenhuma empresa elegível foi vinculada. Verifique filiais inativas ou com acesso restrito.';
+                return;
+            }
+        } else {
+            $this->usuarioEmpresas->syncForUser($id, []);
+        }
         if ($tipo === 'consultor' && $idConsultor) {
             $this->consultores->linkUser((int)$idConsultor, $id);
         }
@@ -95,7 +118,11 @@ class UsuariosController extends BaseController
         $item = $this->usuarios->find($id);
         $clientes = $this->clientes->all();
         $consultores = $this->consultores->all();
-        $this->render('usuarios/edit', ['item' => $item, 'clientes' => $clientes, 'consultores' => $consultores]);
+        $selectedClientes = $item ? $this->usuarioEmpresas->selectedForUser((int)$item['id']) : [];
+        if (empty($selectedClientes) && !empty($item['id_cliente'])) {
+            $selectedClientes = [(int)$item['id_cliente']];
+        }
+        $this->render('usuarios/edit', ['item' => $item, 'clientes' => $clientes, 'consultores' => $consultores, 'selectedClientes' => $selectedClientes]);
     }
 
     public function update(): void
@@ -111,14 +138,20 @@ class UsuariosController extends BaseController
         $nome = trim($_POST['nome'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $tipo = $_POST['tipo_acesso'] ?? 'cliente';
-        $idCliente = $_POST['id_cliente'] ?? null;
+        $selectedClientes = $this->parseSelectedClientes($_POST);
         $senha = $_POST['senha'] ?? null;
+        if ($tipo === 'cliente' && empty($selectedClientes)) {
+            http_response_code(400);
+            echo 'Selecione ao menos uma empresa para o usuário cliente';
+            return;
+        }
         $this->usuarios->update($id, [
             'nome' => $nome,
             'email' => $email,
             'tipo_acesso' => $tipo,
-            'id_cliente' => $tipo === 'cliente' ? ($idCliente ? (int)$idCliente : null) : null,
+            'id_cliente' => $tipo === 'cliente' ? (int)($selectedClientes[0] ?? 0) : null,
         ]);
+        $this->usuarioEmpresas->syncForUser($id, $tipo === 'cliente' ? $selectedClientes : []);
         if ($senha) {
             $hash = password_hash($senha, PASSWORD_DEFAULT);
             $this->usuarios->updatePassword($id, $hash);
@@ -132,5 +165,19 @@ class UsuariosController extends BaseController
         $id = (int)($_GET['id'] ?? 0);
         $this->usuarios->delete($id);
         header('Location: index.php?route=usuarios/index');
+    }
+
+    private function parseSelectedClientes(array $payload): array
+    {
+        $selected = $payload['id_clientes'] ?? [];
+        if (!is_array($selected)) {
+            $selected = [];
+        }
+        if (empty($selected) && !empty($payload['id_cliente'])) {
+            $selected = [$payload['id_cliente']];
+        }
+        $selected = array_values(array_unique(array_filter(array_map('intval', $selected), fn(int $id): bool => $id > 0)));
+        sort($selected);
+        return $selected;
     }
 }

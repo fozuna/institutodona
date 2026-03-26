@@ -23,23 +23,30 @@ class IndicadorModel extends BaseModel
     public function all(): array
     {
         $this->ensure();
-        $stmt = $this->db->query('SELECT i.*, c.nome_empresa AS cliente_nome FROM indicadores i JOIN clientes c ON c.id = i.cliente_id ORDER BY cliente_nome, nome, referencia');
+        $params = [];
+        $scope = $this->tenantInCondition('i.cliente_id', $params, 'ia');
+        $stmt = $this->db->prepare("SELECT i.*, c.nome_empresa AS cliente_nome FROM indicadores i JOIN clientes c ON c.id = i.cliente_id WHERE $scope ORDER BY cliente_nome, nome, referencia");
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 
     public function byCliente(int $clienteId): array
     {
         $this->ensure();
-        $stmt = $this->db->prepare('SELECT i.*, c.nome_empresa AS cliente_nome FROM indicadores i JOIN clientes c ON c.id = i.cliente_id WHERE cliente_id = :cid ORDER BY referencia IS NULL, referencia, nome');
-        $stmt->execute(['cid' => $clienteId]);
+        $params = ['cid' => $clienteId];
+        $scope = $this->tenantInCondition('i.cliente_id', $params, 'ib');
+        $stmt = $this->db->prepare("SELECT i.*, c.nome_empresa AS cliente_nome FROM indicadores i JOIN clientes c ON c.id = i.cliente_id WHERE i.cliente_id = :cid AND $scope ORDER BY referencia IS NULL, referencia, nome");
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 
     public function find(int $id): ?array
     {
         $this->ensure();
-        $stmt = $this->db->prepare('SELECT i.*, c.nome_empresa AS cliente_nome FROM indicadores i JOIN clientes c ON c.id = i.cliente_id WHERE i.id = :id');
-        $stmt->execute(['id' => $id]);
+        $params = ['id' => $id];
+        $scope = $this->tenantInCondition('i.cliente_id', $params, 'ic');
+        $stmt = $this->db->prepare("SELECT i.*, c.nome_empresa AS cliente_nome FROM indicadores i JOIN clientes c ON c.id = i.cliente_id WHERE i.id = :id AND $scope");
+        $stmt->execute($params);
         $row = $stmt->fetch();
         return $row ?: null;
     }
@@ -47,6 +54,10 @@ class IndicadorModel extends BaseModel
     public function create(array $data): int
     {
         $this->ensure();
+        $data['cliente_id'] = (int)$this->normalizeScopedClienteId(isset($data['cliente_id']) ? (int)$data['cliente_id'] : null);
+        if (($data['cliente_id'] ?? 0) <= 0 || !$this->canAccessClienteId((int)$data['cliente_id'])) {
+            return 0;
+        }
         $stmt = $this->db->prepare('INSERT INTO indicadores (cliente_id, nome, unidade, referencia, meta, realizado) VALUES (:cliente_id, :nome, :unidade, :referencia, :meta, :realizado)');
         $stmt->execute([
             'cliente_id' => $data['cliente_id'],
@@ -62,8 +73,8 @@ class IndicadorModel extends BaseModel
     public function update(int $id, array $data): bool
     {
         $this->ensure();
-        $stmt = $this->db->prepare('UPDATE indicadores SET cliente_id = :cliente_id, nome = :nome, unidade = :unidade, referencia = :referencia, meta = :meta, realizado = :realizado WHERE id = :id');
-        return $stmt->execute([
+        $data['cliente_id'] = (int)$this->normalizeScopedClienteId(isset($data['cliente_id']) ? (int)$data['cliente_id'] : null);
+        $params = [
             'cliente_id' => $data['cliente_id'],
             'nome' => $data['nome'],
             'unidade' => $data['unidade'] ?? null,
@@ -71,20 +82,27 @@ class IndicadorModel extends BaseModel
             'meta' => $data['meta'] ?? 0,
             'realizado' => $data['realizado'] ?? 0,
             'id' => $id,
-        ]);
+        ];
+        $scope = $this->tenantInCondition('cliente_id', $params, 'idu');
+        $stmt = $this->db->prepare("UPDATE indicadores SET cliente_id = :cliente_id, nome = :nome, unidade = :unidade, referencia = :referencia, meta = :meta, realizado = :realizado WHERE id = :id AND $scope");
+        return $stmt->execute($params) && $stmt->rowCount() > 0;
     }
 
     public function updateRealizado(int $id, float $realizado): bool
     {
         $this->ensure();
-        $stmt = $this->db->prepare('UPDATE indicadores SET realizado = :realizado WHERE id = :id');
-        return $stmt->execute(['realizado' => $realizado, 'id' => $id]);
+        $params = ['realizado' => $realizado, 'id' => $id];
+        $scope = $this->tenantInCondition('cliente_id', $params, 'ir');
+        $stmt = $this->db->prepare("UPDATE indicadores SET realizado = :realizado WHERE id = :id AND $scope");
+        return $stmt->execute($params) && $stmt->rowCount() > 0;
     }
 
     public function delete(int $id): bool
     {
         $this->ensure();
-        $stmt = $this->db->prepare('DELETE FROM indicadores WHERE id = :id');
-        return $stmt->execute(['id' => $id]);
+        $params = ['id' => $id];
+        $scope = $this->tenantInCondition('cliente_id', $params, 'idl');
+        $stmt = $this->db->prepare("DELETE FROM indicadores WHERE id = :id AND $scope");
+        return $stmt->execute($params) && $stmt->rowCount() > 0;
     }
 }

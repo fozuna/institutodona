@@ -131,14 +131,13 @@ class ClientesController extends BaseController
     public function show(): void
     {
         $this->requireLogin();
-        $user = $_SESSION['user'] ?? [];
-        $id = (int)($_GET['id'] ?? 0);
-        $tipo = $user['tipo_acesso'] ?? null;
-        if ($tipo === 'cliente' && (int)($user['id_cliente'] ?? 0) !== $id) {
-            http_response_code(403);
-            echo 'Acesso negado';
+        $requestedId = (int)($_GET['id'] ?? 0);
+        $id = (int)($this->resolveScopedClienteId($requestedId > 0 ? $requestedId : null) ?? 0);
+        if ($id <= 0) {
+            header('Location: index.php?route=clientes/index');
             return;
         }
+        \App\Core\AuditLogger::log('cliente_view', 'cliente', $id, ['route' => 'clientes/show']);
         $item = $this->clientes->find($id);
         // Garante que a tabela de pilares exista antes dos JOINs em aplicacoes
         $pilares = (new PilarModel())->all();
@@ -205,17 +204,11 @@ class ClientesController extends BaseController
     public function exportPlanos(): void
     {
         $this->requireLogin();
-        $user = $_SESSION['user'] ?? [];
-        $id = (int)($_GET['id'] ?? 0);
-        $tipo = $user['tipo_acesso'] ?? null;
-        if ($tipo === 'cliente' && (int)($user['id_cliente'] ?? 0) !== $id) {
-            http_response_code(403);
-            echo 'Acesso negado';
-            return;
-        }
-        if ($tipo !== 'instituto' && $tipo !== 'cliente') {
-            http_response_code(403);
-            echo 'Acesso negado';
+        $requestedId = (int)($_GET['id'] ?? 0);
+        $id = (int)($this->resolveScopedClienteId($requestedId > 0 ? $requestedId : null) ?? 0);
+        if ($id <= 0) {
+            http_response_code(400);
+            echo 'Cliente inválido para exportação.';
             return;
         }
         $statusFilters = $_GET['plano_status'] ?? [];
@@ -271,7 +264,7 @@ class ClientesController extends BaseController
         $this->requireRole('instituto');
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
-        $idCliente = (int)($_POST['id_cliente'] ?? 0);
+        $idCliente = (int)($this->resolveScopedClienteId((int)($_POST['id_cliente'] ?? 0)) ?? 0);
         $idMetodologia = (int)($_POST['id_metodologia'] ?? 0);
         $status = $_POST['status'] ?? 'Planejado';
         $consultorId = isset($_POST['consultor_id']) ? (int)$_POST['consultor_id'] : null;
@@ -295,7 +288,7 @@ class ClientesController extends BaseController
         $this->requireRole('instituto');
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
-        $idCliente = (int)($_POST['id_cliente'] ?? 0);
+        $idCliente = (int)($this->resolveScopedClienteId((int)($_POST['id_cliente'] ?? 0)) ?? 0);
         $idAplicacao = (int)($_POST['id_aplicacao'] ?? 0);
         $status = $_POST['status'] ?? 'Planejado';
         $dataPrevista = $_POST['data_prevista'] ?? null;
@@ -317,7 +310,7 @@ class ClientesController extends BaseController
     public function deleteAplicacao(): void
     {
         $this->requireRole('instituto');
-        $idCliente = (int)($_GET['id_cliente'] ?? 0);
+        $idCliente = (int)($this->resolveScopedClienteId((int)($_GET['id_cliente'] ?? 0)) ?? 0);
         $idAplicacao = (int)($_GET['id_aplicacao'] ?? 0);
         if ($idAplicacao) {
             (new AplicacaoModel())->delete($idAplicacao);

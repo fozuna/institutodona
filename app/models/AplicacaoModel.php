@@ -95,6 +95,10 @@ class AplicacaoModel extends BaseModel
 
     public function addArquivo(int $aplicacaoId, int $clienteId, string $nomeOriginal, string $path, string $mime, int $size): bool
     {
+        $clienteId = (int)$this->normalizeScopedClienteId($clienteId);
+        if ($clienteId <= 0 || !$this->canAccessClienteId($clienteId)) {
+            return false;
+        }
         $this->ensureTable();
         try {
             $this->db->exec("CREATE TABLE IF NOT EXISTS aplicacao_arquivos (
@@ -134,8 +138,10 @@ class AplicacaoModel extends BaseModel
             tamanho INT NOT NULL,
             uploaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        $stmt = $this->db->prepare('SELECT id, nome_original, arquivo_path, mime, tamanho, uploaded_at FROM aplicacao_arquivos WHERE aplicacao_id = :id ORDER BY uploaded_at DESC');
-        $stmt->execute(['id' => $aplicacaoId]);
+        $params = ['id' => $aplicacaoId];
+        $scope = $this->tenantInCondition('cliente_id', $params, 'afa');
+        $stmt = $this->db->prepare("SELECT id, nome_original, arquivo_path, mime, tamanho, uploaded_at FROM aplicacao_arquivos WHERE aplicacao_id = :id AND $scope ORDER BY uploaded_at DESC");
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 
@@ -150,8 +156,10 @@ class AplicacaoModel extends BaseModel
                 $chk->execute(['ap' => $idAplicacao, 'fn' => $funcaoId]);
                 if (!$chk->fetch()) { return false; }
             }
-            $stmt = $this->db->prepare('UPDATE aplicacoes SET funcao_id = :funcao_id WHERE id = :id');
-            return $stmt->execute(['funcao_id' => $funcaoId, 'id' => $idAplicacao]);
+            $params = ['funcao_id' => $funcaoId, 'id' => $idAplicacao];
+            $scope = $this->tenantInCondition('id_cliente', $params, 'aua');
+            $stmt = $this->db->prepare("UPDATE aplicacoes SET funcao_id = :funcao_id WHERE id = :id AND $scope");
+            return $stmt->execute($params);
         } catch (\PDOException $e) {
             return false;
         }
@@ -190,8 +198,11 @@ class AplicacaoModel extends BaseModel
                 WHERE a.id_cliente = :id_cliente
                 GROUP BY a.id
                 $order";
+        $params = ['id_cliente' => $idCliente];
+        $scope = $this->tenantInCondition('a.id_cliente', $params, 'abc');
+        $sql = str_replace('WHERE a.id_cliente = :id_cliente', 'WHERE a.id_cliente = :id_cliente AND ' . $scope, $sql);
         $stmt = $this->db->prepare($sql);
-        $stmt->execute(['id_cliente' => $idCliente]);
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 
@@ -214,6 +225,8 @@ class AplicacaoModel extends BaseModel
         $selectTipo = $hasTipoCol ? 'm.tipo' : 'NULL AS tipo';
         $selectArquivo = $hasArquivoCol ? 'm.arquivo_path' : 'NULL AS arquivo_path';
 
+        $params = [];
+        $scope = $this->tenantInCondition('a.id_cliente', $params, 'aal');
         $sql = "SELECT a.id, a.status, a.id_metodologia, a.id_cliente, $selectPrevista, $selectConclusao, $selectConsultorId,
                        m.item_pilar, $selectTipo, $selectArquivo, p.nome AS pilar_nome, cli.nome_empresa AS cliente_nome, $selectCons
                 FROM aplicacoes a
@@ -221,9 +234,10 @@ class AplicacaoModel extends BaseModel
                 JOIN pilares p ON p.id = m.id_pilar
                 JOIN clientes cli ON cli.id = a.id_cliente
                 $joinCons
+                WHERE $scope
                 $order";
         $stmt = $this->db->prepare($sql);
-        $stmt->execute();
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 
@@ -235,6 +249,12 @@ class AplicacaoModel extends BaseModel
         if ($idCliente !== null) {
             $where = 'WHERE a.id_cliente = :id_cliente';
             $params['id_cliente'] = $idCliente;
+        }
+        $scope = $this->tenantInCondition('a.id_cliente', $params, 'asp');
+        if ($where === '') {
+            $where = 'WHERE ' . $scope;
+        } else {
+            $where .= ' AND ' . $scope;
         }
         $sql = "SELECT p.nome AS pilar, a.status, COUNT(*) AS total
                 FROM aplicacoes a
@@ -250,6 +270,10 @@ class AplicacaoModel extends BaseModel
 
     public function create(int $idCliente, int $idMetodologia, string $status, ?int $consultorId = null, ?string $dataPrevista = null): int
     {
+        $idCliente = (int)$this->normalizeScopedClienteId($idCliente);
+        if ($idCliente <= 0 || !$this->canAccessClienteId($idCliente)) {
+            return 0;
+        }
         try {
             $this->ensureTable();
             $stmt = $this->db->prepare('INSERT INTO aplicacoes (id_cliente, id_metodologia, status, consultor_id, data_prevista) VALUES (:id_cliente, :id_metodologia, :status, :consultor_id, :data_prevista)');
@@ -369,6 +393,7 @@ class AplicacaoModel extends BaseModel
         $selectArquivo = $hasArquivoCol ? 'm.arquivo_path' : 'NULL AS arquivo_path';
         $conds = ['a.id_cliente = :id_cliente'];
         $params = ['id_cliente' => $idCliente];
+        $conds[] = $this->tenantInCondition('a.id_cliente', $params, 'abf');
         if (!empty($filters['status'])) { $conds[] = 'a.status = :status'; $params['status'] = $filters['status']; }
         if (!empty($filters['consultor_id'])) { $conds[] = 'a.consultor_id = :cid'; $params['cid'] = (int)$filters['consultor_id']; }
         $hasColabTbl = \App\Database\Database::tableExists('colaboradores');
@@ -392,23 +417,27 @@ class AplicacaoModel extends BaseModel
     public function updateStatus(int $idAplicacao, string $status): bool
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('UPDATE aplicacoes SET status = :status WHERE id = :id');
-        return $stmt->execute([
+        $params = [
             'status' => $status,
             'id' => $idAplicacao,
-        ]);
+        ];
+        $scope = $this->tenantInCondition('id_cliente', $params, 'aus');
+        $stmt = $this->db->prepare("UPDATE aplicacoes SET status = :status WHERE id = :id AND $scope");
+        return $stmt->execute($params);
     }
 
     public function updateSchedule(int $idAplicacao, ?string $dataPrevista, ?int $consultorId): bool
     {
         try {
             $this->ensureTable();
-            $stmt = $this->db->prepare('UPDATE aplicacoes SET data_prevista = :data_prevista, consultor_id = :consultor_id WHERE id = :id');
-            return $stmt->execute([
+            $params = [
                 'data_prevista' => $dataPrevista,
                 'consultor_id' => $consultorId,
                 'id' => $idAplicacao,
-            ]);
+            ];
+            $scope = $this->tenantInCondition('id_cliente', $params, 'auc');
+            $stmt = $this->db->prepare("UPDATE aplicacoes SET data_prevista = :data_prevista, consultor_id = :consultor_id WHERE id = :id AND $scope");
+            return $stmt->execute($params);
         } catch (\PDOException $e) {
             return false;
         }
@@ -440,15 +469,20 @@ class AplicacaoModel extends BaseModel
                 JOIN clientes cli ON cli.id = a.id_cliente
                 $joinCons
                 WHERE a.id = :id LIMIT 1";
+        $params = ['id' => $idAplicacao];
+        $scope = $this->tenantInCondition('a.id_cliente', $params, 'afn');
+        $sql = str_replace('WHERE a.id = :id LIMIT 1', 'WHERE a.id = :id AND ' . $scope . ' LIMIT 1', $sql);
         $stmt = $this->db->prepare($sql);
-        $stmt->execute(['id' => $idAplicacao]);
+        $stmt->execute($params);
         $row = $stmt->fetch();
         return $row ?: null;
     }
     public function delete(int $idAplicacao): bool
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('DELETE FROM aplicacoes WHERE id = :id');
-        return $stmt->execute(['id' => $idAplicacao]);
+        $params = ['id' => $idAplicacao];
+        $scope = $this->tenantInCondition('id_cliente', $params, 'adl');
+        $stmt = $this->db->prepare("DELETE FROM aplicacoes WHERE id = :id AND $scope");
+        return $stmt->execute($params);
     }
 }

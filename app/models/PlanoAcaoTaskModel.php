@@ -80,6 +80,10 @@ class PlanoAcaoTaskModel extends BaseModel
     public function create(array $data): int
     {
         $this->ensure();
+        $data['id_cliente'] = (int)$this->normalizeScopedClienteId(isset($data['id_cliente']) ? (int)$data['id_cliente'] : null);
+        if (($data['id_cliente'] ?? 0) <= 0 || !$this->canAccessClienteId((int)$data['id_cliente'])) {
+            return 0;
+        }
         $stmt = $this->db->prepare('INSERT INTO pdca_tasks (id_cliente, titulo, descricao, meta_valor, meta_unidade, prazo, responsavel, fase, status, progresso) VALUES (:id_cliente, :titulo, :descricao, :meta_valor, :meta_unidade, :prazo, :responsavel, :fase, :status, :progresso)');
         $stmt->execute([
             'id_cliente' => $data['id_cliente'],
@@ -107,8 +111,7 @@ class PlanoAcaoTaskModel extends BaseModel
         $old = $this->find($id);
         if (!$old) return false;
 
-        $stmt = $this->db->prepare('UPDATE pdca_tasks SET titulo=:titulo, descricao=:descricao, meta_valor=:meta_valor, meta_unidade=:meta_unidade, prazo=:prazo, responsavel=:responsavel, status=:status, progresso=:progresso WHERE id=:id');
-        $res = $stmt->execute([
+        $params = [
             'titulo' => $data['titulo'],
             'descricao' => $data['descricao'] ?? null,
             'meta_valor' => $data['meta_valor'] ?? null,
@@ -118,7 +121,10 @@ class PlanoAcaoTaskModel extends BaseModel
             'status' => $data['status'] ?? 'Planejado',
             'progresso' => (int)($data['progresso'] ?? 0),
             'id' => $id,
-        ]);
+        ];
+        $scope = $this->tenantInCondition('id_cliente', $params, 'ptu');
+        $stmt = $this->db->prepare("UPDATE pdca_tasks SET titulo=:titulo, descricao=:descricao, meta_valor=:meta_valor, meta_unidade=:meta_unidade, prazo=:prazo, responsavel=:responsavel, status=:status, progresso=:progresso WHERE id=:id AND $scope");
+        $res = $stmt->execute($params);
 
         if ($res) {
             $changes = [];
@@ -139,8 +145,10 @@ class PlanoAcaoTaskModel extends BaseModel
     public function byCliente(int $idCliente): array
     {
         $this->ensure();
-        $stmt = $this->db->prepare('SELECT * FROM pdca_tasks WHERE id_cliente = :id ORDER BY prazo IS NULL, prazo, created_at DESC');
-        $stmt->execute(['id' => $idCliente]);
+        $params = ['id' => $idCliente];
+        $scope = $this->tenantInCondition('id_cliente', $params, 'ptbc');
+        $stmt = $this->db->prepare("SELECT * FROM pdca_tasks WHERE id_cliente = :id AND $scope ORDER BY prazo IS NULL, prazo, created_at DESC");
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 
@@ -149,6 +157,7 @@ class PlanoAcaoTaskModel extends BaseModel
         $this->ensure();
         $sql = 'SELECT COUNT(*) AS total FROM pdca_tasks WHERE id_cliente = :id';
         $params = ['id' => $idCliente];
+        $sql .= ' AND ' . $this->tenantInCondition('id_cliente', $params, 'ptc');
         if ($statusFilter !== null && $statusFilter !== '') {
             $sql .= ' AND status = :status';
             $params['status'] = $statusFilter;
@@ -170,6 +179,7 @@ class PlanoAcaoTaskModel extends BaseModel
         $offset = ($page - 1) * $perPage;
         $sql = 'SELECT * FROM pdca_tasks WHERE id_cliente = :id';
         $params = ['id' => $idCliente];
+        $sql .= ' AND ' . $this->tenantInCondition('id_cliente', $params, 'ptp');
         if ($statusFilter !== null && $statusFilter !== '') {
             $sql .= ' AND status = :status';
             $params['status'] = $statusFilter;
@@ -194,6 +204,7 @@ class PlanoAcaoTaskModel extends BaseModel
         $this->ensure();
         $sql = 'SELECT COUNT(*) AS total FROM pdca_tasks WHERE id_cliente = :id';
         $params = ['id' => $idCliente];
+        $sql .= ' AND ' . $this->tenantInCondition('id_cliente', $params, 'ptcm');
 
         $realStatuses = [];
         $includeOverdue = false;
@@ -233,6 +244,7 @@ class PlanoAcaoTaskModel extends BaseModel
         $offset = ($page - 1) * $perPage;
         $sql = 'SELECT * FROM pdca_tasks WHERE id_cliente = :id';
         $params = ['id' => $idCliente];
+        $sql .= ' AND ' . $this->tenantInCondition('id_cliente', $params, 'ptpm');
 
         $realStatuses = [];
         $includeOverdue = false;
@@ -279,6 +291,7 @@ class PlanoAcaoTaskModel extends BaseModel
         $sql = 'SELECT id, id_cliente, titulo, descricao, meta_valor, meta_unidade, prazo, responsavel, status, progresso, created_at
                 FROM pdca_tasks WHERE id_cliente = :id';
         $params = ['id' => $idCliente];
+        $sql .= ' AND ' . $this->tenantInCondition('id_cliente', $params, 'ptfe');
 
         $realStatuses = [];
         $includeOverdue = false;
@@ -315,8 +328,10 @@ class PlanoAcaoTaskModel extends BaseModel
     public function find(int $id): ?array
     {
         $this->ensure();
-        $stmt = $this->db->prepare('SELECT * FROM pdca_tasks WHERE id = :id');
-        $stmt->execute(['id' => $id]);
+        $params = ['id' => $id];
+        $scope = $this->tenantInCondition('id_cliente', $params, 'ptf');
+        $stmt = $this->db->prepare("SELECT * FROM pdca_tasks WHERE id = :id AND $scope");
+        $stmt->execute($params);
         $row = $stmt->fetch();
         return $row ?: null;
     }
@@ -324,7 +339,9 @@ class PlanoAcaoTaskModel extends BaseModel
     public function delete(int $id): bool
     {
         $this->ensure();
-        $stmt = $this->db->prepare('DELETE FROM pdca_tasks WHERE id = :id');
-        return $stmt->execute(['id' => $id]);
+        $params = ['id' => $id];
+        $scope = $this->tenantInCondition('id_cliente', $params, 'ptd');
+        $stmt = $this->db->prepare("DELETE FROM pdca_tasks WHERE id = :id AND $scope");
+        return $stmt->execute($params);
     }
 }

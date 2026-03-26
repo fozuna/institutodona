@@ -32,8 +32,11 @@ class FuncaoModel extends BaseModel
                     FROM funcoes f JOIN setores s ON s.id = f.setor_id
                     JOIN departamentos d ON d.id = s.departamento_id
                     WHERE d.cliente_id = :cid ORDER BY d.nome, s.nome, f.nome';
+            $params = ['cid' => $clienteId];
+            $scope = $this->tenantInCondition('d.cliente_id', $params, 'fbc');
+            $sql = str_replace('WHERE d.cliente_id = :cid', 'WHERE d.cliente_id = :cid AND ' . $scope, $sql);
             $stmt = $this->db->prepare($sql);
-            $stmt->execute(['cid' => $clienteId]);
+            $stmt->execute($params);
             return $stmt->fetchAll();
         } catch (\PDOException $e) {
             return [];
@@ -43,8 +46,10 @@ class FuncaoModel extends BaseModel
     public function find(int $id): ?array
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('SELECT id, nome, setor_id FROM funcoes WHERE id = :id');
-        $stmt->execute(['id' => $id]);
+        $params = ['id' => $id];
+        $scope = $this->tenantInCondition('d.cliente_id', $params, 'ff');
+        $stmt = $this->db->prepare("SELECT f.id, f.nome, f.setor_id FROM funcoes f JOIN setores s ON s.id = f.setor_id JOIN departamentos d ON d.id = s.departamento_id WHERE f.id = :id AND $scope");
+        $stmt->execute($params);
         $row = $stmt->fetch();
         return $row ?: null;
     }
@@ -52,6 +57,13 @@ class FuncaoModel extends BaseModel
     public function create(array $data): int
     {
         $this->ensureTable();
+        $params = ['sid' => (int)$data['setor_id']];
+        $scope = $this->tenantInCondition('d.cliente_id', $params, 'fc');
+        $check = $this->db->prepare("SELECT s.id FROM setores s JOIN departamentos d ON d.id = s.departamento_id WHERE s.id = :sid AND $scope LIMIT 1");
+        $check->execute($params);
+        if (!$check->fetch()) {
+            return 0;
+        }
         $stmt = $this->db->prepare('INSERT INTO funcoes (nome, setor_id) VALUES (:nome, :setor_id)');
         $stmt->execute(['nome' => $data['nome'], 'setor_id' => (int)$data['setor_id']]);
         return (int)$this->db->lastInsertId();
@@ -60,14 +72,18 @@ class FuncaoModel extends BaseModel
     public function update(int $id, array $data): bool
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('UPDATE funcoes SET nome = :nome, setor_id = :setor_id WHERE id = :id');
-        return $stmt->execute(['nome' => $data['nome'], 'setor_id' => (int)$data['setor_id'], 'id' => $id]);
+        $params = ['nome' => $data['nome'], 'setor_id' => (int)$data['setor_id'], 'id' => $id];
+        $scope = $this->tenantInCondition('d.cliente_id', $params, 'fu');
+        $stmt = $this->db->prepare("UPDATE funcoes f JOIN setores s ON s.id = f.setor_id JOIN departamentos d ON d.id = s.departamento_id SET f.nome = :nome, f.setor_id = :setor_id WHERE f.id = :id AND $scope");
+        return $stmt->execute($params);
     }
 
     public function delete(int $id): bool
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('DELETE FROM funcoes WHERE id = :id');
-        return $stmt->execute(['id' => $id]);
+        $params = ['id' => $id];
+        $scope = $this->tenantInCondition('d.cliente_id', $params, 'fd');
+        $stmt = $this->db->prepare("DELETE f FROM funcoes f JOIN setores s ON s.id = f.setor_id JOIN departamentos d ON d.id = s.departamento_id WHERE f.id = :id AND $scope");
+        return $stmt->execute($params);
     }
 }

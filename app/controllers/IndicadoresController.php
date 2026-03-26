@@ -19,8 +19,9 @@ class IndicadoresController extends BaseController
     {
         $this->requireLogin();
         $clientes = (new ClienteModel())->all();
-        $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
+        $cliente = (int)($this->resolveScopedClienteId(isset($_GET['cliente']) ? (int)$_GET['cliente'] : null) ?? 0);
         $items = $cliente ? $this->model->byCliente($cliente) : [];
+        \App\Core\AuditLogger::log('indicadores_view', 'indicador', null, ['cliente_id' => $cliente]);
         $this->render('indicadores/index', compact('clientes', 'cliente', 'items'));
     }
 
@@ -37,7 +38,7 @@ class IndicadoresController extends BaseController
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
         $data = [
-            'cliente_id' => (int)($_POST['cliente_id'] ?? 0),
+            'cliente_id' => (int)($this->resolveScopedClienteId((int)($_POST['cliente_id'] ?? 0)) ?? 0),
             'nome' => trim($_POST['nome'] ?? ''),
             'unidade' => 'R$',
             'referencia' => $_POST['referencia'] ?? null,
@@ -65,7 +66,7 @@ class IndicadoresController extends BaseController
     public function charts(): void
     {
         $this->requireLogin();
-        $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
+        $cliente = (int)($this->resolveScopedClienteId(isset($_GET['cliente']) ? (int)$_GET['cliente'] : null) ?? 0);
         $clientes = (new ClienteModel())->all();
         $items = $cliente ? $this->model->byCliente($cliente) : [];
         // Agrupa por nome de indicador
@@ -100,7 +101,7 @@ class IndicadoresController extends BaseController
     public function realizado(): void
     {
         $this->requireLogin();
-        $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
+        $cliente = (int)($this->resolveScopedClienteId(isset($_GET['cliente']) ? (int)$_GET['cliente'] : null) ?? 0);
         $clientes = (new ClienteModel())->all();
         $items = $cliente ? $this->model->byCliente($cliente) : [];
         $this->render('indicadores/realizado', compact('clientes','cliente','items'));
@@ -109,7 +110,7 @@ class IndicadoresController extends BaseController
     public function painel(): void
     {
         $this->requireLogin();
-        $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
+        $cliente = (int)($this->resolveScopedClienteId(isset($_GET['cliente']) ? (int)$_GET['cliente'] : null) ?? 0);
         $ano = isset($_GET['ano']) ? (int)$_GET['ano'] : (int)date('Y');
         $clientes = (new ClienteModel())->all();
         $items = $cliente ? $this->model->byCliente($cliente) : [];
@@ -153,7 +154,7 @@ class IndicadoresController extends BaseController
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
         $id = (int)($_POST['id'] ?? 0);
         $data = [
-            'cliente_id' => (int)($_POST['cliente_id'] ?? 0),
+            'cliente_id' => (int)($this->resolveScopedClienteId((int)($_POST['cliente_id'] ?? 0)) ?? 0),
             'nome' => trim($_POST['nome'] ?? ''),
             'unidade' => 'R$',
             'referencia' => $_POST['referencia'] ?? null,
@@ -178,7 +179,7 @@ class IndicadoresController extends BaseController
         $id = (int)($_POST['id'] ?? 0);
         $real = isset($_POST['realizado']) ? (float)$_POST['realizado'] : null;
         if ($real !== null && $real < 0) $real = 0;
-        $cliente = (int)($_POST['cliente'] ?? 0);
+        $cliente = (int)($this->resolveScopedClienteId((int)($_POST['cliente'] ?? 0)) ?? 0);
         if ($id && $real !== null) { $this->model->updateRealizado($id, $real); }
         header('Location: index.php?route=indicadores/index&cliente=' . $cliente);
     }

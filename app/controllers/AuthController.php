@@ -44,8 +44,14 @@ class AuthController extends BaseController
         $user = $this->usuarios->findByEmail($email);
         if ($user && password_verify($senha, $user['senha_hash'])) {
             Auth::login($user);
+            AuditLogger::log('auth_login_success', 'usuario', (int)$user['id'], [
+                'tipo_acesso' => $user['tipo_acesso'] ?? null,
+                'cliente_id' => isset($user['id_cliente']) ? (int)$user['id_cliente'] : null,
+                'scope_clientes' => Auth::allowedClientIds(),
+            ]);
             header('Location: index.php?route=dashboard/index');
         } else {
+            AuditLogger::log('auth_login_fail', 'usuario', null, ['email' => $email]);
             $this->render('auth/login', ['error' => 'Credenciais inválidas']);
         }
     }

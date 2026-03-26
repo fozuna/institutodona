@@ -35,16 +35,21 @@ class ColaboradorModel extends BaseModel
                 LEFT JOIN clientes cli ON cli.id = col.cliente_id
                 WHERE col.cliente_id = :cid
                 ORDER BY d.nome, s.nome, f.nome, col.nome';
+        $params = ['cid' => $clienteId];
+        $scope = $this->tenantInCondition('col.cliente_id', $params, 'cabc');
+        $sql = str_replace('WHERE col.cliente_id = :cid', 'WHERE col.cliente_id = :cid AND ' . $scope, $sql);
         $stmt = $this->db->prepare($sql);
-        $stmt->execute(['cid' => $clienteId]);
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 
     public function countByCliente(int $clienteId): int
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('SELECT COUNT(*) AS total FROM colaboradores WHERE cliente_id = :cid');
-        $stmt->execute(['cid' => $clienteId]);
+        $params = ['cid' => $clienteId];
+        $scope = $this->tenantInCondition('cliente_id', $params, 'cc');
+        $stmt = $this->db->prepare("SELECT COUNT(*) AS total FROM colaboradores WHERE cliente_id = :cid AND $scope");
+        $stmt->execute($params);
         $row = $stmt->fetch();
         return (int)($row['total'] ?? 0);
     }
@@ -54,6 +59,7 @@ class ColaboradorModel extends BaseModel
         $this->ensureTable();
         $conds = ['col.cliente_id = :cid'];
         $params = ['cid' => $clienteId];
+        $conds[] = $this->tenantInCondition('col.cliente_id', $params, 'ccf');
         if (!empty($filters['lider'])) { $conds[] = 'col.lider = :lider'; $params['lider'] = $filters['lider']; }
         if (!empty($filters['departamento_id'])) { $conds[] = 'd.id = :dep'; $params['dep'] = (int)$filters['departamento_id']; }
         if (!empty($filters['funcao_id'])) { $conds[] = 'f.id = :func'; $params['func'] = (int)$filters['funcao_id']; }
@@ -98,6 +104,7 @@ class ColaboradorModel extends BaseModel
         $offset = ($page - 1) * $perPage;
         $conds = ['col.cliente_id = :cid'];
         $params = ['cid' => $clienteId];
+        $conds[] = $this->tenantInCondition('col.cliente_id', $params, 'cpf');
         if (!empty($filters['lider'])) { $conds[] = 'col.lider = :lider'; $params['lider'] = $filters['lider']; }
         if (!empty($filters['departamento_id'])) { $conds[] = 'd.id = :dep'; $params['dep'] = (int)$filters['departamento_id']; }
         if (!empty($filters['funcao_id'])) { $conds[] = 'f.id = :func'; $params['func'] = (int)$filters['funcao_id']; }
@@ -119,8 +126,10 @@ class ColaboradorModel extends BaseModel
     public function find(int $id): ?array
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('SELECT id, nome, email, funcao_id, cliente_id, lider FROM colaboradores WHERE id = :id');
-        $stmt->execute(['id' => $id]);
+        $params = ['id' => $id];
+        $scope = $this->tenantInCondition('cliente_id', $params, 'cf');
+        $stmt = $this->db->prepare("SELECT id, nome, email, funcao_id, cliente_id, lider FROM colaboradores WHERE id = :id AND $scope");
+        $stmt->execute($params);
         $row = $stmt->fetch();
         return $row ?: null;
     }
@@ -128,6 +137,10 @@ class ColaboradorModel extends BaseModel
     public function create(array $data): int
     {
         $this->ensureTable();
+        $data['cliente_id'] = (int)$this->normalizeScopedClienteId(isset($data['cliente_id']) ? (int)$data['cliente_id'] : null);
+        if (($data['cliente_id'] ?? 0) <= 0 || !$this->canAccessClienteId((int)$data['cliente_id'])) {
+            return 0;
+        }
         $stmt = $this->db->prepare('INSERT INTO colaboradores (nome, email, funcao_id, lider, cliente_id) VALUES (:nome, :email, :funcao_id, :lider, :cliente_id)');
         $stmt->execute([
             'nome' => $data['nome'],
@@ -142,22 +155,27 @@ class ColaboradorModel extends BaseModel
     public function update(int $id, array $data): bool
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('UPDATE colaboradores SET nome = :nome, email = :email, funcao_id = :funcao_id, lider = :lider, cliente_id = :cliente_id WHERE id = :id');
-        return $stmt->execute([
+        $data['cliente_id'] = (int)$this->normalizeScopedClienteId(isset($data['cliente_id']) ? (int)$data['cliente_id'] : null);
+        $params = [
             'nome' => $data['nome'],
             'email' => $data['email'] ?? null,
             'funcao_id' => (int)$data['funcao_id'],
             'lider' => ($data['lider'] ?? 'não') === 'sim' ? 'sim' : 'não',
             'cliente_id' => $data['cliente_id'] ?? null,
             'id' => $id
-        ]);
+        ];
+        $scope = $this->tenantInCondition('cliente_id', $params, 'cu');
+        $stmt = $this->db->prepare("UPDATE colaboradores SET nome = :nome, email = :email, funcao_id = :funcao_id, lider = :lider, cliente_id = :cliente_id WHERE id = :id AND $scope");
+        return $stmt->execute($params);
     }
 
     public function delete(int $id): bool
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('DELETE FROM colaboradores WHERE id = :id');
-        return $stmt->execute(['id' => $id]);
+        $params = ['id' => $id];
+        $scope = $this->tenantInCondition('cliente_id', $params, 'cd');
+        $stmt = $this->db->prepare("DELETE FROM colaboradores WHERE id = :id AND $scope");
+        return $stmt->execute($params);
     }
 
     public function searchByClienteName(int $clienteId, string $q, int $limit = 10): array
@@ -165,9 +183,13 @@ class ColaboradorModel extends BaseModel
         $this->ensureTable();
         $q = trim($q);
         if ($q === '') { return []; }
-        $stmt = $this->db->prepare('SELECT id, nome, email FROM colaboradores WHERE cliente_id = :cid AND nome LIKE :q ORDER BY nome LIMIT :lim');
+        $params = ['cid' => $clienteId];
+        $scope = $this->tenantInCondition('cliente_id', $params, 'cs');
+        $stmt = $this->db->prepare("SELECT id, nome, email FROM colaboradores WHERE cliente_id = :cid AND $scope AND nome LIKE :q ORDER BY nome LIMIT :lim");
         $like = '%' . $q . '%';
-        $stmt->bindValue(':cid', $clienteId, \PDO::PARAM_INT);
+        foreach ($params as $k => $v) {
+            $stmt->bindValue(':' . $k, $v, \PDO::PARAM_INT);
+        }
         $stmt->bindValue(':q', $like, \PDO::PARAM_STR);
         $stmt->bindValue(':lim', $limit, \PDO::PARAM_INT);
         $stmt->execute();

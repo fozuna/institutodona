@@ -3,6 +3,13 @@ namespace App\Models;
 
 class ClienteModel extends BaseModel
 {
+    private function scopedParams(string $prefix = 'cli'): array
+    {
+        $params = [];
+        $cond = $this->tenantInCondition('id', $params, $prefix);
+        return [$cond, $params];
+    }
+
     private function ensureColumns(): void
     {
         try {
@@ -12,6 +19,12 @@ class ClienteModel extends BaseModel
             if (!\App\Database\Database::columnExists('clientes', 'matriz_id')) {
                 $this->db->exec('ALTER TABLE clientes ADD COLUMN matriz_id INT NULL');
             }
+            if (!\App\Database\Database::columnExists('clientes', 'ativo')) {
+                $this->db->exec('ALTER TABLE clientes ADD COLUMN ativo TINYINT(1) NOT NULL DEFAULT 1');
+            }
+            if (!\App\Database\Database::columnExists('clientes', 'acesso_restrito')) {
+                $this->db->exec('ALTER TABLE clientes ADD COLUMN acesso_restrito TINYINT(1) NOT NULL DEFAULT 0');
+            }
         } catch (\PDOException $e) {
             // silencioso
         }
@@ -20,13 +33,17 @@ class ClienteModel extends BaseModel
     public function all(): array
     {
         $this->ensureColumns();
+        [$scopeCond, $params] = $this->scopedParams('ca');
         try {
-            $stmt = $this->db->query('SELECT id, nome_empresa, CNPJ, contato, logo_path, is_matriz, matriz_id FROM clientes ORDER BY nome_empresa');
+            $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato, logo_path, is_matriz, matriz_id FROM clientes WHERE $scopeCond ORDER BY nome_empresa");
+            $stmt->execute($params);
         } catch (\PDOException $e) {
             try {
-                $stmt = $this->db->query('SELECT id, nome_empresa, CNPJ, contato, logo_path FROM clientes ORDER BY nome_empresa');
+                $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato, logo_path FROM clientes WHERE $scopeCond ORDER BY nome_empresa");
+                $stmt->execute($params);
             } catch (\PDOException $e2) {
-                $stmt = $this->db->query('SELECT id, nome_empresa, CNPJ, contato FROM clientes ORDER BY nome_empresa');
+                $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato FROM clientes WHERE $scopeCond ORDER BY nome_empresa");
+                $stmt->execute($params);
             }
         }
         return $stmt->fetchAll();
@@ -34,6 +51,9 @@ class ClienteModel extends BaseModel
 
     public function find(int $id): ?array
     {
+        if (!$this->canAccessClienteId($id)) {
+            return null;
+        }
         $this->ensureColumns();
         try {
             $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path, is_matriz, matriz_id FROM clientes WHERE id = :id');
@@ -85,6 +105,9 @@ class ClienteModel extends BaseModel
 
     public function update(int $id, array $data): bool
     {
+        if (!$this->canAccessClienteId($id)) {
+            return false;
+        }
         $this->ensureColumns();
         try {
             $stmt = $this->db->prepare('UPDATE clientes SET nome_empresa = :nome_empresa, CNPJ = :cnpj, contato = :contato, logo_path = :logo_path, is_matriz = :is_matriz, matriz_id = :matriz_id WHERE id = :id');
@@ -121,6 +144,9 @@ class ClienteModel extends BaseModel
 
     public function delete(int $id): bool
     {
+        if (!$this->canAccessClienteId($id)) {
+            return false;
+        }
         $stmt = $this->db->prepare('DELETE FROM clientes WHERE id = :id');
         return $stmt->execute(['id' => $id]);
     }
@@ -128,13 +154,18 @@ class ClienteModel extends BaseModel
     public function matrizes(): array
     {
         $this->ensureColumns();
+        [$scopeCond, $params] = $this->scopedParams('cm');
+        $where = 'is_matriz = 1 AND ' . $scopeCond;
         try {
-            $stmt = $this->db->query('SELECT id, nome_empresa, CNPJ, contato, logo_path, is_matriz, matriz_id FROM clientes WHERE is_matriz = 1 ORDER BY nome_empresa');
+            $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato, logo_path, is_matriz, matriz_id FROM clientes WHERE $where ORDER BY nome_empresa");
+            $stmt->execute($params);
         } catch (\PDOException $e) {
             try {
-                $stmt = $this->db->query('SELECT id, nome_empresa, CNPJ, contato, logo_path FROM clientes WHERE is_matriz = 1 ORDER BY nome_empresa');
+                $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato, logo_path FROM clientes WHERE $where ORDER BY nome_empresa");
+                $stmt->execute($params);
             } catch (\PDOException $e2) {
-                $stmt = $this->db->query('SELECT id, nome_empresa, CNPJ, contato FROM clientes WHERE is_matriz = 1 ORDER BY nome_empresa');
+                $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato FROM clientes WHERE $where ORDER BY nome_empresa");
+                $stmt->execute($params);
             }
         }
         return $stmt->fetchAll();
@@ -142,10 +173,15 @@ class ClienteModel extends BaseModel
 
     public function filiaisByMatriz(int $matrizId): array
     {
+        if (!$this->canAccessClienteId($matrizId)) {
+            return [];
+        }
         $this->ensureColumns();
         try {
-            $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato FROM clientes WHERE is_matriz = 0 AND matriz_id = :mid ORDER BY nome_empresa');
-            $stmt->execute(['mid' => $matrizId]);
+            $params = ['mid' => $matrizId];
+            $scope = $this->tenantInCondition('id', $params, 'cf');
+            $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato FROM clientes WHERE is_matriz = 0 AND matriz_id = :mid AND $scope ORDER BY nome_empresa");
+            $stmt->execute($params);
             return $stmt->fetchAll();
         } catch (\PDOException $e) {
             return [];

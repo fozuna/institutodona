@@ -20,13 +20,8 @@ class DashboardController extends BaseController
     {
         $this->requireLogin();
         $user = $_SESSION['user'];
-        $selectedCliente = null;
-
-        if ($user['tipo_acesso'] === 'cliente') {
-            $selectedCliente = (int)$user['id_cliente'];
-        } elseif (isset($_GET['cliente'])) {
-            $selectedCliente = (int)$_GET['cliente'];
-        }
+        $requestedCliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : null;
+        $selectedCliente = $this->resolveScopedClienteId($requestedCliente);
 
         $clientes = $this->clientes->all();
         $kanbanData = [
@@ -43,10 +38,12 @@ class DashboardController extends BaseController
         }
 
         if ($selectedCliente) {
+            \App\Core\AuditLogger::log('dashboard_view_cliente', 'dashboard', null, ['cliente_id' => (int)$selectedCliente]);
             foreach ($this->aplicacoes->byCliente($selectedCliente) as $row) {
                 $kanbanData[$row['status']][] = $row;
             }
         } else {
+            \App\Core\AuditLogger::log('dashboard_view_global', 'dashboard', null, []);
             foreach ($this->aplicacoes->all() as $row) {
                 $kanbanData[$row['status']][] = $row;
             }

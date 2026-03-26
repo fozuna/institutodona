@@ -18,7 +18,10 @@ class SetorModel extends BaseModel
     public function all(): array
     {
         $this->ensureTable();
-        $stmt = $this->db->query('SELECT s.id, s.nome, s.departamento_id FROM setores s ORDER BY s.nome');
+        $params = [];
+        $scope = $this->tenantInCondition('d.cliente_id', $params, 'sa');
+        $stmt = $this->db->prepare("SELECT s.id, s.nome, s.departamento_id FROM setores s JOIN departamentos d ON d.id = s.departamento_id WHERE $scope ORDER BY s.nome");
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 
@@ -28,16 +31,21 @@ class SetorModel extends BaseModel
         $sql = 'SELECT s.id, s.nome, s.departamento_id, d.nome AS departamento
                 FROM setores s JOIN departamentos d ON d.id = s.departamento_id
                 WHERE d.cliente_id = :cid ORDER BY d.nome, s.nome';
+        $params = ['cid' => $clienteId];
+        $scope = $this->tenantInCondition('d.cliente_id', $params, 'sbc');
+        $sql = str_replace('WHERE d.cliente_id = :cid', 'WHERE d.cliente_id = :cid AND ' . $scope, $sql);
         $stmt = $this->db->prepare($sql);
-        $stmt->execute(['cid' => $clienteId]);
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 
     public function find(int $id): ?array
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('SELECT id, nome, departamento_id FROM setores WHERE id = :id');
-        $stmt->execute(['id' => $id]);
+        $params = ['id' => $id];
+        $scope = $this->tenantInCondition('d.cliente_id', $params, 'sf');
+        $stmt = $this->db->prepare("SELECT s.id, s.nome, s.departamento_id FROM setores s JOIN departamentos d ON d.id = s.departamento_id WHERE s.id = :id AND $scope");
+        $stmt->execute($params);
         $row = $stmt->fetch();
         return $row ?: null;
     }
@@ -45,6 +53,14 @@ class SetorModel extends BaseModel
     public function create(array $data): int
     {
         $this->ensureTable();
+        $depId = (int)$data['departamento_id'];
+        $params = ['dep' => $depId];
+        $scope = $this->tenantInCondition('cliente_id', $params, 'sc');
+        $check = $this->db->prepare("SELECT id FROM departamentos WHERE id = :dep AND $scope LIMIT 1");
+        $check->execute($params);
+        if (!$check->fetch()) {
+            return 0;
+        }
         $stmt = $this->db->prepare('INSERT INTO setores (nome, departamento_id) VALUES (:nome, :departamento_id)');
         $stmt->execute(['nome' => $data['nome'], 'departamento_id' => (int)$data['departamento_id']]);
         return (int)$this->db->lastInsertId();
@@ -53,14 +69,18 @@ class SetorModel extends BaseModel
     public function update(int $id, array $data): bool
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('UPDATE setores SET nome = :nome, departamento_id = :departamento_id WHERE id = :id');
-        return $stmt->execute(['nome' => $data['nome'], 'departamento_id' => (int)$data['departamento_id'], 'id' => $id]);
+        $params = ['nome' => $data['nome'], 'departamento_id' => (int)$data['departamento_id'], 'id' => $id];
+        $scope = $this->tenantInCondition('d.cliente_id', $params, 'su');
+        $stmt = $this->db->prepare("UPDATE setores s JOIN departamentos d ON d.id = s.departamento_id SET s.nome = :nome, s.departamento_id = :departamento_id WHERE s.id = :id AND $scope");
+        return $stmt->execute($params);
     }
 
     public function delete(int $id): bool
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('DELETE FROM setores WHERE id = :id');
-        return $stmt->execute(['id' => $id]);
+        $params = ['id' => $id];
+        $scope = $this->tenantInCondition('d.cliente_id', $params, 'sd');
+        $stmt = $this->db->prepare("DELETE s FROM setores s JOIN departamentos d ON d.id = s.departamento_id WHERE s.id = :id AND $scope");
+        return $stmt->execute($params);
     }
 }

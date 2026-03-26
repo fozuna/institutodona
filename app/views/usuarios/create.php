@@ -1,4 +1,4 @@
-<?php use App\Core\Security; /** @var array $clientes */ /** @var array $consultores */ ?>
+<?php use App\Core\Security; /** @var array $clientes */ /** @var array $consultores */ /** @var array $selectedClientes */ ?>
 <div class="p-6 max-w-xl">
     <h1 class="text-2xl font-bold mb-4"><?= htmlspecialchars($pageTitle ?? 'Novo Usuário') ?></h1>
     <form method="post" action="index.php?route=usuarios/store" class="space-y-4">
@@ -24,13 +24,15 @@
             </select>
         </div>
         <div>
-            <label class="block text-sm">Vincular Cliente (opcional)</label>
-            <select name="id_cliente" class="border rounded p-2 w-full">
-                <option value="">-- nenhum --</option>
+            <label class="block text-sm">Empresas vinculadas</label>
+            <select name="id_clientes[]" class="border rounded p-2 w-full h-44" multiple>
                 <?php foreach ($clientes as $c): ?>
-                    <option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['nome_empresa']) ?></option>
+                    <option value="<?= (int)$c['id'] ?>" <?= in_array((int)$c['id'], $selectedClientes ?? [], true) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($c['nome_empresa']) ?>
+                    </option>
                 <?php endforeach; ?>
             </select>
+            <p class="text-xs text-gray-500 mt-1">Selecione uma ou mais empresas. Matrizes propagam acesso para filiais ativas e não restritas.</p>
         </div>
         <div>
             <label class="block text-sm">Vincular Consultor (opcional)</label>

@@ -33,8 +33,10 @@ class CronogramaEventoModel extends BaseModel
     public function byCronograma(int $idCronograma): array
     {
         $this->ensureTables();
-        $stmt = $this->db->prepare('SELECT id, data, topico, unidade, atividade, responsavel, modelo, status FROM cronograma_eventos WHERE id_cronograma = :id ORDER BY data');
-        $stmt->execute(['id' => $idCronograma]);
+        $params = ['id' => $idCronograma];
+        $scope = $this->tenantInCondition('cr.id_cliente', $params, 'ceb');
+        $stmt = $this->db->prepare("SELECT ce.id, ce.data, ce.topico, ce.unidade, ce.atividade, ce.responsavel, ce.modelo, ce.status FROM cronograma_eventos ce JOIN cronogramas cr ON cr.id = ce.id_cronograma WHERE ce.id_cronograma = :id AND $scope ORDER BY ce.data");
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 
@@ -42,6 +44,13 @@ class CronogramaEventoModel extends BaseModel
     {
         $this->ensureTables();
         try {
+            $scopeParams = ['id' => $idCronograma];
+            $scope = $this->tenantInCondition('id_cliente', $scopeParams, 'cec');
+            $check = $this->db->prepare("SELECT id FROM cronogramas WHERE id = :id AND $scope LIMIT 1");
+            $check->execute($scopeParams);
+            if (!$check->fetch()) {
+                return 0;
+            }
             $stmt = $this->db->prepare('INSERT INTO cronograma_eventos (id_cronograma, data, topico, unidade, atividade, responsavel, modelo, status) VALUES (:id_cronograma, :data, :topico, :unidade, :atividade, :responsavel, :modelo, :status)');
             $stmt->execute([
                 'id_cronograma' => $idCronograma,
@@ -70,8 +79,7 @@ class CronogramaEventoModel extends BaseModel
     public function update(int $id, array $data): bool
     {
         $this->ensureTables();
-        $stmt = $this->db->prepare('UPDATE cronograma_eventos SET data = :data, topico = :topico, unidade = :unidade, atividade = :atividade, responsavel = :responsavel, modelo = :modelo, status = :status WHERE id = :id');
-        return $stmt->execute([
+        $params = [
             'data' => $data['data'],
             'topico' => $data['topico'],
             'unidade' => $data['unidade'] ?? null,
@@ -80,13 +88,18 @@ class CronogramaEventoModel extends BaseModel
             'modelo' => $data['modelo'] ?? null,
             'status' => $data['status'] ?? 'Planejado',
             'id' => $id,
-        ]);
+        ];
+        $scope = $this->tenantInCondition('cr.id_cliente', $params, 'ceu');
+        $stmt = $this->db->prepare("UPDATE cronograma_eventos ce JOIN cronogramas cr ON cr.id = ce.id_cronograma SET ce.data = :data, ce.topico = :topico, ce.unidade = :unidade, ce.atividade = :atividade, ce.responsavel = :responsavel, ce.modelo = :modelo, ce.status = :status WHERE ce.id = :id AND $scope");
+        return $stmt->execute($params);
     }
 
     public function delete(int $id): bool
     {
         $this->ensureTables();
-        $stmt = $this->db->prepare('DELETE FROM cronograma_eventos WHERE id = :id');
-        return $stmt->execute(['id' => $id]);
+        $params = ['id' => $id];
+        $scope = $this->tenantInCondition('cr.id_cliente', $params, 'ced');
+        $stmt = $this->db->prepare("DELETE ce FROM cronograma_eventos ce JOIN cronogramas cr ON cr.id = ce.id_cronograma WHERE ce.id = :id AND $scope");
+        return $stmt->execute($params);
     }
 }

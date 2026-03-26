@@ -55,26 +55,35 @@ class AvaliacaoModel extends BaseModel
     public function all(): array
     {
         $this->ensureTable();
+        $params = [];
+        $scope = $this->tenantInCondition('a.cliente_id', $params, 'avall');
         $sql = 'SELECT a.*, c.nome_empresa AS cliente_nome
                 FROM avaliacoes a
                 LEFT JOIN clientes c ON c.id = a.cliente_id
+                WHERE ' . $scope . '
                 ORDER BY a.created_at DESC';
-        return $this->db->query($sql)->fetchAll();
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
     }
  
     public function byCliente(int $clienteId): array
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('SELECT * FROM avaliacoes WHERE cliente_id = :cid ORDER BY created_at DESC');
-        $stmt->execute(['cid' => $clienteId]);
+        $params = ['cid' => $clienteId];
+        $scope = $this->tenantInCondition('cliente_id', $params, 'avbc');
+        $stmt = $this->db->prepare("SELECT * FROM avaliacoes WHERE cliente_id = :cid AND $scope ORDER BY created_at DESC");
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
  
     public function find(int $id): ?array
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('SELECT * FROM avaliacoes WHERE id = :id');
-        $stmt->execute(['id' => $id]);
+        $params = ['id' => $id];
+        $scope = $this->tenantInCondition('cliente_id', $params, 'avf');
+        $stmt = $this->db->prepare("SELECT * FROM avaliacoes WHERE id = :id AND $scope");
+        $stmt->execute($params);
         $row = $stmt->fetch();
         return $row ?: null;
     }
@@ -82,6 +91,10 @@ class AvaliacaoModel extends BaseModel
     public function create(array $data): int
     {
         $this->ensureTable();
+        $data['cliente_id'] = $this->normalizeScopedClienteId(isset($data['cliente_id']) ? (int)$data['cliente_id'] : null);
+        if (($data['cliente_id'] ?? 0) <= 0 || !$this->canAccessClienteId((int)$data['cliente_id'])) {
+            return 0;
+        }
         $stmt = $this->db->prepare('INSERT INTO avaliacoes (cliente_id, empresa_nome, contato, respostas_json, nota_financeiro, nota_mercado, nota_pessoas, nota_processo, realidade_financeiro, realidade_mercado, realidade_pessoas, realidade_processo) VALUES (:cliente_id, :empresa_nome, :contato, :respostas_json, :nota_financeiro, :nota_mercado, :nota_pessoas, :nota_processo, :realidade_financeiro, :realidade_mercado, :realidade_pessoas, :realidade_processo)');
         $stmt->execute([
             'cliente_id' => $data['cliente_id'] ?? null,
