@@ -20,6 +20,8 @@ Permitir navegação completa no menu para usuários autenticados, com isolament
 ## Regras de escopo
 
 - Usuário `instituto` mantém acesso irrestrito.
+- Usuário `cliente_admin` e `cliente` possuem privilégios administrativos no próprio escopo.
+- Usuário `reader` possui acesso somente leitura.
 - Usuário não `instituto`:
   - visualiza somente dados com `cliente_id/id_cliente` dentro de `allowed_client_ids`;
   - pode ser vinculado a múltiplas empresas no cadastro (`id_clientes[]`);
@@ -29,6 +31,28 @@ Permitir navegação completa no menu para usuários autenticados, com isolament
   - seleciona uma ou mais matrizes/empresas diretas;
   - propaga automaticamente permissões para filiais elegíveis;
   - grava permissões diretas e herdadas em lote.
+
+## Regras de segurança por perfil
+
+- `instituto`
+  - leitura e escrita sem restrição de cliente.
+- `cliente_admin` e `cliente`
+  - leitura e escrita permitidas apenas no escopo de empresas vinculadas.
+  - escrita permitida somente em rotas de mutação com método `POST`.
+- `reader`
+  - permitido apenas `GET/HEAD`.
+  - bloqueio de rotas de mutação mesmo quando acessadas via `GET`.
+
+## Verificação de escopo
+
+- Backend
+  - `BaseController::requireLogin` aplica guarda por rota/método e bloqueio por perfil.
+  - `BaseModel` aplica `tenantInCondition` em consultas e mutações.
+- Frontend
+  - interface em modo reader desabilita formulários de escrita e oculta links de mutação.
+- Banco
+  - tabela `usuario_empresas` mantém escopo explícito usuário-empresa.
+  - chaves estrangeiras e índices reforçam integridade e desempenho do isolamento.
 
 ## Hierarquia cliente/filial
 
@@ -48,6 +72,10 @@ Permitir navegação completa no menu para usuários autenticados, com isolament
   - rota
   - cliente resolvido por escopo
   - lista de clientes permitidos
+- Ações administrativas de clientes registram:
+  - rota de escrita
+  - método HTTP
+  - escopo de clientes ativo no momento da ação
 - Visualizações/exportações por cliente registram `cliente_id` para rastreabilidade.
 
 ## Compatibilidade

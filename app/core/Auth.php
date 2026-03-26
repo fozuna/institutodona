@@ -3,6 +3,8 @@ namespace App\Core;
 
 class Auth
 {
+    private const ADMIN_CLIENT_ROLES = ['cliente', 'cliente_admin'];
+
     public static function user(): ?array
     {
         return $_SESSION['user'] ?? null;
@@ -53,12 +55,22 @@ class Auth
 
     public static function isCliente(): bool
     {
-        return (self::user()['tipo_acesso'] ?? null) === 'cliente';
+        return in_array((self::user()['tipo_acesso'] ?? null), self::ADMIN_CLIENT_ROLES, true);
     }
 
     public static function isConsultor(): bool
     {
         return (self::user()['tipo_acesso'] ?? null) === 'consultor';
+    }
+
+    public static function isClienteAdmin(): bool
+    {
+        return in_array((self::user()['tipo_acesso'] ?? null), self::ADMIN_CLIENT_ROLES, true);
+    }
+
+    public static function isReader(): bool
+    {
+        return (self::user()['tipo_acesso'] ?? null) === 'reader';
     }
 
     public static function isLoggedIn(): bool

@@ -23,7 +23,9 @@
                 <label class="block text-sm">Perfil</label>
                 <select name="tipo_acesso" class="border rounded p-2 w-64">
                     <?php $tipo = $item['tipo_acesso']; ?>
+                    <option value="cliente_admin" <?= $tipo === 'cliente_admin' ? 'selected' : '' ?>>Cliente Admin</option>
                     <option value="cliente" <?= $tipo === 'cliente' ? 'selected' : '' ?>>Cliente</option>
+                    <option value="reader" <?= $tipo === 'reader' ? 'selected' : '' ?>>Reader</option>
                     <option value="consultor" <?= $tipo === 'consultor' ? 'selected' : '' ?>>Consultor</option>
                     <option value="instituto" <?= $tipo === 'instituto' ? 'selected' : '' ?>>Instituto</option>
                 </select>

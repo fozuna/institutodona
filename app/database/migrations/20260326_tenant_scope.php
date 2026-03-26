@@ -48,6 +48,23 @@ function ensureColumn(\PDO $pdo, string $table, string $column, string $ddl): vo
     }
 }
 
+function ensureUsuariosRoles(\PDO $pdo): void
+{
+    if (!tableExists($pdo, 'usuarios')) {
+        return;
+    }
+    $stmt = $pdo->prepare("SELECT COLUMN_TYPE FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'usuarios' AND column_name = 'tipo_acesso' LIMIT 1");
+    $stmt->execute();
+    $columnType = strtolower((string)$stmt->fetchColumn());
+    $required = ["'instituto'", "'cliente'", "'cliente_admin'", "'reader'", "'consultor'"];
+    foreach ($required as $token) {
+        if (strpos($columnType, $token) === false) {
+            $pdo->exec("ALTER TABLE usuarios MODIFY COLUMN tipo_acesso ENUM('instituto','cliente','cliente_admin','reader','consultor') NOT NULL DEFAULT 'cliente'");
+            break;
+        }
+    }
+}
+
 ensureColumn($pdo, 'clientes', 'ativo', 'ALTER TABLE clientes ADD COLUMN ativo TINYINT(1) NOT NULL DEFAULT 1');
 ensureColumn($pdo, 'clientes', 'acesso_restrito', 'ALTER TABLE clientes ADD COLUMN acesso_restrito TINYINT(1) NOT NULL DEFAULT 0');
 if (tableExists($pdo, 'usuario_empresas') === false) {
@@ -72,5 +89,6 @@ ensureIndex($pdo, 'usuario_empresas', 'idx_usuario_empresas_cliente', 'ALTER TAB
 ensureForeignKey($pdo, 'clientes', 'fk_clientes_matriz', 'ALTER TABLE clientes ADD CONSTRAINT fk_clientes_matriz FOREIGN KEY (matriz_id) REFERENCES clientes(id) ON DELETE SET NULL');
 ensureForeignKey($pdo, 'usuario_empresas', 'fk_usuario_empresas_usuario', 'ALTER TABLE usuario_empresas ADD CONSTRAINT fk_usuario_empresas_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE');
 ensureForeignKey($pdo, 'usuario_empresas', 'fk_usuario_empresas_cliente', 'ALTER TABLE usuario_empresas ADD CONSTRAINT fk_usuario_empresas_cliente FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE');
+ensureUsuariosRoles($pdo);
 
 echo "MIGRATION_OK\n";

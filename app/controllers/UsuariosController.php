@@ -10,6 +10,7 @@ use App\Models\UsuarioEmpresaModel;
 
 class UsuariosController extends BaseController
 {
+    private const CLIENT_SCOPED_ROLES = ['cliente', 'cliente_admin', 'reader'];
     private UsuarioModel $usuarios;
     private ClienteModel $clientes;
     private ConsultorModel $consultores;
@@ -37,7 +38,7 @@ class UsuariosController extends BaseController
             $mapConsultoresEmailNome[$c['email']] = $c['nome'];
         }
         foreach ($items as &$u) {
-            if ($u['tipo_acesso'] === 'cliente' && !empty($u['id_cliente'])) {
+            if (in_array((string)$u['tipo_acesso'], self::CLIENT_SCOPED_ROLES, true) && !empty($u['id_cliente'])) {
                 $assigned = $this->usuarioEmpresas->allForUser((int)$u['id']);
                 if (!empty($assigned)) {
                     $u['pertence'] = implode(', ', array_map(static fn(array $r): string => (string)$r['nome_empresa'], $assigned));
@@ -74,7 +75,7 @@ class UsuariosController extends BaseController
         $nome = trim($_POST['nome'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $senha = $_POST['senha'] ?? '';
-        $tipo = $_POST['tipo_acesso'] ?? 'cliente';
+        $tipo = $_POST['tipo_acesso'] ?? 'cliente_admin';
         $selectedClientes = $this->parseSelectedClientes($_POST);
         $idConsultor = $_POST['id_consultor'] ?? null;
         if (!$nome || !$email || !$senha) {
@@ -82,9 +83,9 @@ class UsuariosController extends BaseController
             echo 'Campos obrigatórios faltando';
             return;
         }
-        if ($tipo === 'cliente' && empty($selectedClientes)) {
+        if (in_array($tipo, self::CLIENT_SCOPED_ROLES, true) && empty($selectedClientes)) {
             http_response_code(400);
-            echo 'Selecione ao menos uma empresa para o usuário cliente';
+            echo 'Selecione ao menos uma empresa para o usuário';
             return;
         }
         $hash = password_hash($senha, PASSWORD_DEFAULT);
@@ -93,9 +94,9 @@ class UsuariosController extends BaseController
             'email' => $email,
             'senha_hash' => $hash,
             'tipo_acesso' => $tipo,
-            'id_cliente' => $tipo === 'cliente' ? (int)($selectedClientes[0] ?? 0) : null,
+            'id_cliente' => in_array($tipo, self::CLIENT_SCOPED_ROLES, true) ? (int)($selectedClientes[0] ?? 0) : null,
         ]);
-        if ($tipo === 'cliente' && $id > 0) {
+        if (in_array($tipo, self::CLIENT_SCOPED_ROLES, true) && $id > 0) {
             $allAllowed = $this->usuarioEmpresas->syncForUser($id, $selectedClientes);
             if (empty($allAllowed)) {
                 http_response_code(400);
@@ -137,21 +138,21 @@ class UsuariosController extends BaseController
         $id = (int)($_POST['id'] ?? 0);
         $nome = trim($_POST['nome'] ?? '');
         $email = trim($_POST['email'] ?? '');
-        $tipo = $_POST['tipo_acesso'] ?? 'cliente';
+        $tipo = $_POST['tipo_acesso'] ?? 'cliente_admin';
         $selectedClientes = $this->parseSelectedClientes($_POST);
         $senha = $_POST['senha'] ?? null;
-        if ($tipo === 'cliente' && empty($selectedClientes)) {
+        if (in_array($tipo, self::CLIENT_SCOPED_ROLES, true) && empty($selectedClientes)) {
             http_response_code(400);
-            echo 'Selecione ao menos uma empresa para o usuário cliente';
+            echo 'Selecione ao menos uma empresa para o usuário';
             return;
         }
         $this->usuarios->update($id, [
             'nome' => $nome,
             'email' => $email,
             'tipo_acesso' => $tipo,
-            'id_cliente' => $tipo === 'cliente' ? (int)($selectedClientes[0] ?? 0) : null,
+            'id_cliente' => in_array($tipo, self::CLIENT_SCOPED_ROLES, true) ? (int)($selectedClientes[0] ?? 0) : null,
         ]);
-        $this->usuarioEmpresas->syncForUser($id, $tipo === 'cliente' ? $selectedClientes : []);
+        $this->usuarioEmpresas->syncForUser($id, in_array($tipo, self::CLIENT_SCOPED_ROLES, true) ? $selectedClientes : []);
         if ($senha) {
             $hash = password_hash($senha, PASSWORD_DEFAULT);
             $this->usuarios->updatePassword($id, $hash);

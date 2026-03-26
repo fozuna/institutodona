@@ -23,6 +23,7 @@ $config = require $cfg;
 </head>
 <body class="bg-brand-gray-50 text-brand-black">
     <?php $user = $_SESSION['user'] ?? null; ?>
+    <?php $isReader = ($user['tipo_acesso'] ?? null) === 'reader'; ?>
     <div class="flex min-h-screen">
         <?php if ($user): ?>
             <!-- Sidebar fixa (apenas quando logado) -->
@@ -84,6 +85,38 @@ $config = require $cfg;
                     </div>
                 <?php endif; ?>
                 <?= $content ?>
+                <?php if ($isReader): ?>
+                <script>
+                    (function(){
+                        const writeRoutes = [
+                            'store','update','delete','attach','upload','set_status',
+                            'upsertMetric','addCheck','createAction','updateTask',
+                            'updateAction','importRun','delete_update','storeFilial',
+                            'updateAplicacao','deleteAplicacao'
+                        ];
+                        document.querySelectorAll('form').forEach((form)=>{
+                            const method = (form.getAttribute('method') || 'get').toLowerCase();
+                            if (method !== 'get') {
+                                form.querySelectorAll('input,select,textarea,button').forEach((el)=>{
+                                    if (el.tagName === 'BUTTON') {
+                                        el.disabled = true;
+                                    } else if (el.name !== 'csrf') {
+                                        el.readOnly = true;
+                                        el.disabled = true;
+                                    }
+                                });
+                            }
+                        });
+                        document.querySelectorAll('a[href*="index.php?route="]').forEach((a)=>{
+                            const href = a.getAttribute('href') || '';
+                            const hit = writeRoutes.some((s)=>href.includes('/' + s) || href.includes('=' + s) || href.includes('/' + s + '&'));
+                            if (hit) {
+                                a.style.display = 'none';
+                            }
+                        });
+                    })();
+                </script>
+                <?php endif; ?>
             </div>
             <?php if ($user): ?>
             <footer class="border-t bg-white text-xs text-gray-500 py-3 px-6">

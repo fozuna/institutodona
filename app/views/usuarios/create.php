@@ -18,7 +18,9 @@
         <div>
             <label class="block text-sm">Perfil</label>
             <select name="tipo_acesso" class="border rounded p-2 w-64">
+                <option value="cliente_admin">Cliente Admin</option>
                 <option value="cliente">Cliente</option>
+                <option value="reader">Reader</option>
                 <option value="consultor">Consultor</option>
                 <option value="instituto">Instituto</option>
             </select>

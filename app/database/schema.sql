@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   nome VARCHAR(120) NOT NULL,
   email VARCHAR(180) NOT NULL UNIQUE,
   senha_hash VARCHAR(255) NOT NULL,
-  tipo_acesso ENUM('instituto','cliente','consultor') NOT NULL DEFAULT 'cliente',
+  tipo_acesso ENUM('instituto','cliente','cliente_admin','reader','consultor') NOT NULL DEFAULT 'cliente',
   id_cliente INT NULL,
   CONSTRAINT fk_usr_cliente FOREIGN KEY (id_cliente) REFERENCES clientes(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -136,7 +136,7 @@ ALTER TABLE aplicacoes
   ADD COLUMN IF NOT EXISTS data_prevista DATE NULL,
   ADD COLUMN IF NOT EXISTS data_conclusao DATE NULL;
 
-ALTER TABLE usuarios MODIFY COLUMN tipo_acesso ENUM('instituto','cliente','consultor') NOT NULL DEFAULT 'cliente';
+ALTER TABLE usuarios MODIFY COLUMN tipo_acesso ENUM('instituto','cliente','cliente_admin','reader','consultor') NOT NULL DEFAULT 'cliente';
 
 ALTER TABLE consultores
   ADD COLUMN IF NOT EXISTS telefone VARCHAR(30) NULL,
