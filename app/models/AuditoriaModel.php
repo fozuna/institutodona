@@ -7,6 +7,16 @@ class AuditoriaModel extends BaseModel
 {
     private static bool $tablesEnsured = false;
 
+    private function safeRollback(): void
+    {
+        try {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+        } catch (\Throwable $e) {
+        }
+    }
+
     private function ensureTables(): void
     {
         if (self::$tablesEnsured) {
@@ -333,7 +343,13 @@ class AuditoriaModel extends BaseModel
         if (!$auditoria || !in_array((string)$auditoria['status'], ['Agendada', 'Em Auditoria'], true)) {
             return false;
         }
-        $this->db->beginTransaction();
+        try {
+            if (!$this->db->beginTransaction()) {
+                return false;
+            }
+        } catch (\Throwable $e) {
+            return false;
+        }
         try {
             $this->persistAvaliacoesNoTx($auditoriaId, $avaliacoes, $userId);
             $this->db->prepare("UPDATE auditorias SET status = 'Em Auditoria', updated_by = :updated_by WHERE id = :id AND status = 'Agendada'")
@@ -341,7 +357,7 @@ class AuditoriaModel extends BaseModel
             $this->db->commit();
             return true;
         } catch (\Throwable $e) {
-            $this->db->rollBack();
+            $this->safeRollback();
             return false;
         }
     }
@@ -353,7 +369,13 @@ class AuditoriaModel extends BaseModel
         if (!$auditoria || !in_array((string)$auditoria['status'], ['Agendada', 'Em Auditoria'], true)) {
             return false;
         }
-        $this->db->beginTransaction();
+        try {
+            if (!$this->db->beginTransaction()) {
+                return false;
+            }
+        } catch (\Throwable $e) {
+            return false;
+        }
         try {
             $this->persistAvaliacoesNoTx($auditoriaId, $avaliacoes, $userId);
             $this->db->prepare("UPDATE auditorias SET status = 'Em Auditoria', updated_by = :updated_by WHERE id = :id AND status = 'Agendada'")
@@ -373,17 +395,22 @@ class AuditoriaModel extends BaseModel
                 'updated_by' => $userId
             ]) && $up->rowCount() > 0;
             if (!$ok) {
-                $this->db->rollBack();
+                $this->safeRollback();
                 return false;
             }
             try {
                 (new SetorMetricaModel())->registrarConclusao((int)$auditoria['setor_id'], $stats);
             } catch (\Throwable $e) {
             }
-            $this->db->commit();
+            try {
+                $this->db->commit();
+            } catch (\Throwable $e) {
+                $this->safeRollback();
+                return false;
+            }
             return true;
         } catch (\Throwable $e) {
-            $this->db->rollBack();
+            $this->safeRollback();
             return false;
         }
     }
