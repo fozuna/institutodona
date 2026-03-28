@@ -295,12 +295,14 @@ class AuditoriaModel extends BaseModel
     public function duplicateFrom(array $src, array $newData, int $userId): int
     {
         $this->ensureTables();
-        $this->db->beginTransaction();
-        try {
+        $tryStatus = ['Rascunho','Agendada']; // fallback caso enum não tenha Rascunho
+        foreach ($tryStatus as $status) {
+            $this->db->beginTransaction();
+            try {
             $stmt = $this->db->prepare("INSERT INTO auditorias
                 (cliente_id, setor_id, responsavel_id, data_auditoria, nome_auditoria, pergunta, objetivo, referencia_esperada, status, created_by, updated_by)
                 VALUES
-                (:cliente_id, :setor_id, NULL, :data_auditoria, :nome_auditoria, :pergunta, :objetivo, :referencia_esperada, 'Rascunho', :uid, :uid)");
+                (:cliente_id, :setor_id, NULL, :data_auditoria, :nome_auditoria, :pergunta, :objetivo, :referencia_esperada, :status, :uid, :uid)");
             $primeira = $src['questoes'][0] ?? ['pergunta' => '', 'referencia_esperada' => '', 'responsavel_nome' => ''];
             $stmt->execute([
                 'cliente_id' => (int)$src['cliente_id'],
@@ -310,6 +312,7 @@ class AuditoriaModel extends BaseModel
                 'pergunta' => (string)$primeira['pergunta'],
                 'objetivo' => (string)$primeira['responsavel_nome'],
                 'referencia_esperada' => (string)$primeira['referencia_esperada'],
+                'status' => $status,
                 'uid' => $userId,
             ]);
             $newId = (int)$this->db->lastInsertId();
@@ -323,16 +326,18 @@ class AuditoriaModel extends BaseModel
                     'resp' => (string)($q['responsavel_nome'] ?? ''),
                     'perg' => (string)($q['pergunta'] ?? ''),
                     'ref' => (string)($q['referencia_esperada'] ?? ''),
-                    'proc' => (string)($q['processos_json'] ?? json_encode($q['processos'] ?? [])),
+                    'proc' => isset($q['processos_json']) ? (string)$q['processos_json'] : json_encode($q['processos'] ?? []),
                     'ord' => $ordem++,
                 ]);
             }
             $this->db->commit();
             return $newId;
-        } catch (\Throwable $e) {
-            $this->safeRollback();
-            return 0;
+            } catch (\Throwable $e) {
+                $this->safeRollback();
+                // tenta próximo status (fallback)
+            }
         }
+        return 0;
     }
 
     public function create(array $data, int $userId): int
@@ -395,7 +400,7 @@ class AuditoriaModel extends BaseModel
             $stmt = $this->db->prepare("UPDATE auditorias
                 SET cliente_id = :cliente_id, setor_id = :setor_id, data_auditoria = :data_auditoria, nome_auditoria = :nome_auditoria,
                     pergunta = :pergunta, objetivo = :objetivo, referencia_esperada = :referencia_esperada, updated_by = :updated_by
-                WHERE id = :id AND deleted_at IS NULL AND status IN ('Rascunho','Agendada','Em Auditoria') AND realizada_at IS NULL$scope");
+                WHERE id = :id AND deleted_at IS NULL AND status IN ('Rascunho','Agendada','Em Auditoria','Realizada') AND realizada_at IS NULL$scope");
             $updated = $stmt->execute($params) && $stmt->rowCount() > 0;
             if (!$updated) {
                 $this->db->rollBack();

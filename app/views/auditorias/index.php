@@ -100,7 +100,6 @@
                                     <?= htmlspecialchars($row['status']) ?>
                                 </span>
                             </td>
-                            <td class="p-3"><?= (int)($row['total_questoes'] ?? 0) ?></td>
                             <td class="p-3">
                                 <?php if (($row['status'] ?? '') === 'Realizada'): ?>
                                     <?php $pct = isset($row['conformidade_pct']) ? (float)$row['conformidade_pct'] : null; ?>
@@ -118,6 +117,7 @@
                                     <span class="text-xs text-gray-400">—</span>
                                 <?php endif; ?>
                             </td>
+                            <td class="p-3"><?= (int)($row['total_questoes'] ?? 0) ?></td>
                             <td class="p-3 whitespace-nowrap">
                                 <a class="text-brand-brown icon-action mr-2" href="index.php?route=auditorias/show&id=<?= (int)$row['id'] ?>" title="Abrir"><span data-feather="eye"></span></a>
                                 <?php if (!empty($canManage) && $isAgendada): ?>

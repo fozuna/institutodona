@@ -206,11 +206,7 @@ class AuditoriasController extends BaseController
             $this->redirect('index.php?route=auditorias/index');
             return;
         }
-        if (($item['status'] ?? '') === 'Realizada') {
-            $_SESSION['flash_error'] = 'Esta auditoria já foi finalizada.';
-            $this->redirect('index.php?route=auditorias/show&id=' . $id);
-            return;
-        }
+        // Permitir edição/auditoria independentemente do status
         $this->auditorias->iniciarExecucao($id, (int)($_SESSION['user']['id'] ?? 0));
         $item = $this->auditorias->findWithQuestoes($id) ?: $item;
         $respostas = $this->auditorias->respostasByAuditoria($id);
