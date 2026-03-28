@@ -135,8 +135,8 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
                         </div>
                         <div class="md:col-span-8">
                             <label class="block text-xs">Pergunta de Auditoria</label>
-                            <textarea class="border rounded p-2 w-full" rows="3" data-pergunta="${index}">${q.pergunta || ''}</textarea>
-                            <div class="text-xs text-gray-500">${count}/1000</div>
+                            <textarea class="border rounded p-2 w-full" rows="3" maxlength="1000" data-pergunta="${index}">${q.pergunta || ''}</textarea>
+                            <div class="text-xs text-gray-500" data-pergunta-count="${index}">${count}/1000</div>
                         </div>
                         <div class="md:col-span-12">
                             <label class="block text-xs">Referência Esperada</label>
@@ -193,9 +193,13 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
             });
             questoesContainer.querySelectorAll('[data-pergunta]').forEach((el)=>{
                 el.addEventListener('input', ()=>{
-                    questoes[Number(el.getAttribute('data-pergunta'))].pergunta = el.value;
+                    const idx = Number(el.getAttribute('data-pergunta'));
+                    questoes[idx].pergunta = el.value;
+                    const countEl = questoesContainer.querySelector(`[data-pergunta-count="${idx}"]`);
+                    if (countEl) {
+                        countEl.textContent = `${(el.value || '').length}/1000`;
+                    }
                     syncHidden();
-                    renderQuestoes();
                 });
             });
             questoesContainer.querySelectorAll('[data-referencia]').forEach((el)=>{
