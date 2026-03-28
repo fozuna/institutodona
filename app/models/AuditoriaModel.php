@@ -292,6 +292,41 @@ class AuditoriaModel extends BaseModel
         }
     }
 
+    public function isNomeDisponivel(string $nome, ?int $excludeId = null): bool
+    {
+        $this->ensureTables();
+        $params = ['nome' => $nome];
+        $sql = 'SELECT COUNT(*) FROM auditorias WHERE nome_auditoria = :nome';
+        if ($excludeId !== null && $excludeId > 0) {
+            $sql .= ' AND id <> :id';
+            $params['id'] = $excludeId;
+        }
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return (int)$stmt->fetchColumn() === 0;
+    }
+
+    public function validarNomeAuditoria(string $nome): ?string
+    {
+        $nome = trim($nome);
+        if ($nome === '') return 'Nome da auditoria é obrigatório.';
+        if (mb_strlen($nome) > 100) return 'Nome da auditoria deve ter no máximo 100 caracteres.';
+        if (!preg_match('/^[\p{L}\p{N}\s._-]+$/u', $nome)) return 'Nome contém caracteres inválidos.';
+        return null;
+    }
+
+    public function renomear(int $id, string $novoNome, int $userId): bool
+    {
+        $this->ensureTables();
+        $err = $this->validarNomeAuditoria($novoNome);
+        if ($err !== null) return false;
+        if (!$this->isNomeDisponivel($novoNome, $id)) return false;
+        $params = ['id' => $id, 'nome' => $novoNome, 'uid' => $userId];
+        $scope = $this->hasScopeRestriction() ? (' AND ' . $this->tenantInCondition('cliente_id', $params, 'audrn')) : '';
+        $stmt = $this->db->prepare("UPDATE auditorias SET nome_auditoria = :nome, updated_by = :uid WHERE id = :id$scope");
+        return $stmt->execute($params) && $stmt->rowCount() > 0;
+    }
+
     public function duplicateFrom(array $src, array $newData, int $userId): int
     {
         $this->ensureTables();
@@ -304,6 +339,9 @@ class AuditoriaModel extends BaseModel
                 VALUES
                 (:cliente_id, :setor_id, NULL, :data_auditoria, :nome_auditoria, :pergunta, :objetivo, :referencia_esperada, :status, :uid, :uid)");
             $primeira = $src['questoes'][0] ?? ['pergunta' => '', 'referencia_esperada' => '', 'responsavel_nome' => ''];
+            $err = $this->validarNomeAuditoria((string)($newData['nome_auditoria'] ?? ''));
+            if ($err !== null) { $this->safeRollback(); return 0; }
+            if (!$this->isNomeDisponivel((string)$newData['nome_auditoria'])) { $this->safeRollback(); return 0; }
             $stmt->execute([
                 'cliente_id' => (int)$src['cliente_id'],
                 'setor_id' => (int)$src['setor_id'],

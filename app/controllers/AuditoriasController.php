@@ -326,6 +326,18 @@ class AuditoriasController extends BaseController
             $this->redirect('index.php?route=auditorias/index');
             return;
         }
+        // Validações de nome
+        $msg = $this->auditorias->validarNomeAuditoria($nome);
+        if ($msg !== null) {
+            $_SESSION['flash_error'] = $msg;
+            $this->redirect('index.php?route=auditorias/index');
+            return;
+        }
+        if (!$this->auditorias->isNomeDisponivel($nome)) {
+            $_SESSION['flash_error'] = 'Já existe uma auditoria com este nome.';
+            $this->redirect('index.php?route=auditorias/index');
+            return;
+        }
         $newId = $this->auditorias->duplicateFrom($src, [
             'nome_auditoria' => $nome,
             'data_auditoria' => $data ?: date('Y-m-d'),
@@ -337,6 +349,44 @@ class AuditoriasController extends BaseController
         }
         AuditLogger::log('auditoria_duplicate', 'auditoria', $newId, ['source_id' => $sourceId]);
         $_SESSION['flash_success'] = 'Auditoria duplicada como rascunho.';
+        $this->redirect('index.php?route=auditorias/index');
+    }
+
+    public function rename(): void
+    {
+        $this->requireLogin();
+        $this->requireManagePermission();
+        if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo 'Requisição inválida.';
+            return;
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        $nome = trim((string)($_POST['nome_auditoria'] ?? ''));
+        if ($id <= 0) {
+            $_SESSION['flash_error'] = 'Auditoria inválida.';
+            $this->redirect('index.php?route=auditorias/index');
+            return;
+        }
+        $msg = $this->auditorias->validarNomeAuditoria($nome);
+        if ($msg !== null) {
+            $_SESSION['flash_error'] = $msg;
+            $this->redirect('index.php?route=auditorias/index');
+            return;
+        }
+        if (!$this->auditorias->isNomeDisponivel($nome, $id)) {
+            $_SESSION['flash_error'] = 'Já existe uma auditoria com este nome.';
+            $this->redirect('index.php?route=auditorias/index');
+            return;
+        }
+        $ok = $this->auditorias->renomear($id, $nome, (int)($_SESSION['user']['id'] ?? 0));
+        if (!$ok) {
+            $_SESSION['flash_error'] = 'Não foi possível renomear a auditoria.';
+            $this->redirect('index.php?route=auditorias/index');
+            return;
+        }
+        AuditLogger::log('auditoria_rename', 'auditoria', $id, ['nome' => $nome]);
+        $_SESSION['flash_success'] = 'Auditoria renomeada com sucesso.';
         $this->redirect('index.php?route=auditorias/index');
     }
 

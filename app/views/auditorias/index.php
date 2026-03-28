@@ -138,6 +138,10 @@
                                         data-nome="<?= htmlspecialchars($row['nome_auditoria'] ?? '') ?>"
                                         data-data="<?= htmlspecialchars($row['data_auditoria'] ?? '') ?>"
                                         title="Duplicar Auditoria"><span data-feather="copy"></span></button>
+                                    <button type="button" class="text-brand-brown icon-action ml-2" data-rename
+                                        data-id="<?= (int)$row['id'] ?>"
+                                        data-nome="<?= htmlspecialchars($row['nome_auditoria'] ?? '') ?>"
+                                        title="Renomear Auditoria"><span data-feather="type"></span></button>
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -193,6 +197,23 @@
                 <div class="flex items-center justify-end gap-2">
                     <button type="button" id="cancelDuplicate" class="px-3 py-2 rounded bg-gray-200 text-brand-brown">Cancelar</button>
                     <button type="submit" id="btnDuplicate" class="px-3 py-2 rounded bg-brand-red text-white">Duplicar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="modalRename" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded shadow p-6 w-full max-w-md">
+            <h2 class="text-lg font-semibold mb-3">Renomear Auditoria</h2>
+            <form method="post" action="index.php?route=auditorias/rename" id="renameForm" class="space-y-3">
+                <input type="hidden" name="csrf" value="<?= Security::csrfToken() ?>" />
+                <input type="hidden" name="id" id="renId" />
+                <div>
+                    <label class="block text-sm">Novo nome</label>
+                    <input class="border rounded p-2 w-full" name="nome_auditoria" id="renNome" required maxlength="100" pattern="[\p{L}\p{N}\s._-]+">
+                </div>
+                <div class="flex items-center justify-end gap-2">
+                    <button type="button" id="cancelRename" class="px-3 py-2 rounded bg-gray-200 text-brand-brown">Cancelar</button>
+                    <button type="submit" id="btnRename" class="px-3 py-2 rounded bg-brand-red text-white">Renomear</button>
                 </div>
             </form>
         </div>
@@ -269,6 +290,26 @@
         document.getElementById('duplicateForm')?.addEventListener('submit', ()=>{
             const b = document.getElementById('btnDuplicate');
             if (b) { b.disabled = true; b.textContent = 'Duplicando...'; }
+        });
+        // Renomear
+        const modalRen = document.getElementById('modalRename');
+        const renId = document.getElementById('renId');
+        const renNome = document.getElementById('renNome');
+        document.querySelectorAll('[data-rename]').forEach((el)=>{
+            el.addEventListener('click', ()=>{
+                renId.value = el.getAttribute('data-id');
+                renNome.value = el.getAttribute('data-nome') || '';
+                modalRen.classList.remove('hidden');
+                modalRen.classList.add('flex');
+            });
+        });
+        document.getElementById('cancelRename')?.addEventListener('click', ()=>{
+            modalRen.classList.add('hidden');
+            modalRen.classList.remove('flex');
+        });
+        document.getElementById('renameForm')?.addEventListener('submit', ()=>{
+            const b = document.getElementById('btnRename');
+            if (b) { b.disabled = true; b.textContent = 'Renomeando...'; }
         });
     })();
 </script>
