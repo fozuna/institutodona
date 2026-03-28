@@ -10,7 +10,7 @@ $config = require $cfg;
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Instituto Dona - Gestão de Processos</title>
+    <title>SisDoná - Viva+</title>
     <?php
         $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
         $baseUrl = rtrim(dirname($scriptName), '/\\'); // e.g., /institutodona/public_html
@@ -32,8 +32,8 @@ $config = require $cfg;
                     <div class="flex flex-col items-start gap-2">
                         <img src="<?= $assetsUrl ?>/img/logobco.png" alt="Logo" class="h-8 md:h-10 w-auto" />
                         <div class="leading-tight">
-                            <div class="font-bold text-sm">Instituto Dona</div>
-                            <div class="text-[11px] opacity-80">Gestão de Processos</div>
+                            <div class="font-bold text-sm">SisDoná</div>
+                            <div class="text-[11px] opacity-80">Viva+</div>
                         </div>
                     </div>
                 </div>

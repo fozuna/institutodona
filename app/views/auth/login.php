@@ -5,8 +5,8 @@
     <div class="relative basis-[70%] text-white flex items-center justify-center"
          style="background-image: url('assets/img/login-bg.jpg'); background-size: cover; background-position: center; background-repeat: no-repeat; background-color: var(--brand-red); background-blend-mode: multiply;">
         <div class="p-10 max-w-2xl">
-            <h1 class="text-4xl font-bold mb-4">Instituto Dona</h1>
-            <p class="text-lg opacity-90">Gestão de processos, pessoas e metodologias com simplicidade.</p>
+            <h1 class="text-4xl font-bold mb-4">SisDoná</h1>
+            <p class="text-lg opacity-90">Viva+</p>
         </div>
     </div>
 
