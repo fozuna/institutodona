@@ -144,6 +144,12 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
                         <div class="md:col-span-12 text-xs text-gray-600">
                             <strong>Processos vinculados:</strong> ${processos.length ? processos.join(', ') : 'nenhum'}
                         </div>
+                        <div class="md:col-span-12">
+                            <label class="block text-xs">Anexos da Questão</label>
+                            <input type="file" multiple data-anexos="${index}" class="border rounded p-2 w-full" />
+                            <div class="text-xs text-gray-500 mt-1">Limites: 10MB por arquivo, 50MB por questão. Arquivos são comprimidos automaticamente.</div>
+                            <div class="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2" data-anexos-list="${index}"></div>
+                        </div>
                     </div>
                 `;
                 questoesContainer.appendChild(card);
@@ -391,6 +397,43 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
         setorSelect?.addEventListener('change', ()=>{
             responsavelSugestoesPorQuestao.clear();
             renderQuestoes();
+        });
+        questoesContainer.addEventListener('change', async (e)=>{
+            const t = e.target;
+            if (!(t instanceof HTMLInputElement)) return;
+            if (!t.hasAttribute('data-anexos')) return;
+            const idx = Number(t.getAttribute('data-anexos'));
+            const files = Array.from(t.files || []);
+            if (!files.length) return;
+            if (!<?= (int)($values['id'] ?? 0) ?>) {
+                alert('Salve a auditoria antes de enviar anexos.');
+                t.value = '';
+                return;
+            }
+            const list = questoesContainer.querySelector(`[data-anexos-list="${idx}"]`);
+            const fd = new FormData();
+            fd.append('csrf', <?= json_encode(Security::csrfToken()) ?>);
+            fd.append('auditoria_id', <?= (int)($values['id'] ?? 0) ?>);
+            fd.append('questao_id', String(idx + 1));
+            files.forEach(f=>fd.append('files[]', f));
+            try {
+                const res = await fetch('index.php?route=auditorias/api_upload_anexo', { method: 'POST', body: fd });
+                const json = await res.json();
+                if (json && json.success && Array.isArray(json.saved)) {
+                    json.saved.forEach(s=>{
+                        const tile = document.createElement('div');
+                        tile.className = 'border rounded p-2 text-xs';
+                        tile.textContent = s.name + ' (' + Math.round(s.size/1024) + ' KB)';
+                        list?.appendChild(tile);
+                    });
+                } else {
+                    alert('Falha ao enviar anexos.');
+                }
+            } catch (err) {
+                alert('Erro ao enviar anexos.');
+            } finally {
+                t.value = '';
+            }
         });
         dataAuditoria?.addEventListener('input', applyDateMask);
 

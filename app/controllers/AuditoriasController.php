@@ -13,6 +13,8 @@ use App\Models\ClienteModel;
 use App\Models\ColaboradorModel;
 use App\Models\SetorModel;
 use App\Models\UsuarioModel;
+use App\Models\AuditoriaArquivoModel;
+use App\Core\VirusScanner;
 
 class AuditoriasController extends BaseController
 {
@@ -21,6 +23,7 @@ class AuditoriasController extends BaseController
     private SetorModel $setores;
     private ColaboradorModel $colaboradores;
     private UsuarioModel $usuarios;
+    private AuditoriaArquivoModel $arquivos;
 
     public function __construct()
     {
@@ -29,6 +32,7 @@ class AuditoriasController extends BaseController
         $this->setores = new SetorModel();
         $this->colaboradores = new ColaboradorModel();
         $this->usuarios = new UsuarioModel();
+        $this->arquivos = new AuditoriaArquivoModel();
     }
 
     public function index(): void
@@ -410,6 +414,149 @@ class AuditoriasController extends BaseController
             'total' => count($items),
         ]);
         echo json_encode(['success' => true, 'items' => $items], JSON_UNESCAPED_UNICODE);
+    }
+
+    public function apiUploadAnexo(): void
+    {
+        $this->requireApiAuth(true);
+        header('Content-Type: application/json; charset=utf-8');
+        if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'CSRF inválido'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $auditoriaId = (int)($_POST['auditoria_id'] ?? 0);
+        $questaoId = (int)($_POST['questao_id'] ?? 0);
+        if ($auditoriaId <= 0 || $questaoId <= 0) {
+            http_response_code(422);
+            echo json_encode(['success' => false, 'message' => 'Parâmetros inválidos'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $item = $this->auditorias->find($auditoriaId);
+        if (!$item) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'Auditoria não encontrada'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $params = ['qid' => $questaoId, 'aid' => $auditoriaId];
+        $stmt = $this->auditorias->db->prepare('SELECT id FROM auditoria_questoes WHERE id = :qid AND auditoria_id = :aid');
+        $stmt->execute($params);
+        if (!$stmt->fetch()) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => 'Questão inválida'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $totalBytes = $this->arquivos->totalBytesByQuestao($auditoriaId, $questaoId);
+        $MAX_FILE = 10 * 1024 * 1024;
+        $MAX_TOTAL = 50 * 1024 * 1024;
+        $saved = [];
+        foreach (($_FILES['files']['name'] ?? []) as $i => $name) {
+            $size = (int)($_FILES['files']['size'][$i] ?? 0);
+            $tmp = $_FILES['files']['tmp_name'][$i] ?? '';
+            $err = (int)($_FILES['files']['error'][$i] ?? 0);
+            if ($err !== UPLOAD_ERR_OK || !is_uploaded_file($tmp)) {
+                continue;
+            }
+            if ($size <= 0 || $size > $MAX_FILE) {
+                continue;
+            }
+            if ($totalBytes + $size > $MAX_TOTAL) {
+                break;
+            }
+            $mime = mime_content_type($tmp) ?: null;
+            $hash = hash_file('sha256', $tmp);
+            $scan = VirusScanner::scan($tmp);
+            if (!$scan['safe']) {
+                AuditLogger::log('auditoria_upload_blocked_virus', 'anexo', null, [
+                    'auditoria_id' => $auditoriaId,
+                    'questao_id' => $questaoId,
+                    'name' => $name,
+                    'output' => $scan['output'],
+                ]);
+                continue;
+            }
+            $baseDir = __DIR__ . '/../../storage/auditorias/' . $auditoriaId . '/' . $questaoId . '/';
+            if (!is_dir($baseDir)) {
+                @mkdir($baseDir, 0775, true);
+            }
+            $safeName = preg_replace('/[^a-zA-Z0-9._-]+/', '_', basename($name));
+            $dest = $baseDir . uniqid('f_', true) . '_' . $safeName;
+            if (!@move_uploaded_file($tmp, $dest)) {
+                continue;
+            }
+            $compressed = $dest . '.gz';
+            $gz = @gzopen($compressed, 'wb9');
+            if ($gz) {
+                @gzwrite($gz, file_get_contents($dest));
+                @gzclose($gz);
+            } else {
+                $compressed = null;
+            }
+            $thumb = null;
+            if (is_string($mime) && preg_match('#^image/(jpeg|png|webp)$#i', $mime)) {
+                $thumb = $baseDir . 'thumb_' . uniqid() . '.jpg';
+                try {
+                    if (stripos($mime, 'jpeg') !== false) $im = imagecreatefromjpeg($dest);
+                    elseif (stripos($mime, 'png') !== false) $im = imagecreatefrompng($dest);
+                    else $im = imagecreatefromwebp($dest);
+                    if ($im) {
+                        $w = imagesx($im); $h = imagesy($im);
+                        $nw = 300; $nh = (int)round($h * ($nw / $w));
+                        $out = imagecreatetruecolor($nw, $nh);
+                        imagecopyresampled($out, $im, 0, 0, 0, 0, $nw, $nh, $w, $h);
+                        imagejpeg($out, $thumb, 82);
+                        imagedestroy($out); imagedestroy($im);
+                    } else {
+                        $thumb = null;
+                    }
+                } catch (\Throwable $e) { $thumb = null; }
+            }
+            $id = $this->arquivos->create([
+                'auditoria_id' => $auditoriaId,
+                'questao_id' => $questaoId,
+                'path' => $dest,
+                'compressed_path' => $compressed,
+                'original_name' => $safeName,
+                'mime' => $mime,
+                'size' => $size,
+                'sha256' => $hash,
+                'thumb_path' => $thumb,
+                'created_by' => (int)($_SESSION['user']['id'] ?? null),
+            ]);
+            $totalBytes += $size;
+            $saved[] = ['id' => $id, 'name' => $safeName, 'size' => $size, 'thumb' => $thumb !== null];
+        }
+        echo json_encode(['success' => true, 'saved' => $saved], JSON_UNESCAPED_UNICODE);
+    }
+
+    public function apiListAnexos(): void
+    {
+        $this->requireApiAuth(false);
+        header('Content-Type: application/json; charset=utf-8');
+        $auditoriaId = (int)($_GET['auditoria_id'] ?? 0);
+        $questaoId = (int)($_GET['questao_id'] ?? 0);
+        if ($auditoriaId <= 0 || $questaoId <= 0) {
+            echo json_encode(['success' => true, 'items' => []], JSON_UNESCAPED_UNICODE); return;
+        }
+        $items = $this->arquivos->listByQuestao($auditoriaId, $questaoId);
+        echo json_encode(['success' => true, 'items' => $items], JSON_UNESCAPED_UNICODE);
+    }
+
+    public function downloadAnexo(): void
+    {
+        $this->requireLogin();
+        $id = (int)($_GET['id'] ?? 0);
+        $file = $this->arquivos->find($id);
+        if (!$file) { http_response_code(404); echo 'Arquivo não encontrado'; return; }
+        $auditoria = $this->auditorias->find((int)$file['auditoria_id']);
+        if (!$auditoria) { http_response_code(404); echo 'Auditoria não encontrada'; return; }
+        if (!$this->canAccessCliente((int)$auditoria['cliente_id'])) { http_response_code(403); echo 'Sem permissão'; return; }
+        $path = is_file($file['compressed_path'] ?? '') ? $file['compressed_path'] : $file['path'];
+        if (!is_file($path)) { http_response_code(404); echo 'Arquivo indisponível'; return; }
+        $name = $file['original_name'] ?? ('arquivo_' . $id);
+        header('Content-Type: application/octet-stream');
+        header('Content-Disposition: attachment; filename="' . $name . (substr($path, -3) === '.gz' ? '.gz' : '') . '"');
+        readfile($path);
     }
 
     public function apiList(): void

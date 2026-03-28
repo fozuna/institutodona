@@ -1,0 +1,58 @@
+openapi: 3.0.3
+info:
+  title: API Auditorias - Instituto Dona
+  version: 1.0.0
+paths:
+  /auditorias/api_setores:
+    get:
+      summary: Lista setores por cliente
+      parameters:
+        - in: query
+          name: cliente_id
+          schema: { type: integer }
+        - in: query
+          name: force
+          schema: { type: integer, enum: [0,1] }
+      responses:
+        '200':
+          description: OK
+  /auditorias/api_upload_anexo:
+    post:
+      summary: Upload de anexos por questão
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                csrf: { type: string }
+                auditoria_id: { type: integer }
+                questao_id: { type: integer }
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        '200': { description: OK }
+  /auditorias/api_list_anexos:
+    get:
+      summary: Lista anexos da questão
+      parameters:
+        - in: query
+          name: auditoria_id
+          schema: { type: integer }
+        - in: query
+          name: questao_id
+          schema: { type: integer }
+      responses:
+        '200': { description: OK }
+  /auditorias/download_anexo:
+    get:
+      summary: Download de anexo
+      parameters:
+        - in: query
+          name: id
+          schema: { type: integer }
+      responses:
+        '200': { description: OK }

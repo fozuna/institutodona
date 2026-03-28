@@ -274,6 +274,15 @@ switch ($route) {
     case 'auditorias/api_setores':
         (new AuditoriasController())->apiSetores();
         break;
+    case 'auditorias/api_upload_anexo':
+        (new AuditoriasController())->apiUploadAnexo();
+        break;
+    case 'auditorias/api_list_anexos':
+        (new AuditoriasController())->apiListAnexos();
+        break;
+    case 'auditorias/download_anexo':
+        (new AuditoriasController())->downloadAnexo();
+        break;
     case 'auditorias/api_clientes':
         (new AuditoriasController())->apiClientes();
         break;

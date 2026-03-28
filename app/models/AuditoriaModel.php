@@ -75,7 +75,7 @@ class AuditoriaModel extends BaseModel
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 auditoria_id INT NOT NULL,
                 questao_id INT NOT NULL,
-                conformidade ENUM('pendente','conforme','nao_conforme') NOT NULL DEFAULT 'pendente',
+                conformidade ENUM('pendente','conforme','nao_conforme','nao_aplica') NOT NULL DEFAULT 'pendente',
                 observacoes TEXT NULL,
                 auto_saved_at DATETIME NULL,
                 finalized_at DATETIME NULL,
@@ -87,6 +87,15 @@ class AuditoriaModel extends BaseModel
                 CONSTRAINT fk_auditoria_avaliacoes_auditoria FOREIGN KEY (auditoria_id) REFERENCES auditorias(id) ON DELETE CASCADE,
                 CONSTRAINT fk_auditoria_avaliacoes_questao FOREIGN KEY (questao_id) REFERENCES auditoria_questoes(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            try {
+                $this->db->exec("ALTER TABLE auditoria_avaliacoes MODIFY COLUMN conformidade ENUM('pendente','conforme','nao_conforme','nao_aplica') NOT NULL DEFAULT 'pendente'");
+            } catch (\PDOException $e) {}
+            if (!\App\Database\Database::columnExists('auditorias', 'conformidade_pct')) {
+                $this->db->exec("ALTER TABLE auditorias ADD COLUMN conformidade_pct DECIMAL(5,2) NULL AFTER avaliacao");
+            }
+            if (!\App\Database\Database::columnExists('auditorias', 'semaforo')) {
+                $this->db->exec("ALTER TABLE auditorias ADD COLUMN semaforo ENUM('vermelho','amarelo','verde') NULL AFTER conformidade_pct");
+            }
             self::$tablesEnsured = true;
         } catch (\PDOException $e) {
         }
@@ -329,22 +338,27 @@ class AuditoriaModel extends BaseModel
             $this->persistAvaliacoesNoTx($auditoriaId, $avaliacoes, $userId);
             $this->db->prepare("UPDATE auditorias SET status = 'Em Auditoria', updated_by = :updated_by WHERE id = :id AND status = 'Agendada'")
                 ->execute(['id' => $auditoriaId, 'updated_by' => $userId]);
-            $this->db->prepare('UPDATE auditoria_avaliacoes SET finalized_at = NOW() WHERE auditoria_id = :id')->execute(['id' => $auditoriaId]);
-            $sumStmt = $this->db->prepare("SELECT
-                    SUM(CASE WHEN conformidade = 'conforme' THEN 1 ELSE 0 END) AS total_conforme,
-                    SUM(CASE WHEN conformidade = 'nao_conforme' THEN 1 ELSE 0 END) AS total_nao_conforme
-                FROM auditoria_avaliacoes
-                WHERE auditoria_id = :id");
-            $sumStmt->execute(['id' => $auditoriaId]);
-            $sum = $sumStmt->fetch() ?: ['total_conforme' => 0, 'total_nao_conforme' => 0];
-            $resumo = 'Conforme: ' . (int)$sum['total_conforme'] . ' | Não conforme: ' . (int)$sum['total_nao_conforme'];
+            $this->db->prepare('UPDATE auditoria_avaliacoes SET finalized_at = NOW() WHERE auditoria_id = :id')
+                ->execute(['id' => $auditoriaId]);
+            $stats = $this->computeConformidadeStats($auditoriaId);
+            $resumo = 'Conforme: ' . $stats['conforme'] . ' | Não conforme: ' . $stats['nao_conforme'] . ' | N/A: ' . $stats['nao_aplica'];
             $up = $this->db->prepare("UPDATE auditorias
-                SET status = 'Realizada', realizada_at = NOW(), avaliacao = :avaliacao, updated_by = :updated_by
+                SET status = 'Realizada', realizada_at = NOW(), avaliacao = :avaliacao, conformidade_pct = :pct, semaforo = :sem, updated_by = :updated_by
                 WHERE id = :id AND deleted_at IS NULL AND realizada_at IS NULL");
-            $ok = $up->execute(['id' => $auditoriaId, 'avaliacao' => $resumo, 'updated_by' => $userId]) && $up->rowCount() > 0;
+            $ok = $up->execute([
+                'id' => $auditoriaId,
+                'avaliacao' => $resumo,
+                'pct' => $stats['pct'],
+                'sem' => $stats['semaforo'],
+                'updated_by' => $userId
+            ]) && $up->rowCount() > 0;
             if (!$ok) {
                 $this->db->rollBack();
                 return false;
+            }
+            try {
+                (new SetorMetricaModel())->registrarConclusao((int)$auditoria['setor_id'], $stats);
+            } catch (\Throwable $e) {
             }
             $this->db->commit();
             return true;
@@ -417,13 +431,45 @@ class AuditoriaModel extends BaseModel
             auto_saved_at = NOW(),
             updated_by = VALUES(updated_by)");
         foreach ($avaliacoes as $item) {
+            $conf = (string)$item['conformidade'];
+            if (!in_array($conf, ['pendente','conforme','nao_conforme','nao_aplica'], true)) {
+                $conf = 'pendente';
+            }
             $up->execute([
                 'auditoria_id' => $auditoriaId,
                 'questao_id' => (int)$item['questao_id'],
-                'conformidade' => (string)$item['conformidade'],
+                'conformidade' => $conf,
                 'observacoes' => (string)$item['observacoes'],
                 'updated_by' => $userId,
             ]);
         }
+    }
+
+    private function computeConformidadeStats(int $auditoriaId): array
+    {
+        $sumStmt = $this->db->prepare("SELECT
+                SUM(CASE WHEN conformidade = 'conforme' THEN 1 ELSE 0 END) AS total_conforme,
+                SUM(CASE WHEN conformidade = 'nao_conforme' THEN 1 ELSE 0 END) AS total_nao_conforme,
+                SUM(CASE WHEN conformidade = 'nao_aplica' THEN 1 ELSE 0 END) AS total_nao_aplica
+            FROM auditoria_avaliacoes
+            WHERE auditoria_id = :id");
+        $sumStmt->execute(['id' => $auditoriaId]);
+        $sum = $sumStmt->fetch() ?: ['total_conforme' => 0, 'total_nao_conforme' => 0, 'total_nao_aplica' => 0];
+        $conforme = (int)$sum['total_conforme'];
+        $naoConforme = (int)$sum['total_nao_conforme'];
+        $naoAplica = (int)$sum['total_nao_aplica'];
+        $validas = max(0, $conforme + $naoConforme);
+        $pct = $validas > 0 ? round(($conforme / $validas) * 100, 2) : 0.00;
+        $semaforo = 'vermelho';
+        if ($pct >= 91) $semaforo = 'verde';
+        elseif ($pct >= 76) $semaforo = 'amarelo';
+        return [
+            'conforme' => $conforme,
+            'nao_conforme' => $naoConforme,
+            'nao_aplica' => $naoAplica,
+            'validas' => $validas,
+            'pct' => $pct,
+            'semaforo' => $semaforo,
+        ];
     }
 }
