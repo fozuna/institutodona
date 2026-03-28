@@ -307,6 +307,43 @@ class AuditoriasController extends BaseController
         echo $pdf;
     }
 
+    public function duplicate(): void
+    {
+        $this->requireLogin();
+        $this->requireManagePermission();
+        if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo 'Requisição inválida.';
+            return;
+        }
+        $sourceId = (int)($_POST['id'] ?? 0);
+        $nome = trim((string)($_POST['nome_auditoria'] ?? ''));
+        $data = AuditoriaValidator::normalizeDate((string)($_POST['data_auditoria'] ?? ''));
+        if ($sourceId <= 0 || $nome === '') {
+            $_SESSION['flash_error'] = 'Parâmetros inválidos para duplicação.';
+            $this->redirect('index.php?route=auditorias/index');
+            return;
+        }
+        $src = $this->auditorias->findWithQuestoes($sourceId);
+        if (!$src) {
+            $_SESSION['flash_error'] = 'Auditoria origem não encontrada.';
+            $this->redirect('index.php?route=auditorias/index');
+            return;
+        }
+        $newId = $this->auditorias->duplicateFrom($src, [
+            'nome_auditoria' => $nome,
+            'data_auditoria' => $data ?: date('Y-m-d'),
+        ], (int)($_SESSION['user']['id'] ?? 0));
+        if ($newId <= 0) {
+            $_SESSION['flash_error'] = 'Não foi possível duplicar auditoria.';
+            $this->redirect('index.php?route=auditorias/index');
+            return;
+        }
+        AuditLogger::log('auditoria_duplicate', 'auditoria', $newId, ['source_id' => $sourceId]);
+        $_SESSION['flash_success'] = 'Auditoria duplicada como rascunho.';
+        $this->redirect('index.php?route=auditorias/index');
+    }
+
     public function delete(): void
     {
         $this->requireLogin();

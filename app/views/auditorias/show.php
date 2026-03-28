@@ -68,7 +68,51 @@
                 <?php if (!empty($resp['observacoes'])): ?>
                     <div class="text-sm mt-1"><strong>Observações:</strong> <?= nl2br(htmlspecialchars((string)$resp['observacoes'])) ?></div>
                 <?php endif; ?>
+                <?php if (($item['status'] ?? '') === 'Realizada'): ?>
+                <div class="mt-3">
+                    <div class="text-sm font-semibold mb-2">Anexos</div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2" data-gallery="<?= (int)$questao['id'] ?>"></div>
+                </div>
+                <?php endif; ?>
             </div>
         <?php endforeach; ?>
     </div>
 </div>
+<?php if (($item['status'] ?? '') === 'Realizada'): ?>
+<script>
+    (function(){
+        const auditoriaId = <?= (int)$item['id'] ?>;
+        document.querySelectorAll('[data-gallery]').forEach((el)=>{
+            const qid = Number(el.getAttribute('data-gallery'));
+            fetch(`index.php?route=auditorias/api_list_anexos&auditoria_id=${auditoriaId}&questao_id=${qid}`)
+                .then(r=>r.json())
+                .then(json=>{
+                    const items = (json && Array.isArray(json.items)) ? json.items : [];
+                    if (!items.length) {
+                        const empty = document.createElement('div');
+                        empty.className = 'text-xs text-gray-500';
+                        empty.textContent = 'Sem anexos.';
+                        el.appendChild(empty);
+                        return;
+                    }
+                    items.forEach(it=>{
+                        const a = document.createElement('a');
+                        a.href = `index.php?route=auditorias/download_anexo&id=${it.id}`;
+                        a.className = 'border rounded p-2 text-xs block hover:bg-gray-50';
+                        if (it.has_thumb) {
+                            const img = document.createElement('img');
+                            img.src = `index.php?route=auditorias/thumb_anexo&id=${it.id}`;
+                            img.className = 'w-full h-20 object-cover rounded mb-1';
+                            a.appendChild(img);
+                        }
+                        const t = document.createElement('div');
+                        t.textContent = (it.name || ('arquivo_'+it.id)) + (it.size ? ` (${Math.round(it.size/1024)} KB)` : '');
+                        a.appendChild(t);
+                        el.appendChild(a);
+                    });
+                })
+                .catch(()=>{});
+        });
+    })();
+</script>
+<?php endif; ?>

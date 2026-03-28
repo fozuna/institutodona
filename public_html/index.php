@@ -271,6 +271,9 @@ switch ($route) {
     case 'auditorias/relatorio_pdf':
         (new AuditoriasController())->relatorioPdf();
         break;
+    case 'auditorias/duplicate':
+        (new AuditoriasController())->duplicate();
+        break;
     case 'auditorias/editar_realizada':
         (new AuditoriasController())->editarRealizada();
         break;

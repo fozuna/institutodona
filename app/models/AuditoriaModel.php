@@ -81,10 +81,7 @@ class AuditoriaModel extends BaseModel
                 $this->db->exec("ALTER TABLE auditorias MODIFY COLUMN responsavel_id INT NULL");
             } catch (\PDOException $e) {
             }
-            try {
-                $this->db->exec("ALTER TABLE auditorias MODIFY COLUMN status ENUM('Agendada','Em Auditoria','Realizada') NOT NULL DEFAULT 'Agendada'");
-            } catch (\PDOException $e) {
-            }
+            try { $this->db->exec("ALTER TABLE auditorias MODIFY COLUMN status ENUM('Rascunho','Agendada','Em Auditoria','Realizada') NOT NULL DEFAULT 'Rascunho'"); } catch (\PDOException $e) {}
             $this->db->exec("CREATE TABLE IF NOT EXISTS auditoria_relatorios (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 auditoria_id INT NOT NULL,
@@ -289,9 +286,52 @@ class AuditoriaModel extends BaseModel
         $params = ['id' => $auditoriaId, 'updated_by' => $userId];
         $scope = $this->hasScopeRestriction() ? (' AND ' . $this->tenantInCondition('cliente_id', $params, 'audstart')) : '';
         try {
-            $this->db->prepare("UPDATE auditorias SET status = 'Em Auditoria', updated_by = :updated_by WHERE id = :id AND deleted_at IS NULL AND status = 'Agendada'$scope")
+            $this->db->prepare("UPDATE auditorias SET status = 'Em Auditoria', updated_by = :updated_by WHERE id = :id AND deleted_at IS NULL AND status IN ('Rascunho','Agendada')$scope")
                 ->execute($params);
         } catch (\PDOException $e) {
+        }
+    }
+
+    public function duplicateFrom(array $src, array $newData, int $userId): int
+    {
+        $this->ensureTables();
+        $this->db->beginTransaction();
+        try {
+            $stmt = $this->db->prepare("INSERT INTO auditorias
+                (cliente_id, setor_id, responsavel_id, data_auditoria, nome_auditoria, pergunta, objetivo, referencia_esperada, status, created_by, updated_by)
+                VALUES
+                (:cliente_id, :setor_id, NULL, :data_auditoria, :nome_auditoria, :pergunta, :objetivo, :referencia_esperada, 'Rascunho', :uid, :uid)");
+            $primeira = $src['questoes'][0] ?? ['pergunta' => '', 'referencia_esperada' => '', 'responsavel_nome' => ''];
+            $stmt->execute([
+                'cliente_id' => (int)$src['cliente_id'],
+                'setor_id' => (int)$src['setor_id'],
+                'data_auditoria' => (string)($newData['data_auditoria'] ?? $src['data_auditoria']),
+                'nome_auditoria' => (string)($newData['nome_auditoria'] ?? ($src['nome_auditoria'] ?? 'Cópia')),
+                'pergunta' => (string)$primeira['pergunta'],
+                'objetivo' => (string)$primeira['responsavel_nome'],
+                'referencia_esperada' => (string)$primeira['referencia_esperada'],
+                'uid' => $userId,
+            ]);
+            $newId = (int)$this->db->lastInsertId();
+            $insQ = $this->db->prepare("INSERT INTO auditoria_questoes
+                (auditoria_id, responsavel_nome, pergunta, referencia_esperada, processos_json, ordem)
+                VALUES (:aid, :resp, :perg, :ref, :proc, :ord)");
+            $ordem = 1;
+            foreach (($src['questoes'] ?? []) as $q) {
+                $insQ->execute([
+                    'aid' => $newId,
+                    'resp' => (string)($q['responsavel_nome'] ?? ''),
+                    'perg' => (string)($q['pergunta'] ?? ''),
+                    'ref' => (string)($q['referencia_esperada'] ?? ''),
+                    'proc' => (string)($q['processos_json'] ?? json_encode($q['processos'] ?? [])),
+                    'ord' => $ordem++,
+                ]);
+            }
+            $this->db->commit();
+            return $newId;
+        } catch (\Throwable $e) {
+            $this->safeRollback();
+            return 0;
         }
     }
 
@@ -355,7 +395,7 @@ class AuditoriaModel extends BaseModel
             $stmt = $this->db->prepare("UPDATE auditorias
                 SET cliente_id = :cliente_id, setor_id = :setor_id, data_auditoria = :data_auditoria, nome_auditoria = :nome_auditoria,
                     pergunta = :pergunta, objetivo = :objetivo, referencia_esperada = :referencia_esperada, updated_by = :updated_by
-                WHERE id = :id AND deleted_at IS NULL AND status IN ('Agendada','Em Auditoria') AND realizada_at IS NULL$scope");
+                WHERE id = :id AND deleted_at IS NULL AND status IN ('Rascunho','Agendada','Em Auditoria') AND realizada_at IS NULL$scope");
             $updated = $stmt->execute($params) && $stmt->rowCount() > 0;
             if (!$updated) {
                 $this->db->rollBack();
@@ -545,8 +585,8 @@ class AuditoriaModel extends BaseModel
         $split = self::percentSplit($conforme, $naoConforme);
         $pct = $split['conforme'];
         $semaforo = 'vermelho';
-        if ($pct >= 91) $semaforo = 'verde';
-        elseif ($pct >= 76) $semaforo = 'amarelo';
+        if ($pct >= 100) $semaforo = 'verde';
+        elseif ($pct >= 75) $semaforo = 'amarelo';
         return [
             'conforme' => $conforme,
             'nao_conforme' => $naoConforme,

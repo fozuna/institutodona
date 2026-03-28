@@ -80,6 +80,7 @@
                         <th class="p-3"><button type="button" class="sort-link" data-col="setor">Setor</button></th>
                         <th class="p-3"><button type="button" class="sort-link" data-col="data">Data Agendada</button></th>
                         <th class="p-3"><button type="button" class="sort-link" data-col="status">Status</button></th>
+                        <th class="p-3">Farol</th>
                         <th class="p-3">Questões</th>
                         <th class="p-3">Ações</th>
                     </tr>
@@ -100,6 +101,23 @@
                                 </span>
                             </td>
                             <td class="p-3"><?= (int)($row['total_questoes'] ?? 0) ?></td>
+                            <td class="p-3">
+                                <?php if (($row['status'] ?? '') === 'Realizada'): ?>
+                                    <?php $pct = isset($row['conformidade_pct']) ? (float)$row['conformidade_pct'] : null; ?>
+                                    <?php if ($pct !== null): ?>
+                                        <?php
+                                            $color = 'bg-red-100 text-red-700';
+                                            if ($pct >= 100) $color = 'bg-green-100 text-green-700';
+                                            elseif ($pct >= 75) $color = 'bg-yellow-100 text-yellow-700';
+                                        ?>
+                                        <span class="px-2 py-1 rounded text-xs font-semibold <?= $color ?>"><?= number_format($pct, 0) ?>%</span>
+                                    <?php else: ?>
+                                        <span class="text-xs text-gray-500">-</span>
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <span class="text-xs text-gray-400">—</span>
+                                <?php endif; ?>
+                            </td>
                             <td class="p-3 whitespace-nowrap">
                                 <a class="text-brand-brown icon-action mr-2" href="index.php?route=auditorias/show&id=<?= (int)$row['id'] ?>" title="Abrir"><span data-feather="eye"></span></a>
                                 <?php if (!empty($canManage) && $isAgendada): ?>
@@ -113,6 +131,13 @@
                                 <?php endif; ?>
                                 <?php if (!empty($canManage)): ?>
                                     <button type="button" class="text-brand-brown icon-action" data-open-delete="<?= (int)$row['id'] ?>" title="Excluir"><span data-feather="trash-2"></span></button>
+                                <?php endif; ?>
+                                <?php if (!empty($canManage)): ?>
+                                    <button type="button" class="text-brand-brown icon-action ml-2" data-duplicate
+                                        data-id="<?= (int)$row['id'] ?>"
+                                        data-nome="<?= htmlspecialchars($row['nome_auditoria'] ?? '') ?>"
+                                        data-data="<?= htmlspecialchars($row['data_auditoria'] ?? '') ?>"
+                                        title="Duplicar Auditoria"><span data-feather="copy"></span></button>
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -149,6 +174,29 @@
         </div>
     </div>
 
+    </div>
+
+    <div id="modalDuplicate" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded shadow p-6 w-full max-w-md">
+            <h2 class="text-lg font-semibold mb-3">Duplicar Auditoria</h2>
+            <form method="post" action="index.php?route=auditorias/duplicate" id="duplicateForm" class="space-y-3">
+                <input type="hidden" name="csrf" value="<?= Security::csrfToken() ?>" />
+                <input type="hidden" name="id" id="dupId" />
+                <div>
+                    <label class="block text-sm">Novo nome</label>
+                    <input class="border rounded p-2 w-full" name="nome_auditoria" id="dupNome" required />
+                </div>
+                <div>
+                    <label class="block text-sm">Nova data</label>
+                    <input class="border rounded p-2 w-full" name="data_auditoria" id="dupData" placeholder="YYYY-MM-DD" />
+                </div>
+                <div class="flex items-center justify-end gap-2">
+                    <button type="button" id="cancelDuplicate" class="px-3 py-2 rounded bg-gray-200 text-brand-brown">Cancelar</button>
+                    <button type="submit" id="btnDuplicate" class="px-3 py-2 rounded bg-brand-red text-white">Duplicar</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <?php endif; ?>
 </div>
 <script>
@@ -197,6 +245,30 @@
             btnFiltrar.disabled = true;
             btnFiltrar.textContent = 'Filtrando...';
             skeleton.classList.remove('hidden');
+        });
+        // Duplicar
+        const modalDup = document.getElementById('modalDuplicate');
+        const btnDup = document.getElementById('btnDuplicate');
+        const dupId = document.getElementById('dupId');
+        const dupNome = document.getElementById('dupNome');
+        const dupData = document.getElementById('dupData');
+        document.querySelectorAll('[data-duplicate]').forEach((el)=>{
+            el.addEventListener('click', ()=>{
+                dupId.value = el.getAttribute('data-id');
+                const nome = el.getAttribute('data-nome') || '';
+                dupNome.value = nome ? (nome + ' (cópia)') : '';
+                dupData.value = (new Date()).toISOString().slice(0,10);
+                modalDup.classList.remove('hidden');
+                modalDup.classList.add('flex');
+            });
+        });
+        document.getElementById('cancelDuplicate')?.addEventListener('click', ()=>{
+            modalDup.classList.add('hidden');
+            modalDup.classList.remove('flex');
+        });
+        document.getElementById('duplicateForm')?.addEventListener('submit', ()=>{
+            const b = document.getElementById('btnDuplicate');
+            if (b) { b.disabled = true; b.textContent = 'Duplicando...'; }
         });
     })();
 </script>
