@@ -59,12 +59,8 @@ class AuditoriaValidator
         }
         foreach ($questoes as $idx => $questao) {
             $qIndex = $idx + 1;
-            $respLen = mb_strlen((string)$questao['responsavel_nome']);
             $perguntaLen = mb_strlen((string)$questao['pergunta']);
             $refLen = mb_strlen((string)$questao['referencia_esperada']);
-            if ($respLen < 2 || $respLen > self::RESPONSAVEL_MAX) {
-                $errors['questao_' . $qIndex . '_responsavel_nome'] = "Questão {$qIndex}: responsável deve ter entre 2 e 180 caracteres.";
-            }
             if ($perguntaLen < self::PERGUNTA_MIN || $perguntaLen > self::PERGUNTA_MAX) {
                 $errors['questao_' . $qIndex . '_pergunta'] = "Questão {$qIndex}: pergunta deve ter entre 10 e 1000 caracteres.";
             }
@@ -100,19 +96,7 @@ class AuditoriaValidator
 
     public static function validateResponsaveisCadastrados(array $questoes, callable $isValidName): array
     {
-        $errors = [];
-        foreach ($questoes as $idx => $questao) {
-            $nome = trim((string)($questao['responsavel_nome'] ?? ''));
-            if ($nome === '') {
-                continue;
-            }
-            $ok = (bool)$isValidName($nome);
-            if (!$ok) {
-                $qIndex = $idx + 1;
-                $errors['questao_' . $qIndex . '_responsavel_nome'] = "Questão {$qIndex}: responsável inválido. Selecione um colaborador cadastrado.";
-            }
-        }
-        return $errors;
+        return [];
     }
 
     public static function normalizeQuestoes(array|string $input): array

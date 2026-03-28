@@ -419,20 +419,6 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
             }
             for (let i = 0; i < questoes.length; i++) {
                 const q = questoes[i];
-                if (!q.responsavel_nome || q.responsavel_nome.trim().length < 2) {
-                    e.preventDefault();
-                    alert(`Questão ${i + 1}: informe o responsável.`);
-                    return;
-                }
-                const sugestoes = responsavelSugestoesPorQuestao.get(i) || [];
-                if (sugestoes.length > 0) {
-                    const okResponsavel = sugestoes.some((nome)=>nome.toLowerCase() === q.responsavel_nome.trim().toLowerCase());
-                    if (!okResponsavel) {
-                        e.preventDefault();
-                        alert(`Questão ${i + 1}: selecione um responsável listado entre os colaboradores cadastrados.`);
-                        return;
-                    }
-                }
                 if (!q.pergunta || q.pergunta.trim().length < 10) {
                     e.preventDefault();
                     alert(`Questão ${i + 1}: pergunta deve ter no mínimo 10 caracteres.`);

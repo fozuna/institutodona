@@ -859,25 +859,7 @@ class AuditoriasController extends BaseController
 
     private function appendResponsavelValidationErrors(array $payload, array &$errors): void
     {
-        $clienteId = (int)($payload['cliente_id'] ?? 0);
-        $setorId = (int)($payload['setor_id'] ?? 0);
-        $questoes = is_array($payload['questoes'] ?? null) ? $payload['questoes'] : [];
-        if ($clienteId <= 0 || $setorId <= 0 || empty($questoes)) {
-            return;
-        }
-        $validationErrors = AuditoriaValidator::validateResponsaveisCadastrados($questoes, function (string $nome) use ($setorId, $clienteId): bool {
-            return $this->colaboradores->existsActiveNomeBySetor($setorId, $clienteId, $nome);
-        });
-        if (!empty($validationErrors)) {
-            AuditLogger::log('auditoria_responsavel_invalid', 'auditoria', null, [
-                'cliente_id' => $clienteId,
-                'setor_id' => $setorId,
-                'total_invalidos' => count($validationErrors),
-            ]);
-        }
-        foreach ($validationErrors as $key => $message) {
-            $errors[$key] = $message;
-        }
+        return;
     }
 
     private function isPost(): bool
