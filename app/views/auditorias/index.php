@@ -1,4 +1,4 @@
-<?php use App\Core\Security; /** @var array $items */ /** @var array $filters */ /** @var array $clientes */ /** @var array $setores */ /** @var array $responsaveis */ /** @var bool $canManage */ ?>
+<?php use App\Core\Security; /** @var array $items */ /** @var array $filters */ /** @var array $clientes */ /** @var array $setores */ /** @var bool $canManage */ ?>
 <div class="p-6">
     <div class="flex items-center justify-between mb-4">
         <h1 class="text-2xl font-bold">Auditorias</h1>
@@ -28,15 +28,6 @@
             </select>
         </div>
         <div class="md:col-span-2">
-            <label class="block text-sm">Responsável</label>
-            <select name="responsavel" class="border rounded p-2 w-full">
-                <option value="">Todos</option>
-                <?php foreach ($responsaveis as $c): ?>
-                    <option value="<?= (int)$c['id'] ?>" <?= ((int)($filters['responsavel'] ?? 0) === (int)$c['id']) ? 'selected' : '' ?>><?= htmlspecialchars($c['nome']) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-        <div class="md:col-span-2">
             <label class="block text-sm">Status</label>
             <select name="status" class="border rounded p-2 w-full">
                 <option value="">Todos</option>
@@ -53,21 +44,12 @@
             <input name="fim" value="<?= htmlspecialchars(isset($filters['fim']) && $filters['fim'] ? date('d/m/Y', strtotime($filters['fim'])) : '') ?>" placeholder="DD/MM/YYYY" class="border rounded p-2 w-full" />
         </div>
         <div class="md:col-span-6">
-            <label class="block text-sm">Busca global</label>
-            <input name="q" value="<?= htmlspecialchars($filters['q'] ?? '') ?>" placeholder="Pergunta, objetivo, empresa, setor ou responsável" class="border rounded p-2 w-full" />
+            <label class="block text-sm">Busca por nome</label>
+            <input name="q" id="filtroNomeTempoReal" value="<?= htmlspecialchars($filters['q'] ?? '') ?>" placeholder="Nome da auditoria, empresa ou setor" class="border rounded p-2 w-full" />
         </div>
-        <div class="md:col-span-3">
-            <label class="block text-sm">Ordenação</label>
-            <select name="sort" class="border rounded p-2 w-full">
-                <option value="data_desc" <?= (($filters['sort'] ?? '') === 'data_desc') ? 'selected' : '' ?>>Mais recentes</option>
-                <option value="data_asc" <?= (($filters['sort'] ?? '') === 'data_asc') ? 'selected' : '' ?>>Mais antigas</option>
-                <option value="empresa" <?= (($filters['sort'] ?? '') === 'empresa') ? 'selected' : '' ?>>Empresa</option>
-                <option value="setor" <?= (($filters['sort'] ?? '') === 'setor') ? 'selected' : '' ?>>Setor</option>
-                <option value="responsavel" <?= (($filters['sort'] ?? '') === 'responsavel') ? 'selected' : '' ?>>Responsável</option>
-                <option value="status" <?= (($filters['sort'] ?? '') === 'status') ? 'selected' : '' ?>>Status</option>
-            </select>
-        </div>
-        <div class="md:col-span-3 flex items-end gap-2">
+        <input type="hidden" name="sort_col" id="sortCol" value="<?= htmlspecialchars($filters['sort_col'] ?? 'data') ?>" />
+        <input type="hidden" name="sort_dir" id="sortDir" value="<?= htmlspecialchars($filters['sort_dir'] ?? 'desc') ?>" />
+        <div class="md:col-span-4 flex items-end gap-2">
             <button type="submit" id="btnFiltrar" class="px-4 py-2 rounded bg-brand-red text-white">Filtrar</button>
             <a href="index.php?route=auditorias/index" class="px-4 py-2 rounded bg-gray-200 text-brand-brown">Limpar</a>
         </div>
@@ -94,12 +76,11 @@
             <table class="min-w-full text-sm">
                 <thead>
                     <tr class="text-left border-b">
-                        <th class="p-3">Data</th>
-                        <th class="p-3">Empresa</th>
-                        <th class="p-3">Setor</th>
-                        <th class="p-3">Responsável</th>
-                        <th class="p-3">Pergunta</th>
-                        <th class="p-3">Status</th>
+                        <th class="p-3"><button type="button" class="sort-link" data-col="nome">Nome da Auditoria</button></th>
+                        <th class="p-3"><button type="button" class="sort-link" data-col="setor">Setor</button></th>
+                        <th class="p-3"><button type="button" class="sort-link" data-col="data">Data Agendada</button></th>
+                        <th class="p-3"><button type="button" class="sort-link" data-col="status">Status</button></th>
+                        <th class="p-3">Questões</th>
                         <th class="p-3">Ações</th>
                     </tr>
                 </thead>
@@ -107,37 +88,31 @@
                     <?php foreach ($items as $row): ?>
                         <?php $isAgendada = (($row['status'] ?? '') === 'Agendada'); ?>
                         <tr class="border-b">
-                            <td class="p-3"><?= htmlspecialchars(date('d/m/Y', strtotime($row['data_auditoria']))) ?></td>
-                            <td class="p-3"><?= htmlspecialchars($row['cliente_nome'] ?? '') ?></td>
+                            <td class="p-3">
+                                <div class="font-semibold"><?= htmlspecialchars($row['nome_auditoria'] ?? '') ?></div>
+                                <div class="text-xs text-gray-500"><?= htmlspecialchars($row['cliente_nome'] ?? '') ?></div>
+                            </td>
                             <td class="p-3"><?= htmlspecialchars($row['setor_nome'] ?? '') ?></td>
-                            <td class="p-3"><?= htmlspecialchars($row['responsavel_nome'] ?? '') ?></td>
-                            <td class="p-3 max-w-md"><?= htmlspecialchars($row['pergunta'] ?? '') ?></td>
+                            <td class="p-3"><?= htmlspecialchars(date('d/m/Y', strtotime($row['data_auditoria']))) ?></td>
                             <td class="p-3">
                                 <span class="px-2 py-1 rounded text-xs <?= $isAgendada ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700' ?>">
                                     <?= htmlspecialchars($row['status']) ?>
                                 </span>
                             </td>
+                            <td class="p-3"><?= (int)($row['total_questoes'] ?? 0) ?></td>
                             <td class="p-3 whitespace-nowrap">
+                                <a class="text-brand-brown icon-action mr-2" href="index.php?route=auditorias/show&id=<?= (int)$row['id'] ?>" title="Abrir"><span data-feather="eye"></span></a>
                                 <?php if (!empty($canManage) && $isAgendada): ?>
                                     <a class="text-brand-pink icon-action mr-2" href="index.php?route=auditorias/edit&id=<?= (int)$row['id'] ?>" title="Editar"><span data-feather="edit"></span></a>
-                                    <button type="button" class="text-brand-red icon-action mr-2" data-open-auditar="<?= (int)$row['id'] ?>" title="Auditar"><span data-feather="check-circle"></span></button>
+                                <?php endif; ?>
+                                <?php if (!empty($canManage) && (($row['status'] ?? '') !== 'Realizada')): ?>
+                                    <a class="text-brand-red icon-action mr-2" href="index.php?route=auditorias/auditar&id=<?= (int)$row['id'] ?>" title="Auditar"><span data-feather="check-circle"></span></a>
                                 <?php endif; ?>
                                 <?php if (!empty($canManage)): ?>
                                     <button type="button" class="text-brand-brown icon-action" data-open-delete="<?= (int)$row['id'] ?>" title="Excluir"><span data-feather="trash-2"></span></button>
                                 <?php endif; ?>
                             </td>
                         </tr>
-                        <?php if (!$isAgendada): ?>
-                        <tr class="border-b bg-gray-50">
-                            <td class="p-3" colspan="7">
-                                <div class="text-xs"><strong>Realizada em:</strong> <?= htmlspecialchars(date('d/m/Y H:i', strtotime($row['realizada_at']))) ?></div>
-                                <div class="text-xs mt-1"><strong>Avaliação:</strong> <?= nl2br(htmlspecialchars($row['avaliacao'] ?? '')) ?></div>
-                                <?php if (!empty($row['obs'])): ?>
-                                <div class="text-xs mt-1"><strong>Obs:</strong> <?= nl2br(htmlspecialchars($row['obs'])) ?></div>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                        <?php endif; ?>
                     <?php endforeach; ?>
                 </tbody>
             </table>
@@ -171,28 +146,6 @@
         </div>
     </div>
 
-    <div id="modalAuditar" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
-        <div class="bg-white rounded shadow p-6 w-full max-w-2xl">
-            <h2 class="text-lg font-semibold mb-3">Registrar Auditoria</h2>
-            <form method="post" action="index.php?route=auditorias/auditar" id="auditarForm">
-                <input type="hidden" name="csrf" value="<?= Security::csrfToken() ?>" />
-                <input type="hidden" name="id" id="auditarId" />
-                <div class="mb-3">
-                    <label class="block text-sm">AVALIAÇÃO</label>
-                    <textarea name="avaliacao" id="avaliacaoField" class="border rounded p-2 w-full" rows="5" minlength="50" required></textarea>
-                    <p class="text-xs text-gray-500">Mínimo 50 caracteres.</p>
-                </div>
-                <div class="mb-3">
-                    <label class="block text-sm">OBS</label>
-                    <textarea name="obs" class="border rounded p-2 w-full" rows="4" maxlength="1000"></textarea>
-                </div>
-                <div class="flex items-center justify-end gap-2">
-                    <button type="button" id="cancelAuditar" class="px-3 py-2 rounded bg-gray-200 text-brand-brown">Cancelar</button>
-                    <button type="submit" class="px-3 py-2 rounded bg-brand-red text-white">Auditar</button>
-                </div>
-            </form>
-        </div>
-    </div>
     <?php endif; ?>
 </div>
 <script>
@@ -212,31 +165,31 @@
             modalDelete.classList.add('hidden');
             modalDelete.classList.remove('flex');
         });
-        const modalAuditar = document.getElementById('modalAuditar');
-        const auditarId = document.getElementById('auditarId');
-        document.querySelectorAll('[data-open-auditar]').forEach((btn)=>{
-            btn.addEventListener('click', ()=>{
-                auditarId.value = btn.getAttribute('data-open-auditar');
-                modalAuditar.classList.remove('hidden');
-                modalAuditar.classList.add('flex');
-            });
-        });
-        document.getElementById('cancelAuditar')?.addEventListener('click', ()=>{
-            modalAuditar.classList.add('hidden');
-            modalAuditar.classList.remove('flex');
-        });
-        const auditarForm = document.getElementById('auditarForm');
-        const avaliacaoField = document.getElementById('avaliacaoField');
-        auditarForm?.addEventListener('submit', (e)=>{
-            if ((avaliacaoField.value || '').trim().length < 50) {
-                e.preventDefault();
-                alert('A avaliação precisa ter no mínimo 50 caracteres.');
-            }
-        });
         }
         const filtroForm = document.getElementById('filtroAuditoriasForm');
         const btnFiltrar = document.getElementById('btnFiltrar');
         const skeleton = document.getElementById('auditoriasSkeleton');
+        const sortCol = document.getElementById('sortCol');
+        const sortDir = document.getElementById('sortDir');
+        const filtroNome = document.getElementById('filtroNomeTempoReal');
+        let debounce = null;
+        document.querySelectorAll('.sort-link').forEach((el)=>{
+            el.addEventListener('click', ()=>{
+                const col = el.getAttribute('data-col');
+                if (sortCol.value === col) {
+                    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
+                } else {
+                    sortCol.value = col;
+                    sortDir.value = col === 'nome' || col === 'setor' ? 'asc' : 'desc';
+                }
+                filtroForm.submit();
+            });
+        });
+        filtroNome?.addEventListener('input', ()=>{
+            clearTimeout(debounce);
+            debounce = setTimeout(()=>filtroForm.submit(), 450);
+        });
+        filtroForm.querySelector('[name="setor"]')?.addEventListener('change', ()=>filtroForm.submit());
         filtroForm?.addEventListener('submit', ()=>{
             btnFiltrar.disabled = true;
             btnFiltrar.textContent = 'Filtrando...';

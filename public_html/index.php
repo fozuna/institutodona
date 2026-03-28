@@ -256,20 +256,38 @@ switch ($route) {
     case 'auditorias/update':
         (new AuditoriasController())->update();
         break;
+    case 'auditorias/show':
+        (new AuditoriasController())->show();
+        break;
     case 'auditorias/delete':
         (new AuditoriasController())->delete();
         break;
     case 'auditorias/auditar':
         (new AuditoriasController())->auditar();
         break;
+    case 'auditorias/finalizar':
+        (new AuditoriasController())->finalizar();
+        break;
+    case 'auditorias/relatorio_pdf':
+        (new AuditoriasController())->relatorioPdf();
+        break;
     case 'auditorias/api_setores':
         (new AuditoriasController())->apiSetores();
+        break;
+    case 'auditorias/api_clientes':
+        (new AuditoriasController())->apiClientes();
         break;
     case 'auditorias/api_responsaveis':
         (new AuditoriasController())->apiResponsaveis();
         break;
+    case 'auditorias/api_colaboradores':
+        (new AuditoriasController())->apiColaboradores();
+        break;
     case 'auditorias/api_list':
         (new AuditoriasController())->apiList();
+        break;
+    case 'auditorias/api_show':
+        (new AuditoriasController())->apiShow();
         break;
     case 'auditorias/api_store':
         (new AuditoriasController())->apiStore();
@@ -279,6 +297,12 @@ switch ($route) {
         break;
     case 'auditorias/api_delete':
         (new AuditoriasController())->apiDelete();
+        break;
+    case 'auditorias/api_autosave':
+        (new AuditoriasController())->apiAutosave();
+        break;
+    case 'auditorias/api_finalize':
+        (new AuditoriasController())->apiFinalize();
         break;
     case 'auditorias/api_auditar':
         (new AuditoriasController())->apiAuditar();
@@ -294,6 +318,9 @@ switch ($route) {
         break;
     case 'auth/logout':
         (new AuthController())->logout();
+        break;
+    case 'auth/api_token':
+        (new AuthController())->apiToken();
         break;
     case 'usuarios/index':
         (new UsuariosController())->index();

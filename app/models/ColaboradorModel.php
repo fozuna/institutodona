@@ -216,4 +216,76 @@ class ColaboradorModel extends BaseModel
         $stmt->execute($params);
         return $stmt->fetchAll();
     }
+
+    public function searchActiveBySetor(int $setorId, int $clienteId, string $q, int $limit = 15): array
+    {
+        $this->ensureTable();
+        $q = trim($q);
+        if ($setorId <= 0 || $clienteId <= 0 || $q === '') {
+            return [];
+        }
+        $params = [
+            'sid' => $setorId,
+            'cid' => $clienteId,
+            'q' => '%' . $q . '%',
+            'lim' => max(1, min(30, $limit)),
+        ];
+        $conds = [
+            's.id = :sid',
+            'col.cliente_id = :cid',
+            $this->tenantInCondition('col.cliente_id', $params, 'cauto'),
+        ];
+        if (\App\Database\Database::columnExists('clientes', 'ativo')) {
+            $conds[] = 'cli.ativo = 1';
+        }
+        $sql = 'SELECT col.id, col.nome
+                FROM colaboradores col
+                JOIN funcoes f ON f.id = col.funcao_id
+                JOIN setores s ON s.id = f.setor_id
+                JOIN clientes cli ON cli.id = col.cliente_id
+                WHERE ' . implode(' AND ', $conds) . '
+                  AND col.nome LIKE :q
+                ORDER BY col.nome
+                LIMIT :lim';
+        $stmt = $this->db->prepare($sql);
+        foreach ($params as $key => $value) {
+            $type = in_array($key, ['sid', 'cid', 'lim'], true) ? \PDO::PARAM_INT : \PDO::PARAM_STR;
+            $stmt->bindValue(':' . $key, $value, $type);
+        }
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function existsActiveNomeBySetor(int $setorId, int $clienteId, string $nome): bool
+    {
+        $this->ensureTable();
+        $nome = trim($nome);
+        if ($setorId <= 0 || $clienteId <= 0 || $nome === '') {
+            return false;
+        }
+        $params = [
+            'sid' => $setorId,
+            'cid' => $clienteId,
+            'nome' => mb_strtolower($nome),
+        ];
+        $conds = [
+            's.id = :sid',
+            'col.cliente_id = :cid',
+            $this->tenantInCondition('col.cliente_id', $params, 'cex'),
+            'LOWER(TRIM(col.nome)) = :nome',
+        ];
+        if (\App\Database\Database::columnExists('clientes', 'ativo')) {
+            $conds[] = 'cli.ativo = 1';
+        }
+        $sql = 'SELECT col.id
+                FROM colaboradores col
+                JOIN funcoes f ON f.id = col.funcao_id
+                JOIN setores s ON s.id = f.setor_id
+                JOIN clientes cli ON cli.id = col.cliente_id
+                WHERE ' . implode(' AND ', $conds) . '
+                LIMIT 1';
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return (bool)$stmt->fetchColumn();
+    }
 }

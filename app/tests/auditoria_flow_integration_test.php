@@ -73,11 +73,16 @@ try {
     $first = $model->create([
         'cliente_id' => $clienteA,
         'setor_id' => $setorA,
-        'responsavel_id' => $colaboradorA,
+        'nome_auditoria' => 'Auditoria Processo A ' . $suffix,
         'data_auditoria' => date('Y-m-d'),
-        'pergunta' => 'Pergunta inicial de auditoria para validar processo',
-        'objetivo' => 'Objetivo detalhado para validar conformidade e evidências do processo auditado',
-        'referencia_esperada' => 'POP-100',
+        'questoes' => [
+            [
+                'responsavel_nome' => 'Responsável A',
+                'pergunta' => 'Pergunta inicial de auditoria para validar processo',
+                'referencia_esperada' => 'POP-100',
+                'processos' => ['P1'],
+            ],
+        ],
     ], 2001);
     if ($first <= 0) {
         failFast('Criação inicial de auditoria falhou');
@@ -88,11 +93,16 @@ try {
     $second = $model->create([
         'cliente_id' => $clienteB,
         'setor_id' => $setorB,
-        'responsavel_id' => $colaboradorB,
+        'nome_auditoria' => 'Auditoria Processo B ' . $suffix,
         'data_auditoria' => date('Y-m-d'),
-        'pergunta' => 'Pergunta fora do escopo da empresa',
-        'objetivo' => 'Objetivo fora do escopo para validar isolamento entre empresas no módulo',
-        'referencia_esperada' => 'POP-200',
+        'questoes' => [
+            [
+                'responsavel_nome' => 'Responsável B',
+                'pergunta' => 'Pergunta fora do escopo da empresa',
+                'referencia_esperada' => 'POP-200',
+                'processos' => ['P2'],
+            ],
+        ],
     ], 2001);
     if ($second <= 0) {
         failFast('Consultor deveria criar auditoria em qualquer empresa');
@@ -105,11 +115,14 @@ try {
         $id = $model->create([
             'cliente_id' => ($i % 2 === 0) ? $clienteA : $filialA1,
             'setor_id' => $setorA,
-            'responsavel_id' => $colaboradorA,
+            'nome_auditoria' => 'Auditoria Lote ' . $i,
             'data_auditoria' => date('Y-m-d'),
-            'pergunta' => 'Pergunta lote ' . $i . ' com tamanho adequado para cenário de performance',
-            'objetivo' => 'Objetivo lote ' . $i . ' para teste de performance com volume de registros',
-            'referencia_esperada' => 'REF-' . $i,
+            'questoes' => [[
+                'responsavel_nome' => 'Resp Lote',
+                'pergunta' => 'Pergunta lote ' . $i . ' com tamanho adequado para cenário de performance',
+                'referencia_esperada' => 'REF-' . $i,
+                'processos' => [],
+            ]],
         ], 2001);
         if ($id > 0) {
             $auditoriaIds[] = $id;
@@ -121,7 +134,7 @@ try {
     }
     ok('Performance para 1000+ registros dentro do limite');
 
-    $list = $model->list(['cliente' => $clienteA, 'sort' => 'data_desc'], 1, 10);
+    $list = $model->list(['cliente' => $clienteA, 'sort_col' => 'data', 'sort_dir' => 'desc'], 1, 10);
     if ((int)$list['total'] < 1 || count($list['items']) < 1) {
         failFast('Listagem paginada não retornou registros esperados');
     }
@@ -130,21 +143,26 @@ try {
     $updateOk = $model->updateAgendada($first, [
         'cliente_id' => $clienteA,
         'setor_id' => $setorA,
-        'responsavel_id' => $colaboradorA,
+        'nome_auditoria' => 'Auditoria Atualizada ' . $suffix,
         'data_auditoria' => date('Y-m-d'),
-        'pergunta' => 'Pergunta atualizada para auditoria',
-        'objetivo' => 'Objetivo atualizado para validação de campos editáveis em status agendada',
-        'referencia_esperada' => 'POP-101',
+        'questoes' => [[
+            'responsavel_nome' => 'Resp Atualizado',
+            'pergunta' => 'Pergunta atualizada para auditoria',
+            'referencia_esperada' => 'POP-101',
+            'processos' => ['P3'],
+        ]],
     ], 2001);
     if (!$updateOk) {
         failFast('Atualização de auditoria agendada deveria funcionar');
     }
     ok('Atualização de auditoria agendada');
 
-    $auditOk = $model->auditar($first, [
-        'avaliacao' => str_repeat('Avaliação consistente ', 4),
-        'obs' => 'Observações complementares da execução',
-    ], 2001);
+    $questoes = $model->questoesByAuditoria($first);
+    $auditOk = $model->finalizarAuditoria($first, [[
+        'questao_id' => (int)$questoes[0]['id'],
+        'conformidade' => 'conforme',
+        'observacoes' => 'Observações complementares da execução',
+    ]], 2001);
     if (!$auditOk) {
         failFast('Execução de auditoria deveria funcionar');
     }
@@ -153,11 +171,14 @@ try {
     $updateAfterAudit = $model->updateAgendada($first, [
         'cliente_id' => $clienteA,
         'setor_id' => $setorA,
-        'responsavel_id' => $colaboradorA,
+        'nome_auditoria' => 'Tentativa indevida',
         'data_auditoria' => date('Y-m-d'),
-        'pergunta' => 'Tentativa indevida',
-        'objetivo' => 'Tentativa de alterar após realização deveria falhar',
-        'referencia_esperada' => 'POP-102',
+        'questoes' => [[
+            'responsavel_nome' => 'Resp Bloqueio',
+            'pergunta' => 'Tentativa indevida',
+            'referencia_esperada' => 'POP-102',
+            'processos' => [],
+        ]],
     ], 2001);
     if ($updateAfterAudit) {
         failFast('Edição após auditoria realizada deveria ser bloqueada');

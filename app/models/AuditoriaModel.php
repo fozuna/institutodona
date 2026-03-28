@@ -5,19 +5,25 @@ use App\Core\Auth;
 
 class AuditoriaModel extends BaseModel
 {
+    private static bool $tablesEnsured = false;
+
     private function ensureTables(): void
     {
+        if (self::$tablesEnsured) {
+            return;
+        }
         try {
             $this->db->exec("CREATE TABLE IF NOT EXISTS auditorias (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 cliente_id INT NOT NULL,
                 setor_id INT NOT NULL,
-                responsavel_id INT NOT NULL,
+                responsavel_id INT NULL,
                 data_auditoria DATE NOT NULL,
+                nome_auditoria VARCHAR(180) NOT NULL DEFAULT '',
                 pergunta VARCHAR(500) NOT NULL,
                 objetivo TEXT NOT NULL,
                 referencia_esperada VARCHAR(255) NOT NULL,
-                status ENUM('Agendada','Realizada') NOT NULL DEFAULT 'Agendada',
+                status ENUM('Agendada','Em Auditoria','Realizada') NOT NULL DEFAULT 'Agendada',
                 avaliacao TEXT NULL,
                 obs TEXT NULL,
                 realizada_at DATETIME NULL,
@@ -29,9 +35,21 @@ class AuditoriaModel extends BaseModel
                 deleted_at DATETIME NULL,
                 INDEX idx_auditorias_cliente (cliente_id),
                 INDEX idx_auditorias_setor (setor_id),
+                INDEX idx_auditorias_nome (nome_auditoria),
                 INDEX idx_auditorias_responsavel (responsavel_id),
                 INDEX idx_auditorias_data (data_auditoria)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            if (!\App\Database\Database::columnExists('auditorias', 'nome_auditoria')) {
+                $this->db->exec("ALTER TABLE auditorias ADD COLUMN nome_auditoria VARCHAR(180) NOT NULL DEFAULT '' AFTER data_auditoria");
+            }
+            try {
+                $this->db->exec("ALTER TABLE auditorias MODIFY COLUMN responsavel_id INT NULL");
+            } catch (\PDOException $e) {
+            }
+            try {
+                $this->db->exec("ALTER TABLE auditorias MODIFY COLUMN status ENUM('Agendada','Em Auditoria','Realizada') NOT NULL DEFAULT 'Agendada'");
+            } catch (\PDOException $e) {
+            }
             $this->db->exec("CREATE TABLE IF NOT EXISTS auditoria_relatorios (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 auditoria_id INT NOT NULL,
@@ -40,6 +58,36 @@ class AuditoriaModel extends BaseModel
                 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 INDEX idx_auditoria_relatorios_auditoria (auditoria_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            $this->db->exec("CREATE TABLE IF NOT EXISTS auditoria_questoes (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                auditoria_id INT NOT NULL,
+                responsavel_nome VARCHAR(180) NOT NULL,
+                pergunta TEXT NOT NULL,
+                referencia_esperada TEXT NOT NULL,
+                processos_json TEXT NULL,
+                ordem INT NOT NULL DEFAULT 1,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_auditoria_questoes_auditoria (auditoria_id),
+                CONSTRAINT fk_auditoria_questoes_auditoria FOREIGN KEY (auditoria_id) REFERENCES auditorias(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            $this->db->exec("CREATE TABLE IF NOT EXISTS auditoria_avaliacoes (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                auditoria_id INT NOT NULL,
+                questao_id INT NOT NULL,
+                conformidade ENUM('pendente','conforme','nao_conforme') NOT NULL DEFAULT 'pendente',
+                observacoes TEXT NULL,
+                auto_saved_at DATETIME NULL,
+                finalized_at DATETIME NULL,
+                updated_by INT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_auditoria_questao (auditoria_id, questao_id),
+                INDEX idx_auditoria_avaliacoes_auditoria (auditoria_id),
+                CONSTRAINT fk_auditoria_avaliacoes_auditoria FOREIGN KEY (auditoria_id) REFERENCES auditorias(id) ON DELETE CASCADE,
+                CONSTRAINT fk_auditoria_avaliacoes_questao FOREIGN KEY (questao_id) REFERENCES auditoria_questoes(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            self::$tablesEnsured = true;
         } catch (\PDOException $e) {
         }
     }
@@ -72,10 +120,6 @@ class AuditoriaModel extends BaseModel
             $where[] = 'a.setor_id = :setor';
             $params['setor'] = (int)$filters['setor'];
         }
-        if (!empty($filters['responsavel'])) {
-            $where[] = 'a.responsavel_id = :responsavel';
-            $params['responsavel'] = (int)$filters['responsavel'];
-        }
         if (!empty($filters['status'])) {
             $where[] = 'a.status = :status';
             $params['status'] = (string)$filters['status'];
@@ -89,7 +133,7 @@ class AuditoriaModel extends BaseModel
             $params['fim'] = (string)$filters['fim'];
         }
         if (!empty($filters['q'])) {
-            $where[] = '(a.pergunta LIKE :q OR a.objetivo LIKE :q OR c.nome_empresa LIKE :q OR s.nome LIKE :q OR r.nome LIKE :q)';
+            $where[] = '(a.nome_auditoria LIKE :q OR a.pergunta LIKE :q OR c.nome_empresa LIKE :q OR s.nome LIKE :q)';
             $params['q'] = '%' . trim((string)$filters['q']) . '%';
         }
 
@@ -97,31 +141,30 @@ class AuditoriaModel extends BaseModel
             $where[] = $this->tenantInCondition('a.cliente_id', $params, 'audsc');
         }
 
-        $sort = (string)($filters['sort'] ?? 'data_desc');
-        $orderMap = [
-            'data_desc' => 'a.data_auditoria DESC, a.id DESC',
-            'data_asc' => 'a.data_auditoria ASC, a.id ASC',
-            'status' => 'a.status ASC, a.data_auditoria DESC',
-            'empresa' => 'c.nome_empresa ASC, a.data_auditoria DESC',
-            'setor' => 's.nome ASC, a.data_auditoria DESC',
-            'responsavel' => 'r.nome ASC, a.data_auditoria DESC',
+        $sortCol = (string)($filters['sort_col'] ?? 'data');
+        $sortDir = strtolower((string)($filters['sort_dir'] ?? 'desc')) === 'asc' ? 'ASC' : 'DESC';
+        $columnMap = [
+            'nome' => 'a.nome_auditoria',
+            'setor' => 's.nome',
+            'data' => 'a.data_auditoria',
+            'status' => 'a.status',
+            'empresa' => 'c.nome_empresa',
         ];
-        $order = $orderMap[$sort] ?? $orderMap['data_desc'];
+        $order = ($columnMap[$sortCol] ?? $columnMap['data']) . " {$sortDir}, a.id DESC";
         $whereSql = implode(' AND ', $where);
 
         $countStmt = $this->db->prepare("SELECT COUNT(*) FROM auditorias a
             JOIN clientes c ON c.id = a.cliente_id
             JOIN setores s ON s.id = a.setor_id
-            JOIN colaboradores r ON r.id = a.responsavel_id
             WHERE $whereSql");
         $countStmt->execute($params);
         $total = (int)$countStmt->fetchColumn();
 
-        $sql = "SELECT a.*, c.nome_empresa AS cliente_nome, s.nome AS setor_nome, r.nome AS responsavel_nome
+        $sql = "SELECT a.*, c.nome_empresa AS cliente_nome, s.nome AS setor_nome,
+                       (SELECT COUNT(*) FROM auditoria_questoes q WHERE q.auditoria_id = a.id) AS total_questoes
                 FROM auditorias a
                 JOIN clientes c ON c.id = a.cliente_id
                 JOIN setores s ON s.id = a.setor_id
-                JOIN colaboradores r ON r.id = a.responsavel_id
                 WHERE $whereSql
                 ORDER BY $order
                 LIMIT :lim OFFSET :off";
@@ -143,16 +186,38 @@ class AuditoriaModel extends BaseModel
         }
         $params = ['id' => $id];
         $scope = $this->hasScopeRestriction() ? (' AND ' . $this->tenantInCondition('a.cliente_id', $params, 'audf')) : '';
-        $stmt = $this->db->prepare("SELECT a.*, c.nome_empresa AS cliente_nome, s.nome AS setor_nome, r.nome AS responsavel_nome
+        $stmt = $this->db->prepare("SELECT a.*, c.nome_empresa AS cliente_nome, s.nome AS setor_nome
                                     FROM auditorias a
                                     JOIN clientes c ON c.id = a.cliente_id
                                     JOIN setores s ON s.id = a.setor_id
-                                    JOIN colaboradores r ON r.id = a.responsavel_id
                                     WHERE a.id = :id AND a.deleted_at IS NULL$scope
                                     LIMIT 1");
         $stmt->execute($params);
         $row = $stmt->fetch();
         return $row ?: null;
+    }
+
+    public function findWithQuestoes(int $id): ?array
+    {
+        $item = $this->find($id);
+        if (!$item) {
+            return null;
+        }
+        $item['questoes'] = $this->questoesByAuditoria((int)$item['id']);
+        return $item;
+    }
+
+    public function questoesByAuditoria(int $auditoriaId): array
+    {
+        $this->ensureTables();
+        $stmt = $this->db->prepare('SELECT id, responsavel_nome, pergunta, referencia_esperada, processos_json, ordem FROM auditoria_questoes WHERE auditoria_id = :id ORDER BY ordem, id');
+        $stmt->execute(['id' => $auditoriaId]);
+        $rows = $stmt->fetchAll();
+        foreach ($rows as &$row) {
+            $decoded = json_decode((string)($row['processos_json'] ?? ''), true);
+            $row['processos'] = is_array($decoded) ? $decoded : [];
+        }
+        return $rows;
     }
 
     public function create(array $data, int $userId): int
@@ -162,22 +227,32 @@ class AuditoriaModel extends BaseModel
         if ($clienteId <= 0 || (!$this->canBypassScope() && !$this->canAccessClienteId($clienteId))) {
             return 0;
         }
-        $stmt = $this->db->prepare("INSERT INTO auditorias
-            (cliente_id, setor_id, responsavel_id, data_auditoria, pergunta, objetivo, referencia_esperada, status, created_by, updated_by)
-            VALUES
-            (:cliente_id, :setor_id, :responsavel_id, :data_auditoria, :pergunta, :objetivo, :referencia_esperada, 'Agendada', :created_by, :updated_by)");
-        $stmt->execute([
-            'cliente_id' => $clienteId,
-            'setor_id' => (int)$data['setor_id'],
-            'responsavel_id' => (int)$data['responsavel_id'],
-            'data_auditoria' => $data['data_auditoria'],
-            'pergunta' => $data['pergunta'],
-            'objetivo' => $data['objetivo'],
-            'referencia_esperada' => $data['referencia_esperada'],
-            'created_by' => $userId,
-            'updated_by' => $userId,
-        ]);
-        return (int)$this->db->lastInsertId();
+        $this->db->beginTransaction();
+        try {
+            $primeira = $data['questoes'][0] ?? ['pergunta' => '', 'referencia_esperada' => '', 'responsavel_nome' => ''];
+            $stmt = $this->db->prepare("INSERT INTO auditorias
+                (cliente_id, setor_id, responsavel_id, data_auditoria, nome_auditoria, pergunta, objetivo, referencia_esperada, status, created_by, updated_by)
+                VALUES
+                (:cliente_id, :setor_id, NULL, :data_auditoria, :nome_auditoria, :pergunta, :objetivo, :referencia_esperada, 'Agendada', :created_by, :updated_by)");
+            $stmt->execute([
+                'cliente_id' => $clienteId,
+                'setor_id' => (int)$data['setor_id'],
+                'data_auditoria' => (string)$data['data_auditoria'],
+                'nome_auditoria' => (string)$data['nome_auditoria'],
+                'pergunta' => (string)$primeira['pergunta'],
+                'objetivo' => (string)$primeira['responsavel_nome'],
+                'referencia_esperada' => (string)$primeira['referencia_esperada'],
+                'created_by' => $userId,
+                'updated_by' => $userId,
+            ]);
+            $id = (int)$this->db->lastInsertId();
+            $this->persistQuestoes($id, $data['questoes']);
+            $this->db->commit();
+            return $id;
+        } catch (\Throwable $e) {
+            $this->db->rollBack();
+            return 0;
+        }
     }
 
     public function updateAgendada(int $id, array $data, int $userId): bool
@@ -187,39 +262,110 @@ class AuditoriaModel extends BaseModel
         if ($clienteId <= 0 || (!$this->canBypassScope() && !$this->canAccessClienteId($clienteId))) {
             return false;
         }
-        $params = [
+        $this->db->beginTransaction();
+        try {
+            $primeira = $data['questoes'][0] ?? ['pergunta' => '', 'referencia_esperada' => '', 'responsavel_nome' => ''];
+            $params = [
             'id' => $id,
             'cliente_id' => $clienteId,
             'setor_id' => (int)$data['setor_id'],
-            'responsavel_id' => (int)$data['responsavel_id'],
             'data_auditoria' => $data['data_auditoria'],
-            'pergunta' => $data['pergunta'],
-            'objetivo' => $data['objetivo'],
-            'referencia_esperada' => $data['referencia_esperada'],
+            'nome_auditoria' => (string)$data['nome_auditoria'],
+            'pergunta' => (string)$primeira['pergunta'],
+            'objetivo' => (string)$primeira['responsavel_nome'],
+            'referencia_esperada' => (string)$primeira['referencia_esperada'],
             'updated_by' => $userId,
-        ];
-        $scope = $this->hasScopeRestriction() ? (' AND ' . $this->tenantInCondition('cliente_id', $params, 'audu')) : '';
-        $stmt = $this->db->prepare("UPDATE auditorias
-            SET cliente_id = :cliente_id, setor_id = :setor_id, responsavel_id = :responsavel_id, data_auditoria = :data_auditoria,
-                pergunta = :pergunta, objetivo = :objetivo, referencia_esperada = :referencia_esperada, updated_by = :updated_by
-            WHERE id = :id AND deleted_at IS NULL AND status = 'Agendada' AND realizada_at IS NULL$scope");
-        return $stmt->execute($params) && $stmt->rowCount() > 0;
+            ];
+            $scope = $this->hasScopeRestriction() ? (' AND ' . $this->tenantInCondition('cliente_id', $params, 'audu')) : '';
+            $stmt = $this->db->prepare("UPDATE auditorias
+                SET cliente_id = :cliente_id, setor_id = :setor_id, data_auditoria = :data_auditoria, nome_auditoria = :nome_auditoria,
+                    pergunta = :pergunta, objetivo = :objetivo, referencia_esperada = :referencia_esperada, updated_by = :updated_by
+                WHERE id = :id AND deleted_at IS NULL AND status IN ('Agendada','Em Auditoria') AND realizada_at IS NULL$scope");
+            $updated = $stmt->execute($params) && $stmt->rowCount() > 0;
+            if (!$updated) {
+                $this->db->rollBack();
+                return false;
+            }
+            $this->db->prepare('DELETE FROM auditoria_questoes WHERE auditoria_id = :id')->execute(['id' => $id]);
+            $this->persistQuestoes($id, $data['questoes']);
+            $this->db->prepare('DELETE FROM auditoria_avaliacoes WHERE auditoria_id = :id AND finalized_at IS NULL')->execute(['id' => $id]);
+            $this->db->commit();
+            return true;
+        } catch (\Throwable $e) {
+            $this->db->rollBack();
+            return false;
+        }
     }
 
-    public function auditar(int $id, array $data, int $userId): bool
+    public function autosaveAvaliacoes(int $auditoriaId, array $avaliacoes, int $userId): bool
     {
         $this->ensureTables();
-        $params = [
-            'id' => $id,
-            'avaliacao' => $data['avaliacao'],
-            'obs' => $data['obs'] ?: null,
-            'updated_by' => $userId,
-        ];
-        $scope = $this->hasScopeRestriction() ? (' AND ' . $this->tenantInCondition('cliente_id', $params, 'audx')) : '';
-        $stmt = $this->db->prepare("UPDATE auditorias
-            SET avaliacao = :avaliacao, obs = :obs, status = 'Realizada', realizada_at = NOW(), updated_by = :updated_by
-            WHERE id = :id AND deleted_at IS NULL AND status = 'Agendada' AND realizada_at IS NULL$scope");
-        return $stmt->execute($params) && $stmt->rowCount() > 0;
+        $auditoria = $this->find($auditoriaId);
+        if (!$auditoria || !in_array((string)$auditoria['status'], ['Agendada', 'Em Auditoria'], true)) {
+            return false;
+        }
+        $this->db->beginTransaction();
+        try {
+            $this->persistAvaliacoesNoTx($auditoriaId, $avaliacoes, $userId);
+            $this->db->prepare("UPDATE auditorias SET status = 'Em Auditoria', updated_by = :updated_by WHERE id = :id AND status = 'Agendada'")
+                ->execute(['id' => $auditoriaId, 'updated_by' => $userId]);
+            $this->db->commit();
+            return true;
+        } catch (\Throwable $e) {
+            $this->db->rollBack();
+            return false;
+        }
+    }
+
+    public function finalizarAuditoria(int $auditoriaId, array $avaliacoes, int $userId): bool
+    {
+        $this->ensureTables();
+        $auditoria = $this->find($auditoriaId);
+        if (!$auditoria || !in_array((string)$auditoria['status'], ['Agendada', 'Em Auditoria'], true)) {
+            return false;
+        }
+        $this->db->beginTransaction();
+        try {
+            $this->persistAvaliacoesNoTx($auditoriaId, $avaliacoes, $userId);
+            $this->db->prepare("UPDATE auditorias SET status = 'Em Auditoria', updated_by = :updated_by WHERE id = :id AND status = 'Agendada'")
+                ->execute(['id' => $auditoriaId, 'updated_by' => $userId]);
+            $this->db->prepare('UPDATE auditoria_avaliacoes SET finalized_at = NOW() WHERE auditoria_id = :id')->execute(['id' => $auditoriaId]);
+            $sumStmt = $this->db->prepare("SELECT
+                    SUM(CASE WHEN conformidade = 'conforme' THEN 1 ELSE 0 END) AS total_conforme,
+                    SUM(CASE WHEN conformidade = 'nao_conforme' THEN 1 ELSE 0 END) AS total_nao_conforme
+                FROM auditoria_avaliacoes
+                WHERE auditoria_id = :id");
+            $sumStmt->execute(['id' => $auditoriaId]);
+            $sum = $sumStmt->fetch() ?: ['total_conforme' => 0, 'total_nao_conforme' => 0];
+            $resumo = 'Conforme: ' . (int)$sum['total_conforme'] . ' | Não conforme: ' . (int)$sum['total_nao_conforme'];
+            $up = $this->db->prepare("UPDATE auditorias
+                SET status = 'Realizada', realizada_at = NOW(), avaliacao = :avaliacao, updated_by = :updated_by
+                WHERE id = :id AND deleted_at IS NULL AND realizada_at IS NULL");
+            $ok = $up->execute(['id' => $auditoriaId, 'avaliacao' => $resumo, 'updated_by' => $userId]) && $up->rowCount() > 0;
+            if (!$ok) {
+                $this->db->rollBack();
+                return false;
+            }
+            $this->db->commit();
+            return true;
+        } catch (\Throwable $e) {
+            $this->db->rollBack();
+            return false;
+        }
+    }
+
+    public function respostasByAuditoria(int $auditoriaId): array
+    {
+        $this->ensureTables();
+        $stmt = $this->db->prepare("SELECT questao_id, conformidade, observacoes, auto_saved_at, finalized_at
+                                    FROM auditoria_avaliacoes
+                                    WHERE auditoria_id = :id");
+        $stmt->execute(['id' => $auditoriaId]);
+        $rows = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $rows[(int)$row['questao_id']] = $row;
+        }
+        return $rows;
     }
 
     public function countRelatoriosVinculados(int $id): int
@@ -240,5 +386,44 @@ class AuditoriaModel extends BaseModel
         $scope = $this->hasScopeRestriction() ? (' AND ' . $this->tenantInCondition('cliente_id', $params, 'audd')) : '';
         $stmt = $this->db->prepare("UPDATE auditorias SET deleted_at = NOW(), deleted_by = :deleted_by WHERE id = :id AND deleted_at IS NULL$scope");
         return $stmt->execute($params) && $stmt->rowCount() > 0;
+    }
+
+    private function persistQuestoes(int $auditoriaId, array $questoes): void
+    {
+        $stmt = $this->db->prepare("INSERT INTO auditoria_questoes
+            (auditoria_id, responsavel_nome, pergunta, referencia_esperada, processos_json, ordem)
+            VALUES (:auditoria_id, :responsavel_nome, :pergunta, :referencia_esperada, :processos_json, :ordem)");
+        $ordem = 1;
+        foreach ($questoes as $questao) {
+            $stmt->execute([
+                'auditoria_id' => $auditoriaId,
+                'responsavel_nome' => (string)($questao['responsavel_nome'] ?? ''),
+                'pergunta' => (string)($questao['pergunta'] ?? ''),
+                'referencia_esperada' => (string)($questao['referencia_esperada'] ?? ''),
+                'processos_json' => json_encode(array_values($questao['processos'] ?? []), JSON_UNESCAPED_UNICODE),
+                'ordem' => $ordem++,
+            ]);
+        }
+    }
+
+    private function persistAvaliacoesNoTx(int $auditoriaId, array $avaliacoes, int $userId): void
+    {
+        $up = $this->db->prepare("INSERT INTO auditoria_avaliacoes
+            (auditoria_id, questao_id, conformidade, observacoes, auto_saved_at, updated_by)
+            VALUES (:auditoria_id, :questao_id, :conformidade, :observacoes, NOW(), :updated_by)
+            ON DUPLICATE KEY UPDATE
+            conformidade = VALUES(conformidade),
+            observacoes = VALUES(observacoes),
+            auto_saved_at = NOW(),
+            updated_by = VALUES(updated_by)");
+        foreach ($avaliacoes as $item) {
+            $up->execute([
+                'auditoria_id' => $auditoriaId,
+                'questao_id' => (int)$item['questao_id'],
+                'conformidade' => (string)$item['conformidade'],
+                'observacoes' => (string)$item['observacoes'],
+                'updated_by' => $userId,
+            ]);
+        }
     }
 }
