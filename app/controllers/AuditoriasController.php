@@ -211,6 +211,8 @@ class AuditoriasController extends BaseController
             $this->redirect('index.php?route=auditorias/show&id=' . $id);
             return;
         }
+        $this->auditorias->iniciarExecucao($id, (int)($_SESSION['user']['id'] ?? 0));
+        $item = $this->auditorias->findWithQuestoes($id) ?: $item;
         $respostas = $this->auditorias->respostasByAuditoria($id);
         $this->render('auditorias/auditar', [
             'item' => $item,
@@ -438,10 +440,12 @@ class AuditoriasController extends BaseController
             echo json_encode(['success' => false, 'message' => 'Auditoria não encontrada'], JSON_UNESCAPED_UNICODE);
             return;
         }
-        $params = ['qid' => $questaoId, 'aid' => $auditoriaId];
-        $stmt = $this->auditorias->db->prepare('SELECT id FROM auditoria_questoes WHERE id = :qid AND auditoria_id = :aid');
-        $stmt->execute($params);
-        if (!$stmt->fetch()) {
+        if (($item['status'] ?? '') === 'Realizada') {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => 'Upload permitido apenas durante a auditoria.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        if (!$this->auditorias->questaoPertence($auditoriaId, $questaoId)) {
             http_response_code(403);
             echo json_encode(['success' => false, 'message' => 'Questão inválida'], JSON_UNESCAPED_UNICODE);
             return;
@@ -539,7 +543,17 @@ class AuditoriasController extends BaseController
             echo json_encode(['success' => true, 'items' => []], JSON_UNESCAPED_UNICODE); return;
         }
         $items = $this->arquivos->listByQuestao($auditoriaId, $questaoId);
-        echo json_encode(['success' => true, 'items' => $items], JSON_UNESCAPED_UNICODE);
+        $out = [];
+        foreach ($items as $it) {
+            $out[] = [
+                'id' => (int)$it['id'],
+                'name' => (string)($it['original_name'] ?? ''),
+                'size' => (int)($it['size'] ?? 0),
+                'mime' => $it['mime'] ?? null,
+                'has_thumb' => !empty($it['thumb_path']),
+            ];
+        }
+        echo json_encode(['success' => true, 'items' => $out], JSON_UNESCAPED_UNICODE);
     }
 
     public function downloadAnexo(): void
@@ -556,6 +570,21 @@ class AuditoriasController extends BaseController
         $name = $file['original_name'] ?? ('arquivo_' . $id);
         header('Content-Type: application/octet-stream');
         header('Content-Disposition: attachment; filename="' . $name . (substr($path, -3) === '.gz' ? '.gz' : '') . '"');
+        readfile($path);
+    }
+
+    public function thumbAnexo(): void
+    {
+        $this->requireLogin();
+        $id = (int)($_GET['id'] ?? 0);
+        $file = $this->arquivos->find($id);
+        if (!$file) { http_response_code(404); echo 'Arquivo não encontrado'; return; }
+        $auditoria = $this->auditorias->find((int)$file['auditoria_id']);
+        if (!$auditoria) { http_response_code(404); echo 'Auditoria não encontrada'; return; }
+        if (!$this->canAccessCliente((int)$auditoria['cliente_id'])) { http_response_code(403); echo 'Sem permissão'; return; }
+        $path = $file['thumb_path'] ?? null;
+        if (!$path || !is_file($path)) { http_response_code(404); echo 'Thumbnail indisponível'; return; }
+        header('Content-Type: image/jpeg');
         readfile($path);
     }
 

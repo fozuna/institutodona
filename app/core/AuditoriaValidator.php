@@ -88,8 +88,8 @@ class AuditoriaValidator
         foreach ($avaliacoes as $idx => $item) {
             $conformidade = (string)($item['conformidade'] ?? '');
             $observacoes = trim((string)($item['observacoes'] ?? ''));
-            if (!in_array($conformidade, ['conforme', 'nao_conforme'], true)) {
-                $errors['avaliacao_' . ($idx + 1)] = 'Selecione conforme ou não conforme para todas as questões.';
+            if (!in_array($conformidade, ['conforme', 'nao_conforme', 'nao_aplica'], true)) {
+                $errors['avaliacao_' . ($idx + 1)] = 'Selecione conforme, não conforme ou não se aplica para todas as questões.';
             }
             if (mb_strlen($observacoes) > 2000) {
                 $errors['avaliacao_obs_' . ($idx + 1)] = 'Observação por questão deve ter no máximo 2000 caracteres.';

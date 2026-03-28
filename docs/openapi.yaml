@@ -56,3 +56,12 @@ paths:
           schema: { type: integer }
       responses:
         '200': { description: OK }
+  /auditorias/thumb_anexo:
+    get:
+      summary: Thumbnail de anexo
+      parameters:
+        - in: query
+          name: id
+          schema: { type: integer }
+      responses:
+        '200': { description: OK }

@@ -229,6 +229,26 @@ class AuditoriaModel extends BaseModel
         return $rows;
     }
 
+    public function questaoPertence(int $auditoriaId, int $questaoId): bool
+    {
+        $this->ensureTables();
+        $stmt = $this->db->prepare('SELECT id FROM auditoria_questoes WHERE id = :qid AND auditoria_id = :aid LIMIT 1');
+        $stmt->execute(['qid' => $questaoId, 'aid' => $auditoriaId]);
+        return (bool)$stmt->fetchColumn();
+    }
+
+    public function iniciarExecucao(int $auditoriaId, int $userId): void
+    {
+        $this->ensureTables();
+        $params = ['id' => $auditoriaId, 'updated_by' => $userId];
+        $scope = $this->hasScopeRestriction() ? (' AND ' . $this->tenantInCondition('cliente_id', $params, 'audstart')) : '';
+        try {
+            $this->db->prepare("UPDATE auditorias SET status = 'Em Auditoria', updated_by = :updated_by WHERE id = :id AND deleted_at IS NULL AND status = 'Agendada'$scope")
+                ->execute($params);
+        } catch (\PDOException $e) {
+        }
+    }
+
     public function create(array $data, int $userId): int
     {
         $this->ensureTables();

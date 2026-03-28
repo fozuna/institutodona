@@ -283,6 +283,9 @@ switch ($route) {
     case 'auditorias/download_anexo':
         (new AuditoriasController())->downloadAnexo();
         break;
+    case 'auditorias/thumb_anexo':
+        (new AuditoriasController())->thumbAnexo();
+        break;
     case 'auditorias/api_clientes':
         (new AuditoriasController())->apiClientes();
         break;

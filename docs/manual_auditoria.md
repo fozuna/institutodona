@@ -1,7 +1,7 @@
 # Auditoria — Novas Funcionalidades
 
 ## Upload de Arquivos por Questão
-- Na tela de cadastro/edição, cada questão possui a área “Anexos da Questão”.
+- Os anexos são incluídos somente durante a execução da auditoria (tela de avaliação).
 - Selecione múltiplos arquivos (limites: 10MB por arquivo, 50MB por questão).
 - Ao enviar:
   - Os arquivos são comprimidos (gzip) e validados por antivírus (se disponível).
@@ -27,4 +27,3 @@
 
 ## Ajuda
 - Em caso de erro de upload, verifique o tamanho do arquivo e tente novamente.
-
