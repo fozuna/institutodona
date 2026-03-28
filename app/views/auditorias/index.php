@@ -209,7 +209,7 @@
                 <input type="hidden" name="id" id="renId" />
                 <div>
                     <label class="block text-sm">Novo nome</label>
-                    <input class="border rounded p-2 w-full" name="nome_auditoria" id="renNome" required maxlength="100" pattern="[\p{L}\p{N}\s._-]+">
+                    <input class="border rounded p-2 w-full" name="nome_auditoria" id="dupNome" required maxlength="100">
                 </div>
                 <div class="flex items-center justify-end gap-2">
                     <button type="button" id="cancelRename" class="px-3 py-2 rounded bg-gray-200 text-brand-brown">Cancelar</button>
