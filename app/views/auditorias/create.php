@@ -295,7 +295,7 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
                 if (setorStatus) setorStatus.textContent = '';
                 return;
             }
-            fetch('index.php?route=auditorias/api_setores&cliente_id=' + encodeURIComponent(clienteId))
+            fetch('index.php?route=auditorias/api_setores&force=1&cliente_id=' + encodeURIComponent(clienteId))
                 .then((r)=>r.json())
                 .then((json)=>{
                     const ok = json && json.success !== false;

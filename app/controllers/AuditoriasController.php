@@ -337,12 +337,32 @@ class AuditoriasController extends BaseController
     {
         $this->requireApiAuth(false);
         header('Content-Type: application/json; charset=utf-8');
-        $cliente = (int)($this->resolveScopedClienteId((int)($_GET['cliente_id'] ?? 0)) ?? 0);
+        $clienteRequested = (int)($_GET['cliente_id'] ?? 0);
+        $cliente = (int)($this->resolveScopedClienteId($clienteRequested) ?? 0);
+        $force = (int)($_GET['force'] ?? 0) === 1;
         if ($cliente <= 0) {
             echo json_encode(['success' => true, 'items' => []], JSON_UNESCAPED_UNICODE);
             return;
         }
-        echo json_encode(['success' => true, 'items' => $this->setoresCached($cliente)], JSON_UNESCAPED_UNICODE);
+        try {
+            $items = $this->setoresCached($cliente, $force);
+            AuditLogger::log('auditoria_api_setores', 'auditoria', null, [
+                'cliente_id' => $cliente,
+                'cliente_id_requested' => $clienteRequested,
+                'force' => $force,
+                'total' => count($items),
+            ]);
+            echo json_encode(['success' => true, 'items' => $items], JSON_UNESCAPED_UNICODE);
+        } catch (\Throwable $e) {
+            AuditLogger::log('auditoria_api_setores_error', 'auditoria', null, [
+                'cliente_id' => $cliente,
+                'cliente_id_requested' => $clienteRequested,
+                'force' => $force,
+                'error' => $e->getMessage(),
+            ]);
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Erro ao carregar setores'], JSON_UNESCAPED_UNICODE);
+        }
     }
 
     public function apiClientes(): void
@@ -716,15 +736,29 @@ class AuditoriasController extends BaseController
         return $cache;
     }
 
-    private function setoresCached(int $clienteId): array
+    private function setoresCached(int $clienteId, bool $force = false): array
     {
         if (!isset($_SESSION['cache_auditoria_setores']) || !is_array($_SESSION['cache_auditoria_setores'])) {
             $_SESSION['cache_auditoria_setores'] = [];
         }
-        if (!array_key_exists($clienteId, $_SESSION['cache_auditoria_setores'])) {
-            $_SESSION['cache_auditoria_setores'][$clienteId] = $this->setores->allByCliente($clienteId);
+        if (!isset($_SESSION['cache_auditoria_setores_ts']) || !is_array($_SESSION['cache_auditoria_setores_ts'])) {
+            $_SESSION['cache_auditoria_setores_ts'] = [];
         }
-        return $_SESSION['cache_auditoria_setores'][$clienteId];
+        $cache = $_SESSION['cache_auditoria_setores'][$clienteId] ?? null;
+        $ts = (int)($_SESSION['cache_auditoria_setores_ts'][$clienteId] ?? 0);
+        $expired = ($ts <= 0 || (time() - $ts) > 60);
+        $needsRefresh = $force || !is_array($cache) || $expired;
+        if ($needsRefresh) {
+            $cache = $this->setores->allByCliente($clienteId);
+            $_SESSION['cache_auditoria_setores'][$clienteId] = $cache;
+            $_SESSION['cache_auditoria_setores_ts'][$clienteId] = time();
+        }
+        if (empty($cache)) {
+            $cache = $this->setores->allByCliente($clienteId);
+            $_SESSION['cache_auditoria_setores'][$clienteId] = $cache;
+            $_SESSION['cache_auditoria_setores_ts'][$clienteId] = time();
+        }
+        return $cache;
     }
 
     private function responsaveisBySetorCached(int $setorId, int $clienteId = 0): array
