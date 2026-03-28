@@ -7,6 +7,31 @@ class AuditoriaModel extends BaseModel
 {
     private static bool $tablesEnsured = false;
 
+    public static function percentSplit(int $conforme, int $naoConforme): array
+    {
+        $conforme = max(0, $conforme);
+        $naoConforme = max(0, $naoConforme);
+        $total = $conforme + $naoConforme;
+        if ($total <= 0) {
+            return ['conforme' => 0.00, 'nao_conforme' => 0.00];
+        }
+        $rawC = ($conforme / $total) * 100;
+        $rawN = ($naoConforme / $total) * 100;
+        $pctC = round($rawC, 2);
+        $pctN = round($rawN, 2);
+        $diff = round(100 - ($pctC + $pctN), 2);
+        if (abs($diff) >= 0.01) {
+            if ($rawC >= $rawN) {
+                $pctC = round($pctC + $diff, 2);
+            } else {
+                $pctN = round($pctN + $diff, 2);
+            }
+        }
+        $pctC = max(0.00, min(100.00, $pctC));
+        $pctN = max(0.00, min(100.00, $pctN));
+        return ['conforme' => $pctC, 'nao_conforme' => $pctN];
+    }
+
     private function safeRollback(): void
     {
         try {
@@ -506,7 +531,8 @@ class AuditoriaModel extends BaseModel
         $naoConforme = (int)$sum['total_nao_conforme'];
         $naoAplica = (int)$sum['total_nao_aplica'];
         $validas = max(0, $conforme + $naoConforme);
-        $pct = $validas > 0 ? round(($conforme / $validas) * 100, 2) : 0.00;
+        $split = self::percentSplit($conforme, $naoConforme);
+        $pct = $split['conforme'];
         $semaforo = 'vermelho';
         if ($pct >= 91) $semaforo = 'verde';
         elseif ($pct >= 76) $semaforo = 'amarelo';
@@ -516,6 +542,8 @@ class AuditoriaModel extends BaseModel
             'nao_aplica' => $naoAplica,
             'validas' => $validas,
             'pct' => $pct,
+            'pct_conforme' => $split['conforme'],
+            'pct_nao_conforme' => $split['nao_conforme'],
             'semaforo' => $semaforo,
         ];
     }
