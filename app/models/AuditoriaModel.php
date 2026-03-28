@@ -122,6 +122,17 @@ class AuditoriaModel extends BaseModel
                 CONSTRAINT fk_auditoria_avaliacoes_auditoria FOREIGN KEY (auditoria_id) REFERENCES auditorias(id) ON DELETE CASCADE,
                 CONSTRAINT fk_auditoria_avaliacoes_questao FOREIGN KEY (questao_id) REFERENCES auditoria_questoes(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            $this->db->exec("CREATE TABLE IF NOT EXISTS auditoria_avaliacoes_log (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                auditoria_id INT NOT NULL,
+                questao_id INT NOT NULL,
+                old_observacoes TEXT NULL,
+                new_observacoes TEXT NULL,
+                updated_by INT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_aud_av_log_aud (auditoria_id),
+                INDEX idx_aud_av_log_q (questao_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             try {
                 $this->db->exec("ALTER TABLE auditoria_avaliacoes MODIFY COLUMN conformidade ENUM('pendente','conforme','nao_conforme','nao_aplica') NOT NULL DEFAULT 'pendente'");
             } catch (\PDOException $e) {}

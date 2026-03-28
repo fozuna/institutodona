@@ -339,6 +339,76 @@ class AuditoriasController extends BaseController
         $this->redirect('index.php?route=auditorias/index');
     }
 
+    public function editarRealizada(): void
+    {
+        $this->requireLogin();
+        $this->requireManagePermission();
+        $id = (int)($_GET['id'] ?? 0);
+        $item = $this->auditorias->findWithQuestoes($id);
+        if (!$item || ($item['status'] ?? '') !== 'Realizada') {
+            $_SESSION['flash_error'] = 'Apenas auditorias realizadas podem ser editadas por este fluxo.';
+            $this->redirect('index.php?route=auditorias/index');
+            return;
+        }
+        $respostas = $this->auditorias->respostasByAuditoria($id);
+        $this->render('auditorias/editar_realizada', [
+            'item' => $item,
+            'respostas' => $respostas,
+            'errors' => [],
+        ]);
+    }
+
+    public function atualizarObservacoes(): void
+    {
+        $this->requireLogin();
+        $this->requireManagePermission();
+        if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo 'Requisição inválida.';
+            return;
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        $item = $this->auditorias->findWithQuestoes($id);
+        if (!$item || ($item['status'] ?? '') !== 'Realizada') {
+            $_SESSION['flash_error'] = 'Apenas auditorias realizadas podem ser editadas por este fluxo.';
+            $this->redirect('index.php?route=auditorias/index');
+            return;
+        }
+        $payload = json_decode((string)($_POST['observacoes_json'] ?? '[]'), true) ?: [];
+        $map = [];
+        foreach ($payload as $row) {
+            $qid = (int)($row['questao_id'] ?? 0);
+            $obs = trim((string)($row['observacoes'] ?? ''));
+            if ($qid > 0 && mb_strlen($obs) <= 2000) {
+                $map[$qid] = $obs;
+            }
+        }
+        $old = $this->auditorias->respostasByAuditoria($id);
+        $userId = (int)($_SESSION['user']['id'] ?? 0);
+        $updated = 0;
+        try {
+            $this->auditorias->db->beginTransaction();
+            $stmtUp = $this->auditorias->db->prepare('UPDATE auditoria_avaliacoes SET observacoes = :obs, updated_by = :uid, updated_at = NOW() WHERE auditoria_id = :aid AND questao_id = :qid');
+            $stmtLog = $this->auditorias->db->prepare('INSERT INTO auditoria_avaliacoes_log (auditoria_id, questao_id, old_observacoes, new_observacoes, updated_by) VALUES (:aid, :qid, :old, :new, :uid)');
+            foreach ($map as $qid => $newObs) {
+                $oldObs = trim((string)($old[$qid]['observacoes'] ?? ''));
+                if ($oldObs === $newObs) continue;
+                $stmtUp->execute(['obs' => $newObs, 'uid' => $userId, 'aid' => $id, 'qid' => $qid]);
+                $stmtLog->execute(['aid' => $id, 'qid' => $qid, 'old' => $oldObs, 'new' => $newObs, 'uid' => $userId]);
+                $updated++;
+            }
+            $this->auditorias->db->commit();
+        } catch (\Throwable $e) {
+            try { if ($this->auditorias->db->inTransaction()) $this->auditorias->db->rollBack(); } catch (\Throwable $e2) {}
+            $_SESSION['flash_error'] = 'Erro ao atualizar observações.';
+            $this->redirect('index.php?route=auditorias/show&id=' . $id);
+            return;
+        }
+        AuditLogger::log('auditoria_edit_realizada', 'auditoria', $id, ['updated' => $updated]);
+        $_SESSION['flash_success'] = 'Observações atualizadas com sucesso.';
+        $this->redirect('index.php?route=auditorias/show&id=' . $id);
+    }
+
     public function apiSetores(): void
     {
         $this->requireApiAuth(false);

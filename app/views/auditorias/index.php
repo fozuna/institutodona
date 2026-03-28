@@ -108,6 +108,9 @@
                                 <?php if (!empty($canManage) && (($row['status'] ?? '') !== 'Realizada')): ?>
                                     <a class="text-brand-red icon-action mr-2" href="index.php?route=auditorias/auditar&id=<?= (int)$row['id'] ?>" title="Auditar"><span data-feather="check-circle"></span></a>
                                 <?php endif; ?>
+                                <?php if (!empty($canManage) && (($row['status'] ?? '') === 'Realizada')): ?>
+                                    <a class="text-brand-pink icon-action mr-2" href="index.php?route=auditorias/editar_realizada&id=<?= (int)$row['id'] ?>" title="Editar Obs. (Realizada)"><span data-feather="edit-2"></span></a>
+                                <?php endif; ?>
                                 <?php if (!empty($canManage)): ?>
                                     <button type="button" class="text-brand-brown icon-action" data-open-delete="<?= (int)$row['id'] ?>" title="Excluir"><span data-feather="trash-2"></span></button>
                                 <?php endif; ?>

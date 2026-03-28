@@ -271,6 +271,12 @@ switch ($route) {
     case 'auditorias/relatorio_pdf':
         (new AuditoriasController())->relatorioPdf();
         break;
+    case 'auditorias/editar_realizada':
+        (new AuditoriasController())->editarRealizada();
+        break;
+    case 'auditorias/atualizar_observacoes':
+        (new AuditoriasController())->atualizarObservacoes();
+        break;
     case 'auditorias/api_setores':
         (new AuditoriasController())->apiSetores();
         break;
