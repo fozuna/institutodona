@@ -36,6 +36,7 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
                     <?php endforeach; ?>
                 </select>
                 <?php if (!empty($errors['setor_id'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['setor_id']) ?></p><?php endif; ?>
+                <p id="setorStatus" class="text-xs text-gray-500 mt-1"></p>
             </div>
             <div class="md:col-span-4">
                 <label class="block text-sm">Data de Realização</label>
@@ -71,6 +72,7 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
         const btnSalvar = document.getElementById('btnSalvar');
         const btnSalvarTopo = document.getElementById('btnSalvarTopo');
         const clienteDebugStatus = document.getElementById('clienteDebugStatus');
+        const setorStatus = document.getElementById('setorStatus');
         const backendErrors = <?= json_encode($errors, JSON_UNESCAPED_UNICODE) ?>;
         let questoes = [];
         const responsavelSugestoesPorQuestao = new Map();
@@ -122,7 +124,10 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
                     <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
                         <div class="md:col-span-4">
                             <label class="block text-xs">Responsável</label>
-                            <input type="text" class="border rounded p-2 w-full" data-responsavel="${index}" list="responsavelList_${index}" autocomplete="off" value="${(q.responsavel_nome || '').replace(/"/g, '&quot;')}" />
+                            <div class="relative">
+                                <input type="text" class="border rounded p-2 w-full" data-responsavel="${index}" list="responsavelList_${index}" autocomplete="off" value="${(q.responsavel_nome || '').replace(/"/g, '&quot;')}" />
+                                <div class="hidden absolute z-10 w-full mt-1 bg-white border rounded shadow max-h-52 overflow-auto" data-responsavel-menu="${index}"></div>
+                            </div>
                             <datalist id="responsavelList_${index}"></datalist>
                             <div class="text-xs text-gray-500 mt-1" data-responsavel-status="${index}"></div>
                             ${erroResponsavel ? `<div class="text-xs text-red-600 mt-1">${erroResponsavel}</div>` : ''}
@@ -166,11 +171,23 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
                         fetchSugestoesResponsavel(idx, el.value || '');
                     }, 250));
                 });
+                el.addEventListener('focus', ()=>{
+                    const idx = Number(el.getAttribute('data-responsavel'));
+                    const menu = questoesContainer.querySelector(`[data-responsavel-menu="${idx}"]`);
+                    const sugestoes = responsavelSugestoesPorQuestao.get(idx) || [];
+                    if (menu && sugestoes.length) {
+                        menu.classList.remove('hidden');
+                    }
+                });
                 el.addEventListener('blur', ()=>{
                     const idx = Number(el.getAttribute('data-responsavel'));
                     if ((el.value || '').trim().length >= 2) {
                         fetchSugestoesResponsavel(idx, el.value || '');
                     }
+                    setTimeout(()=>{
+                        const menu = questoesContainer.querySelector(`[data-responsavel-menu="${idx}"]`);
+                        if (menu) menu.classList.add('hidden');
+                    }, 150);
                 });
             });
             questoesContainer.querySelectorAll('[data-pergunta]').forEach((el)=>{
@@ -198,19 +215,42 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
 
         const applySugestoesResponsavel = (idx, items)=>{
             const list = document.getElementById(`responsavelList_${idx}`);
+            const menu = questoesContainer.querySelector(`[data-responsavel-menu="${idx}"]`);
             if (!list) return;
             list.innerHTML = '';
+            if (menu) menu.innerHTML = '';
             const nomes = [];
-            items.forEach((item)=>{
+            (items || []).slice(0, 10).forEach((item)=>{
                 const nome = (item && item.nome) ? String(item.nome).trim() : '';
                 if (!nome) return;
                 nomes.push(nome);
                 const op = document.createElement('option');
                 op.value = nome;
                 list.appendChild(op);
+                if (menu) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'block w-full text-left px-3 py-2 hover:bg-gray-100';
+                    btn.textContent = nome;
+                    btn.addEventListener('mousedown', (e)=>{
+                        e.preventDefault();
+                        const input = questoesContainer.querySelector(`input[data-responsavel="${idx}"]`);
+                        if (!input) return;
+                        input.value = nome;
+                        questoes[idx].responsavel_nome = nome;
+                        syncHidden();
+                        if (menu) menu.classList.add('hidden');
+                        setResponsavelStatus(idx, 'Responsável selecionado.');
+                    });
+                    menu.appendChild(btn);
+                }
             });
             responsavelSugestoesPorQuestao.set(idx, nomes);
             setResponsavelStatus(idx, nomes.length ? `${nomes.length} sugestão(ões) encontrada(s)` : 'Nenhum colaborador encontrado');
+            if (menu) {
+                if (nomes.length) menu.classList.remove('hidden');
+                else menu.classList.add('hidden');
+            }
         };
 
         const fetchSugestoesResponsavel = (idx, query)=>{
@@ -246,15 +286,26 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
 
         const loadSetores = ()=>{
             const clienteId = clienteSelect.value;
+            setorSelect.disabled = true;
             setorSelect.innerHTML = '<option value="">Carregando...</option>';
+            if (setorStatus) setorStatus.textContent = 'Carregando setores...';
             if (!clienteId) {
                 setorSelect.innerHTML = '<option value="">Selecione</option>';
+                setorSelect.disabled = false;
+                if (setorStatus) setorStatus.textContent = '';
                 return;
             }
             fetch('index.php?route=auditorias/api_setores&cliente_id=' + encodeURIComponent(clienteId))
                 .then((r)=>r.json())
                 .then((json)=>{
-                    const items = Array.isArray(json.items) ? json.items : [];
+                    const ok = json && json.success !== false;
+                    const items = ok && Array.isArray(json.items) ? json.items : [];
+                    if (!items.length) {
+                        setorSelect.innerHTML = '<option value="">Nenhum setor encontrado</option>';
+                        setorSelect.disabled = true;
+                        if (setorStatus) setorStatus.textContent = 'Nenhum setor encontrado para a empresa selecionada.';
+                        return;
+                    }
                     setorSelect.innerHTML = '<option value="">Selecione</option>';
                     items.forEach((s)=>{
                         const op = document.createElement('option');
@@ -262,8 +313,15 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
                         op.textContent = s.nome;
                         setorSelect.appendChild(op);
                     });
+                    setorSelect.disabled = false;
+                    if (setorStatus) setorStatus.textContent = '';
                 })
-                .catch(()=>{ setorSelect.innerHTML = '<option value="">Erro ao carregar</option>'; });
+                .catch((err)=>{
+                    console.error('[auditorias/create] falha ao carregar setores', err);
+                    setorSelect.innerHTML = '<option value="">Erro ao carregar setores</option>';
+                    setorSelect.disabled = true;
+                    if (setorStatus) setorStatus.textContent = 'Erro ao carregar setores.';
+                });
         };
 
         const applyClientes = (items)=>{
@@ -321,6 +379,11 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
         });
 
         clienteSelect?.addEventListener('change', ()=>{
+            loadSetores();
+            responsavelSugestoesPorQuestao.clear();
+            renderQuestoes();
+        });
+        clienteSelect?.addEventListener('input', ()=>{
             loadSetores();
             responsavelSugestoesPorQuestao.clear();
             renderQuestoes();
@@ -385,6 +448,12 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
 
         parseInitialQuestoes();
         renderQuestoes();
+        document.addEventListener('click', (e)=>{
+            const t = e.target;
+            if (!(t instanceof HTMLElement)) return;
+            if (t.closest('[data-responsavel-menu]') || t.closest('[data-responsavel]')) return;
+            questoesContainer.querySelectorAll('[data-responsavel-menu]').forEach((m)=>m.classList.add('hidden'));
+        });
         loadClientesIfEmpty().then(()=>{
             if (clienteSelect.value) {
                 loadSetores();
