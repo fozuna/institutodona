@@ -413,7 +413,7 @@ class AuditoriaModel extends BaseModel
         }
     }
 
-    public function updateAgendada(int $id, array $data, int $userId): bool
+    public function updateAgendada(int $id, array $data, int $userId, ?string $prevUpdatedAt = null): bool
     {
         $this->ensureTables();
         $clienteId = (int)$data['cliente_id'];
@@ -434,11 +434,13 @@ class AuditoriaModel extends BaseModel
             'referencia_esperada' => (string)$primeira['referencia_esperada'],
             'updated_by' => $userId,
             ];
+            if ($prevUpdatedAt !== null) { $params['prev'] = $prevUpdatedAt; }
             $scope = $this->hasScopeRestriction() ? (' AND ' . $this->tenantInCondition('cliente_id', $params, 'audu')) : '';
+            $concurrency = $prevUpdatedAt !== null ? ' AND updated_at = :prev' : '';
             $stmt = $this->db->prepare("UPDATE auditorias
                 SET cliente_id = :cliente_id, setor_id = :setor_id, data_auditoria = :data_auditoria, nome_auditoria = :nome_auditoria,
                     pergunta = :pergunta, objetivo = :objetivo, referencia_esperada = :referencia_esperada, updated_by = :updated_by
-                WHERE id = :id AND deleted_at IS NULL AND status IN ('Rascunho','Agendada','Em Auditoria','Realizada') AND realizada_at IS NULL$scope");
+                WHERE id = :id AND deleted_at IS NULL$scope$concurrency");
             $updated = $stmt->execute($params) && $stmt->rowCount() > 0;
             if (!$updated) {
                 $this->db->rollBack();

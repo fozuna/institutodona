@@ -124,11 +124,6 @@ class AuditoriasController extends BaseController
             $this->redirect('index.php?route=auditorias/index');
             return;
         }
-        if ($item['status'] !== 'Agendada' || !empty($item['realizada_at'])) {
-            $_SESSION['flash_error'] = 'Auditorias realizadas não podem ter os campos de cadastro editados.';
-            $this->redirect('index.php?route=auditorias/index');
-            return;
-        }
         $this->requireManagePermission();
         $clientes = $this->clientesCached();
         AuditLogger::log('auditoria_edit_dropdown_init', 'auditoria', (int)$item['id'], [
@@ -154,6 +149,20 @@ class AuditoriasController extends BaseController
         }
         $id = (int)($_POST['id'] ?? 0);
         $payload = $this->payloadFromRequest($_POST);
+        $saveMode = (string)($_POST['save_mode'] ?? 'full'); // 'full' ou 'partial'
+        $prevUpdatedAt = (string)($_POST['prev_updated_at'] ?? '');
+        if ($saveMode === 'partial') {
+            $ok = $this->auditorias->updatePartial($id, $payload, (int)($_SESSION['user']['id'] ?? 0));
+            if (!$ok) {
+                $_SESSION['flash_error'] = 'Não foi possível salvar alterações.';
+                $this->redirect('index.php?route=auditorias/index');
+                return;
+            }
+            AuditLogger::log('auditoria_update_partial', 'auditoria', $id, []);
+            $_SESSION['flash_success'] = 'Alterações salvas.';
+            $this->redirect('index.php?route=auditorias/index');
+            return;
+        }
         $errors = AuditoriaValidator::validateCadastro($payload);
         $this->appendResponsavelValidationErrors($payload, $errors);
         if (!empty($errors)) {
@@ -166,9 +175,9 @@ class AuditoriasController extends BaseController
             ]);
             return;
         }
-        $ok = $this->auditorias->updateAgendada($id, $payload, (int)($_SESSION['user']['id'] ?? 0));
+        $ok = $this->auditorias->updateAgendada($id, $payload, (int)($_SESSION['user']['id'] ?? 0), $prevUpdatedAt !== '' ? $prevUpdatedAt : null);
         if (!$ok) {
-            $_SESSION['flash_error'] = 'Não foi possível atualizar. Auditoria pode já ter sido realizada.';
+            $_SESSION['flash_error'] = 'Não foi possível atualizar. Verifique se os dados não foram alterados por outro usuário.';
             $this->redirect('index.php?route=auditorias/index');
             return;
         }
@@ -352,43 +361,7 @@ class AuditoriasController extends BaseController
         $this->redirect('index.php?route=auditorias/index');
     }
 
-    public function rename(): void
-    {
-        $this->requireLogin();
-        $this->requireManagePermission();
-        if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
-            http_response_code(400);
-            echo 'Requisição inválida.';
-            return;
-        }
-        $id = (int)($_POST['id'] ?? 0);
-        $nome = trim((string)($_POST['nome_auditoria'] ?? ''));
-        if ($id <= 0) {
-            $_SESSION['flash_error'] = 'Auditoria inválida.';
-            $this->redirect('index.php?route=auditorias/index');
-            return;
-        }
-        $msg = $this->auditorias->validarNomeAuditoria($nome);
-        if ($msg !== null) {
-            $_SESSION['flash_error'] = $msg;
-            $this->redirect('index.php?route=auditorias/index');
-            return;
-        }
-        if (!$this->auditorias->isNomeDisponivel($nome, $id)) {
-            $_SESSION['flash_error'] = 'Já existe uma auditoria com este nome.';
-            $this->redirect('index.php?route=auditorias/index');
-            return;
-        }
-        $ok = $this->auditorias->renomear($id, $nome, (int)($_SESSION['user']['id'] ?? 0));
-        if (!$ok) {
-            $_SESSION['flash_error'] = 'Não foi possível renomear a auditoria.';
-            $this->redirect('index.php?route=auditorias/index');
-            return;
-        }
-        AuditLogger::log('auditoria_rename', 'auditoria', $id, ['nome' => $nome]);
-        $_SESSION['flash_success'] = 'Auditoria renomeada com sucesso.';
-        $this->redirect('index.php?route=auditorias/index');
-    }
+    // método rename removido (não utilizado)
 
     public function delete(): void
     {

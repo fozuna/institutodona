@@ -3,12 +3,13 @@
 <div class="p-6 max-w-6xl">
     <div class="sticky top-2 z-20 bg-white border rounded shadow-sm px-4 py-3 mb-4 flex items-center justify-between">
         <h1 class="text-xl font-bold">Editar Auditoria</h1>
-        <button type="submit" form="auditoriaEditForm" id="btnSalvarTopo" class="px-4 py-2 rounded bg-brand-red text-white">Cadastrar Auditoria</button>
+        <button type="submit" form="auditoriaEditForm" id="btnSalvarTopo" name="save_mode" value="full" class="px-4 py-2 rounded bg-brand-red text-white">Salvar Alterações</button>
     </div>
     <form method="post" action="index.php?route=auditorias/update" id="auditoriaEditForm" class="bg-white shadow rounded p-4 space-y-4">
         <input type="hidden" name="csrf" value="<?= Security::csrfToken() ?>" />
         <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
         <input type="hidden" name="questoes_json" id="questoesJson" value="<?= htmlspecialchars(json_encode($questoesServer, JSON_UNESCAPED_UNICODE)) ?>" />
+        <input type="hidden" name="prev_updated_at" value="<?= htmlspecialchars((string)($item['updated_at'] ?? '')) ?>" />
         <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
             <div class="md:col-span-4">
                 <label class="block text-sm">Seleção de Empresa</label>
@@ -51,8 +52,9 @@
         </div>
         <div id="questoesContainer" class="space-y-4"></div>
         <div class="flex items-center gap-2 justify-end">
-            <a href="index.php?route=auditorias/index" class="px-4 py-2 rounded bg-gray-200 text-brand-brown">Cancelar</a>
-            <button type="submit" id="btnSalvar" class="px-4 py-2 rounded bg-brand-red text-white">Cadastrar Auditoria</button>
+            <a href="index.php?route=auditorias/index" id="btnCancelar" class="px-4 py-2 rounded bg-gray-200 text-brand-brown">Cancelar</a>
+            <button type="submit" id="btnSalvarParcial" name="save_mode" value="partial" class="px-4 py-2 rounded bg-yellow-500 text-white">Salvar Parcial</button>
+            <button type="submit" id="btnSalvar" name="save_mode" value="full" class="px-4 py-2 rounded bg-brand-red text-white">Salvar Alterações</button>
         </div>
     </form>
 </div>
@@ -66,6 +68,8 @@
         const form = document.getElementById('auditoriaEditForm');
         const btnSalvar = document.getElementById('btnSalvar');
         const btnSalvarTopo = document.getElementById('btnSalvarTopo');
+        const btnCancelar = document.getElementById('btnCancelar');
+        let dirty = false;
         const clienteDebugStatus = document.getElementById('clienteDebugStatus');
         const backendErrors = <?= json_encode($errors, JSON_UNESCAPED_UNICODE) ?>;
         let questoes = [];
@@ -86,7 +90,7 @@
             }
         };
 
-        const syncHidden = ()=>{ questoesJson.value = JSON.stringify(questoes); };
+        const syncHidden = ()=>{ questoesJson.value = JSON.stringify(questoes); dirty = true; };
 
         const openProcessEditor = (index)=>{
             const atual = Array.isArray(questoes[index].processos) ? questoes[index].processos : [];
@@ -299,7 +303,10 @@
             responsavelSugestoesPorQuestao.clear();
             renderQuestoes();
         });
-        dataAuditoria?.addEventListener('input', applyDateMask);
+        dataAuditoria?.addEventListener('input', ()=>{ applyDateMask(); dirty = true; });
+        window.addEventListener('beforeunload', (e)=>{ if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+        document.getElementById('nomeAuditoria')?.addEventListener('input', ()=>{ dirty = true; });
+        btnCancelar?.addEventListener('click', (e)=>{ if (dirty && !confirm('Descartar alterações não salvas?')) { e.preventDefault(); } });
         form?.addEventListener('submit', (e)=>{
             const dateStr = (dataAuditoria.value || '').trim();
             const nome = (document.getElementById('nomeAuditoria').value || '').trim();
@@ -313,19 +320,9 @@
                 alert('O nome da auditoria deve ter entre 5 e 180 caracteres.');
                 return;
             }
-            if (!questoes.length) {
-                e.preventDefault();
-                alert('Cadastre pelo menos uma questão.');
-                return;
-            }
+            // Em modo parcial, permitimos salvar mesmo sem questões
             for (let i = 0; i < questoes.length; i++) {
                 const q = questoes[i];
-                if (!q.responsavel_nome || q.responsavel_nome.trim().length < 2) { e.preventDefault(); alert(`Questão ${i + 1}: informe o responsável.`); return; }
-                const sugestoes = responsavelSugestoesPorQuestao.get(i) || [];
-                if (sugestoes.length > 0) {
-                    const okResponsavel = sugestoes.some((nome)=>nome.toLowerCase() === q.responsavel_nome.trim().toLowerCase());
-                    if (!okResponsavel) { e.preventDefault(); alert(`Questão ${i + 1}: selecione um responsável listado entre os colaboradores cadastrados.`); return; }
-                }
                 if (!q.pergunta || q.pergunta.trim().length < 10) { e.preventDefault(); alert(`Questão ${i + 1}: pergunta deve ter no mínimo 10 caracteres.`); return; }
                 if (!q.referencia_esperada || q.referencia_esperada.trim().length < 3) { e.preventDefault(); alert(`Questão ${i + 1}: referência esperada obrigatória.`); return; }
             }
@@ -334,6 +331,7 @@
             btnSalvarTopo.disabled = true;
             btnSalvar.textContent = 'Salvando...';
             btnSalvarTopo.textContent = 'Salvando...';
+            dirty = false;
         });
 
         parseInitialQuestoes();

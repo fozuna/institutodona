@@ -274,9 +274,6 @@ switch ($route) {
     case 'auditorias/duplicate':
         (new AuditoriasController())->duplicate();
         break;
-    case 'auditorias/rename':
-        (new AuditoriasController())->rename();
-        break;
     case 'auditorias/editar_realizada':
         (new AuditoriasController())->editarRealizada();
         break;
