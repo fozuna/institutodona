@@ -283,30 +283,53 @@ class AuditoriasController extends BaseController
             return;
         }
         $respostas = $this->auditorias->respostasByAuditoria($id);
-        $lines = [
-            'Relatório de Auditoria',
-            'Nome: ' . ($item['nome_auditoria'] ?? ''),
-            'Empresa: ' . ($item['cliente_nome'] ?? ''),
-            'Setor: ' . ($item['setor_nome'] ?? ''),
-            'Data agendada: ' . date('d/m/Y', strtotime((string)$item['data_auditoria'])),
-            'Status: ' . ($item['status'] ?? ''),
-            '',
-        ];
-        $i = 1;
-        foreach ($item['questoes'] as $questao) {
-            $resposta = $respostas[(int)$questao['id']] ?? null;
-            $lines[] = $i . '. ' . (string)$questao['pergunta'];
-            $lines[] = 'Responsável: ' . (string)$questao['responsavel_nome'];
-            $lines[] = 'Referência: ' . (string)$questao['referencia_esperada'];
-            $lines[] = 'Conformidade: ' . (string)($resposta['conformidade'] ?? 'pendente');
-            $obs = trim((string)($resposta['observacoes'] ?? ''));
-            if ($obs !== '') {
-                $lines[] = 'Observações: ' . $obs;
-            }
-            $lines[] = '';
-            $i++;
+        $auditor = null;
+        $uid = (int)($item['updated_by'] ?? $item['created_by'] ?? 0);
+        if ($uid > 0) {
+            $u = $this->usuarios->find($uid);
+            $auditor = $u['nome'] ?? $u['name'] ?? null;
         }
-        $pdf = SimplePdfReport::fromLines($lines);
+        $header = [
+            'Auditoria' => (string)($item['nome_auditoria'] ?? ''),
+            'Empresa' => (string)($item['cliente_nome'] ?? ''),
+            'Setor' => (string)($item['setor_nome'] ?? ''),
+            'Status' => (string)($item['status'] ?? ''),
+            'Data agendada' => date('d/m/Y', strtotime((string)$item['data_auditoria'])),
+            'Data de finalização' => !empty($item['realizada_at']) ? date('d/m/Y H:i', strtotime((string)$item['realizada_at'])) : '-',
+            'Auditor responsável' => (string)($auditor ?? '-'),
+        ];
+        $questions = [];
+        foreach (($item['questoes'] ?? []) as $idx => $questao) {
+            $resposta = $respostas[(int)$questao['id']] ?? null;
+            $anexos = $this->arquivos->listByQuestao($id, (int)$questao['id']);
+            $images = [];
+            foreach ($anexos as $a) {
+                $p = (string)($a['path'] ?? '');
+                $mime = strtolower((string)($a['mime'] ?? ''));
+                if ($p !== '' && is_file($p) && preg_match('#^image/(jpeg|png|gif|webp)$#', $mime)) {
+                    $images[] = $p;
+                }
+            }
+            $questions[] = [
+                'title' => (string)($questao['pergunta'] ?? ('Questão ' . ($idx + 1))),
+                'rows' => [
+                    'Responsável' => (string)($questao['responsavel_nome'] ?? ''),
+                    'Referência esperada' => (string)($questao['referencia_esperada'] ?? ''),
+                    'Conformidade' => (string)($resposta['conformidade'] ?? 'pendente'),
+                    'Observações' => trim((string)($resposta['observacoes'] ?? '')),
+                ],
+                'images' => $images,
+            ];
+        }
+        $logoPath = __DIR__ . '/../../public_html/assets/img/logobco.png';
+        $pdf = SimplePdfReport::fromAudit([
+            'logo_path' => is_file($logoPath) ? $logoPath : null,
+            'report_title' => 'Relatório de Auditoria',
+            'generated_at' => date('d/m/Y H:i'),
+            'version' => 'v2.0',
+            'header' => $header,
+            'questions' => $questions,
+        ]);
         header('Content-Type: application/pdf');
         header('Content-Disposition: inline; filename="auditoria-' . $id . '.pdf"');
         echo $pdf;
