@@ -120,7 +120,7 @@
                             <td class="p-3"><?= (int)($row['total_questoes'] ?? 0) ?></td>
                             <td class="p-3 whitespace-nowrap">
                                 <a class="text-brand-brown icon-action mr-2" href="index.php?route=auditorias/show&id=<?= (int)$row['id'] ?>" title="Abrir"><span data-feather="eye"></span></a>
-                                <?php if (!empty($canManage) && $isAgendada): ?>
+                                <?php if (!empty($canManage)): ?>
                                     <a class="text-brand-pink icon-action mr-2" href="index.php?route=auditorias/edit&id=<?= (int)$row['id'] ?>" title="Editar"><span data-feather="edit"></span></a>
                                 <?php endif; ?>
                                 <?php if (!empty($canManage) && (($row['status'] ?? '') !== 'Realizada')): ?>
