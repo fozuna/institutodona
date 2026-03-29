@@ -466,6 +466,57 @@ class AuditoriaModel extends BaseModel
         }
     }
 
+    public function updatePartial(int $id, array $data, int $userId): bool
+    {
+        $this->ensureTables();
+        $params = ['id' => $id, 'updated_by' => $userId];
+        $set = ['updated_by = :updated_by'];
+
+        $clienteId = (int)($data['cliente_id'] ?? 0);
+        if ($clienteId > 0) {
+            if (!$this->canBypassScope() && !$this->canAccessClienteId($clienteId)) {
+                return false;
+            }
+            $params['cliente_id'] = $clienteId;
+            $set[] = 'cliente_id = :cliente_id';
+        }
+        $setorId = (int)($data['setor_id'] ?? 0);
+        if ($setorId > 0) {
+            $params['setor_id'] = $setorId;
+            $set[] = 'setor_id = :setor_id';
+        }
+        $nome = trim((string)($data['nome_auditoria'] ?? ''));
+        if ($nome !== '') {
+            $params['nome_auditoria'] = $nome;
+            $set[] = 'nome_auditoria = :nome_auditoria';
+        }
+        $dataAud = (string)($data['data_auditoria'] ?? '');
+        if ($dataAud !== '') {
+            $params['data_auditoria'] = $dataAud;
+            $set[] = 'data_auditoria = :data_auditoria';
+        }
+
+        $scope = $this->hasScopeRestriction() ? (' AND ' . $this->tenantInCondition('cliente_id', $params, 'audup')) : '';
+        $this->db->beginTransaction();
+        try {
+            $stmt = $this->db->prepare("UPDATE auditorias SET " . implode(', ', $set) . " WHERE id = :id AND deleted_at IS NULL$scope");
+            $ok = $stmt->execute($params);
+            if (!$ok) {
+                $this->db->rollBack();
+                return false;
+            }
+            if (!empty($data['questoes']) && is_array($data['questoes'])) {
+                $this->db->prepare('DELETE FROM auditoria_questoes WHERE auditoria_id = :id')->execute(['id' => $id]);
+                $this->persistQuestoes($id, $data['questoes']);
+            }
+            $this->db->commit();
+            return true;
+        } catch (\Throwable $e) {
+            $this->safeRollback();
+            return false;
+        }
+    }
+
     public function autosaveAvaliacoes(int $auditoriaId, array $avaliacoes, int $userId): bool
     {
         $this->ensureTables();
