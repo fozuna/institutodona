@@ -79,11 +79,11 @@
     </div>
 </div>
 <?php if (($item['status'] ?? '') === 'Realizada'): ?>
-<div id="imgOverlay" class="fixed inset-0 bg-black/85 hidden items-center justify-center z-[60]" role="dialog" aria-modal="true" aria-label="Visualizador de imagem">
+<div id="imgOverlay" class="fixed inset-0 bg-black/85 hidden items-center justify-center z-[60]" role="dialog" aria-modal="true" aria-label="Visualizador de anexo">
     <button type="button" id="ovClose" class="absolute top-4 right-4 px-3 py-2 rounded bg-white/20 text-white">Fechar ✕</button>
     <button type="button" id="ovPrev" class="absolute left-3 md:left-6 px-3 py-2 rounded bg-white/20 text-white">◀</button>
     <button type="button" id="ovNext" class="absolute right-3 md:right-6 px-3 py-2 rounded bg-white/20 text-white">▶</button>
-    <div class="w-[95vw] h-[90vh] flex flex-col items-center justify-center gap-3">
+    <div id="ovPanel" tabindex="-1" class="w-[95vw] h-[90vh] flex flex-col items-center justify-center gap-3">
         <div class="flex items-center gap-2">
             <button type="button" id="ovZoomOut" class="px-3 py-2 rounded bg-white/20 text-white">-</button>
             <button type="button" id="ovZoomIn" class="px-3 py-2 rounded bg-white/20 text-white">+</button>
@@ -91,17 +91,22 @@
         </div>
         <div class="text-white text-xs" id="ovCaption"></div>
         <img id="ovImg" alt="Imagem ampliada" class="max-w-full max-h-[80vh] object-contain rounded shadow-xl" />
+        <iframe id="ovFrame" title="Visualização de anexo" class="hidden w-full h-[80vh] rounded bg-white"></iframe>
     </div>
 </div>
 <script>
     (function(){
         const auditoriaId = <?= (int)$item['id'] ?>;
         const allowedImage = (name = '')=>/\.(jpg|jpeg|png|gif|webp)$/i.test(String(name));
+        const allowedPdf = (name = '')=>/\.pdf$/i.test(String(name));
         const allImages = [];
         let current = 0;
         let scale = 1;
+        let lastFocus = null;
         const overlay = document.getElementById('imgOverlay');
+        const ovPanel = document.getElementById('ovPanel');
         const ovImg = document.getElementById('ovImg');
+        const ovFrame = document.getElementById('ovFrame');
         const ovCaption = document.getElementById('ovCaption');
         const ovDownload = document.getElementById('ovDownload');
         const ovClose = document.getElementById('ovClose');
@@ -116,17 +121,32 @@
             current = Math.max(0, Math.min(idx, allImages.length - 1));
             const it = allImages[current];
             scale = 1;
-            ovImg.src = it.full;
-            ovImg.alt = it.name || 'imagem';
+            ovImg.classList.add('hidden');
+            ovFrame.classList.add('hidden');
+            if (it.type === 'pdf') {
+                ovFrame.src = it.full;
+                ovFrame.classList.remove('hidden');
+            } else if (it.type === 'other') {
+                ovFrame.src = it.full;
+                ovFrame.classList.remove('hidden');
+            } else {
+                ovImg.src = it.full;
+                ovImg.alt = it.name || 'imagem';
+                ovImg.classList.remove('hidden');
+            }
             ovCaption.textContent = `${current + 1}/${allImages.length} · ${it.name || ''}`;
             ovDownload.href = it.download;
+            lastFocus = document.activeElement;
             overlay.classList.remove('hidden');
             overlay.classList.add('flex');
             applyZoom();
+            ovPanel.focus();
         };
         const closeOverlay = ()=>{
             overlay.classList.add('hidden');
             overlay.classList.remove('flex');
+            ovFrame.src = 'about:blank';
+            if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();
         };
         const nav = (dir)=>{
             if (!allImages.length) return;
@@ -145,7 +165,14 @@
             if (e.key === 'Escape') closeOverlay();
             if (e.key === 'ArrowLeft') nav(-1);
             if (e.key === 'ArrowRight') nav(1);
+            if (e.key === 'Tab') {
+                const focusables = [ovClose, ovPrev, ovNext, ovZoomOut, ovZoomIn, ovDownload].filter(Boolean);
+                const first = focusables[0], last = focusables[focusables.length - 1];
+                if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+                else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+            }
         });
+        overlay.addEventListener('click', (e)=>{ if (e.target === overlay) closeOverlay(); });
 
         document.querySelectorAll('[data-gallery]').forEach((el)=>{
             const qid = Number(el.getAttribute('data-gallery'));
@@ -172,19 +199,36 @@
                         const card = document.createElement('button');
                         card.type = 'button';
                         card.className = 'border rounded p-2 text-xs block text-left hover:bg-gray-50 w-full';
-                        if (it.has_thumb && allowedImage(name)) {
+                        const mime = String(it.mime || '').toLowerCase();
+                        const isImage = allowedImage(name) || mime.startsWith('image/');
+                        const isPdf = allowedPdf(name) || mime === 'application/pdf';
+                        if (isImage) {
                             const img = document.createElement('img');
                             img.loading = 'lazy';
-                            img.src = `index.php?route=auditorias/thumb_anexo&id=${it.id}`;
+                            img.src = it.has_thumb ? `index.php?route=auditorias/thumb_anexo&id=${it.id}` : full;
                             img.className = 'w-full h-24 md:h-28 object-cover rounded mb-1 bg-gray-100';
                             img.alt = name;
-                            img.onerror = ()=>{ img.remove(); };
+                            img.onerror = ()=>{ img.src = full; };
                             card.appendChild(img);
                             const index = allImages.length;
-                            allImages.push({ name, full, download });
+                            allImages.push({ name, full, download, type: 'image' });
+                            card.addEventListener('click', ()=>openAt(index));
+                        } else if (isPdf) {
+                            const pdfThumb = document.createElement('div');
+                            pdfThumb.className = 'w-full h-24 md:h-28 rounded mb-1 bg-gray-100 flex items-center justify-center text-sm text-gray-600';
+                            pdfThumb.textContent = 'PDF';
+                            card.appendChild(pdfThumb);
+                            const index = allImages.length;
+                            allImages.push({ name, full, download, type: 'pdf' });
                             card.addEventListener('click', ()=>openAt(index));
                         } else {
-                            card.addEventListener('click', ()=>window.open(full, '_blank'));
+                            const fileThumb = document.createElement('div');
+                            fileThumb.className = 'w-full h-24 md:h-28 rounded mb-1 bg-gray-100 flex items-center justify-center text-sm text-gray-600';
+                            fileThumb.textContent = 'ARQUIVO';
+                            card.appendChild(fileThumb);
+                            const index = allImages.length;
+                            allImages.push({ name, full, download, type: 'other' });
+                            card.addEventListener('click', ()=>openAt(index));
                         }
                         const t = document.createElement('div');
                         t.textContent = name + (it.size ? ` (${Math.round(it.size/1024)} KB)` : '');
