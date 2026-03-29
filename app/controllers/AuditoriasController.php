@@ -352,7 +352,12 @@ class AuditoriasController extends BaseController
             'data_auditoria' => $data ?: date('Y-m-d'),
         ], (int)($_SESSION['user']['id'] ?? 0));
         if ($newId <= 0) {
-            $_SESSION['flash_error'] = 'Não foi possível duplicar auditoria.';
+            $detail = trim((string)$this->auditorias->getLastError());
+            AuditLogger::log('auditoria_duplicate_error', 'auditoria', null, [
+                'source_id' => $sourceId,
+                'message' => $detail,
+            ]);
+            $_SESSION['flash_error'] = 'Não foi possível duplicar auditoria.' . ($detail !== '' ? (' Detalhe: ' . $detail) : '');
             $this->redirect('index.php?route=auditorias/index');
             return;
         }

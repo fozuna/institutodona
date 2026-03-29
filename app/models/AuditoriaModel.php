@@ -6,6 +6,7 @@ use App\Core\Auth;
 class AuditoriaModel extends BaseModel
 {
     private static bool $tablesEnsured = false;
+    private ?string $lastError = null;
 
     public static function percentSplit(int $conforme, int $naoConforme): array
     {
@@ -292,6 +293,11 @@ class AuditoriaModel extends BaseModel
         }
     }
 
+    public function getLastError(): ?string
+    {
+        return $this->lastError;
+    }
+
     public function isNomeDisponivel(string $nome, ?int $excludeId = null): bool
     {
         $this->ensureTables();
@@ -330,6 +336,7 @@ class AuditoriaModel extends BaseModel
     public function duplicateFrom(array $src, array $newData, int $userId): int
     {
         $this->ensureTables();
+        $this->lastError = null;
         $tryStatus = ['Rascunho','Agendada']; // fallback caso enum não tenha Rascunho
         foreach ($tryStatus as $status) {
             $this->db->beginTransaction();
@@ -340,8 +347,8 @@ class AuditoriaModel extends BaseModel
                 (:cliente_id, :setor_id, NULL, :data_auditoria, :nome_auditoria, :pergunta, :objetivo, :referencia_esperada, :status, :uid, :uid)");
             $primeira = $src['questoes'][0] ?? ['pergunta' => '', 'referencia_esperada' => '', 'responsavel_nome' => ''];
             $err = $this->validarNomeAuditoria((string)($newData['nome_auditoria'] ?? ''));
-            if ($err !== null) { $this->safeRollback(); return 0; }
-            if (!$this->isNomeDisponivel((string)$newData['nome_auditoria'])) { $this->safeRollback(); return 0; }
+            if ($err !== null) { $this->lastError = $err; $this->safeRollback(); return 0; }
+            if (!$this->isNomeDisponivel((string)$newData['nome_auditoria'])) { $this->lastError = 'Já existe uma auditoria com este nome.'; $this->safeRollback(); return 0; }
             $stmt->execute([
                 'cliente_id' => (int)$src['cliente_id'],
                 'setor_id' => (int)$src['setor_id'],
@@ -372,6 +379,7 @@ class AuditoriaModel extends BaseModel
             return $newId;
             } catch (\Throwable $e) {
                 $this->safeRollback();
+                $this->lastError = $e->getMessage();
                 // tenta próximo status (fallback)
             }
         }
