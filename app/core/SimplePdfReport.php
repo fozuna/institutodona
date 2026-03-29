@@ -212,23 +212,25 @@ class SimplePdfReport
         if (!is_file($path)) return null;
         $real = realpath($path) ?: $path;
         if (isset($this->images[$real])) return $this->images[$real];
-        $info = @getimagesize($real);
+        $info = @\getimagesize($real);
         if (!$info || empty($info[0]) || empty($info[1])) return null;
         $mime = strtolower((string)($info['mime'] ?? ''));
-        $binary = @file_get_contents($real);
+        $binary = @\file_get_contents($real);
         $w = (float)$info[0];
         $h = (float)$info[1];
         if ($binary === false) return null;
         if ($mime !== 'image/jpeg') {
             $im = null;
-            if ($mime === 'image/png') $im = @imagecreatefrompng($real);
-            elseif ($mime === 'image/gif') $im = @imagecreatefromgif($real);
-            elseif ($mime === 'image/webp' && function_exists('imagecreatefromwebp')) $im = @imagecreatefromwebp($real);
+            $canGd = \function_exists('imagejpeg');
+            if (!$canGd) return null;
+            if ($mime === 'image/png' && \function_exists('imagecreatefrompng')) $im = @\imagecreatefrompng($real);
+            elseif ($mime === 'image/gif' && \function_exists('imagecreatefromgif')) $im = @\imagecreatefromgif($real);
+            elseif ($mime === 'image/webp' && \function_exists('imagecreatefromwebp')) $im = @\imagecreatefromwebp($real);
             if (!$im) return null;
-            ob_start();
-            imagejpeg($im, null, 90);
-            $binary = (string)ob_get_clean();
-            imagedestroy($im);
+            \ob_start();
+            \imagejpeg($im, null, 90);
+            $binary = (string)\ob_get_clean();
+            \imagedestroy($im);
             $mime = 'image/jpeg';
         }
         $name = 'Im' . (++$this->imageSeq);
