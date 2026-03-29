@@ -45,7 +45,7 @@
                         <label class="block text-sm font-semibold">Anexos da Questão</label>
                         <div class="text-xs text-gray-500" data-anexo-status="<?= (int)$questao['id'] ?>"></div>
                     </div>
-                    <input type="file" multiple class="border rounded p-2 w-full mt-2" data-anexo-input="<?= (int)$questao['id'] ?>" />
+                    <input type="file" multiple accept=".jpg,.jpeg,.png,.gif,.webp,image/jpeg,image/png,image/gif,image/webp" class="border rounded p-2 w-full mt-2" data-anexo-input="<?= (int)$questao['id'] ?>" />
                     <div class="text-xs text-gray-500 mt-1">Limites: 10MB por arquivo, 50MB por questão.</div>
                     <div class="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2" data-anexo-list="<?= (int)$questao['id'] ?>"></div>
                 </div>
@@ -156,8 +156,11 @@
                 const size = it.size ? ` (${Math.round(it.size/1024)} KB)` : '';
                 if (it.has_thumb) {
                     const img = document.createElement('img');
+                    img.loading = 'lazy';
                     img.src = `index.php?route=auditorias/thumb_anexo&id=${it.id}`;
                     img.className = 'w-full h-20 object-cover rounded mb-1';
+                    img.alt = name;
+                    img.onerror = ()=>{ img.remove(); };
                     card.appendChild(img);
                 }
                 const t = document.createElement('div');
@@ -182,11 +185,36 @@
                 });
         };
 
+        const allowedMime = new Set(['image/jpeg','image/png','image/gif','image/webp']);
+        const allowedExt = /\.(jpg|jpeg|png|gif|webp)$/i;
+        const maxPerFile = 10 * 1024 * 1024;
+        const maxTotal = 50 * 1024 * 1024;
+
         document.querySelectorAll('[data-anexo-input]').forEach((input)=>{
             input.addEventListener('change', async ()=>{
                 const questaoId = Number(input.getAttribute('data-anexo-input'));
                 const files = Array.from(input.files || []);
                 if (!files.length) return;
+                const totalSize = files.reduce((acc, f)=>acc + (f.size || 0), 0);
+                if (totalSize > maxTotal) {
+                    setAnexoStatus(questaoId, 'Total excede 50MB por questão.', true);
+                    input.value = '';
+                    return;
+                }
+                for (const f of files) {
+                    const mimeOk = allowedMime.has((f.type || '').toLowerCase());
+                    const extOk = allowedExt.test(f.name || '');
+                    if (!(mimeOk || extOk)) {
+                        setAnexoStatus(questaoId, `Formato inválido: ${f.name}. Use JPG, PNG, GIF ou WEBP.`, true);
+                        input.value = '';
+                        return;
+                    }
+                    if ((f.size || 0) > maxPerFile) {
+                        setAnexoStatus(questaoId, `Arquivo excede 10MB: ${f.name}`, true);
+                        input.value = '';
+                        return;
+                    }
+                }
                 setAnexoStatus(questaoId, 'Enviando anexos...');
                 const fd = new FormData();
                 fd.append('csrf', csrfField.value);

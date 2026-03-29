@@ -79,14 +79,84 @@
     </div>
 </div>
 <?php if (($item['status'] ?? '') === 'Realizada'): ?>
+<div id="imgOverlay" class="fixed inset-0 bg-black/85 hidden items-center justify-center z-[60]" role="dialog" aria-modal="true" aria-label="Visualizador de imagem">
+    <button type="button" id="ovClose" class="absolute top-4 right-4 px-3 py-2 rounded bg-white/20 text-white">Fechar ✕</button>
+    <button type="button" id="ovPrev" class="absolute left-3 md:left-6 px-3 py-2 rounded bg-white/20 text-white">◀</button>
+    <button type="button" id="ovNext" class="absolute right-3 md:right-6 px-3 py-2 rounded bg-white/20 text-white">▶</button>
+    <div class="w-[95vw] h-[90vh] flex flex-col items-center justify-center gap-3">
+        <div class="flex items-center gap-2">
+            <button type="button" id="ovZoomOut" class="px-3 py-2 rounded bg-white/20 text-white">-</button>
+            <button type="button" id="ovZoomIn" class="px-3 py-2 rounded bg-white/20 text-white">+</button>
+            <a id="ovDownload" href="#" target="_blank" class="px-3 py-2 rounded bg-white/20 text-white">Download</a>
+        </div>
+        <div class="text-white text-xs" id="ovCaption"></div>
+        <img id="ovImg" alt="Imagem ampliada" class="max-w-full max-h-[80vh] object-contain rounded shadow-xl" />
+    </div>
+</div>
 <script>
     (function(){
         const auditoriaId = <?= (int)$item['id'] ?>;
+        const allowedImage = (name = '')=>/\.(jpg|jpeg|png|gif|webp)$/i.test(String(name));
+        const allImages = [];
+        let current = 0;
+        let scale = 1;
+        const overlay = document.getElementById('imgOverlay');
+        const ovImg = document.getElementById('ovImg');
+        const ovCaption = document.getElementById('ovCaption');
+        const ovDownload = document.getElementById('ovDownload');
+        const ovClose = document.getElementById('ovClose');
+        const ovPrev = document.getElementById('ovPrev');
+        const ovNext = document.getElementById('ovNext');
+        const ovZoomIn = document.getElementById('ovZoomIn');
+        const ovZoomOut = document.getElementById('ovZoomOut');
+
+        const applyZoom = ()=>{ ovImg.style.transform = `scale(${scale})`; };
+        const openAt = (idx)=>{
+            if (!allImages.length) return;
+            current = Math.max(0, Math.min(idx, allImages.length - 1));
+            const it = allImages[current];
+            scale = 1;
+            ovImg.src = it.full;
+            ovImg.alt = it.name || 'imagem';
+            ovCaption.textContent = `${current + 1}/${allImages.length} · ${it.name || ''}`;
+            ovDownload.href = it.download;
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
+            applyZoom();
+        };
+        const closeOverlay = ()=>{
+            overlay.classList.add('hidden');
+            overlay.classList.remove('flex');
+        };
+        const nav = (dir)=>{
+            if (!allImages.length) return;
+            let idx = current + dir;
+            if (idx < 0) idx = allImages.length - 1;
+            if (idx >= allImages.length) idx = 0;
+            openAt(idx);
+        };
+        ovClose?.addEventListener('click', closeOverlay);
+        ovPrev?.addEventListener('click', ()=>nav(-1));
+        ovNext?.addEventListener('click', ()=>nav(1));
+        ovZoomIn?.addEventListener('click', ()=>{ scale = Math.min(4, scale + 0.25); applyZoom(); });
+        ovZoomOut?.addEventListener('click', ()=>{ scale = Math.max(0.5, scale - 0.25); applyZoom(); });
+        document.addEventListener('keydown', (e)=>{
+            if (overlay.classList.contains('hidden')) return;
+            if (e.key === 'Escape') closeOverlay();
+            if (e.key === 'ArrowLeft') nav(-1);
+            if (e.key === 'ArrowRight') nav(1);
+        });
+
         document.querySelectorAll('[data-gallery]').forEach((el)=>{
             const qid = Number(el.getAttribute('data-gallery'));
+            const loading = document.createElement('div');
+            loading.className = 'text-xs text-gray-500';
+            loading.textContent = 'Carregando imagens...';
+            el.appendChild(loading);
             fetch(`index.php?route=auditorias/api_list_anexos&auditoria_id=${auditoriaId}&questao_id=${qid}`)
                 .then(r=>r.json())
                 .then(json=>{
+                    el.innerHTML = '';
                     const items = (json && Array.isArray(json.items)) ? json.items : [];
                     if (!items.length) {
                         const empty = document.createElement('div');
@@ -96,22 +166,39 @@
                         return;
                     }
                     items.forEach(it=>{
-                        const a = document.createElement('a');
-                        a.href = `index.php?route=auditorias/download_anexo&id=${it.id}`;
-                        a.className = 'border rounded p-2 text-xs block hover:bg-gray-50';
-                        if (it.has_thumb) {
+                        const name = it.name || ('arquivo_'+it.id);
+                        const download = `index.php?route=auditorias/download_anexo&id=${it.id}`;
+                        const full = download;
+                        const card = document.createElement('button');
+                        card.type = 'button';
+                        card.className = 'border rounded p-2 text-xs block text-left hover:bg-gray-50 w-full';
+                        if (it.has_thumb && allowedImage(name)) {
                             const img = document.createElement('img');
+                            img.loading = 'lazy';
                             img.src = `index.php?route=auditorias/thumb_anexo&id=${it.id}`;
-                            img.className = 'w-full h-20 object-cover rounded mb-1';
-                            a.appendChild(img);
+                            img.className = 'w-full h-24 md:h-28 object-cover rounded mb-1 bg-gray-100';
+                            img.alt = name;
+                            img.onerror = ()=>{ img.remove(); };
+                            card.appendChild(img);
+                            const index = allImages.length;
+                            allImages.push({ name, full, download });
+                            card.addEventListener('click', ()=>openAt(index));
+                        } else {
+                            card.addEventListener('click', ()=>window.open(download, '_blank'));
                         }
                         const t = document.createElement('div');
-                        t.textContent = (it.name || ('arquivo_'+it.id)) + (it.size ? ` (${Math.round(it.size/1024)} KB)` : '');
-                        a.appendChild(t);
-                        el.appendChild(a);
+                        t.textContent = name + (it.size ? ` (${Math.round(it.size/1024)} KB)` : '');
+                        card.appendChild(t);
+                        el.appendChild(card);
                     });
                 })
-                .catch(()=>{});
+                .catch(()=>{
+                    el.innerHTML = '';
+                    const err = document.createElement('div');
+                    err.className = 'text-xs text-red-600';
+                    err.textContent = 'Erro ao carregar anexos.';
+                    el.appendChild(err);
+                });
         });
     })();
 </script>
