@@ -150,7 +150,7 @@
             }
             items.forEach((it)=>{
                 const card = document.createElement('a');
-                card.href = `index.php?route=auditorias/download_anexo&id=${it.id}`;
+                card.href = `index.php?route=auditorias/view_anexo&id=${it.id}`;
                 card.className = 'border rounded p-2 text-xs block hover:bg-gray-50';
                 const name = it.name || ('arquivo_' + it.id);
                 const size = it.size ? ` (${Math.round(it.size/1024)} KB)` : '';

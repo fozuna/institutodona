@@ -619,20 +619,14 @@ class AuditoriasController extends BaseController
             if (!@move_uploaded_file($tmp, $dest)) {
                 continue;
             }
-            $compressed = $dest . '.gz';
-            $gz = @gzopen($compressed, 'wb9');
-            if ($gz) {
-                @gzwrite($gz, file_get_contents($dest));
-                @gzclose($gz);
-            } else {
-                $compressed = null;
-            }
+            $compressed = null;
             $thumb = null;
-            if (is_string($mime) && preg_match('#^image/(jpeg|png|webp)$#i', $mime)) {
+            if (is_string($mime) && preg_match('#^image/(jpeg|png|webp|gif)$#i', $mime)) {
                 $thumb = $baseDir . 'thumb_' . uniqid() . '.jpg';
                 try {
                     if (stripos($mime, 'jpeg') !== false) $im = imagecreatefromjpeg($dest);
                     elseif (stripos($mime, 'png') !== false) $im = imagecreatefrompng($dest);
+                    elseif (stripos($mime, 'gif') !== false) $im = imagecreatefromgif($dest);
                     else $im = imagecreatefromwebp($dest);
                     if ($im) {
                         $w = imagesx($im); $h = imagesy($im);
@@ -696,11 +690,29 @@ class AuditoriasController extends BaseController
         $auditoria = $this->auditorias->find((int)$file['auditoria_id']);
         if (!$auditoria) { http_response_code(404); echo 'Auditoria não encontrada'; return; }
         if (!$this->canAccessCliente((int)$auditoria['cliente_id'])) { http_response_code(403); echo 'Sem permissão'; return; }
-        $path = is_file($file['compressed_path'] ?? '') ? $file['compressed_path'] : $file['path'];
+        $path = $file['path'];
         if (!is_file($path)) { http_response_code(404); echo 'Arquivo indisponível'; return; }
         $name = $file['original_name'] ?? ('arquivo_' . $id);
-        header('Content-Type: application/octet-stream');
-        header('Content-Disposition: attachment; filename="' . $name . (substr($path, -3) === '.gz' ? '.gz' : '') . '"');
+        $mime = (string)($file['mime'] ?? 'application/octet-stream');
+        header('Content-Type: ' . ($mime !== '' ? $mime : 'application/octet-stream'));
+        header('Content-Disposition: attachment; filename="' . $name . '"');
+        readfile($path);
+    }
+
+    public function viewAnexo(): void
+    {
+        $this->requireLogin();
+        $id = (int)($_GET['id'] ?? 0);
+        $file = $this->arquivos->find($id);
+        if (!$file) { http_response_code(404); echo 'Arquivo não encontrado'; return; }
+        $auditoria = $this->auditorias->find((int)$file['auditoria_id']);
+        if (!$auditoria) { http_response_code(404); echo 'Auditoria não encontrada'; return; }
+        if (!$this->canAccessCliente((int)$auditoria['cliente_id'])) { http_response_code(403); echo 'Sem permissão'; return; }
+        $path = $file['path'];
+        if (!is_file($path)) { http_response_code(404); echo 'Arquivo indisponível'; return; }
+        $mime = (string)($file['mime'] ?? 'application/octet-stream');
+        header('Content-Type: ' . ($mime !== '' ? $mime : 'application/octet-stream'));
+        header('Content-Disposition: inline; filename="' . ($file['original_name'] ?? ('arquivo_' . $id)) . '"');
         readfile($path);
     }
 

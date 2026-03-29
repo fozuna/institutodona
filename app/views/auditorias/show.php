@@ -168,7 +168,7 @@
                     items.forEach(it=>{
                         const name = it.name || ('arquivo_'+it.id);
                         const download = `index.php?route=auditorias/download_anexo&id=${it.id}`;
-                        const full = download;
+                        const full = `index.php?route=auditorias/view_anexo&id=${it.id}`;
                         const card = document.createElement('button');
                         card.type = 'button';
                         card.className = 'border rounded p-2 text-xs block text-left hover:bg-gray-50 w-full';
@@ -184,7 +184,7 @@
                             allImages.push({ name, full, download });
                             card.addEventListener('click', ()=>openAt(index));
                         } else {
-                            card.addEventListener('click', ()=>window.open(download, '_blank'));
+                            card.addEventListener('click', ()=>window.open(full, '_blank'));
                         }
                         const t = document.createElement('div');
                         t.textContent = name + (it.size ? ` (${Math.round(it.size/1024)} KB)` : '');
