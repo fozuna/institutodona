@@ -344,7 +344,7 @@ class AuditoriaModel extends BaseModel
             $stmt = $this->db->prepare("INSERT INTO auditorias
                 (cliente_id, setor_id, responsavel_id, data_auditoria, nome_auditoria, pergunta, objetivo, referencia_esperada, status, created_by, updated_by)
                 VALUES
-                (:cliente_id, :setor_id, NULL, :data_auditoria, :nome_auditoria, :pergunta, :objetivo, :referencia_esperada, :status, :uid, :uid)");
+                (:cliente_id, :setor_id, NULL, :data_auditoria, :nome_auditoria, :pergunta, :objetivo, :referencia_esperada, :status, :created_by, :updated_by)");
             $primeira = $src['questoes'][0] ?? ['pergunta' => '', 'referencia_esperada' => '', 'responsavel_nome' => ''];
             $err = $this->validarNomeAuditoria((string)($newData['nome_auditoria'] ?? ''));
             if ($err !== null) { $this->lastError = $err; $this->safeRollback(); return 0; }
@@ -358,7 +358,8 @@ class AuditoriaModel extends BaseModel
                 'objetivo' => (string)$primeira['responsavel_nome'],
                 'referencia_esperada' => (string)$primeira['referencia_esperada'],
                 'status' => $status,
-                'uid' => $userId,
+                'created_by' => $userId,
+                'updated_by' => $userId,
             ]);
             $newId = (int)$this->db->lastInsertId();
             $insQ = $this->db->prepare("INSERT INTO auditoria_questoes
