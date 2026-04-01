@@ -10,6 +10,7 @@
         <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
         <input type="hidden" name="questoes_json" id="questoesJson" value="<?= htmlspecialchars(json_encode($questoesServer, JSON_UNESCAPED_UNICODE)) ?>" />
         <input type="hidden" name="prev_updated_at" value="<?= htmlspecialchars((string)($item['updated_at'] ?? '')) ?>" />
+        <input type="hidden" name="prev_lock_version" value="<?= (int)($item['lock_version'] ?? 0) ?>" />
         <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
             <div class="md:col-span-4">
                 <label class="block text-sm">Seleção de Empresa</label>

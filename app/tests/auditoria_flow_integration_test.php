@@ -10,6 +10,9 @@ function failFast(string $msg): void { echo "FAIL: $msg\n"; exit(1); }
 
 $pdo = Database::getConnection();
 $suffix = 'aud_' . date('YmdHis') . '_' . random_int(100, 999);
+$cnpjA = str_pad((string)random_int(0, 99999999999999), 14, '0', STR_PAD_LEFT);
+$cnpjA1 = str_pad((string)random_int(0, 99999999999999), 14, '0', STR_PAD_LEFT);
+$cnpjB = str_pad((string)random_int(0, 99999999999999), 14, '0', STR_PAD_LEFT);
 $clienteIds = [];
 $depIds = [];
 $setorIds = [];
@@ -19,13 +22,13 @@ $auditoriaIds = [];
 
 try {
     $insCli = $pdo->prepare('INSERT INTO clientes (nome_empresa, CNPJ, contato, is_matriz, matriz_id) VALUES (:n,:c,:ct,:m,:mid)');
-    $insCli->execute(['n' => 'Empresa A ' . $suffix, 'c' => 'CNPJ-' . $suffix . '-A', 'ct' => 'contato', 'm' => 1, 'mid' => null]);
+    $insCli->execute(['n' => 'Empresa A ' . $suffix, 'c' => $cnpjA, 'ct' => 'contato', 'm' => 1, 'mid' => null]);
     $clienteA = (int)$pdo->lastInsertId();
     $clienteIds[] = $clienteA;
-    $insCli->execute(['n' => 'Filial A1 ' . $suffix, 'c' => 'CNPJ-' . $suffix . '-A1', 'ct' => 'contato', 'm' => 0, 'mid' => $clienteA]);
+    $insCli->execute(['n' => 'Filial A1 ' . $suffix, 'c' => $cnpjA1, 'ct' => 'contato', 'm' => 0, 'mid' => $clienteA]);
     $filialA1 = (int)$pdo->lastInsertId();
     $clienteIds[] = $filialA1;
-    $insCli->execute(['n' => 'Empresa B ' . $suffix, 'c' => 'CNPJ-' . $suffix . '-B', 'ct' => 'contato', 'm' => 1, 'mid' => null]);
+    $insCli->execute(['n' => 'Empresa B ' . $suffix, 'c' => $cnpjB, 'ct' => 'contato', 'm' => 1, 'mid' => null]);
     $clienteB = (int)$pdo->lastInsertId();
     $clienteIds[] = $clienteB;
 
@@ -54,10 +57,10 @@ try {
     $funcaoIds[] = $funcB;
 
     $insCol = $pdo->prepare('INSERT INTO colaboradores (nome, email, funcao_id, lider, cliente_id) VALUES (:n,:e,:f,:l,:cid)');
-    $insCol->execute(['n' => 'Colab A ' . $suffix, 'e' => 'colab.a.' . $suffix . '@test.local', 'f' => $funcA, 'l' => 'não', 'cid' => $clienteA]);
+    $insCol->execute(['n' => 'Colab A ' . $suffix, 'e' => 'colab.a.' . $suffix . '@test.local', 'f' => $funcA, 'l' => 'sim', 'cid' => $clienteA]);
     $colaboradorA = (int)$pdo->lastInsertId();
     $colaboradorIds[] = $colaboradorA;
-    $insCol->execute(['n' => 'Colab B ' . $suffix, 'e' => 'colab.b.' . $suffix . '@test.local', 'f' => $funcB, 'l' => 'não', 'cid' => $clienteB]);
+    $insCol->execute(['n' => 'Colab B ' . $suffix, 'e' => 'colab.b.' . $suffix . '@test.local', 'f' => $funcB, 'l' => 'sim', 'cid' => $clienteB]);
     $colaboradorB = (int)$pdo->lastInsertId();
     $colaboradorIds[] = $colaboradorB;
 
@@ -151,11 +154,64 @@ try {
             'referencia_esperada' => 'POP-101',
             'processos' => ['P3'],
         ]],
-    ], 2001);
+    ], 2001, null, 1);
     if (!$updateOk) {
         failFast('Atualização de auditoria agendada deveria funcionar');
     }
     ok('Atualização de auditoria agendada');
+
+    $concurrencyAudit = $model->create([
+        'cliente_id' => $clienteA,
+        'setor_id' => $setorA,
+        'nome_auditoria' => 'Auditoria Concorrência ' . $suffix,
+        'data_auditoria' => date('Y-m-d'),
+        'questoes' => [[
+            'responsavel_nome' => 'Resp Concorrência',
+            'pergunta' => 'Pergunta para validar conflito de versão',
+            'referencia_esperada' => 'POP-LOCK',
+            'processos' => [],
+        ]],
+    ], 2001);
+    if ($concurrencyAudit <= 0) {
+        failFast('Criação de auditoria para teste de concorrência falhou');
+    }
+    $auditoriaIds[] = $concurrencyAudit;
+
+    $freshUpdate = $model->updateAgendada($concurrencyAudit, [
+        'cliente_id' => $clienteA,
+        'setor_id' => $setorA,
+        'nome_auditoria' => 'Auditoria Concorrência Atualizada ' . $suffix,
+        'data_auditoria' => date('Y-m-d'),
+        'questoes' => [[
+            'responsavel_nome' => 'Resp Concorrência 2',
+            'pergunta' => 'Atualização válida para subir versão',
+            'referencia_esperada' => 'POP-LOCK-2',
+            'processos' => [],
+        ]],
+    ], 2001, null, 1);
+    if (!$freshUpdate) {
+        failFast('Atualização inicial de auditoria de concorrência deveria funcionar');
+    }
+
+    $staleUpdate = $model->updateAgendada($concurrencyAudit, [
+        'cliente_id' => $clienteA,
+        'setor_id' => $setorA,
+        'nome_auditoria' => 'Atualização com versão antiga ' . $suffix,
+        'data_auditoria' => date('Y-m-d'),
+        'questoes' => [[
+            'responsavel_nome' => 'Resp Stale',
+            'pergunta' => 'Tentativa com versão antiga',
+            'referencia_esperada' => 'POP-STALE',
+            'processos' => [],
+        ]],
+    ], 2001, null, 1);
+    if ($staleUpdate) {
+        failFast('Atualização com versão antiga deveria falhar por concorrência');
+    }
+    if (($model->getLastError() ?? '') !== 'concurrency_conflict') {
+        failFast('Falha de concorrência deveria retornar código concurrency_conflict');
+    }
+    ok('Detecção de conflito de versão otimista');
 
     $questoes = $model->questoesByAuditoria($first);
     $auditOk = $model->finalizarAuditoria($first, [[
@@ -164,7 +220,8 @@ try {
         'observacoes' => 'Observações complementares da execução',
     ]], 2001);
     if (!$auditOk) {
-        failFast('Execução de auditoria deveria funcionar');
+        $snapshot = $model->find($first);
+        failFast('Execução de auditoria deveria funcionar. erro=' . (string)($model->getLastError() ?? 'n/a') . ' status=' . (string)($snapshot['status'] ?? 'n/a'));
     }
     ok('Execução de auditoria e transição de status');
 

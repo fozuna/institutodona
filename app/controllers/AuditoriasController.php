@@ -151,10 +151,15 @@ class AuditoriasController extends BaseController
         $payload = $this->payloadFromRequest($_POST);
         $saveMode = (string)($_POST['save_mode'] ?? 'full'); // 'full' ou 'partial'
         $prevUpdatedAt = (string)($_POST['prev_updated_at'] ?? '');
+        $prevLockVersionRaw = $_POST['prev_lock_version'] ?? null;
+        $prevLockVersion = is_numeric($prevLockVersionRaw) ? (int)$prevLockVersionRaw : null;
         if ($saveMode === 'partial') {
-            $ok = $this->auditorias->updatePartial($id, $payload, (int)($_SESSION['user']['id'] ?? 0));
+            $ok = $this->auditorias->updatePartial($id, $payload, (int)($_SESSION['user']['id'] ?? 0), $prevUpdatedAt !== '' ? $prevUpdatedAt : null, $prevLockVersion);
             if (!$ok) {
-                $_SESSION['flash_error'] = 'Não foi possível salvar alterações.';
+                $reason = (string)($this->auditorias->getLastError() ?? '');
+                $_SESSION['flash_error'] = $reason === 'concurrency_conflict'
+                    ? 'Outro usuário alterou esta auditoria. Reabra a edição para sincronizar os dados antes de salvar.'
+                    : 'Não foi possível salvar alterações.';
                 $this->redirect('index.php?route=auditorias/index');
                 return;
             }
@@ -175,9 +180,18 @@ class AuditoriasController extends BaseController
             ]);
             return;
         }
-        $ok = $this->auditorias->updateAgendada($id, $payload, (int)($_SESSION['user']['id'] ?? 0), $prevUpdatedAt !== '' ? $prevUpdatedAt : null);
+        $ok = $this->auditorias->updateAgendada(
+            $id,
+            $payload,
+            (int)($_SESSION['user']['id'] ?? 0),
+            $prevUpdatedAt !== '' ? $prevUpdatedAt : null,
+            $prevLockVersion
+        );
         if (!$ok) {
-            $_SESSION['flash_error'] = 'Não foi possível atualizar. Verifique se os dados não foram alterados por outro usuário.';
+            $reason = (string)($this->auditorias->getLastError() ?? '');
+            $_SESSION['flash_error'] = $reason === 'concurrency_conflict'
+                ? 'Outro usuário alterou esta auditoria enquanto você editava. Atualize a página e tente novamente.'
+                : 'Não foi possível atualizar. Verifique se os dados não foram alterados por outro usuário.';
             $this->redirect('index.php?route=auditorias/index');
             return;
         }
@@ -824,6 +838,9 @@ class AuditoriasController extends BaseController
         }
         $id = (int)($_POST['id'] ?? 0);
         $payload = $this->payloadFromRequest($_POST);
+        $prevUpdatedAt = (string)($_POST['prev_updated_at'] ?? '');
+        $prevLockVersionRaw = $_POST['prev_lock_version'] ?? null;
+        $prevLockVersion = is_numeric($prevLockVersionRaw) ? (int)$prevLockVersionRaw : null;
         $errors = AuditoriaValidator::validateCadastro($payload);
         $this->appendResponsavelValidationErrors($payload, $errors);
         if (!empty($errors)) {
@@ -831,10 +848,24 @@ class AuditoriasController extends BaseController
             echo json_encode(['success' => false, 'errors' => $errors], JSON_UNESCAPED_UNICODE);
             return;
         }
-        $ok = $this->auditorias->updateAgendada($id, $payload, (int)($_SESSION['user']['id'] ?? 0));
+        $ok = $this->auditorias->updateAgendada(
+            $id,
+            $payload,
+            (int)($_SESSION['user']['id'] ?? 0),
+            $prevUpdatedAt !== '' ? $prevUpdatedAt : null,
+            $prevLockVersion
+        );
         if (!$ok) {
-            http_response_code(409);
-            echo json_encode(['success' => false, 'message' => 'Auditoria não pode ser atualizada.'], JSON_UNESCAPED_UNICODE);
+            $reason = (string)($this->auditorias->getLastError() ?? '');
+            $status = $reason === 'concurrency_conflict' ? 409 : 422;
+            http_response_code($status);
+            echo json_encode([
+                'success' => false,
+                'reason' => $reason,
+                'message' => $reason === 'concurrency_conflict'
+                    ? 'Registro desatualizado. Recarregue os dados antes de atualizar.'
+                    : 'Auditoria não pode ser atualizada.',
+            ], JSON_UNESCAPED_UNICODE);
             return;
         }
         AuditLogger::log('auditoria_api_update', 'auditoria', $id, []);

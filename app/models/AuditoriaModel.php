@@ -65,6 +65,7 @@ class AuditoriaModel extends BaseModel
                 realizada_at DATETIME NULL,
                 created_by INT NULL,
                 updated_by INT NULL,
+                lock_version INT NOT NULL DEFAULT 1,
                 deleted_by INT NULL,
                 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -77,6 +78,9 @@ class AuditoriaModel extends BaseModel
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             if (!\App\Database\Database::columnExists('auditorias', 'nome_auditoria')) {
                 $this->db->exec("ALTER TABLE auditorias ADD COLUMN nome_auditoria VARCHAR(180) NOT NULL DEFAULT '' AFTER data_auditoria");
+            }
+            if (!\App\Database\Database::columnExists('auditorias', 'lock_version')) {
+                $this->db->exec("ALTER TABLE auditorias ADD COLUMN lock_version INT NOT NULL DEFAULT 1 AFTER updated_by");
             }
             try {
                 $this->db->exec("ALTER TABLE auditorias MODIFY COLUMN responsavel_id INT NULL");
@@ -287,7 +291,7 @@ class AuditoriaModel extends BaseModel
         $params = ['id' => $auditoriaId, 'updated_by' => $userId];
         $scope = $this->hasScopeRestriction() ? (' AND ' . $this->tenantInCondition('cliente_id', $params, 'audstart')) : '';
         try {
-            $this->db->prepare("UPDATE auditorias SET status = 'Em Auditoria', updated_by = :updated_by WHERE id = :id AND deleted_at IS NULL AND status IN ('Rascunho','Agendada')$scope")
+            $this->db->prepare("UPDATE auditorias SET status = 'Em Auditoria', updated_by = :updated_by, lock_version = lock_version + 1 WHERE id = :id AND deleted_at IS NULL AND status IN ('Rascunho','Agendada')$scope")
                 ->execute($params);
         } catch (\PDOException $e) {
         }
@@ -422,11 +426,13 @@ class AuditoriaModel extends BaseModel
         }
     }
 
-    public function updateAgendada(int $id, array $data, int $userId, ?string $prevUpdatedAt = null): bool
+    public function updateAgendada(int $id, array $data, int $userId, ?string $prevUpdatedAt = null, ?int $prevLockVersion = null): bool
     {
         $this->ensureTables();
+        $this->lastError = null;
         $clienteId = (int)$data['cliente_id'];
         if ($clienteId <= 0 || (!$this->canBypassScope() && !$this->canAccessClienteId($clienteId))) {
+            $this->lastError = 'scope';
             return false;
         }
         $this->db->beginTransaction();
@@ -443,16 +449,28 @@ class AuditoriaModel extends BaseModel
             'referencia_esperada' => (string)$primeira['referencia_esperada'],
             'updated_by' => $userId,
             ];
-            if ($prevUpdatedAt !== null) { $params['prev'] = $prevUpdatedAt; }
+            if ($prevLockVersion !== null) {
+                $params['prev_lock_version'] = $prevLockVersion;
+            } elseif ($prevUpdatedAt !== null) {
+                $params['prev'] = $prevUpdatedAt;
+            }
             $scope = $this->hasScopeRestriction() ? (' AND ' . $this->tenantInCondition('cliente_id', $params, 'audu')) : '';
-            $concurrency = $prevUpdatedAt !== null ? ' AND updated_at = :prev' : '';
+            if ($prevLockVersion !== null) {
+                $concurrency = ' AND lock_version = :prev_lock_version';
+            } elseif ($prevUpdatedAt !== null) {
+                $concurrency = ' AND updated_at = :prev';
+            } else {
+                $concurrency = '';
+            }
             $stmt = $this->db->prepare("UPDATE auditorias
                 SET cliente_id = :cliente_id, setor_id = :setor_id, data_auditoria = :data_auditoria, nome_auditoria = :nome_auditoria,
-                    pergunta = :pergunta, objetivo = :objetivo, referencia_esperada = :referencia_esperada, updated_by = :updated_by
-                WHERE id = :id AND deleted_at IS NULL$scope$concurrency");
+                    pergunta = :pergunta, objetivo = :objetivo, referencia_esperada = :referencia_esperada, updated_by = :updated_by,
+                    lock_version = lock_version + 1
+                WHERE id = :id AND deleted_at IS NULL AND realizada_at IS NULL AND status IN ('Rascunho','Agendada')$scope$concurrency");
             $updated = $stmt->execute($params) && $stmt->rowCount() > 0;
             if (!$updated) {
                 $this->db->rollBack();
+                $this->lastError = $this->detectWriteConflict($id, $prevUpdatedAt, $prevLockVersion);
                 return false;
             }
             $this->db->prepare('DELETE FROM auditoria_questoes WHERE auditoria_id = :id')->execute(['id' => $id]);
@@ -462,13 +480,15 @@ class AuditoriaModel extends BaseModel
             return true;
         } catch (\Throwable $e) {
             $this->db->rollBack();
+            $this->lastError = 'exception';
             return false;
         }
     }
 
-    public function updatePartial(int $id, array $data, int $userId): bool
+    public function updatePartial(int $id, array $data, int $userId, ?string $prevUpdatedAt = null, ?int $prevLockVersion = null): bool
     {
         $this->ensureTables();
+        $this->lastError = null;
         $params = ['id' => $id, 'updated_by' => $userId];
         $set = ['updated_by = :updated_by'];
 
@@ -495,14 +515,25 @@ class AuditoriaModel extends BaseModel
             $params['data_auditoria'] = $dataAud;
             $set[] = 'data_auditoria = :data_auditoria';
         }
+        $set[] = 'lock_version = lock_version + 1';
+        if ($prevLockVersion !== null) {
+            $params['prev_lock_version'] = $prevLockVersion;
+            $concurrency = ' AND lock_version = :prev_lock_version';
+        } elseif ($prevUpdatedAt !== null) {
+            $params['prev'] = $prevUpdatedAt;
+            $concurrency = ' AND updated_at = :prev';
+        } else {
+            $concurrency = '';
+        }
 
         $scope = $this->hasScopeRestriction() ? (' AND ' . $this->tenantInCondition('cliente_id', $params, 'audup')) : '';
         $this->db->beginTransaction();
         try {
-            $stmt = $this->db->prepare("UPDATE auditorias SET " . implode(', ', $set) . " WHERE id = :id AND deleted_at IS NULL$scope");
+            $stmt = $this->db->prepare("UPDATE auditorias SET " . implode(', ', $set) . " WHERE id = :id AND deleted_at IS NULL AND realizada_at IS NULL AND status IN ('Rascunho','Agendada')$scope$concurrency");
             $ok = $stmt->execute($params);
-            if (!$ok) {
+            if (!$ok || $stmt->rowCount() <= 0) {
                 $this->db->rollBack();
+                $this->lastError = $this->detectWriteConflict($id, $prevUpdatedAt, $prevLockVersion);
                 return false;
             }
             if (!empty($data['questoes']) && is_array($data['questoes'])) {
@@ -513,6 +544,7 @@ class AuditoriaModel extends BaseModel
             return true;
         } catch (\Throwable $e) {
             $this->safeRollback();
+            $this->lastError = 'exception';
             return false;
         }
     }
@@ -533,7 +565,7 @@ class AuditoriaModel extends BaseModel
         }
         try {
             $this->persistAvaliacoesNoTx($auditoriaId, $avaliacoes, $userId);
-            $this->db->prepare("UPDATE auditorias SET status = 'Em Auditoria', updated_by = :updated_by WHERE id = :id AND status = 'Agendada'")
+            $this->db->prepare("UPDATE auditorias SET status = 'Em Auditoria', updated_by = :updated_by, lock_version = lock_version + 1 WHERE id = :id AND status = 'Agendada'")
                 ->execute(['id' => $auditoriaId, 'updated_by' => $userId]);
             $this->db->commit();
             return true;
@@ -546,6 +578,7 @@ class AuditoriaModel extends BaseModel
     public function finalizarAuditoria(int $auditoriaId, array $avaliacoes, int $userId): bool
     {
         $this->ensureTables();
+        $this->lastError = null;
         $auditoria = $this->find($auditoriaId);
         if (!$auditoria || !in_array((string)$auditoria['status'], ['Agendada', 'Em Auditoria'], true)) {
             return false;
@@ -559,14 +592,15 @@ class AuditoriaModel extends BaseModel
         }
         try {
             $this->persistAvaliacoesNoTx($auditoriaId, $avaliacoes, $userId);
-            $this->db->prepare("UPDATE auditorias SET status = 'Em Auditoria', updated_by = :updated_by WHERE id = :id AND status = 'Agendada'")
+            $this->db->prepare("UPDATE auditorias SET status = 'Em Auditoria', updated_by = :updated_by, lock_version = lock_version + 1 WHERE id = :id AND status = 'Agendada'")
                 ->execute(['id' => $auditoriaId, 'updated_by' => $userId]);
             $this->db->prepare('UPDATE auditoria_avaliacoes SET finalized_at = NOW() WHERE auditoria_id = :id')
                 ->execute(['id' => $auditoriaId]);
             $stats = $this->computeConformidadeStats($auditoriaId);
             $resumo = 'Conforme: ' . $stats['conforme'] . ' | Não conforme: ' . $stats['nao_conforme'] . ' | N/A: ' . $stats['nao_aplica'];
             $up = $this->db->prepare("UPDATE auditorias
-                SET status = 'Realizada', realizada_at = NOW(), avaliacao = :avaliacao, conformidade_pct = :pct, semaforo = :sem, updated_by = :updated_by
+                SET status = 'Realizada', realizada_at = NOW(), avaliacao = :avaliacao, conformidade_pct = :pct, semaforo = :sem, updated_by = :updated_by,
+                    lock_version = lock_version + 1
                 WHERE id = :id AND deleted_at IS NULL AND realizada_at IS NULL");
             $ok = $up->execute([
                 'id' => $auditoriaId,
@@ -576,6 +610,11 @@ class AuditoriaModel extends BaseModel
                 'updated_by' => $userId
             ]) && $up->rowCount() > 0;
             if (!$ok) {
+                $check = $this->find($auditoriaId);
+                if ($check && ($check['status'] ?? '') === 'Realizada' && !empty($check['realizada_at'])) {
+                    try { $this->db->commit(); } catch (\Throwable $e) { $this->safeRollback(); return false; }
+                    return true;
+                }
                 $this->safeRollback();
                 return false;
             }
@@ -587,11 +626,19 @@ class AuditoriaModel extends BaseModel
                 $this->db->commit();
             } catch (\Throwable $e) {
                 $this->safeRollback();
+                $check = $this->find($auditoriaId);
+                if ($check && ($check['status'] ?? '') === 'Realizada' && !empty($check['realizada_at'])) {
+                    return true;
+                }
                 return false;
             }
             return true;
         } catch (\Throwable $e) {
             $this->safeRollback();
+            $check = $this->find($auditoriaId);
+            if ($check && ($check['status'] ?? '') === 'Realizada' && !empty($check['realizada_at'])) {
+                return true;
+            }
             return false;
         }
     }
@@ -671,6 +718,25 @@ class AuditoriaModel extends BaseModel
                 'updated_by' => $userId,
             ]);
         }
+    }
+
+    private function detectWriteConflict(int $id, ?string $prevUpdatedAt, ?int $prevLockVersion): string
+    {
+        $params = ['id' => $id];
+        $scope = $this->hasScopeRestriction() ? (' AND ' . $this->tenantInCondition('cliente_id', $params, 'audver')) : '';
+        $stmt = $this->db->prepare("SELECT id, updated_at, lock_version FROM auditorias WHERE id = :id AND deleted_at IS NULL$scope LIMIT 1");
+        $stmt->execute($params);
+        $row = $stmt->fetch();
+        if (!$row) {
+            return 'not_found';
+        }
+        if ($prevLockVersion !== null && (int)$row['lock_version'] !== $prevLockVersion) {
+            return 'concurrency_conflict';
+        }
+        if ($prevLockVersion === null && $prevUpdatedAt !== null && (string)$row['updated_at'] !== $prevUpdatedAt) {
+            return 'concurrency_conflict';
+        }
+        return 'unchanged_or_rule';
     }
 
     private function computeConformidadeStats(int $auditoriaId): array

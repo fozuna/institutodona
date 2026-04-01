@@ -7,3 +7,4 @@ node_modules/
 vendor/
 public_html/assets/**/*.map
 storage/
+.mariadb/

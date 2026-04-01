@@ -96,7 +96,18 @@ class AuditoriaValidator
 
     public static function validateResponsaveisCadastrados(array $questoes, callable $isValidName): array
     {
-        return [];
+        $errors = [];
+        foreach ($questoes as $idx => $questao) {
+            $nome = trim((string)($questao['responsavel_nome'] ?? ''));
+            if ($nome === '') {
+                continue;
+            }
+            if (!(bool)$isValidName($nome)) {
+                $qIndex = $idx + 1;
+                $errors['questao_' . $qIndex . '_responsavel_nome'] = "Questão {$qIndex}: responsável inválido. Selecione um colaborador cadastrado.";
+            }
+        }
+        return $errors;
     }
 
     public static function normalizeQuestoes(array|string $input): array
