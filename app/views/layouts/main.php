@@ -79,7 +79,7 @@ $config = require $cfg;
                     </div>
                 <?php endif; ?>
                 <?php if (!empty($_SESSION['flash_error'])): ?>
-                    <div class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                    <div class="mb-4 <?php echo $user ? 'bg-red-100 border border-red-400 text-red-700' : 'bg-[#e8eef8] border border-brand-brown text-brand-brown'; ?> px-4 py-3 rounded relative" role="alert">
                         <strong class="font-bold">Erro!</strong>
                         <span class="block sm:inline"><?= htmlspecialchars($_SESSION['flash_error']) ?></span>
                         <?php unset($_SESSION['flash_error']); ?>

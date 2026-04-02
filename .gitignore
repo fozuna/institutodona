@@ -8,3 +8,4 @@ vendor/
 public_html/assets/**/*.map
 storage/
 .mariadb/
+.vercel/

@@ -1,9 +1,9 @@
 <?php /** @var string|null $error */ ?>
 <?php use App\Core\Security; ?>
 <div class="min-h-screen flex">
-    <!-- Lado esquerdo: 70% vermelho com imagem de fundo -->
+    <!-- Lado esquerdo: 70% com imagem de fundo -->
     <div class="relative basis-[70%] text-white flex items-center justify-center"
-         style="background-image: url('assets/img/login-bg.jpg'); background-size: cover; background-position: center; background-repeat: no-repeat; background-color: var(--brand-red); background-blend-mode: multiply;">
+         style="background-image: url('assets/img/logobco.png'); background-size: cover; background-position: center; background-repeat: no-repeat; background-color: #102040; background-blend-mode: multiply;">
         <div class="p-10 max-w-2xl">
             <h1 class="text-4xl font-bold mb-4">SisDoná</h1>
             <p class="text-lg opacity-90">Viva+</p>
@@ -15,7 +15,7 @@
         <div class="w-full max-w-sm bg-white shadow rounded p-6 border">
             <h2 class="text-2xl font-bold mb-4 text-brand-brown">Entrar</h2>
             <?php if (!empty($error)): ?>
-                <div class="mb-3 px-3 py-2 rounded bg-red-100 text-red-700 text-sm"><?= htmlspecialchars($error) ?></div>
+                <div role="alert" class="mb-3 px-3 py-2 rounded border border-brand-brown bg-[#e8eef8] text-brand-brown text-sm"><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
             <form method="post" action="index.php?route=auth/doLogin" class="space-y-4">
                 <input type="hidden" name="csrf" value="<?= Security::csrfToken() ?>" />
@@ -27,7 +27,7 @@
                     <label class="block text-sm">Senha</label>
                     <input class="border rounded p-2 w-full" name="senha" type="password" required />
                 </div>
-                <button class="px-4 py-2 rounded bg-brand-red text-white w-full" type="submit">Acessar</button>
+                <button class="px-4 py-2 rounded bg-brand-brown hover:bg-[#0b1630] focus:outline-none focus:ring-2 focus:ring-[#102040] focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed text-white w-full transition-colors" type="submit">Acessar</button>
             </form>
             <p class="text-xs text-gray-500 mt-3">Use um usuário previamente criado na tabela usuarios.</p>
         </div>
