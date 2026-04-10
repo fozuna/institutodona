@@ -121,6 +121,16 @@ CREATE TABLE IF NOT EXISTS avaliacoes (
   id INT AUTO_INCREMENT PRIMARY KEY,
   cliente_id INT NULL,
   empresa_nome VARCHAR(255) NULL,
+  nome VARCHAR(150) NOT NULL DEFAULT '',
+  whatsapp VARCHAR(20) NOT NULL DEFAULT '',
+  email VARCHAR(180) NOT NULL DEFAULT '',
+  numero_funcionarios INT UNSIGNED NOT NULL DEFAULT 0,
+  numero_lideres INT UNSIGNED NOT NULL DEFAULT 0,
+  faturamento_medio_anual BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  tomador_decisao TINYINT(1) NOT NULL DEFAULT 0,
+  origem_cadastro VARCHAR(30) NOT NULL DEFAULT 'cliente_existente',
+  created_by_user_id INT NULL,
+  cliente_associado_em DATETIME NULL,
   contato VARCHAR(255) NULL,
   respostas_json TEXT NULL,
   nota_financeiro TINYINT NOT NULL DEFAULT 0,
@@ -129,6 +139,35 @@ CREATE TABLE IF NOT EXISTS avaliacoes (
   nota_processo TINYINT NOT NULL DEFAULT 0,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_av_cli FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS avaliacoes_publicas (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  avaliacao_id INT NOT NULL,
+  token CHAR(36) NOT NULL UNIQUE,
+  nome VARCHAR(150) NULL,
+  empresa VARCHAR(255) NULL,
+  whatsapp VARCHAR(20) NULL,
+  email VARCHAR(180) NULL,
+  numero_funcionarios INT UNSIGNED NULL,
+  numero_lideres INT UNSIGNED NULL,
+  faturamento_anual BIGINT UNSIGNED NULL,
+  tomador_decisao TINYINT(1) NULL,
+  respostas_json TEXT NULL,
+  nota_financeiro TINYINT NOT NULL DEFAULT 0,
+  nota_mercado TINYINT NOT NULL DEFAULT 0,
+  nota_pessoas TINYINT NOT NULL DEFAULT 0,
+  nota_processo TINYINT NOT NULL DEFAULT 0,
+  realidade_financeiro TINYINT NULL,
+  realidade_mercado TINYINT NULL,
+  realidade_pessoas TINYINT NULL,
+  realidade_processo TINYINT NULL,
+  status ENUM('pendente','iniciada','concluida') NOT NULL DEFAULT 'pendente',
+  expiracao DATETIME NULL,
+  data_criacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  data_conclusao DATETIME NULL,
+  UNIQUE KEY uq_avaliacao_publica_avaliacao (avaliacao_id),
+  CONSTRAINT fk_avaliacoes_publicas_avaliacao FOREIGN KEY (avaliacao_id) REFERENCES avaliacoes(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 -- Alterações para bases já existentes
 ALTER TABLE aplicacoes

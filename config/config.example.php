@@ -2,9 +2,9 @@
 return [
     'db' => [
         'host' => 'database',
-        'dbname' => 'dbinstituto',
-        'user' => 'usuario123',
-        'pass' => 'd54fc3f4c3adkfalkdhfie',
+        'dbname' => 'u357871217_institutodona',
+        'user' => 'root',
+        'pass' => '',
         'charset' => 'utf8mb4',
     ],
     'app' => [

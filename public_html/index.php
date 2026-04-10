@@ -427,11 +427,26 @@ switch ($route) {
     case 'avaliacoes/store':
         (new AvaliacoesController())->store();
         break;
+    case 'avaliacoes/gerar-link-cliente':
+        (new AvaliacoesController())->gerarLinkCliente();
+        break;
+    case 'avaliacoes/api_public_link_generate':
+        (new AvaliacoesController())->apiGeneratePublicLink();
+        break;
+    case 'avaliacoes/log-link-share':
+        (new AvaliacoesController())->logLinkShare();
+        break;
+    case 'avaliacoes/associar-cliente':
+        (new AvaliacoesController())->associarCliente();
+        break;
     case 'avaliacoes/show':
         (new AvaliacoesController())->show();
         break;
     case 'avaliacoes/planoacao':
         (new AvaliacoesController())->planoacao();
+        break;
+    case 'avaliacoes/relatorio_pdf':
+        (new AvaliacoesController())->relatorioPdf();
         break;
     case 'colaboradores/index':
         (new ColaboradoresController())->index();

@@ -1,18 +1,24 @@
 <?php
 namespace App\Controllers;
 
+use App\Core\AuditLogger;
+use App\Core\AvaliacaoQuestionario;
 use App\Core\BaseController;
 use App\Core\Security;
+use App\Core\SimplePdfReport;
 use App\Models\AvaliacaoModel;
+use App\Models\AvaliacaoPublicaModel;
 use App\Models\ClienteModel;
 
 class AvaliacoesController extends BaseController
 {
     private AvaliacaoModel $model;
+    private AvaliacaoPublicaModel $publicModel;
 
     public function __construct()
     {
         $this->model = new AvaliacaoModel();
+        $this->publicModel = new AvaliacaoPublicaModel();
     }
 
     public function index(): void
@@ -28,7 +34,18 @@ class AvaliacoesController extends BaseController
         $this->requireLogin();
         $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
         $clientes = (new ClienteModel())->all();
-        $this->render('avaliacoes/create', compact('cliente', 'clientes'));
+        $values = $this->defaultValues();
+        if ($cliente > 0) {
+            $values['modo_cadastro'] = 'existente';
+            foreach ($clientes as $cl) {
+                if ((int)($cl['id'] ?? 0) === $cliente) {
+                    $values['empresa_nome'] = (string)($cl['nome_empresa'] ?? '');
+                    break;
+                }
+            }
+        }
+        $errors = [];
+        $this->render('avaliacoes/create', compact('cliente', 'clientes', 'values', 'errors'));
     }
 
     public function store(): void
@@ -36,9 +53,31 @@ class AvaliacoesController extends BaseController
         $this->requireLogin();
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
+        $clientes = (new ClienteModel())->all();
+        $clientesById = [];
+        foreach ($clientes as $cl) {
+            $cid = (int)($cl['id'] ?? 0);
+            if ($cid > 0) {
+                $clientesById[$cid] = (string)($cl['nome_empresa'] ?? '');
+            }
+        }
         $clienteId = isset($_POST['cliente_id']) ? (int)$_POST['cliente_id'] : 0;
+        $modoCadastro = (string)($_POST['modo_cadastro'] ?? ($clienteId > 0 ? 'existente' : 'potencial'));
+        if ($modoCadastro !== 'existente') {
+            $clienteId = 0;
+        }
         $empresaNome = trim($_POST['empresa_nome'] ?? '');
-        $contato = trim($_POST['contato'] ?? '');
+        if ($empresaNome === '' && $clienteId > 0 && isset($clientesById[$clienteId])) {
+            $empresaNome = trim($clientesById[$clienteId]);
+        }
+        $nome = trim($_POST['nome'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $whatsappRaw = (string)($_POST['whatsapp'] ?? '');
+        $numeroFuncionarios = $this->positiveInt($_POST['numero_funcionarios'] ?? null);
+        $numeroLideres = $this->positiveInt($_POST['numero_lideres'] ?? null);
+        $faturamentoMedioAnual = $this->positiveInt($_POST['faturamento_medio_anual'] ?? null);
+        $tomadorDecisao = $this->booleanFromInput($_POST['tomador_decisao'] ?? null);
+        $whatsapp = preg_replace('/\D+/', '', $whatsappRaw ?? '') ?: '';
         $fin = $_POST['financeiro'] ?? [];
         $mer = $_POST['mercado'] ?? [];
         $pes = $_POST['pessoas'] ?? [];
@@ -51,10 +90,63 @@ class AvaliacoesController extends BaseController
         $realMer = isset($_POST['realidade_mercado']) ? (int)$_POST['realidade_mercado'] : null;
         $realPes = isset($_POST['realidade_pessoas']) ? (int)$_POST['realidade_pessoas'] : null;
         $realPro = isset($_POST['realidade_processo']) ? (int)$_POST['realidade_processo'] : null;
+        $errors = [];
+        if ($modoCadastro === 'existente' && ($clienteId <= 0 || !isset($clientesById[$clienteId]))) {
+            $errors['cliente_id'] = 'Selecione um cliente válido.';
+        }
+        if ($empresaNome === '') {
+            $errors['empresa_nome'] = 'Empresa é obrigatória.';
+        }
+        if ($nome === '') {
+            $errors['nome'] = 'Nome é obrigatório.';
+        }
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $errors['email'] = 'Informe um e-mail válido.';
+        }
+        if (!$this->isValidWhatsapp($whatsapp)) {
+            $errors['whatsapp'] = 'Informe um WhatsApp válido apenas com números.';
+        }
+        if ($numeroFuncionarios === null) {
+            $errors['numero_funcionarios'] = 'Número de funcionários deve ser um inteiro positivo.';
+        }
+        if ($numeroLideres === null) {
+            $errors['numero_lideres'] = 'Número de líderes deve ser um inteiro positivo.';
+        }
+        if ($faturamentoMedioAnual === null) {
+            $errors['faturamento_medio_anual'] = 'Faturamento médio anual deve ser um inteiro positivo.';
+        }
+        if ($tomadorDecisao === null) {
+            $errors['tomador_decisao'] = 'Selecione se é tomador de decisão.';
+        }
+        $values = [
+            'modo_cadastro' => $modoCadastro,
+            'cliente_id' => $clienteId,
+            'empresa_nome' => $empresaNome,
+            'nome' => $nome,
+            'email' => $email,
+            'whatsapp' => $whatsapp,
+            'numero_funcionarios' => (string)($_POST['numero_funcionarios'] ?? ''),
+            'numero_lideres' => (string)($_POST['numero_lideres'] ?? ''),
+            'faturamento_medio_anual' => (string)($_POST['faturamento_medio_anual'] ?? ''),
+            'tomador_decisao' => (string)($_POST['tomador_decisao'] ?? ''),
+        ];
+        if (!empty($errors)) {
+            $cliente = $clienteId;
+            $this->render('avaliacoes/create', compact('cliente', 'clientes', 'values', 'errors'));
+            return;
+        }
         $payload = [
             'cliente_id' => $clienteId ?: null,
-            'empresa_nome' => $clienteId ? null : ($empresaNome ?: null),
-            'contato' => $contato ?: null,
+            'empresa_nome' => $empresaNome ?: null,
+            'nome' => $nome,
+            'email' => $email,
+            'whatsapp' => $whatsapp,
+            'numero_funcionarios' => $numeroFuncionarios,
+            'numero_lideres' => $numeroLideres,
+            'faturamento_medio_anual' => $faturamentoMedioAnual,
+            'tomador_decisao' => $tomadorDecisao,
+            'origem_cadastro' => $clienteId > 0 ? 'cliente_existente' : 'potencial_cliente',
+            'contato' => $nome,
             'respostas_json' => json_encode(['financeiro' => $fin, 'mercado' => $mer, 'pessoas' => $pes, 'processo' => $pro]),
             'nota_financeiro' => $notaFin,
             'nota_mercado' => $notaMer,
@@ -66,11 +158,19 @@ class AvaliacoesController extends BaseController
             'realidade_processo' => $realPro,
         ];
         $id = $this->model->create($payload);
+        if ($id <= 0) {
+            $_SESSION['flash_error'] = 'Não foi possível salvar a avaliação.';
+            $cliente = $clienteId;
+            $errors = [];
+            $this->render('avaliacoes/create', compact('cliente', 'clientes', 'values', 'errors'));
+            return;
+        }
+        $_SESSION['flash_success'] = 'Avaliação salva com sucesso.';
         \App\Core\AuditLogger::log('create', 'avaliacao', $id, $payload);
         if ($clienteId) {
-            header('Location: index.php?route=avaliacoes/show&id=' . $id . '&cliente=' . $clienteId);
+            $this->redirect('index.php?route=avaliacoes/show&id=' . $id . '&cliente=' . $clienteId);
         } else {
-            header('Location: index.php?route=avaliacoes/show&id=' . $id);
+            $this->redirect('index.php?route=avaliacoes/show&id=' . $id);
         }
     }
 
@@ -79,7 +179,19 @@ class AvaliacoesController extends BaseController
         $this->requireLogin();
         $id = (int)($_GET['id'] ?? 0);
         $item = $this->model->find($id);
-        $this->render('avaliacoes/show', compact('item'));
+        $clientesAssociacao = [];
+        $publicLinkData = null;
+        $publicLinkUrl = '';
+        if ($item && (int)($item['cliente_id'] ?? 0) <= 0) {
+            $clientesAssociacao = (new ClienteModel())->all();
+        }
+        if ($item) {
+            $publicLinkData = $this->publicModel->findByAvaliacaoId((int)$item['id']);
+            if (!empty($publicLinkData['token'])) {
+                $publicLinkUrl = $this->buildPublicLink((string)$publicLinkData['token']);
+            }
+        }
+        $this->render('avaliacoes/show', compact('item', 'clientesAssociacao', 'publicLinkData', 'publicLinkUrl'));
     }
 
     public function planoacao(): void
@@ -94,5 +206,308 @@ class AvaliacoesController extends BaseController
         }
         $respostas = json_decode($item['respostas_json'] ?? '{}', true) ?: [];
         $this->render('avaliacoes/planoacao', compact('item', 'respostas'));
+    }
+
+    public function associarCliente(): void
+    {
+        $this->requireLogin();
+        $csrf = $_POST['csrf'] ?? null;
+        if (!Security::verifyCsrf($csrf)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+        $avaliacaoId = (int)($_POST['avaliacao_id'] ?? 0);
+        $clienteId = (int)($_POST['cliente_id'] ?? 0);
+        if ($avaliacaoId <= 0 || $clienteId <= 0) {
+            $_SESSION['flash_error'] = 'Selecione uma avaliação e um cliente válidos.';
+            $this->redirect('index.php?route=avaliacoes/show&id=' . $avaliacaoId);
+            return;
+        }
+        $ok = $this->model->associateCliente($avaliacaoId, $clienteId);
+        if (!$ok) {
+            $_SESSION['flash_error'] = 'Não foi possível associar a avaliação ao cliente selecionado.';
+            $this->redirect('index.php?route=avaliacoes/show&id=' . $avaliacaoId);
+            return;
+        }
+        AuditLogger::log('associate_cliente', 'avaliacao', $avaliacaoId, [
+            'avaliacao_id' => $avaliacaoId,
+            'cliente_id' => $clienteId,
+        ]);
+        $_SESSION['flash_success'] = 'Cliente associado à avaliação com sucesso.';
+        $this->redirect('index.php?route=avaliacoes/show&id=' . $avaliacaoId . '&cliente=' . $clienteId);
+    }
+
+    public function gerarLinkCliente(): void
+    {
+        $this->requireLogin();
+        if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST' || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo 'Requisição inválida.';
+            return;
+        }
+        $id = (int)($_POST['avaliacao_id'] ?? 0);
+        if ($id <= 0) {
+            $_SESSION['flash_error'] = 'Avaliação inválida.';
+            $this->redirect('index.php?route=avaliacoes/index');
+            return;
+        }
+        $item = $this->model->find($id);
+        if (!$item) {
+            $_SESSION['flash_error'] = 'Avaliação não encontrada.';
+            $this->redirect('index.php?route=avaliacoes/index');
+            return;
+        }
+        $empresa = (string)($item['empresa_nome'] ?? ($item['cliente_nome'] ?? ''));
+        $anterior = $this->publicModel->findByAvaliacaoId($id);
+        AuditLogger::log('avaliacao_publica_regenerate_attempt', 'avaliacao_publica', $id, [
+            'avaliacao_id' => $id,
+            'had_previous_link' => !empty($anterior),
+            'previous_status' => $anterior['status'] ?? null,
+            'previous_token' => $anterior['token'] ?? null,
+        ]);
+        try {
+            $publico = $this->publicModel->createOrRefreshForAvaliacao($id, $empresa, true);
+        } catch (\Throwable $e) {
+            AuditLogger::log('avaliacao_publica_regenerate_error', 'avaliacao_publica', $id, [
+                'avaliacao_id' => $id,
+                'message' => $e->getMessage(),
+            ]);
+            $_SESSION['flash_error'] = 'Falha ao gerar o novo link público.';
+            $this->redirect('index.php?route=avaliacoes/index');
+            return;
+        }
+        if (empty($publico['token'])) {
+            AuditLogger::log('avaliacao_publica_regenerate_failed', 'avaliacao_publica', $id, [
+                'avaliacao_id' => $id,
+            ]);
+            $_SESSION['flash_error'] = 'Não foi possível gerar o link público.';
+            $this->redirect('index.php?route=avaliacoes/index');
+            return;
+        }
+        AuditLogger::log('avaliacao_publica_regenerate_success', 'avaliacao_publica', (int)($publico['id'] ?? 0), [
+            'avaliacao_id' => $id,
+            'token' => $publico['token'] ?? null,
+            'expiracao' => $publico['expiracao'] ?? null,
+            'permanent' => empty($publico['expiracao']),
+            'replaced_previous_token' => $anterior['token'] ?? null,
+        ]);
+        $_SESSION['generated_public_link'] = [
+            'avaliacao_id' => $id,
+            'empresa' => $empresa,
+            'url' => $this->buildPublicLink((string)($publico['token'] ?? '')),
+            'token' => (string)($publico['token'] ?? ''),
+            'expiracao' => (string)($publico['expiracao'] ?? ''),
+            'permanent' => empty($publico['expiracao']),
+        ];
+        $_SESSION['flash_success'] = 'Link público permanente gerado com sucesso.';
+        $this->redirect('index.php?route=avaliacoes/index');
+    }
+
+    public function apiGeneratePublicLink(): void
+    {
+        $this->requireLogin();
+        if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST' || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'message' => 'Requisição inválida.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $id = (int)($_POST['avaliacao_id'] ?? 0);
+        $item = $id > 0 ? $this->model->find($id) : null;
+        if (!$item) {
+            http_response_code(404);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'message' => 'Avaliação não encontrada.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        try {
+            $publico = $this->publicModel->createOrRefreshForAvaliacao($id, (string)($item['empresa_nome'] ?? ($item['cliente_nome'] ?? '')), true);
+            AuditLogger::log('avaliacao_publica_api_generate', 'avaliacao_publica', (int)($publico['id'] ?? 0), [
+                'avaliacao_id' => $id,
+                'token' => $publico['token'] ?? null,
+                'permanent' => empty($publico['expiracao']),
+            ]);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => true,
+                'data' => [
+                    'avaliacao_id' => $id,
+                    'token' => $publico['token'] ?? null,
+                    'public_url' => $this->buildPublicLink((string)($publico['token'] ?? '')),
+                    'permanent' => empty($publico['expiracao']),
+                ],
+            ], JSON_UNESCAPED_UNICODE);
+        } catch (\Throwable $e) {
+            AuditLogger::log('avaliacao_publica_api_generate_error', 'avaliacao_publica', $id, [
+                'avaliacao_id' => $id,
+                'message' => $e->getMessage(),
+            ]);
+            http_response_code(500);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'message' => 'Falha ao gerar link público.'], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    public function logLinkShare(): void
+    {
+        $this->requireLogin();
+        if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST' || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => 'Requisição inválida.']);
+            return;
+        }
+        $avaliacaoId = (int)($_POST['avaliacao_id'] ?? 0);
+        $channel = trim((string)($_POST['channel'] ?? ''));
+        $url = trim((string)($_POST['url'] ?? ''));
+        $success = trim((string)($_POST['success'] ?? ''));
+        if ($avaliacaoId <= 0 || $channel === '') {
+            http_response_code(422);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => 'Dados inválidos.']);
+            return;
+        }
+        AuditLogger::log('avaliacao_publica_share', 'avaliacao_publica', $avaliacaoId, [
+            'avaliacao_id' => $avaliacaoId,
+            'channel' => $channel,
+            'url' => $url,
+            'success' => $success,
+        ]);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => true]);
+    }
+
+    public function relatorioPdf(): void
+    {
+        $this->requireLogin();
+        $id = (int)($_GET['id'] ?? 0);
+        $item = $this->model->find($id);
+        if (!$item) {
+            http_response_code(404);
+            echo 'Avaliação não encontrada.';
+            return;
+        }
+        $publico = $this->publicModel->findByAvaliacaoId($id);
+        $empresa = (string)($item['cliente_nome'] ?? $item['empresa_nome'] ?? '');
+        $header = [
+            'Empresa' => $empresa !== '' ? $empresa : '-',
+            'Nome do respondente' => (string)($item['nome'] ?? ''),
+            'Data da avaliação' => !empty($item['created_at']) ? date('d/m/Y H:i', strtotime((string)$item['created_at'])) : '-',
+            'Link utilizado' => !empty($publico['token']) ? $this->buildPublicLink((string)$publico['token']) : 'Não gerado',
+            'Tipo de vínculo' => !empty($item['cliente_id']) ? 'Cliente associado' : 'Potencial cliente',
+            'E-mail' => (string)($item['email'] ?? ''),
+            'WhatsApp' => (string)($item['whatsapp'] ?? ''),
+        ];
+        $labels = [
+            'financeiro' => 'Financeiro',
+            'mercado' => 'Mercado',
+            'pessoas' => 'Pessoas',
+            'processo' => 'Processo',
+        ];
+        $respostas = json_decode((string)($item['respostas_json'] ?? '{}'), true) ?: [];
+        $questions = [];
+        foreach (AvaliacaoQuestionario::pilares() as $pillar => $items) {
+            foreach ($items as $idx => $question) {
+                $checked = in_array($idx + 1, array_map('intval', $respostas[$pillar] ?? []), true);
+                $questions[] = [
+                    'title' => $labels[$pillar] . ' · ' . $question,
+                    'rows' => [
+                        'Pilar' => $labels[$pillar],
+                        'Pontuação da questão' => $checked ? 'Pontuado' : 'Não pontuado',
+                        'Pontuação do pilar' => (string)((int)($item['nota_' . $pillar] ?? 0)) . '/7',
+                        'Realidade do pilar' => (string)((int)($item['realidade_' . $pillar] ?? 0)) . '%',
+                    ],
+                    'images' => [],
+                ];
+            }
+        }
+        $logoPath = __DIR__ . '/../../public_html/assets/img/logobco.png';
+        $pdf = SimplePdfReport::fromAudit([
+            'logo_path' => is_file($logoPath) ? $logoPath : null,
+            'report_title' => 'Relatório da Avaliação',
+            'generated_at' => date('d/m/Y H:i'),
+            'version' => 'v1.0',
+            'header' => $header,
+            'questions' => $questions,
+        ]);
+        AuditLogger::log('avaliacao_pdf_export', 'avaliacao', $id, [
+            'avaliacao_id' => $id,
+            'public_link' => !empty($publico['token']),
+        ]);
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: inline; filename="avaliacao-' . $id . '.pdf"');
+        echo $pdf;
+    }
+
+    private function buildPublicLink(string $token): string
+    {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/index.php');
+        if (PHP_SAPI === 'cli' || strpos($scriptName, '/app/tests/') !== false) {
+            $scriptName = '/index.php';
+        }
+        $base = rtrim(dirname($scriptName), '/');
+        if ($base === '/' || $base === '\\' || $base === '.') {
+            $base = '';
+        }
+        if ($base !== '' && strpos($base, '/') !== 0) {
+            $base = '/' . ltrim($base, '/');
+        }
+        return $scheme . '://' . $host . $base . '/public/avaliacao/' . $token;
+    }
+
+    private function defaultValues(): array
+    {
+        return [
+            'modo_cadastro' => 'potencial',
+            'cliente_id' => '',
+            'empresa_nome' => '',
+            'nome' => '',
+            'email' => '',
+            'whatsapp' => '',
+            'numero_funcionarios' => '',
+            'numero_lideres' => '',
+            'faturamento_medio_anual' => '',
+            'tomador_decisao' => '',
+        ];
+    }
+
+    private function positiveInt($value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        $raw = trim((string)$value);
+        if (!preg_match('/^[1-9]\d*$/', $raw)) {
+            return null;
+        }
+        return (int)$raw;
+    }
+
+    private function booleanFromInput($value): ?int
+    {
+        if ($value === '1' || $value === 1 || $value === true || $value === 'sim') {
+            return 1;
+        }
+        if ($value === '0' || $value === 0 || $value === false || $value === 'nao' || $value === 'não') {
+            return 0;
+        }
+        return null;
+    }
+
+    private function isValidWhatsapp(string $digits): bool
+    {
+        if (!preg_match('/^\d+$/', $digits)) {
+            return false;
+        }
+        if (strlen($digits) === 12 || strlen($digits) === 13) {
+            if (strpos($digits, '55') !== 0) {
+                return false;
+            }
+            $digits = substr($digits, 2);
+        }
+        return (bool)preg_match('/^\d{10,11}$/', $digits);
     }
 }

@@ -7,7 +7,7 @@ class BaseController
         'store', 'update', 'delete', 'attach', 'upload', 'set_status',
         'upsertmetric', 'addcheck', 'createaction', 'updatetask',
         'updateaction', 'importrun', 'delete_update', 'storefilial',
-        'updateaplicacao', 'deleteaplicacao', 'auditar',
+        'updateaplicacao', 'deleteaplicacao', 'auditar', 'gerar-link-cliente', 'api_public_link_generate', 'log-link-share', 'associar-cliente',
         'api_store', 'api_update', 'api_delete', 'api_auditar',
     ];
 

@@ -1,9 +1,15 @@
-<?php /** @var array|null $item */ ?>
+<?php /** @var array|null $item */ /** @var array $clientesAssociacao */ /** @var array|null $publicLinkData */ /** @var string $publicLinkUrl */ ?>
 <div class="p-6">
   <div class="flex justify-between items-center mb-4">
     <h1 class="text-2xl font-bold">Avaliação</h1>
     <div class="flex items-center gap-2">
       <?php if ($item): ?>
+        <form method="post" action="index.php?route=avaliacoes/gerar-link-cliente" class="inline-flex">
+          <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+          <input type="hidden" name="avaliacao_id" value="<?= (int)$item['id'] ?>" />
+          <button class="px-3 py-2 rounded bg-brand-red text-white" type="submit">Criar Link de Avaliação Pública</button>
+        </form>
+        <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?route=avaliacoes/relatorio_pdf&id=<?= (int)$item['id'] ?>" target="_blank" rel="noopener">Exportar PDF</a>
         <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=avaliacoes/planoacao&id=<?= (int)$item['id'] ?>">Plano de Ação</a>
       <?php endif; ?>
       <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="javascript:history.back()">Voltar</a>
@@ -17,12 +23,68 @@
     $total = array_sum($labels);
     $pct = fn($n) => round(($n / $max) * 100);
     $empresa = $item['cliente_id'] ? ($item['cliente_nome'] ?? '') : ($item['empresa_nome'] ?? '');
+    $isPotencial = (int)($item['cliente_id'] ?? 0) <= 0;
   ?>
+  <?php if (!empty($publicLinkUrl)): ?>
+    <div class="bg-white shadow rounded p-4 mb-4">
+      <div class="font-semibold mb-2">Link público permanente</div>
+      <div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-center">
+        <input class="border rounded p-2 w-full bg-gray-50" value="<?= htmlspecialchars($publicLinkUrl) ?>" readonly />
+        <a class="px-4 py-2 rounded bg-gray-200 text-brand-brown text-center" href="<?= htmlspecialchars($publicLinkUrl) ?>" target="_blank" rel="noopener">Abrir link</a>
+      </div>
+      <div class="text-xs text-gray-600 mt-2">
+        Status: <?= htmlspecialchars(ucfirst((string)($publicLinkData['status'] ?? 'pendente'))) ?> ·
+        <?= empty($publicLinkData['expiracao']) ? 'Sem expiração automática' : ('Expira em ' . htmlspecialchars(date('d/m/Y H:i', strtotime((string)$publicLinkData['expiracao'])))) ?>
+      </div>
+    </div>
+  <?php endif; ?>
   <div class="bg-white shadow rounded p-4 mb-4">
     <div class="mb-2 text-sm text-gray-600">Empresa</div>
     <div class="font-semibold"><?= htmlspecialchars($empresa ?: '—') ?></div>
     <div class="text-sm text-gray-600 mt-1">Data: <?= htmlspecialchars(date('d/m/Y H:i', strtotime($item['created_at']))) ?></div>
+    <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+      <?php if ($isPotencial): ?>
+        <span class="px-2 py-1 rounded bg-yellow-100 text-yellow-800">Potencial cliente</span>
+      <?php else: ?>
+        <span class="px-2 py-1 rounded bg-green-100 text-green-800">Cliente associado</span>
+      <?php endif; ?>
+      <?php if (!empty($item['cliente_associado_em'])): ?>
+        <span class="px-2 py-1 rounded bg-gray-100 text-gray-700">Associado em <?= htmlspecialchars(date('d/m/Y H:i', strtotime($item['cliente_associado_em']))) ?></span>
+      <?php endif; ?>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mt-4 text-sm">
+      <div><span class="text-gray-600">Nome:</span> <span class="font-medium"><?= htmlspecialchars($item['nome'] ?? ($item['contato'] ?? '—')) ?></span></div>
+      <?php if (!empty($item['cliente_id']) && !empty($item['empresa_nome'])): ?>
+        <div><span class="text-gray-600">Empresa informada no cadastro:</span> <span class="font-medium"><?= htmlspecialchars((string)$item['empresa_nome']) ?></span></div>
+      <?php endif; ?>
+      <div><span class="text-gray-600">WhatsApp:</span> <span class="font-medium"><?= htmlspecialchars($item['whatsapp'] ?? '—') ?></span></div>
+      <div><span class="text-gray-600">E-mail:</span> <span class="font-medium"><?= htmlspecialchars($item['email'] ?? '—') ?></span></div>
+      <div><span class="text-gray-600">Funcionários:</span> <span class="font-medium"><?= isset($item['numero_funcionarios']) ? (int)$item['numero_funcionarios'] : '—' ?></span></div>
+      <div><span class="text-gray-600">Líderes:</span> <span class="font-medium"><?= isset($item['numero_lideres']) ? (int)$item['numero_lideres'] : '—' ?></span></div>
+      <div><span class="text-gray-600">Faturamento anual:</span> <span class="font-medium">R$ <?= isset($item['faturamento_medio_anual']) ? number_format((float)$item['faturamento_medio_anual'], 0, ',', '.') : '—' ?></span></div>
+      <div><span class="text-gray-600">Tomador de decisão:</span> <span class="font-medium"><?= isset($item['tomador_decisao']) ? ((int)$item['tomador_decisao'] === 1 ? 'Sim' : 'Não') : '—' ?></span></div>
+    </div>
   </div>
+  <?php if ($isPotencial): ?>
+    <div class="bg-white shadow rounded p-4 mb-4">
+      <div class="font-semibold mb-2">Associar a um cliente efetivo</div>
+      <p class="text-sm text-gray-600 mb-3">Quando este potencial cliente se tornar efetivo, associe a avaliação a um cadastro existente sem perder o histórico já registrado.</p>
+      <form method="post" action="index.php?route=avaliacoes/associar-cliente" class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
+        <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+        <input type="hidden" name="avaliacao_id" value="<?= (int)$item['id'] ?>" />
+        <div>
+          <label class="block text-sm mb-1">Cliente para associação</label>
+          <select name="cliente_id" class="border rounded p-2 w-full" required>
+            <option value="">Selecione um cliente</option>
+            <?php foreach (($clientesAssociacao ?? []) as $cliente): ?>
+              <option value="<?= (int)$cliente['id'] ?>"><?= htmlspecialchars((string)$cliente['nome_empresa']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">Associar cliente</button>
+      </form>
+    </div>
+  <?php endif; ?>
   <div class="grid grid-cols-1 xl:grid-cols-4 gap-4">
     <?php foreach ($labels as $name => $score): ?>
       <div class="bg-white shadow rounded p-4">
@@ -62,44 +124,7 @@
     </div>
   </div>
   <?php
-    $qs = [
-      'financeiro' => [
-        'Planejamento estratégico?',
-        'Quadro de indicadores estratégicos?',
-        'Indicadores de desempenho por área?',
-        'Informações gerenciais de fácil acesso?',
-        'Reuniões de alinhamento estratégico?',
-        'Gestão à vista?',
-        'Registro dos planos de ação?',
-      ],
-      'mercado' => [
-        'Missão, Visão e Valores?',
-        'Processo comercial ativo e controlado?',
-        'Relacionamento com fornecedores saudável?',
-        'Pesquisa de satisfação de clientes?',
-        'Canal de sugestões/fale conosco?',
-        'Análise de concorrência/mercado?',
-        'Práticas ambientais?',
-      ],
-      'pessoas' => [
-        'Pesquisa de clima organizacional?',
-        'Seleção adequada com teste de perfil?',
-        'Integração com padrinhamento (onboarding)?',
-        'Avaliação de gaps e feedback?',
-        'Quadro de carreira e organograma?',
-        'Desenvolvimento e treinamentos?',
-        'PRG atualizado e implementado?',
-      ],
-      'processo' => [
-        'Manual de processos?',
-        'Treinamento/reciclagem de equipe nos manuais?',
-        'Monitoramento da produção (indicadores)?',
-        'Controle de ocorrências e erros?',
-        'Garantia da qualidade de terceiros?',
-        'Auditoria baseada nos manuais?',
-        'Metodologia de incentivo à melhoria?',
-      ],
-    ];
+    $qs = \App\Core\AvaliacaoQuestionario::pilares();
     $resp = json_decode($item['respostas_json'] ?? '{}', true) ?: [];
   ?>
   <div class="bg-white shadow rounded p-4 mt-4">
