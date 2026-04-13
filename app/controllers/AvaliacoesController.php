@@ -246,62 +246,38 @@ class AvaliacoesController extends BaseController
             echo 'Requisição inválida.';
             return;
         }
-        $id = (int)($_POST['avaliacao_id'] ?? 0);
-        if ($id <= 0) {
-            $id = $this->createPlaceholderAvaliacaoForPublicLink();
-            if ($id <= 0) {
-                $_SESSION['flash_error'] = 'Não foi possível preparar uma avaliação base para gerar o link público.';
-                $this->redirect('index.php?route=avaliacoes/index');
-                return;
-            }
-            AuditLogger::log('avaliacao_publica_seed_created', 'avaliacao', $id, [
-                'avaliacao_id' => $id,
-                'source' => 'empty_state_button',
-            ]);
-        }
-        $item = $this->model->find($id);
-        if (!$item) {
-            $_SESSION['flash_error'] = 'Avaliação não encontrada.';
-            $this->redirect('index.php?route=avaliacoes/index');
-            return;
-        }
-        $empresa = (string)($item['empresa_nome'] ?? ($item['cliente_nome'] ?? ''));
-        $anterior = $this->publicModel->findByAvaliacaoId($id);
-        AuditLogger::log('avaliacao_publica_regenerate_attempt', 'avaliacao_publica', $id, [
-            'avaliacao_id' => $id,
-            'had_previous_link' => !empty($anterior),
-            'previous_status' => $anterior['status'] ?? null,
-            'previous_token' => $anterior['token'] ?? null,
-        ]);
         try {
-            $publico = $this->publicModel->createOrRefreshForAvaliacao($id, $empresa, true);
+            $publico = $this->publicModel->createStandaloneLink();
         } catch (\Throwable $e) {
-            AuditLogger::log('avaliacao_publica_regenerate_error', 'avaliacao_publica', $id, [
-                'avaliacao_id' => $id,
+            AuditLogger::log('avaliacao_publica_generate_error', 'avaliacao_publica', 0, [
                 'message' => $e->getMessage(),
+                'script_name' => (string)($_SERVER['SCRIPT_NAME'] ?? ''),
+                'request_uri' => (string)($_SERVER['REQUEST_URI'] ?? ''),
+                'host' => (string)($_SERVER['HTTP_HOST'] ?? ''),
             ]);
             $_SESSION['flash_error'] = 'Falha ao gerar o novo link público.';
             $this->redirect('index.php?route=avaliacoes/index');
             return;
         }
         if (empty($publico['token'])) {
-            AuditLogger::log('avaliacao_publica_regenerate_failed', 'avaliacao_publica', $id, [
-                'avaliacao_id' => $id,
-            ]);
+            AuditLogger::log('avaliacao_publica_generate_failed', 'avaliacao_publica', 0, []);
             $_SESSION['flash_error'] = 'Não foi possível gerar o link público.';
             $this->redirect('index.php?route=avaliacoes/index');
             return;
         }
-        AuditLogger::log('avaliacao_publica_regenerate_success', 'avaliacao_publica', (int)($publico['id'] ?? 0), [
-            'avaliacao_id' => $id,
+        AuditLogger::log('avaliacao_publica_generate_success', 'avaliacao_publica', (int)($publico['id'] ?? 0), [
             'token' => $publico['token'] ?? null,
             'expiracao' => $publico['expiracao'] ?? null,
             'permanent' => empty($publico['expiracao']),
-            'replaced_previous_token' => $anterior['token'] ?? null,
+            'standalone' => true,
+            'script_name' => (string)($_SERVER['SCRIPT_NAME'] ?? ''),
+            'request_uri' => (string)($_SERVER['REQUEST_URI'] ?? ''),
+            'host' => (string)($_SERVER['HTTP_HOST'] ?? ''),
         ]);
         $_SESSION['generated_public_link'] = [
-            'avaliacao_id' => $id,
-            'empresa' => $empresa,
+            'avaliacao_id' => 0,
+            'public_id' => (int)($publico['id'] ?? 0),
+            'empresa' => '',
             'url' => $this->buildPublicLink((string)($publico['token'] ?? '')),
             'token' => (string)($publico['token'] ?? ''),
             'expiracao' => (string)($publico['expiracao'] ?? ''),
@@ -320,38 +296,33 @@ class AvaliacoesController extends BaseController
             echo json_encode(['success' => false, 'message' => 'Requisição inválida.'], JSON_UNESCAPED_UNICODE);
             return;
         }
-        $id = (int)($_POST['avaliacao_id'] ?? 0);
-        if ($id <= 0) {
-            $id = $this->createPlaceholderAvaliacaoForPublicLink();
-        }
-        $item = $id > 0 ? $this->model->find($id) : null;
-        if (!$item) {
-            http_response_code(404);
-            header('Content-Type: application/json; charset=utf-8');
-            echo json_encode(['success' => false, 'message' => 'Não foi possível preparar uma avaliação base para gerar o link público.'], JSON_UNESCAPED_UNICODE);
-            return;
-        }
         try {
-            $publico = $this->publicModel->createOrRefreshForAvaliacao($id, (string)($item['empresa_nome'] ?? ($item['cliente_nome'] ?? '')), true);
+            $publico = $this->publicModel->createStandaloneLink();
             AuditLogger::log('avaliacao_publica_api_generate', 'avaliacao_publica', (int)($publico['id'] ?? 0), [
-                'avaliacao_id' => $id,
                 'token' => $publico['token'] ?? null,
                 'permanent' => empty($publico['expiracao']),
+                'standalone' => true,
+                'script_name' => (string)($_SERVER['SCRIPT_NAME'] ?? ''),
+                'request_uri' => (string)($_SERVER['REQUEST_URI'] ?? ''),
+                'host' => (string)($_SERVER['HTTP_HOST'] ?? ''),
             ]);
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode([
                 'success' => true,
                 'data' => [
-                    'avaliacao_id' => $id,
+                    'avaliacao_id' => 0,
+                    'public_id' => (int)($publico['id'] ?? 0),
                     'token' => $publico['token'] ?? null,
                     'public_url' => $this->buildPublicLink((string)($publico['token'] ?? '')),
                     'permanent' => empty($publico['expiracao']),
                 ],
             ], JSON_UNESCAPED_UNICODE);
         } catch (\Throwable $e) {
-            AuditLogger::log('avaliacao_publica_api_generate_error', 'avaliacao_publica', $id, [
-                'avaliacao_id' => $id,
+            AuditLogger::log('avaliacao_publica_api_generate_error', 'avaliacao_publica', 0, [
                 'message' => $e->getMessage(),
+                'script_name' => (string)($_SERVER['SCRIPT_NAME'] ?? ''),
+                'request_uri' => (string)($_SERVER['REQUEST_URI'] ?? ''),
+                'host' => (string)($_SERVER['HTTP_HOST'] ?? ''),
             ]);
             http_response_code(500);
             header('Content-Type: application/json; charset=utf-8');
@@ -369,17 +340,19 @@ class AvaliacoesController extends BaseController
             return;
         }
         $avaliacaoId = (int)($_POST['avaliacao_id'] ?? 0);
+        $publicId = (int)($_POST['public_id'] ?? 0);
         $channel = trim((string)($_POST['channel'] ?? ''));
         $url = trim((string)($_POST['url'] ?? ''));
         $success = trim((string)($_POST['success'] ?? ''));
-        if ($avaliacaoId <= 0 || $channel === '') {
+        if (($avaliacaoId <= 0 && $publicId <= 0) || $channel === '') {
             http_response_code(422);
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode(['ok' => false, 'message' => 'Dados inválidos.']);
             return;
         }
-        AuditLogger::log('avaliacao_publica_share', 'avaliacao_publica', $avaliacaoId, [
+        AuditLogger::log('avaliacao_publica_share', 'avaliacao_publica', $publicId > 0 ? $publicId : $avaliacaoId, [
             'avaliacao_id' => $avaliacaoId,
+            'public_id' => $publicId,
             'channel' => $channel,
             'url' => $url,
             'success' => $success,
@@ -452,6 +425,10 @@ class AvaliacoesController extends BaseController
 
     private function buildPublicLink(string $token): string
     {
+        $configured = trim((string)(getenv('PUBLIC_EVALUATION_BASE_URL') ?: ''));
+        if ($configured !== '') {
+            return rtrim($configured, '/') . '/' . rawurlencode($token);
+        }
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
         $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/index.php');
@@ -465,38 +442,10 @@ class AvaliacoesController extends BaseController
         if ($base !== '' && strpos($base, '/') !== 0) {
             $base = '/' . ltrim($base, '/');
         }
-        return $scheme . '://' . $host . $base . '/public/avaliacao/' . $token;
-    }
-
-    private function createPlaceholderAvaliacaoForPublicLink(): int
-    {
-        return $this->model->create([
-            'cliente_id' => null,
-            'empresa_nome' => 'Novo cadastro público',
-            'nome' => '',
-            'email' => '',
-            'whatsapp' => '',
-            'numero_funcionarios' => 0,
-            'numero_lideres' => 0,
-            'faturamento_medio_anual' => 0,
-            'tomador_decisao' => 0,
-            'origem_cadastro' => 'potencial_cliente',
-            'contato' => null,
-            'respostas_json' => json_encode([
-                'financeiro' => [],
-                'mercado' => [],
-                'pessoas' => [],
-                'processo' => [],
-            ]),
-            'nota_financeiro' => 0,
-            'nota_mercado' => 0,
-            'nota_pessoas' => 0,
-            'nota_processo' => 0,
-            'realidade_financeiro' => 0,
-            'realidade_mercado' => 0,
-            'realidade_pessoas' => 0,
-            'realidade_processo' => 0,
-        ]);
+        if (str_starts_with($base, '/public_html')) {
+            return $scheme . '://' . $host . $base . '/public/avaliacao/' . rawurlencode($token);
+        }
+        return $scheme . '://' . $host . '/public_html/public/avaliacao/' . rawurlencode($token);
     }
 
 

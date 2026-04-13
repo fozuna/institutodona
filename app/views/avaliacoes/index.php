@@ -5,11 +5,20 @@
   if ($baseUrl === '/' || $baseUrl === '\\') { $baseUrl = ''; }
   $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
   $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+  $configuredPublicBaseUrl = trim((string)(getenv('PUBLIC_EVALUATION_BASE_URL') ?: ''));
+  if ($configuredPublicBaseUrl !== '') {
+    $publicBaseUrl = rtrim($configuredPublicBaseUrl, '/');
+  } elseif (str_starts_with($baseUrl, '/public_html')) {
+    $publicBaseUrl = $scheme . '://' . $host . $baseUrl . '/public/avaliacao';
+  } else {
+    $publicBaseUrl = $scheme . '://' . $host . '/public_html/public/avaliacao';
+  }
   $generatedLink = $_SESSION['generated_public_link'] ?? null;
   unset($_SESSION['generated_public_link']);
   $generatedUrl = (string)($generatedLink['url'] ?? '');
   $generatedEmpresa = (string)($generatedLink['empresa'] ?? '');
   $generatedAvaliacaoId = (int)($generatedLink['avaliacao_id'] ?? 0);
+  $generatedPublicId = (int)($generatedLink['public_id'] ?? 0);
   $generatedExpiracao = (string)($generatedLink['expiracao'] ?? '');
   $generatedPermanent = !empty($generatedLink['permanent']);
   $defaultSelectedAvaliacaoId = !empty($items) ? (int)($items[0]['id'] ?? 0) : 0;
@@ -55,12 +64,12 @@
           </div>
         </div>
         <div class="flex flex-wrap gap-2 xl:justify-end">
-          <button type="button" class="px-3 py-2 rounded bg-brand-red text-white btn-share-action" data-channel="copy" data-url="<?= htmlspecialchars($generatedUrl) ?>" data-avaliacao-id="<?= $generatedAvaliacaoId ?>">Copiar link</button>
-          <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown share-link-anchor" href="<?= htmlspecialchars($mailtoHref) ?>" data-channel="email" data-url="<?= htmlspecialchars($generatedUrl) ?>" data-avaliacao-id="<?= $generatedAvaliacaoId ?>">Enviar por e-mail</a>
-          <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown share-link-anchor" href="<?= htmlspecialchars($whatsHref) ?>" target="_blank" rel="noopener" data-channel="whatsapp" data-url="<?= htmlspecialchars($generatedUrl) ?>" data-avaliacao-id="<?= $generatedAvaliacaoId ?>">WhatsApp</a>
-          <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown share-link-anchor" href="<?= htmlspecialchars($linkedinHref) ?>" target="_blank" rel="noopener" data-channel="linkedin" data-url="<?= htmlspecialchars($generatedUrl) ?>" data-avaliacao-id="<?= $generatedAvaliacaoId ?>">LinkedIn</a>
-          <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown share-link-anchor" href="<?= htmlspecialchars($facebookHref) ?>" target="_blank" rel="noopener" data-channel="facebook" data-url="<?= htmlspecialchars($generatedUrl) ?>" data-avaliacao-id="<?= $generatedAvaliacaoId ?>">Facebook</a>
-          <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown share-link-anchor" href="<?= htmlspecialchars($generatedUrl) ?>" target="_blank" rel="noopener" data-channel="open" data-url="<?= htmlspecialchars($generatedUrl) ?>" data-avaliacao-id="<?= $generatedAvaliacaoId ?>">Abrir link</a>
+          <button type="button" class="px-3 py-2 rounded bg-brand-red text-white btn-share-action" data-channel="copy" data-url="<?= htmlspecialchars($generatedUrl) ?>" data-avaliacao-id="<?= $generatedAvaliacaoId ?>" data-public-id="<?= $generatedPublicId ?>">Copiar link</button>
+          <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown share-link-anchor" href="<?= htmlspecialchars($mailtoHref) ?>" data-channel="email" data-url="<?= htmlspecialchars($generatedUrl) ?>" data-avaliacao-id="<?= $generatedAvaliacaoId ?>" data-public-id="<?= $generatedPublicId ?>">Enviar por e-mail</a>
+          <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown share-link-anchor" href="<?= htmlspecialchars($whatsHref) ?>" target="_blank" rel="noopener" data-channel="whatsapp" data-url="<?= htmlspecialchars($generatedUrl) ?>" data-avaliacao-id="<?= $generatedAvaliacaoId ?>" data-public-id="<?= $generatedPublicId ?>">WhatsApp</a>
+          <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown share-link-anchor" href="<?= htmlspecialchars($linkedinHref) ?>" target="_blank" rel="noopener" data-channel="linkedin" data-url="<?= htmlspecialchars($generatedUrl) ?>" data-avaliacao-id="<?= $generatedAvaliacaoId ?>" data-public-id="<?= $generatedPublicId ?>">LinkedIn</a>
+          <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown share-link-anchor" href="<?= htmlspecialchars($facebookHref) ?>" target="_blank" rel="noopener" data-channel="facebook" data-url="<?= htmlspecialchars($generatedUrl) ?>" data-avaliacao-id="<?= $generatedAvaliacaoId ?>" data-public-id="<?= $generatedPublicId ?>">Facebook</a>
+          <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown share-link-anchor" href="<?= htmlspecialchars($generatedUrl) ?>" target="_blank" rel="noopener" data-channel="open" data-url="<?= htmlspecialchars($generatedUrl) ?>" data-avaliacao-id="<?= $generatedAvaliacaoId ?>" data-public-id="<?= $generatedPublicId ?>">Abrir link</a>
         </div>
       </div>
     </div>
@@ -92,7 +101,7 @@
           $publicToken = (string)($i['publico_token'] ?? '');
           $expirado = !empty($i['publico_expiracao']) && strtotime((string)$i['publico_expiracao']) < time();
           $permanente = empty($i['publico_expiracao']);
-          $publicLink = $publicToken !== '' ? ($scheme . '://' . $host . $baseUrl . '/public/avaliacao/' . $publicToken) : '';
+          $publicLink = $publicToken !== '' ? ($publicBaseUrl . '/' . rawurlencode($publicToken)) : '';
         ?>
           <tr class="border-b cursor-pointer row-avaliacao <?= (int)$i['id'] === $defaultSelectedAvaliacaoId ? 'bg-red-50' : '' ?>" data-avaliacao-id="<?= (int)$i['id'] ?>" data-empresa="<?= htmlspecialchars($nm) ?>">
             <td class="p-3">
@@ -143,11 +152,12 @@
 <script>
   (function(){
     const csrfShareToken = <?= json_encode($csrfShareToken, JSON_UNESCAPED_UNICODE) ?>;
-    async function logShare(channel, url, avaliacaoId, success) {
-      if (!avaliacaoId || !channel) return;
+    async function logShare(channel, url, avaliacaoId, publicId, success) {
+      if ((!avaliacaoId && !publicId) || !channel) return;
       const payload = new URLSearchParams();
       payload.set('csrf', csrfShareToken);
       payload.set('avaliacao_id', String(avaliacaoId));
+      payload.set('public_id', String(publicId));
       payload.set('channel', channel);
       payload.set('url', url || '');
       payload.set('success', success ? '1' : '0');
@@ -165,22 +175,48 @@
     const generatedLinkInput = document.getElementById('generated-public-link');
     const generatedPanel = document.getElementById('generated-link-panel');
     const generatedCopyBtn = generatedPanel ? generatedPanel.querySelector('[data-channel="copy"]') : null;
+    function fallbackCopyText(text) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', 'readonly');
+      textarea.style.position = 'fixed';
+      textarea.style.top = '-9999px';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      textarea.setSelectionRange(0, textarea.value.length);
+      let ok = false;
+      try {
+        ok = document.execCommand('copy');
+      } catch (e) {
+        ok = false;
+      }
+      document.body.removeChild(textarea);
+      return ok;
+    }
+    async function copyTextRobust(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return true;
+        } catch (e) {}
+      }
+      return fallbackCopyText(text);
+    }
     if (generatedLinkInput && feedbackEl) {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(generatedLinkInput.value).then(() => {
+      copyTextRobust(generatedLinkInput.value).then((copied) => {
+        if (copied) {
           feedbackEl.textContent = 'Link copiado automaticamente com sucesso.';
           if (generatedCopyBtn) {
             generatedCopyBtn.textContent = 'Copiado';
           }
-          logShare('auto_copy', generatedLinkInput.value, <?= (int)$generatedAvaliacaoId ?>, true);
-        }).catch(() => {
+          logShare('auto_copy', generatedLinkInput.value, <?= (int)$generatedAvaliacaoId ?>, <?= (int)$generatedPublicId ?>, true);
+        } else {
           feedbackEl.textContent = 'Não foi possível copiar automaticamente. Use as opções abaixo para compartilhar.';
-          logShare('auto_copy', generatedLinkInput.value, <?= (int)$generatedAvaliacaoId ?>, false);
-        });
-      } else {
-        feedbackEl.textContent = 'Não foi possível copiar automaticamente. Use as opções abaixo para compartilhar.';
-        logShare('auto_copy', generatedLinkInput.value, <?= (int)$generatedAvaliacaoId ?>, false);
-      }
+          logShare('auto_copy', generatedLinkInput.value, <?= (int)$generatedAvaliacaoId ?>, <?= (int)$generatedPublicId ?>, false);
+        }
+      });
     }
     const form = document.getElementById('form-gerar-link-publico');
     const hiddenId = document.getElementById('avaliacao-publica-id');
@@ -214,17 +250,18 @@
       btn.addEventListener('click', async () => {
         const link = btn.getAttribute('data-link') || '';
         const avaliacaoId = Number(btn.getAttribute('data-avaliacao-id') || '0');
+        const publicId = Number(btn.getAttribute('data-public-id') || '0');
         if (!link) return;
         try {
-          if (!(navigator.clipboard && navigator.clipboard.writeText)) {
+          const copied = await copyTextRobust(link);
+          if (!copied) {
             throw new Error('clipboard_unavailable');
           }
-          await navigator.clipboard.writeText(link);
           btn.textContent = 'Copiado';
-          logShare('copy_existing', link, avaliacaoId, true);
+          logShare('copy_existing', link, avaliacaoId, publicId, true);
           setTimeout(()=>{ btn.textContent = 'Copiar'; }, 1500);
         } catch (e) {
-          logShare('copy_existing', link, avaliacaoId, false);
+          logShare('copy_existing', link, avaliacaoId, publicId, false);
         }
       });
     });
@@ -232,22 +269,23 @@
       btn.addEventListener('click', async () => {
         const link = btn.getAttribute('data-url') || '';
         const avaliacaoId = Number(btn.getAttribute('data-avaliacao-id') || '0');
+        const publicId = Number(btn.getAttribute('data-public-id') || '0');
         if (!link) {
           if (feedbackEl) feedbackEl.textContent = 'Nenhum link disponível para cópia.';
           return;
         }
         try {
-          if (!(navigator.clipboard && navigator.clipboard.writeText)) {
+          const copied = await copyTextRobust(link);
+          if (!copied) {
             throw new Error('clipboard_unavailable');
           }
-          await navigator.clipboard.writeText(link);
           btn.textContent = 'Copiado';
           if (feedbackEl) feedbackEl.textContent = 'Link copiado para a área de transferência.';
-          logShare('copy', link, avaliacaoId, true);
+          logShare('copy', link, avaliacaoId, publicId, true);
           setTimeout(() => { btn.textContent = 'Copiar link'; }, 1800);
         } catch (e) {
-          if (feedbackEl) feedbackEl.textContent = 'Falha ao copiar automaticamente. Tente novamente.';
-          logShare('copy', link, avaliacaoId, false);
+          if (feedbackEl) feedbackEl.textContent = 'Falha na cópia automática. Selecione e copie manualmente o campo do link.';
+          logShare('copy', link, avaliacaoId, publicId, false);
         }
       });
     });
@@ -256,8 +294,9 @@
         const channel = anchor.getAttribute('data-channel') || '';
         const url = anchor.getAttribute('data-url') || '';
         const avaliacaoId = Number(anchor.getAttribute('data-avaliacao-id') || '0');
+        const publicId = Number(anchor.getAttribute('data-public-id') || '0');
         if (feedbackEl) feedbackEl.textContent = 'Opção de compartilhamento aberta com sucesso.';
-        logShare(channel, url, avaliacaoId, true);
+        logShare(channel, url, avaliacaoId, publicId, true);
       });
     });
   })();

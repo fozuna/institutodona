@@ -28,6 +28,7 @@ $_SERVER['SCRIPT_NAME'] = '/index.php';
 
 $pdo = Database::getConnection();
 $beforeCount = (int)$pdo->query('SELECT COUNT(*) FROM avaliacoes')->fetchColumn();
+$beforePublicCount = (int)$pdo->query('SELECT COUNT(*) FROM avaliacoes_publicas')->fetchColumn();
 
 $_POST = [
     'csrf' => Security::csrfToken(),
@@ -38,19 +39,23 @@ $controller = new AvaliacoesControllerTestDouble();
 $controller->gerarLinkCliente();
 
 $afterCount = (int)$pdo->query('SELECT COUNT(*) FROM avaliacoes')->fetchColumn();
+$afterPublicCount = (int)$pdo->query('SELECT COUNT(*) FROM avaliacoes_publicas')->fetchColumn();
 $generated = $_SESSION['generated_public_link'] ?? [];
-$newAvaliacaoId = (int)($generated['avaliacao_id'] ?? 0);
-$newAvaliacao = null;
-if ($newAvaliacaoId > 0) {
-    $stmt = $pdo->prepare('SELECT empresa_nome, origem_cadastro FROM avaliacoes WHERE id = :id');
-    $stmt->execute(['id' => $newAvaliacaoId]);
-    $newAvaliacao = $stmt->fetch();
+$publicId = (int)($generated['public_id'] ?? 0);
+$publicRecord = null;
+if ($publicId > 0) {
+    $stmt = $pdo->prepare('SELECT avaliacao_id, empresa, status FROM avaliacoes_publicas WHERE id = :id');
+    $stmt->execute(['id' => $publicId]);
+    $publicRecord = $stmt->fetch();
 }
 
 echo json_encode([
-    'created_new_avaliacao' => $afterCount === ($beforeCount + 1),
+    'did_not_create_internal_avaliacao' => $afterCount === $beforeCount,
+    'created_new_public_link' => $afterPublicCount === ($beforePublicCount + 1),
     'generated_link_present' => !empty($generated['url']),
     'redirected_to_index' => $controller->redirectUrl === 'index.php?route=avaliacoes/index',
-    'placeholder_empresa' => $newAvaliacao['empresa_nome'] ?? null,
-    'placeholder_origem' => $newAvaliacao['origem_cadastro'] ?? null,
+    'generated_avaliacao_id' => (int)($generated['avaliacao_id'] ?? 0),
+    'public_record_avaliacao_id_is_null' => !isset($publicRecord['avaliacao_id']) || $publicRecord['avaliacao_id'] === null,
+    'public_record_empresa_is_null' => !isset($publicRecord['empresa']) || $publicRecord['empresa'] === null,
+    'public_record_status' => $publicRecord['status'] ?? null,
 ], JSON_UNESCAPED_UNICODE);

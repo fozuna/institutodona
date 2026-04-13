@@ -174,7 +174,7 @@ COMMIT;
 
 CREATE TABLE IF NOT EXISTS avaliacoes_publicas (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  avaliacao_id INT NOT NULL,
+  avaliacao_id INT NULL,
   token CHAR(36) NOT NULL,
   nome VARCHAR(150) NULL,
   empresa VARCHAR(255) NULL,
@@ -205,6 +205,7 @@ CALL sp_add_column_if_missing('avaliacoes_publicas', 'expiracao', 'DATETIME NULL
 CALL sp_add_column_if_missing('avaliacoes_publicas', 'data_conclusao', 'DATETIME NULL AFTER data_criacao');
 
 -- Ajustes de tipo para tokens UUID e links permanentes.
+ALTER TABLE avaliacoes_publicas MODIFY avaliacao_id INT NULL;
 ALTER TABLE avaliacoes_publicas MODIFY token CHAR(36) NOT NULL;
 ALTER TABLE avaliacoes_publicas MODIFY expiracao DATETIME NULL;
 

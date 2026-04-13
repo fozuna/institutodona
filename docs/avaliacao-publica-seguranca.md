@@ -6,6 +6,7 @@ Implementação do endpoint público de avaliação com acesso anônimo e isolam
 
 - Página pública: `/public_html/public/avaliacao/{token}`
 - API pública de validação: `/public_html/public/avaliacao/api/validate/{token}`
+- Base pública configurável por ambiente: `PUBLIC_EVALUATION_BASE_URL`
 
 Essas rotas não passam pelo front controller autenticado do sistema interno e não usam `requireLogin()`.
 
@@ -34,6 +35,7 @@ Além disso, a view pública usa meta `robots` para não indexação.
 ### Garantias funcionais
 
 - O link público funciona sem sessão autenticada
+- O link gerado pelo botão superior é standalone e não depende de `cliente_id`, `avaliacao_id` prévio ou histórico de clientes
 - Usuários anônimos permanecem restritos à página pública e à API pública de validação
 - Não há renderização do layout interno do sistema
 - Não há menu, navegação lateral ou atalhos para outras funcionalidades
@@ -44,6 +46,8 @@ Além disso, a view pública usa meta `robots` para não indexação.
 
 - Teste local sem sessão autenticada garantindo renderização da página pública
 - Teste local sem sessão autenticada garantindo resposta da API pública
+- Teste local de geração standalone sem criar avaliação interna
+- Teste local de render garantindo fallback de cópia no frontend
 - Verificação remota:
   - `/public/avaliacao/...` pode não existir conforme a configuração do host
   - `/public_html/public/avaliacao/...` respondeu como página pública sem exigir login

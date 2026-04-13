@@ -104,6 +104,9 @@ class AvaliacaoPublicaController
         AuditLogger::log('avaliacao_publica_access', 'avaliacao_publica', (int)($record['avaliacao_id'] ?? 0), [
             'token' => $token,
             'status' => $record['status'] ?? null,
+            'request_uri' => (string)($_SERVER['REQUEST_URI'] ?? ''),
+            'script_name' => (string)($_SERVER['SCRIPT_NAME'] ?? ''),
+            'host' => (string)($_SERVER['HTTP_HOST'] ?? ''),
         ]);
         $this->render([
             'rateLimited' => false,
@@ -275,6 +278,9 @@ class AvaliacaoPublicaController
             'token' => $token,
             'available' => $available,
             'status' => $record['status'] ?? null,
+            'request_uri' => (string)($_SERVER['REQUEST_URI'] ?? ''),
+            'script_name' => (string)($_SERVER['SCRIPT_NAME'] ?? ''),
+            'host' => (string)($_SERVER['HTTP_HOST'] ?? ''),
         ]);
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
@@ -431,6 +437,10 @@ class AvaliacaoPublicaController
 
     private function publicUrlByToken(string $token): string
     {
+        $configured = trim((string)(getenv('PUBLIC_EVALUATION_BASE_URL') ?: ''));
+        if ($configured !== '') {
+            return rtrim($configured, '/') . '/' . rawurlencode($token);
+        }
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
         $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/public/avaliacao/index.php');
@@ -447,7 +457,10 @@ class AvaliacaoPublicaController
         if ($base !== '' && strpos($base, '/') !== 0) {
             $base = '/' . ltrim($base, '/');
         }
-        return $scheme . '://' . $host . $base . '/public/avaliacao/' . $token;
+        if (str_starts_with($base, '/public_html')) {
+            return $scheme . '://' . $host . $base . '/public/avaliacao/' . rawurlencode($token);
+        }
+        return $scheme . '://' . $host . '/public_html/public/avaliacao/' . rawurlencode($token);
     }
 
     private function isValidWhatsapp(string $digits): bool

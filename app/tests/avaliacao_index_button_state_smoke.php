@@ -71,6 +71,7 @@ $potentialDoesNotBlock = strpos($htmlWithItems, 'Potencial cliente') !== false &
 $buttonEnabledWithoutItems = preg_match('/id="btn-gerar-link-publico"[^>]*>/m', $htmlWithoutItems, $buttonEmptyMatch)
     && preg_match('/\sdisabled(\s|>|=)/', $buttonEmptyMatch[0]) !== 1;
 $emptyStateAllowsBlankId = strpos($htmlWithoutItems, 'id="avaliacao-publica-id" value=""') !== false;
+$copyFallbackPresent = strpos($htmlWithItems, 'copyTextRobust') !== false && strpos($htmlWithItems, 'fallbackCopyText') !== false;
 
 echo json_encode([
     'button_enabled_with_items' => $buttonEnabledWithItems,
@@ -78,4 +79,5 @@ echo json_encode([
     'potential_cliente_does_not_block' => $potentialDoesNotBlock,
     'button_enabled_without_items' => $buttonEnabledWithoutItems,
     'empty_state_allows_blank_id' => $emptyStateAllowsBlankId,
+    'copy_fallback_present' => $copyFallbackPresent,
 ], JSON_UNESCAPED_UNICODE);

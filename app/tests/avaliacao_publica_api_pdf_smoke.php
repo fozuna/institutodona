@@ -47,6 +47,8 @@ $validateData = json_decode($validateJson, true);
 
 echo json_encode([
     'api_success' => (bool)($data['success'] ?? false),
+    'api_standalone' => (int)($data['data']['avaliacao_id'] ?? -1) === 0,
+    'public_id_present' => !empty($data['data']['public_id']),
     'public_url' => $data['data']['public_url'] ?? null,
     'permanent' => $data['data']['permanent'] ?? null,
     'validate_available' => $validateData['data']['available'] ?? null,

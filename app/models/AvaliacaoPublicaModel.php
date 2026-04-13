@@ -8,7 +8,7 @@ class AvaliacaoPublicaModel extends BaseModel
         try {
             $this->db->exec("CREATE TABLE IF NOT EXISTS avaliacoes_publicas (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                avaliacao_id INT NOT NULL,
+                avaliacao_id INT NULL,
                 token CHAR(36) NOT NULL UNIQUE,
                 nome VARCHAR(150) NULL,
                 empresa VARCHAR(255) NULL,
@@ -34,6 +34,7 @@ class AvaliacaoPublicaModel extends BaseModel
                 UNIQUE KEY uq_avaliacao_publica_avaliacao (avaliacao_id),
                 CONSTRAINT fk_avaliacoes_publicas_avaliacao FOREIGN KEY (avaliacao_id) REFERENCES avaliacoes(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            $this->db->exec("ALTER TABLE avaliacoes_publicas MODIFY avaliacao_id INT NULL");
             $this->db->exec("ALTER TABLE avaliacoes_publicas MODIFY expiracao DATETIME NULL");
             if (!\App\Database\Database::columnExists('avaliacoes_publicas', 'expiracao')) {
                 $this->db->exec("ALTER TABLE avaliacoes_publicas ADD COLUMN expiracao DATETIME NULL AFTER status");
@@ -110,6 +111,19 @@ class AvaliacaoPublicaModel extends BaseModel
             'avaliacao_id' => $avaliacaoId,
             'token' => $token,
             'empresa' => $empresa !== '' ? $empresa : null,
+            'status' => 'pendente',
+        ]);
+        $id = (int)$this->db->lastInsertId();
+        return $this->findById($id) ?: [];
+    }
+
+    public function createStandaloneLink(): array
+    {
+        $this->ensureTable();
+        $token = $this->generateToken();
+        $stmt = $this->db->prepare('INSERT INTO avaliacoes_publicas (avaliacao_id, token, empresa, status, expiracao) VALUES (NULL, :token, NULL, :status, NULL)');
+        $stmt->execute([
+            'token' => $token,
             'status' => 'pendente',
         ]);
         $id = (int)$this->db->lastInsertId();
