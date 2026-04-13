@@ -7,6 +7,7 @@ Implementação do endpoint público de avaliação com acesso anônimo e isolam
 - Página pública: `/public_html/public/avaliacao/{token}`
 - API pública de validação: `/public_html/public/avaliacao/api/validate/{token}`
 - Base pública configurável por ambiente: `PUBLIC_EVALUATION_BASE_URL`
+- Fallback portátil entre ambientes: `/index.php?route=avaliacao-publica/open&token={token}`
 
 Essas rotas não passam pelo front controller autenticado do sistema interno e não usam `requireLogin()`.
 
@@ -16,6 +17,7 @@ Essas rotas não passam pelo front controller autenticado do sistema interno e n
 - Entrada dedicada: `public_html/public/avaliacao/index.php`
 - Rewrite dedicada em `public_html/public/avaliacao/.htaccess`
 - Roteamento local dedicado em `public_html/router.php`
+- Rota pública fallback no front controller: `avaliacao-publica/open`
 - View pública standalone, sem menu administrativo, sem layout interno e sem links de navegação para áreas autenticadas
 
 ### Headers de segurança

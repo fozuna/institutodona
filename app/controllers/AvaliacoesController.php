@@ -442,10 +442,10 @@ class AvaliacoesController extends BaseController
         if ($base !== '' && strpos($base, '/') !== 0) {
             $base = '/' . ltrim($base, '/');
         }
-        if (str_starts_with($base, '/public_html')) {
-            return $scheme . '://' . $host . $base . '/public/avaliacao/' . rawurlencode($token);
+        if (str_ends_with($base, '/public/avaliacao')) {
+            $base = substr($base, 0, -strlen('/public/avaliacao'));
         }
-        return $scheme . '://' . $host . '/public_html/public/avaliacao/' . rawurlencode($token);
+        return $scheme . '://' . $host . $base . '/index.php?route=avaliacao-publica/open&token=' . rawurlencode($token);
     }
 
 

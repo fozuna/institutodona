@@ -254,6 +254,11 @@ class AvaliacaoPublicaController
             'realidade_pessoas' => $this->toPercent($notaPes, (int)($totais['pessoas'] ?? 1)),
             'realidade_processo' => $this->toPercent($notaPro, (int)($totais['processo'] ?? 1)),
         ]);
+        $updatedRecord = $this->publicas->findByToken($token) ?: $record;
+        if ((int)($updatedRecord['avaliacao_id'] ?? 0) <= 0) {
+            $avaliacaoId = $this->publicas->materializeStandaloneToAvaliacao($token);
+            $updatedRecord['avaliacao_id'] = $avaliacaoId > 0 ? $avaliacaoId : ($updatedRecord['avaliacao_id'] ?? null);
+        }
         AuditLogger::log('avaliacao_publica_finished', 'avaliacao_publica', (int)($record['avaliacao_id'] ?? 0), [
             'token' => $token,
             'nota_total' => $notaFin + $notaMer + $notaPes + $notaPro,
@@ -457,10 +462,11 @@ class AvaliacaoPublicaController
         if ($base !== '' && strpos($base, '/') !== 0) {
             $base = '/' . ltrim($base, '/');
         }
-        if (str_starts_with($base, '/public_html')) {
-            return $scheme . '://' . $host . $base . '/public/avaliacao/' . rawurlencode($token);
+        $indexBase = $base !== '' ? $base : '';
+        if (str_ends_with($indexBase, '/public/avaliacao')) {
+            $indexBase = substr($indexBase, 0, -strlen('/public/avaliacao'));
         }
-        return $scheme . '://' . $host . '/public_html/public/avaliacao/' . rawurlencode($token);
+        return $scheme . '://' . $host . $indexBase . '/index.php?route=avaliacao-publica/open&token=' . rawurlencode($token);
     }
 
     private function isValidWhatsapp(string $digits): bool

@@ -26,6 +26,7 @@ use App\Controllers\AvaliacoesController;
 use App\Controllers\LogsController;
 use App\Controllers\AboutController;
 use App\Controllers\AuditoriasController;
+use App\Controllers\AvaliacaoPublicaController;
 
 $route = $_GET['route'] ?? 'auth/login';
 
@@ -447,6 +448,9 @@ switch ($route) {
         break;
     case 'avaliacoes/relatorio_pdf':
         (new AvaliacoesController())->relatorioPdf();
+        break;
+    case 'avaliacao-publica/open':
+        (new AvaliacaoPublicaController())->handle();
         break;
     case 'colaboradores/index':
         (new ColaboradoresController())->index();

@@ -191,6 +191,61 @@ class AvaliacaoPublicaModel extends BaseModel
         ]);
     }
 
+    public function attachToAvaliacaoByToken(string $token, int $avaliacaoId): bool
+    {
+        $this->ensureTable();
+        $stmt = $this->db->prepare('UPDATE avaliacoes_publicas SET avaliacao_id = :avaliacao_id WHERE token = :token');
+        return $stmt->execute([
+            'avaliacao_id' => $avaliacaoId,
+            'token' => $token,
+        ]);
+    }
+
+    public function materializeStandaloneToAvaliacao(string $token): int
+    {
+        $this->ensureTable();
+        $record = $this->findByToken($token);
+        if (!$record || (int)($record['avaliacao_id'] ?? 0) > 0) {
+            return (int)($record['avaliacao_id'] ?? 0);
+        }
+        $avaliacoes = new AvaliacaoModel();
+        $respostas = json_decode((string)($record['respostas_json'] ?? '{}'), true);
+        if (!is_array($respostas)) {
+            $respostas = [
+                'financeiro' => [],
+                'mercado' => [],
+                'pessoas' => [],
+                'processo' => [],
+            ];
+        }
+        $avaliacaoId = $avaliacoes->create([
+            'cliente_id' => null,
+            'empresa_nome' => (string)($record['empresa'] ?? 'Novo cadastro público'),
+            'nome' => (string)($record['nome'] ?? ''),
+            'email' => (string)($record['email'] ?? ''),
+            'whatsapp' => (string)($record['whatsapp'] ?? ''),
+            'numero_funcionarios' => (int)($record['numero_funcionarios'] ?? 0),
+            'numero_lideres' => (int)($record['numero_lideres'] ?? 0),
+            'faturamento_medio_anual' => (int)($record['faturamento_anual'] ?? 0),
+            'tomador_decisao' => (int)($record['tomador_decisao'] ?? 0),
+            'origem_cadastro' => 'potencial_cliente',
+            'contato' => (string)($record['nome'] ?? ''),
+            'respostas_json' => json_encode($respostas),
+            'nota_financeiro' => (int)($record['nota_financeiro'] ?? 0),
+            'nota_mercado' => (int)($record['nota_mercado'] ?? 0),
+            'nota_pessoas' => (int)($record['nota_pessoas'] ?? 0),
+            'nota_processo' => (int)($record['nota_processo'] ?? 0),
+            'realidade_financeiro' => isset($record['realidade_financeiro']) ? (int)$record['realidade_financeiro'] : 0,
+            'realidade_mercado' => isset($record['realidade_mercado']) ? (int)$record['realidade_mercado'] : 0,
+            'realidade_pessoas' => isset($record['realidade_pessoas']) ? (int)$record['realidade_pessoas'] : 0,
+            'realidade_processo' => isset($record['realidade_processo']) ? (int)$record['realidade_processo'] : 0,
+        ]);
+        if ($avaliacaoId > 0) {
+            $this->attachToAvaliacaoByToken($token, $avaliacaoId);
+        }
+        return $avaliacaoId;
+    }
+
     private function findById(int $id): ?array
     {
         $stmt = $this->db->prepare('SELECT * FROM avaliacoes_publicas WHERE id = :id LIMIT 1');
