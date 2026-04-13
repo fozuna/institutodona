@@ -12,6 +12,7 @@
   $generatedAvaliacaoId = (int)($generatedLink['avaliacao_id'] ?? 0);
   $generatedExpiracao = (string)($generatedLink['expiracao'] ?? '');
   $generatedPermanent = !empty($generatedLink['permanent']);
+  $defaultSelectedAvaliacaoId = !empty($items) ? (int)($items[0]['id'] ?? 0) : 0;
   $csrfShareToken = \App\Core\Security::csrfToken();
   $shareText = $generatedEmpresa !== '' ? ('Olá! Segue o link da avaliação da empresa ' . $generatedEmpresa . ': ' . $generatedUrl) : ('Olá! Segue o link da avaliação: ' . $generatedUrl);
   $mailtoHref = $generatedUrl !== '' ? ('mailto:?subject=' . rawurlencode('Link da avaliação pública') . '&body=' . rawurlencode($shareText)) : '';
@@ -33,8 +34,8 @@
     <div class="flex items-center gap-3">
       <form method="post" action="index.php?route=avaliacoes/gerar-link-cliente" id="form-gerar-link-publico" class="flex items-center gap-3">
         <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
-        <input type="hidden" name="avaliacao_id" id="avaliacao-publica-id" value="" />
-        <button type="submit" id="btn-gerar-link-publico" class="px-3 py-2 rounded bg-brand-red text-white disabled:opacity-50 disabled:cursor-not-allowed" disabled>Criar Link de Avaliação Pública</button>
+        <input type="hidden" name="avaliacao_id" id="avaliacao-publica-id" value="<?= $defaultSelectedAvaliacaoId > 0 ? $defaultSelectedAvaliacaoId : '' ?>" />
+        <button type="submit" id="btn-gerar-link-publico" class="px-3 py-2 rounded bg-brand-red text-white disabled:opacity-50 disabled:cursor-not-allowed" <?= $defaultSelectedAvaliacaoId > 0 ? '' : 'disabled' ?>>Criar Link de Avaliação Pública</button>
       </form>
       <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=avaliacoes/create">Nova Avaliação</a>
     </div>
@@ -93,7 +94,7 @@
           $permanente = empty($i['publico_expiracao']);
           $publicLink = $publicToken !== '' ? ($scheme . '://' . $host . $baseUrl . '/public/avaliacao/' . $publicToken) : '';
         ?>
-          <tr class="border-b cursor-pointer row-avaliacao" data-avaliacao-id="<?= (int)$i['id'] ?>" data-empresa="<?= htmlspecialchars($nm) ?>">
+          <tr class="border-b cursor-pointer row-avaliacao <?= (int)$i['id'] === $defaultSelectedAvaliacaoId ? 'bg-red-50' : '' ?>" data-avaliacao-id="<?= (int)$i['id'] ?>" data-empresa="<?= htmlspecialchars($nm) ?>">
             <td class="p-3">
               <div><?= htmlspecialchars($nm) ?></div>
               <?php if ($isPotencial): ?>
@@ -199,7 +200,10 @@
         selectRow(row);
       });
     });
-    if (rows.length === 1) {
+    const preselectedRow = hiddenId ? Array.from(rows).find((row) => (row.getAttribute('data-avaliacao-id') || '') === hiddenId.value) : null;
+    if (preselectedRow) {
+      selectRow(preselectedRow);
+    } else if (rows.length > 0) {
       selectRow(rows[0]);
     }
     if (form && generateBtn) {
