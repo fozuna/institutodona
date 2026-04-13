@@ -29,13 +29,13 @@
   <div class="flex flex-col gap-3 mb-4 xl:flex-row xl:items-center xl:justify-between">
     <div>
       <h1 class="text-2xl font-bold">Avaliações</h1>
-      <p class="text-sm text-gray-600">Selecione uma avaliação para criar ou renovar um link público permanente.</p>
+      <p class="text-sm text-gray-600">Crie um link público permanente a qualquer momento, mesmo sem avaliações prévias cadastradas.</p>
     </div>
     <div class="flex items-center gap-3">
       <form method="post" action="index.php?route=avaliacoes/gerar-link-cliente" id="form-gerar-link-publico" class="flex items-center gap-3">
         <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
         <input type="hidden" name="avaliacao_id" id="avaliacao-publica-id" value="<?= $defaultSelectedAvaliacaoId > 0 ? $defaultSelectedAvaliacaoId : '' ?>" />
-        <button type="submit" id="btn-gerar-link-publico" class="px-3 py-2 rounded bg-brand-red text-white disabled:opacity-50 disabled:cursor-not-allowed" <?= $defaultSelectedAvaliacaoId > 0 ? '' : 'disabled' ?>>Criar Link de Avaliação Pública</button>
+        <button type="submit" id="btn-gerar-link-publico" class="px-3 py-2 rounded bg-brand-red text-white">Criar Link de Avaliação Pública</button>
       </form>
       <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=avaliacoes/create">Nova Avaliação</a>
     </div>
@@ -192,7 +192,6 @@
       });
       row.classList.add('bg-red-50');
       hiddenId.value = row.getAttribute('data-avaliacao-id') || '';
-      generateBtn.disabled = hiddenId.value === '';
     }
     rows.forEach((row) => {
       row.addEventListener('click', (event) => {
@@ -208,10 +207,6 @@
     }
     if (form && generateBtn) {
       form.addEventListener('submit', () => {
-        if (!hiddenId.value) {
-          return false;
-        }
-        generateBtn.disabled = true;
         generateBtn.textContent = 'Criando link...';
       });
     }

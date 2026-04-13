@@ -248,9 +248,16 @@ class AvaliacoesController extends BaseController
         }
         $id = (int)($_POST['avaliacao_id'] ?? 0);
         if ($id <= 0) {
-            $_SESSION['flash_error'] = 'Avaliação inválida.';
-            $this->redirect('index.php?route=avaliacoes/index');
-            return;
+            $id = $this->createPlaceholderAvaliacaoForPublicLink();
+            if ($id <= 0) {
+                $_SESSION['flash_error'] = 'Não foi possível preparar uma avaliação base para gerar o link público.';
+                $this->redirect('index.php?route=avaliacoes/index');
+                return;
+            }
+            AuditLogger::log('avaliacao_publica_seed_created', 'avaliacao', $id, [
+                'avaliacao_id' => $id,
+                'source' => 'empty_state_button',
+            ]);
         }
         $item = $this->model->find($id);
         if (!$item) {
@@ -314,11 +321,14 @@ class AvaliacoesController extends BaseController
             return;
         }
         $id = (int)($_POST['avaliacao_id'] ?? 0);
+        if ($id <= 0) {
+            $id = $this->createPlaceholderAvaliacaoForPublicLink();
+        }
         $item = $id > 0 ? $this->model->find($id) : null;
         if (!$item) {
             http_response_code(404);
             header('Content-Type: application/json; charset=utf-8');
-            echo json_encode(['success' => false, 'message' => 'Avaliação não encontrada.'], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['success' => false, 'message' => 'Não foi possível preparar uma avaliação base para gerar o link público.'], JSON_UNESCAPED_UNICODE);
             return;
         }
         try {
@@ -457,6 +467,38 @@ class AvaliacoesController extends BaseController
         }
         return $scheme . '://' . $host . $base . '/public/avaliacao/' . $token;
     }
+
+    private function createPlaceholderAvaliacaoForPublicLink(): int
+    {
+        return $this->model->create([
+            'cliente_id' => null,
+            'empresa_nome' => 'Novo cadastro público',
+            'nome' => '',
+            'email' => '',
+            'whatsapp' => '',
+            'numero_funcionarios' => 0,
+            'numero_lideres' => 0,
+            'faturamento_medio_anual' => 0,
+            'tomador_decisao' => 0,
+            'origem_cadastro' => 'potencial_cliente',
+            'contato' => null,
+            'respostas_json' => json_encode([
+                'financeiro' => [],
+                'mercado' => [],
+                'pessoas' => [],
+                'processo' => [],
+            ]),
+            'nota_financeiro' => 0,
+            'nota_mercado' => 0,
+            'nota_pessoas' => 0,
+            'nota_processo' => 0,
+            'realidade_financeiro' => 0,
+            'realidade_mercado' => 0,
+            'realidade_pessoas' => 0,
+            'realidade_processo' => 0,
+        ]);
+    }
+
 
     private function defaultValues(): array
     {

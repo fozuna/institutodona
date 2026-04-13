@@ -68,11 +68,14 @@ $buttonEnabledWithItems = preg_match('/id="btn-gerar-link-publico"[^>]*>/m', $ht
     && preg_match('/\sdisabled(\s|>|=)/', $buttonMatch[0]) !== 1;
 $firstSelected = strpos($htmlWithItems, 'id="avaliacao-publica-id" value="101"') !== false;
 $potentialDoesNotBlock = strpos($htmlWithItems, 'Potencial cliente') !== false && $buttonEnabledWithItems;
-$buttonDisabledWithoutItems = preg_match('/id="btn-gerar-link-publico"[^>]*\sdisabled(\s|>|=)/m', $htmlWithoutItems) === 1;
+$buttonEnabledWithoutItems = preg_match('/id="btn-gerar-link-publico"[^>]*>/m', $htmlWithoutItems, $buttonEmptyMatch)
+    && preg_match('/\sdisabled(\s|>|=)/', $buttonEmptyMatch[0]) !== 1;
+$emptyStateAllowsBlankId = strpos($htmlWithoutItems, 'id="avaliacao-publica-id" value=""') !== false;
 
 echo json_encode([
     'button_enabled_with_items' => $buttonEnabledWithItems,
     'first_item_preselected' => $firstSelected,
     'potential_cliente_does_not_block' => $potentialDoesNotBlock,
-    'button_disabled_without_items' => $buttonDisabledWithoutItems,
+    'button_enabled_without_items' => $buttonEnabledWithoutItems,
+    'empty_state_allows_blank_id' => $emptyStateAllowsBlankId,
 ], JSON_UNESCAPED_UNICODE);
