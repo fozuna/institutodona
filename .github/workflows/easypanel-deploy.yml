@@ -19,4 +19,3 @@ jobs:
         run: |
           set -e
           curl -fsS -X POST "$EASYPANEL_DEPLOY_URL" || curl -fsS -X GET "$EASYPANEL_DEPLOY_URL"
-          fi

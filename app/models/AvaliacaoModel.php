@@ -111,17 +111,33 @@ class AvaliacaoModel extends BaseModel
         $this->ensureTable();
         $params = [];
         $scope = $this->scopeClause('a', $params, 'avall');
-        $sql = 'SELECT a.*, c.nome_empresa AS cliente_nome,
-                       ap.token AS publico_token,
-                       ap.status AS publico_status,
-                       ap.nome AS publico_nome,
-                       ap.empresa AS publico_empresa,
-                       ap.expiracao AS publico_expiracao,
-                       ap.data_criacao AS publico_data_envio,
-                       ap.data_conclusao AS publico_data_conclusao
+        $publicaExists = \App\Database\Database::tableExists('avaliacoes_publicas');
+        $select = [
+            'a.*',
+            'c.nome_empresa AS cliente_nome',
+        ];
+        $joinPublica = '';
+        if ($publicaExists) {
+            $select[] = 'ap.token AS publico_token';
+            $select[] = 'ap.status AS publico_status';
+            $select[] = 'ap.nome AS publico_nome';
+            $select[] = 'ap.empresa AS publico_empresa';
+            $select[] = 'ap.expiracao AS publico_expiracao';
+            $select[] = 'ap.data_criacao AS publico_data_envio';
+            $select[] = 'ap.data_conclusao AS publico_data_conclusao';
+            $joinPublica = ' LEFT JOIN avaliacoes_publicas ap ON ap.avaliacao_id = a.id';
+        } else {
+            $select[] = 'NULL AS publico_token';
+            $select[] = 'NULL AS publico_status';
+            $select[] = 'NULL AS publico_nome';
+            $select[] = 'NULL AS publico_empresa';
+            $select[] = 'NULL AS publico_expiracao';
+            $select[] = 'NULL AS publico_data_envio';
+            $select[] = 'NULL AS publico_data_conclusao';
+        }
+        $sql = 'SELECT ' . implode(",\n                       ", $select) . '
                 FROM avaliacoes a
-                LEFT JOIN clientes c ON c.id = a.cliente_id
-                LEFT JOIN avaliacoes_publicas ap ON ap.avaliacao_id = a.id
+                LEFT JOIN clientes c ON c.id = a.cliente_id' . $joinPublica . '
                 WHERE ' . $scope . '
                 ORDER BY a.created_at DESC';
         $stmt = $this->db->prepare($sql);
@@ -240,6 +256,7 @@ class AvaliacaoModel extends BaseModel
         }
         $columnCliente = $alias !== '' ? $alias . '.cliente_id' : 'a.cliente_id';
         $columnCreator = $alias !== '' ? $alias . '.created_by_user_id' : 'a.created_by_user_id';
+        $hasCreatorColumn = \App\Database\Database::columnExists('avaliacoes', 'created_by_user_id');
         $parts = [];
         $clientIds = Auth::allowedClientIds();
         if (!empty($clientIds)) {
@@ -252,7 +269,7 @@ class AvaliacaoModel extends BaseModel
             $parts[] = $columnCliente . ' IN (' . implode(',', $holders) . ')';
         }
         $userId = (int)(Auth::user()['id'] ?? 0);
-        if ($userId > 0) {
+        if ($userId > 0 && $hasCreatorColumn) {
             $params[$prefix . 'u'] = $userId;
             $parts[] = '(' . $columnCliente . ' IS NULL AND ' . $columnCreator . ' = :' . $prefix . 'u)';
         }
