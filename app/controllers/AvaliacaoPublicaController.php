@@ -19,6 +19,7 @@ class AvaliacaoPublicaController
 
     public function handle(): void
     {
+        $this->applyPublicSecurityHeaders();
         if ((string)($_GET['resource'] ?? '') === 'validate') {
             $this->validateApi();
             return;
@@ -259,6 +260,7 @@ class AvaliacaoPublicaController
 
     public function validateApi(): void
     {
+        $this->applyPublicSecurityHeaders();
         $token = $this->resolveTokenFromRequest();
         if (!$this->allowRequest($token)) {
             http_response_code(429);
@@ -287,6 +289,18 @@ class AvaliacaoPublicaController
                 'public_url' => $record ? $this->publicUrlByToken($token) : null,
             ],
         ], JSON_UNESCAPED_UNICODE);
+    }
+
+    private function applyPublicSecurityHeaders(): void
+    {
+        header('X-Frame-Options: DENY');
+        header("Content-Security-Policy: default-src 'self' https://cdn.tailwindcss.com; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
+        header('Referrer-Policy: no-referrer');
+        header('X-Content-Type-Options: nosniff');
+        header('X-Robots-Tag: noindex, nofollow, noarchive');
+        header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
     }
 
     private function render(array $params): void

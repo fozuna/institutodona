@@ -24,6 +24,7 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Avaliação Empresarial</title>
+  <meta name="robots" content="noindex,nofollow,noarchive" />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="<?= htmlspecialchars($assetsUrl) ?>/css/theme.css" />
 </head>
