@@ -112,13 +112,14 @@ class AvaliacaoModel extends BaseModel
         $params = [];
         $scope = $this->scopeClause('a', $params, 'avall');
         $publicaExists = \App\Database\Database::tableExists('avaliacoes_publicas');
+        $publicaHasSlug = $publicaExists && \App\Database\Database::columnExists('avaliacoes_publicas', 'slug');
         $select = [
             'a.*',
             'c.nome_empresa AS cliente_nome',
         ];
         $joinPublica = '';
         if ($publicaExists) {
-            $select[] = 'ap.slug AS publico_slug';
+            $select[] = $publicaHasSlug ? 'ap.slug AS publico_slug' : 'NULL AS publico_slug';
             $select[] = 'ap.token AS publico_token';
             $select[] = 'ap.status AS publico_status';
             $select[] = 'ap.nome AS publico_nome';
