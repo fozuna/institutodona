@@ -453,6 +453,12 @@ class AvaliacaoPublicaController
     {
         $configured = trim((string)(getenv('PUBLIC_EVALUATION_BASE_URL') ?: ''));
         if ($configured !== '') {
+            if (str_contains($configured, '{identifier}')) {
+                return str_replace('{identifier}', rawurlencode($identifier), $configured);
+            }
+            if (str_contains($configured, '?')) {
+                return rtrim($configured, '&') . rawurlencode($identifier);
+            }
             return rtrim($configured, '/') . '/' . rawurlencode($identifier);
         }
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
@@ -468,7 +474,7 @@ class AvaliacaoPublicaController
         if ($base !== '' && strpos($base, '/') !== 0) {
             $base = '/' . ltrim($base, '/');
         }
-        return $scheme . '://' . $host . $base . '/avaliar/' . rawurlencode($identifier);
+        return $scheme . '://' . $host . $base . '/index.php?route=avaliacao-publica/open&slug=' . rawurlencode($identifier);
     }
 
     private function createAvaliacaoFromPublicSubmission(array $record, array $values, array $selectedMap, array $totais): int

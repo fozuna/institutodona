@@ -1,8 +1,31 @@
 <?php
-// Redireciona explicitamente para o index do public_html preservando o subcaminho (ex.: /institutodona)
-$base = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/\\');
-if ($base === '/' || $base === '\\') { $base = ''; }
-$target = $base . '/public_html/index.php';
+$scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
+$base = rtrim(dirname($scriptName), '/\\');
+if ($base === '/' || $base === '\\' || $base === '.') {
+    $base = '';
+}
+
+$requestUri = (string)($_SERVER['REQUEST_URI'] ?? '/');
+$path = str_replace('\\', '/', (string)(parse_url($requestUri, PHP_URL_PATH) ?? '/'));
+$query = (string)(parse_url($requestUri, PHP_URL_QUERY) ?? '');
+$relativePath = $path;
+if ($base !== '' && str_starts_with($relativePath, $base)) {
+    $relativePath = substr($relativePath, strlen($base));
+}
+$relativePath = '/' . ltrim($relativePath, '/');
+
+if (preg_match('#^/avaliar/([^/]+)/?$#', $relativePath, $m)) {
+    $target = $base . '/public_html/index.php?route=avaliacao-publica/open&slug=' . rawurlencode((string)$m[1]);
+    if ($query !== '') {
+        $target .= '&' . $query;
+    }
+} else {
+    $target = $base . '/public_html/index.php';
+    if ($query !== '') {
+        $target .= '?' . $query;
+    }
+}
+
 if (!headers_sent()) {
     header('Location: ' . $target);
     exit;

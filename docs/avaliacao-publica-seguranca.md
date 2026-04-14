@@ -4,7 +4,7 @@ Implementação do endpoint público de avaliação com acesso anônimo e isolam
 
 ### Endpoint público
 
-- Página pública permanente: `/avaliar/{slug}`
+- Página pública permanente: `/index.php?route=avaliacao-publica/open&slug={slug}`
 - API pública de validação: `/public_html/public/avaliacao/api/validate/{slug}`
 - Base pública configurável por ambiente: `PUBLIC_EVALUATION_BASE_URL`
 - Fallback portátil entre ambientes: `/index.php?route=avaliacao-publica/open&slug={slug}`
@@ -18,6 +18,7 @@ Essas rotas não passam pelo front controller autenticado do sistema interno e n
 - Rewrite dedicada em `public_html/public/avaliacao/.htaccess`
 - Roteamento local dedicado em `public_html/router.php`
 - Rewrite raiz para URL amigável em `public_html/.htaccess`
+- Geração padrão do link usando o front controller explícito `index.php?route=avaliacao-publica/open&slug=...`
 - Rota pública fallback no front controller: `avaliacao-publica/open`
 - View pública standalone, sem menu administrativo, sem layout interno e sem links de navegação para áreas autenticadas
 
@@ -51,5 +52,6 @@ Além disso, a view pública usa meta `robots` para não indexação.
 - Teste local sem sessão autenticada garantindo renderização da página pública
 - Teste local sem sessão autenticada garantindo resposta da API pública
 - Teste local manual do endpoint amigável `/avaliar/{slug}` abrindo diretamente a etapa 1
+- Geração padrão atual prioriza o endpoint explícito `index.php?route=avaliacao-publica/open&slug=...` para evitar redirecionamentos indevidos em produção
 - Teste local de geração standalone sem criar avaliação interna
 - Teste local de render garantindo fallback de cópia no frontend

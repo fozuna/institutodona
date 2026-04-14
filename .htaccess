@@ -1,4 +1,11 @@
 Options -Indexes
 DirectoryIndex public_html/index.php
 
-# Mantemos o roteamento dentro de public_html/.htaccess
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  RewriteRule ^avaliar/([^/]+)/?$ public_html/index.php?route=avaliacao-publica/open&slug=$1 [L,QSA]
+</IfModule>
