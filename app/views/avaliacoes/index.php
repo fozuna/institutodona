@@ -9,10 +9,7 @@
   if ($configuredPublicBaseUrl !== '') {
     $publicBaseUrl = rtrim($configuredPublicBaseUrl, '/');
   } else {
-    if (str_ends_with($baseUrl, '/public/avaliacao')) {
-      $baseUrl = substr($baseUrl, 0, -strlen('/public/avaliacao'));
-    }
-    $publicBaseUrl = $scheme . '://' . $host . $baseUrl . '/index.php?route=avaliacao-publica/open&token=';
+    $publicBaseUrl = $scheme . '://' . $host . $baseUrl . '/avaliar/';
   }
   $generatedLink = $_SESSION['generated_public_link'] ?? null;
   unset($_SESSION['generated_public_link']);
@@ -99,10 +96,12 @@
           $isPotencial = (int)($i['cliente_id'] ?? 0) <= 0;
           $status = $i['publico_status'] ?? '';
           $statusMeta = $statusMap[$status] ?? null;
+          $publicSlug = (string)($i['publico_slug'] ?? '');
           $publicToken = (string)($i['publico_token'] ?? '');
           $expirado = !empty($i['publico_expiracao']) && strtotime((string)$i['publico_expiracao']) < time();
           $permanente = empty($i['publico_expiracao']);
-          $publicLink = $publicToken !== '' ? ($configuredPublicBaseUrl !== '' ? ($publicBaseUrl . '/' . rawurlencode($publicToken)) : ($publicBaseUrl . rawurlencode($publicToken))) : '';
+          $publicIdentifier = $publicSlug !== '' ? $publicSlug : $publicToken;
+          $publicLink = $publicIdentifier !== '' ? rtrim($publicBaseUrl, '/') . '/' . rawurlencode($publicIdentifier) : '';
         ?>
           <tr class="border-b cursor-pointer row-avaliacao <?= (int)$i['id'] === $defaultSelectedAvaliacaoId ? 'bg-red-50' : '' ?>" data-avaliacao-id="<?= (int)$i['id'] ?>" data-empresa="<?= htmlspecialchars($nm) ?>">
             <td class="p-3">

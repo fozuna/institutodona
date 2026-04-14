@@ -176,6 +176,7 @@ CREATE TABLE IF NOT EXISTS avaliacoes_publicas (
   id INT AUTO_INCREMENT PRIMARY KEY,
   avaliacao_id INT NULL,
   token CHAR(36) NOT NULL,
+  slug VARCHAR(120) NULL,
   created_by_user_id INT NULL,
   nome VARCHAR(150) NULL,
   empresa VARCHAR(255) NULL,
@@ -199,9 +200,11 @@ CREATE TABLE IF NOT EXISTS avaliacoes_publicas (
   data_criacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   data_conclusao DATETIME NULL,
   UNIQUE KEY uq_avaliacao_publica_avaliacao (avaliacao_id),
-  UNIQUE KEY uq_avaliacoes_publicas_token (token)
+  UNIQUE KEY uq_avaliacoes_publicas_token (token),
+  UNIQUE KEY uq_avaliacoes_publicas_slug (slug)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CALL sp_add_column_if_missing('avaliacoes_publicas', 'slug', 'VARCHAR(120) NULL AFTER token');
 CALL sp_add_column_if_missing('avaliacoes_publicas', 'expiracao', 'DATETIME NULL AFTER status');
 CALL sp_add_column_if_missing('avaliacoes_publicas', 'data_conclusao', 'DATETIME NULL AFTER data_criacao');
 CALL sp_add_column_if_missing('avaliacoes_publicas', 'created_by_user_id', 'INT NULL AFTER token');
@@ -212,6 +215,7 @@ ALTER TABLE avaliacoes_publicas MODIFY token CHAR(36) NOT NULL;
 ALTER TABLE avaliacoes_publicas MODIFY expiracao DATETIME NULL;
 
 CALL sp_add_index_if_missing('avaliacoes_publicas', 'uq_avaliacoes_publicas_token', 'UNIQUE INDEX uq_avaliacoes_publicas_token (token)');
+CALL sp_add_index_if_missing('avaliacoes_publicas', 'uq_avaliacoes_publicas_slug', 'UNIQUE INDEX uq_avaliacoes_publicas_slug (slug)');
 CALL sp_add_index_if_missing('avaliacoes_publicas', 'idx_avaliacoes_publicas_status_data', 'INDEX idx_avaliacoes_publicas_status_data (status, data_criacao)');
 CALL sp_add_index_if_missing('avaliacoes_publicas', 'idx_avaliacoes_publicas_data_conclusao', 'INDEX idx_avaliacoes_publicas_data_conclusao (data_conclusao)');
 

@@ -13,6 +13,7 @@ class AvaliacaoPublicaModel extends BaseModel
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 avaliacao_id INT NULL,
                 token CHAR(36) NOT NULL UNIQUE,
+                slug VARCHAR(120) NULL UNIQUE,
                 created_by_user_id INT NULL,
                 nome VARCHAR(150) NULL,
                 empresa VARCHAR(255) NULL,
@@ -40,6 +41,9 @@ class AvaliacaoPublicaModel extends BaseModel
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             $this->db->exec("ALTER TABLE avaliacoes_publicas MODIFY avaliacao_id INT NULL");
             $this->db->exec("ALTER TABLE avaliacoes_publicas MODIFY expiracao DATETIME NULL");
+            if (!\App\Database\Database::columnExists('avaliacoes_publicas', 'slug')) {
+                $this->db->exec("ALTER TABLE avaliacoes_publicas ADD COLUMN slug VARCHAR(120) NULL UNIQUE AFTER token");
+            }
             if (!\App\Database\Database::columnExists('avaliacoes_publicas', 'created_by_user_id')) {
                 $this->db->exec("ALTER TABLE avaliacoes_publicas ADD COLUMN created_by_user_id INT NULL AFTER token");
             }
@@ -74,6 +78,15 @@ class AvaliacaoPublicaModel extends BaseModel
         return $row ?: null;
     }
 
+    public function findBySlug(string $slug): ?array
+    {
+        $this->ensureTable();
+        $stmt = $this->db->prepare('SELECT * FROM avaliacoes_publicas WHERE slug = :slug LIMIT 1');
+        $stmt->execute(['slug' => $slug]);
+        $row = $stmt->fetch();
+        return $row ?: null;
+    }
+
     public function createOrRefreshForAvaliacao(int $avaliacaoId, string $empresa = '', bool $forceNew = false): array
     {
         $this->ensureTable();
@@ -82,9 +95,11 @@ class AvaliacaoPublicaModel extends BaseModel
             return $existing;
         }
         $token = $this->generateToken();
+        $slug = $this->generateSlug();
         if ($existing) {
             $stmt = $this->db->prepare('UPDATE avaliacoes_publicas
                 SET token = :token,
+                    slug = :slug,
                     nome = NULL,
                     empresa = :empresa,
                     whatsapp = NULL,
@@ -109,6 +124,7 @@ class AvaliacaoPublicaModel extends BaseModel
                 WHERE id = :id');
             $stmt->execute([
                 'token' => $token,
+                'slug' => $slug,
                 'empresa' => $empresa !== '' ? $empresa : null,
                 'status' => 'pendente',
                 'id' => (int)$existing['id'],
@@ -116,10 +132,11 @@ class AvaliacaoPublicaModel extends BaseModel
             $row = $this->findById((int)$existing['id']);
             return $row ?: [];
         }
-        $stmt = $this->db->prepare('INSERT INTO avaliacoes_publicas (avaliacao_id, token, empresa, status, expiracao) VALUES (:avaliacao_id, :token, :empresa, :status, NULL)');
+        $stmt = $this->db->prepare('INSERT INTO avaliacoes_publicas (avaliacao_id, token, slug, empresa, status, expiracao) VALUES (:avaliacao_id, :token, :slug, :empresa, :status, NULL)');
         $stmt->execute([
             'avaliacao_id' => $avaliacaoId,
             'token' => $token,
+            'slug' => $slug,
             'empresa' => $empresa !== '' ? $empresa : null,
             'status' => 'pendente',
         ]);
@@ -131,10 +148,12 @@ class AvaliacaoPublicaModel extends BaseModel
     {
         $this->ensureTable();
         $token = $this->generateToken();
+        $slug = $this->generateSlug();
         try {
-            $stmt = $this->db->prepare('INSERT INTO avaliacoes_publicas (avaliacao_id, token, created_by_user_id, empresa, status, expiracao) VALUES (NULL, :token, :created_by_user_id, NULL, :status, NULL)');
+            $stmt = $this->db->prepare('INSERT INTO avaliacoes_publicas (avaliacao_id, token, slug, created_by_user_id, empresa, status, expiracao) VALUES (NULL, :token, :slug, :created_by_user_id, NULL, :status, NULL)');
             $stmt->execute([
                 'token' => $token,
+                'slug' => $slug,
                 'created_by_user_id' => Auth::user()['id'] ?? null,
                 'status' => 'pendente',
             ]);
@@ -303,6 +322,17 @@ class AvaliacaoPublicaModel extends BaseModel
         return $token;
     }
 
+    private function generateSlug(): string
+    {
+        do {
+            $slug = 'avaliar-' . substr(bin2hex(random_bytes(6)), 0, 12);
+            $stmt = $this->db->prepare('SELECT COUNT(*) FROM avaliacoes_publicas WHERE slug = :slug');
+            $stmt->execute(['slug' => $slug]);
+            $exists = (int)$stmt->fetchColumn() > 0;
+        } while ($exists);
+        return $slug;
+    }
+
     private function generateUuidV4(): string
     {
         $data = random_bytes(16);
@@ -313,7 +343,6 @@ class AvaliacaoPublicaModel extends BaseModel
 
     private function isExpired(array $record): bool
     {
-        $expiracao = (string)($record['expiracao'] ?? '');
-        return $expiracao !== '' && strtotime($expiracao) < time();
+        return false;
     }
 }

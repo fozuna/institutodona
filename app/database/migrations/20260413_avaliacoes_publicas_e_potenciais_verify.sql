@@ -15,12 +15,12 @@ WHERE table_schema = DATABASE()
 
 -- 2) Estrutura: colunas obrigatórias em avaliacoes_publicas
 SELECT 'avaliacoes_publicas.core_fields' AS check_name,
-       SUM(column_name IN ('token','status','expiracao','data_criacao','data_conclusao')) AS cols_found,
-       5 AS cols_expected
+       SUM(column_name IN ('token','slug','status','expiracao','data_criacao','data_conclusao')) AS cols_found,
+       6 AS cols_expected
 FROM information_schema.columns
 WHERE table_schema = DATABASE()
   AND table_name = 'avaliacoes_publicas'
-  AND column_name IN ('token','status','expiracao','data_criacao','data_conclusao');
+  AND column_name IN ('token','slug','status','expiracao','data_criacao','data_conclusao');
 
 -- 3) Índices críticos
 SELECT 'idx_avaliacoes_cliente_id' AS check_name,
@@ -36,6 +36,13 @@ FROM information_schema.statistics
 WHERE table_schema = DATABASE()
   AND table_name = 'avaliacoes_publicas'
   AND index_name = 'uq_avaliacoes_publicas_token';
+
+SELECT 'uq_avaliacoes_publicas_slug' AS check_name,
+       COUNT(*) AS present
+FROM information_schema.statistics
+WHERE table_schema = DATABASE()
+  AND table_name = 'avaliacoes_publicas'
+  AND index_name = 'uq_avaliacoes_publicas_slug';
 
 -- 4) FK principais
 SELECT 'fk_avaliacoes_publicas_avaliacao' AS check_name,
@@ -77,8 +84,7 @@ FROM avaliacoes
 ORDER BY id DESC
 LIMIT 10;
 
-SELECT id, avaliacao_id, token, status, expiracao, data_criacao, data_conclusao
+SELECT id, avaliacao_id, token, slug, status, expiracao, data_criacao, data_conclusao
 FROM avaliacoes_publicas
 ORDER BY id DESC
 LIMIT 10;
-

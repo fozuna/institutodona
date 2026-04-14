@@ -10,7 +10,8 @@ $expiredToken = !empty($expiredToken);
 $alreadyDone = !empty($alreadyDone);
 $formAction = $formAction ?? '';
 $formError = $formError ?? '';
-$token = $record['token'] ?? ($_GET['token'] ?? $_POST['token'] ?? '');
+$submitted = !empty($submitted);
+$identifier = $record['slug'] ?? $record['token'] ?? ($_GET['slug'] ?? $_GET['token'] ?? $_POST['slug'] ?? $_POST['token'] ?? '');
 $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
 $baseUrl = rtrim(dirname(dirname(dirname($scriptName))), '/\\');
 if ($baseUrl === '/' || $baseUrl === '\\') { $baseUrl = ''; }
@@ -58,8 +59,8 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
             <h2 class="text-2xl font-bold mb-3 text-brand-brown">Muitas tentativas</h2>
             <p class="text-base leading-7 text-gray-700">Aguarde alguns minutos e tente novamente.</p>
           <?php elseif ($invalidToken || $expiredToken): ?>
-            <h2 class="text-2xl font-bold mb-3 text-brand-brown">Link inválido ou expirado</h2>
-            <p class="text-base leading-7 text-gray-700">Este link não está mais disponível. Solicite um novo link público.</p>
+            <h2 class="text-2xl font-bold mb-3 text-brand-brown">Link inválido</h2>
+            <p class="text-base leading-7 text-gray-700">Este link público não foi encontrado. Verifique o endereço informado.</p>
           <?php elseif ($alreadyDone): ?>
             <h2 class="text-2xl font-bold mb-3 text-brand-brown">Avaliação já finalizada</h2>
             <p class="text-base leading-7 text-gray-700 mb-4">Esta avaliação já foi concluída. Obrigado pela participação.</p>
@@ -72,12 +73,15 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
               <h2 class="mt-2 text-2xl font-bold text-brand-brown">Dados iniciais</h2>
               <p class="mt-2 text-base leading-7 text-gray-600">Preencha as informações abaixo para iniciar a avaliação.</p>
             </div>
+            <?php if ($submitted): ?>
+              <div class="mb-6 rounded border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">Avaliação enviada com sucesso. Este link continua ativo e pode ser utilizado novamente.</div>
+            <?php endif; ?>
             <?php if ($formError !== ''): ?>
               <div class="mb-6 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><?= htmlspecialchars($formError) ?></div>
             <?php endif; ?>
             <form method="post" action="<?= htmlspecialchars($formAction) ?>" class="space-y-6">
               <input type="hidden" name="action" value="start" />
-              <input type="hidden" name="token" value="<?= htmlspecialchars((string)$token) ?>" />
+              <input type="hidden" name="identifier" value="<?= htmlspecialchars((string)$identifier) ?>" />
               <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label class="block text-sm font-medium mb-2">Nome</label>
@@ -137,7 +141,15 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
             <?php endif; ?>
             <form method="post" action="<?= htmlspecialchars($formAction) ?>" class="space-y-6">
               <input type="hidden" name="action" value="finish" />
-              <input type="hidden" name="token" value="<?= htmlspecialchars((string)$token) ?>" />
+              <input type="hidden" name="identifier" value="<?= htmlspecialchars((string)$identifier) ?>" />
+              <input type="hidden" name="nome" value="<?= $fieldValue('nome') ?>" />
+              <input type="hidden" name="empresa" value="<?= $fieldValue('empresa') ?>" />
+              <input type="hidden" name="whatsapp" value="<?= $fieldValue('whatsapp') ?>" />
+              <input type="hidden" name="email" value="<?= $fieldValue('email') ?>" />
+              <input type="hidden" name="numero_funcionarios" value="<?= $fieldValue('numero_funcionarios') ?>" />
+              <input type="hidden" name="numero_lideres" value="<?= $fieldValue('numero_lideres') ?>" />
+              <input type="hidden" name="faturamento_anual" value="<?= $fieldValue('faturamento_anual') ?>" />
+              <input type="hidden" name="tomador_decisao" value="<?= $fieldValue('tomador_decisao') ?>" />
               <div class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-4 gap-6">
                 <?php foreach ($qs as $pillar => $questions): ?>
                   <div class="bg-white border rounded">

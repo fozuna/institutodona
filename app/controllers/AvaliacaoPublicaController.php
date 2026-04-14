@@ -4,6 +4,7 @@ namespace App\Controllers;
 use App\Core\AvaliacaoQuestionario;
 use App\Core\AuditLogger;
 use App\Core\PublicRateLimiter;
+use App\Models\AvaliacaoModel;
 use App\Models\AvaliacaoPublicaModel;
 
 class AvaliacaoPublicaController
@@ -24,10 +25,10 @@ class AvaliacaoPublicaController
             $this->validateApi();
             return;
         }
-        $token = $this->resolveTokenFromRequest();
-        if (!$this->allowRequest($token)) {
+        $identifier = $this->resolveIdentifierFromRequest();
+        if (!$this->allowRequest($identifier)) {
             AuditLogger::log('avaliacao_publica_rate_limited', 'avaliacao_publica', 0, [
-                'token' => $token,
+                'identifier' => $identifier,
                 'ip' => (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'),
                 'method' => strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')),
             ]);
@@ -44,66 +45,37 @@ class AvaliacaoPublicaController
                 'selectedMap' => [],
                 'qs' => AvaliacaoQuestionario::pilares(),
                 'publicUrl' => '',
-                'formAction' => $this->publicUrlByToken($token),
+                'formAction' => $this->publicUrlByIdentifier($identifier),
+                'submitted' => false,
             ]);
             return;
         }
         if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'POST') {
             $action = (string)($_POST['action'] ?? '');
             if ($action === 'start') {
-                $this->start($token);
+                $this->start($identifier);
                 return;
             }
             if ($action === 'finish') {
-                $this->finish($token);
+                $this->finish($identifier);
                 return;
             }
         }
-        $this->show($token);
+        $this->show($identifier);
     }
 
-    private function show(string $token): void
+    private function show(string $identifier): void
     {
-        if (!$this->isUuid($token)) {
-            AuditLogger::log('avaliacao_publica_access_invalid', 'avaliacao_publica', 0, ['token' => $token]);
-            http_response_code(404);
-            $this->renderInvalidToken();
-            return;
-        }
-        $record = $this->publicas->findByToken($token);
+        $record = $this->findPublicRecord($identifier);
         if (!$record) {
-            AuditLogger::log('avaliacao_publica_access_not_found', 'avaliacao_publica', 0, ['token' => $token]);
+            AuditLogger::log('avaliacao_publica_access_invalid', 'avaliacao_publica', 0, ['identifier' => $identifier]);
             http_response_code(404);
             $this->renderInvalidToken();
-            return;
-        }
-        if ($this->isExpired($record)) {
-            AuditLogger::log('avaliacao_publica_access_expired', 'avaliacao_publica', (int)($record['avaliacao_id'] ?? 0), ['token' => $token]);
-            http_response_code(410);
-            $this->renderExpiredToken($record);
-            return;
-        }
-        if (($record['status'] ?? '') === 'concluida') {
-            AuditLogger::log('avaliacao_publica_access_completed', 'avaliacao_publica', (int)($record['avaliacao_id'] ?? 0), ['token' => $token]);
-            $this->render([
-                'rateLimited' => false,
-                'invalidToken' => false,
-                'expiredToken' => false,
-                'alreadyDone' => true,
-                'record' => $record,
-                'step' => 2,
-                'values' => $this->valuesFromRecord($record),
-                'errors' => [],
-                'selectedMap' => $this->selectedMapFromRecord($record),
-                'qs' => AvaliacaoQuestionario::pilares(),
-                'publicUrl' => $this->publicUrlByToken($token),
-                'formAction' => $this->publicUrlByToken($token),
-            ]);
             return;
         }
         AuditLogger::log('avaliacao_publica_access', 'avaliacao_publica', (int)($record['avaliacao_id'] ?? 0), [
-            'token' => $token,
-            'status' => $record['status'] ?? null,
+            'token' => $record['token'] ?? null,
+            'slug' => $record['slug'] ?? null,
             'request_uri' => (string)($_SERVER['REQUEST_URI'] ?? ''),
             'script_name' => (string)($_SERVER['SCRIPT_NAME'] ?? ''),
             'host' => (string)($_SERVER['HTTP_HOST'] ?? ''),
@@ -114,39 +86,24 @@ class AvaliacaoPublicaController
             'expiredToken' => false,
             'alreadyDone' => false,
             'record' => $record,
-            'step' => ($record['status'] ?? 'pendente') === 'pendente' ? 1 : 2,
-            'values' => $this->valuesFromRecord($record),
+            'step' => 1,
+            'values' => $this->defaultValues(),
             'errors' => [],
-            'selectedMap' => $this->selectedMapFromRecord($record),
+            'selectedMap' => [],
             'qs' => AvaliacaoQuestionario::pilares(),
-            'publicUrl' => $this->publicUrlByToken($token),
-            'formAction' => $this->publicUrlByToken($token),
+            'publicUrl' => $this->publicUrlByRecord($record),
+            'formAction' => $this->publicUrlByRecord($record),
+            'submitted' => !empty($_GET['submitted']),
         ]);
     }
 
-    private function start(string $token): void
+    private function start(string $identifier): void
     {
-        if (!$this->isUuid($token)) {
-            AuditLogger::log('avaliacao_publica_start_invalid', 'avaliacao_publica', 0, ['token' => $token]);
-            http_response_code(404);
-            $this->renderInvalidToken();
-            return;
-        }
-        $record = $this->publicas->findByToken($token);
+        $record = $this->findPublicRecord($identifier);
         if (!$record) {
-            AuditLogger::log('avaliacao_publica_start_not_found', 'avaliacao_publica', 0, ['token' => $token]);
+            AuditLogger::log('avaliacao_publica_start_not_found', 'avaliacao_publica', 0, ['identifier' => $identifier]);
             http_response_code(404);
             $this->renderInvalidToken();
-            return;
-        }
-        if ($this->isExpired($record)) {
-            AuditLogger::log('avaliacao_publica_start_expired', 'avaliacao_publica', (int)($record['avaliacao_id'] ?? 0), ['token' => $token]);
-            http_response_code(410);
-            $this->renderExpiredToken($record);
-            return;
-        }
-        if (($record['status'] ?? '') === 'concluida') {
-            $this->redirect($this->publicUrlByToken($token));
             return;
         }
         $values = [
@@ -162,7 +119,8 @@ class AvaliacaoPublicaController
         $errors = $this->validateStep1($values);
         if (!empty($errors)) {
             AuditLogger::log('avaliacao_publica_start_validation_error', 'avaliacao_publica', (int)($record['avaliacao_id'] ?? 0), [
-                'token' => $token,
+                'token' => $record['token'] ?? null,
+                'slug' => $record['slug'] ?? null,
                 'errors' => array_keys($errors),
             ]);
             http_response_code(422);
@@ -177,69 +135,72 @@ class AvaliacaoPublicaController
                 'errors' => $errors,
                 'selectedMap' => [],
                 'qs' => AvaliacaoQuestionario::pilares(),
-                'publicUrl' => $this->publicUrlByToken($token),
-                'formAction' => $this->publicUrlByToken($token),
+                'publicUrl' => $this->publicUrlByRecord($record),
+                'formAction' => $this->publicUrlByRecord($record),
+                'submitted' => false,
             ]);
-            return;
-        }
-        try {
-            $saved = $this->publicas->startByToken($token, [
-                'nome' => $values['nome'],
-                'empresa' => $values['empresa'],
-                'whatsapp' => $values['whatsapp'],
-                'email' => $values['email'],
-                'numero_funcionarios' => (int)$values['numero_funcionarios'],
-                'numero_lideres' => (int)$values['numero_lideres'],
-                'faturamento_anual' => (int)$values['faturamento_anual'],
-                'tomador_decisao' => (int)$values['tomador_decisao'],
-            ]);
-        } catch (\Throwable $e) {
-            $this->renderSubmissionError(1, $record, $values, [], 'Falha ao salvar os dados iniciais.', $e);
-            return;
-        }
-        if (!$saved) {
-            AuditLogger::log('avaliacao_publica_start_noop', 'avaliacao_publica', (int)($record['avaliacao_id'] ?? 0), [
-                'token' => $token,
-                'status' => $record['status'] ?? null,
-            ]);
-            $this->renderSubmissionError(1, $record, $values, [], 'Não foi possível salvar os dados iniciais. Verifique se o link ainda está válido.', null);
             return;
         }
         AuditLogger::log('avaliacao_publica_started', 'avaliacao_publica', (int)($record['avaliacao_id'] ?? 0), [
-            'token' => $token,
+            'token' => $record['token'] ?? null,
+            'slug' => $record['slug'] ?? null,
             'nome' => $values['nome'],
             'empresa' => $values['empresa'],
         ]);
-        $this->redirect($this->publicUrlByToken($token) . '?step=2');
+        $this->render([
+            'rateLimited' => false,
+            'invalidToken' => false,
+            'expiredToken' => false,
+            'alreadyDone' => false,
+            'record' => $record,
+            'step' => 2,
+            'values' => $values,
+            'errors' => [],
+            'selectedMap' => [],
+            'qs' => AvaliacaoQuestionario::pilares(),
+            'publicUrl' => $this->publicUrlByRecord($record),
+            'formAction' => $this->publicUrlByRecord($record),
+            'submitted' => false,
+        ]);
     }
 
-    private function finish(string $token): void
+    private function finish(string $identifier): void
     {
-        if (!$this->isUuid($token)) {
-            AuditLogger::log('avaliacao_publica_finish_invalid', 'avaliacao_publica', 0, ['token' => $token]);
-            http_response_code(404);
-            $this->renderInvalidToken();
-            return;
-        }
-        $record = $this->publicas->findByToken($token);
+        $record = $this->findPublicRecord($identifier);
         if (!$record) {
-            AuditLogger::log('avaliacao_publica_finish_not_found', 'avaliacao_publica', 0, ['token' => $token]);
+            AuditLogger::log('avaliacao_publica_finish_not_found', 'avaliacao_publica', 0, ['identifier' => $identifier]);
             http_response_code(404);
             $this->renderInvalidToken();
             return;
         }
-        if ($this->isExpired($record)) {
-            AuditLogger::log('avaliacao_publica_finish_expired', 'avaliacao_publica', (int)($record['avaliacao_id'] ?? 0), ['token' => $token]);
-            http_response_code(410);
-            $this->renderExpiredToken($record);
-            return;
-        }
-        if (($record['status'] ?? '') === 'concluida') {
-            $this->redirect($this->publicUrlByToken($token));
-            return;
-        }
-        if (($record['status'] ?? '') !== 'iniciada') {
-            $this->redirect($this->publicUrlByToken($token));
+        $values = [
+            'nome' => trim((string)($_POST['nome'] ?? '')),
+            'empresa' => trim((string)($_POST['empresa'] ?? '')),
+            'whatsapp' => preg_replace('/\D+/', '', (string)($_POST['whatsapp'] ?? '')) ?: '',
+            'email' => trim((string)($_POST['email'] ?? '')),
+            'numero_funcionarios' => trim((string)($_POST['numero_funcionarios'] ?? '')),
+            'numero_lideres' => trim((string)($_POST['numero_lideres'] ?? '')),
+            'faturamento_anual' => trim((string)($_POST['faturamento_anual'] ?? '')),
+            'tomador_decisao' => (string)($_POST['tomador_decisao'] ?? ''),
+        ];
+        $errors = $this->validateStep1($values);
+        if (!empty($errors)) {
+            http_response_code(422);
+            $this->render([
+                'rateLimited' => false,
+                'invalidToken' => false,
+                'expiredToken' => false,
+                'alreadyDone' => false,
+                'record' => $record,
+                'step' => 1,
+                'values' => $values,
+                'errors' => $errors,
+                'selectedMap' => [],
+                'qs' => AvaliacaoQuestionario::pilares(),
+                'publicUrl' => $this->publicUrlByRecord($record),
+                'formAction' => $this->publicUrlByRecord($record),
+                'submitted' => false,
+            ]);
             return;
         }
         $financeiro = array_map('intval', (array)($_POST['financeiro'] ?? []));
@@ -258,64 +219,45 @@ class AvaliacaoPublicaController
             'processo' => $processo,
         ];
         try {
-            $saved = $this->publicas->concludeByToken($token, [
-                'respostas_json' => json_encode($selectedMap),
-                'nota_financeiro' => $notaFin,
-                'nota_mercado' => $notaMer,
-                'nota_pessoas' => $notaPes,
-                'nota_processo' => $notaPro,
-                'realidade_financeiro' => $this->toPercent($notaFin, (int)($totais['financeiro'] ?? 1)),
-                'realidade_mercado' => $this->toPercent($notaMer, (int)($totais['mercado'] ?? 1)),
-                'realidade_pessoas' => $this->toPercent($notaPes, (int)($totais['pessoas'] ?? 1)),
-                'realidade_processo' => $this->toPercent($notaPro, (int)($totais['processo'] ?? 1)),
-            ]);
+            $avaliacaoId = $this->createAvaliacaoFromPublicSubmission($record, $values, $selectedMap, $totais);
         } catch (\Throwable $e) {
-            $this->renderSubmissionError(2, $record, $this->valuesFromRecord($record), $selectedMap, 'Falha ao salvar a avaliação.', $e);
+            $this->renderSubmissionError(2, $record, $values, $selectedMap, 'Falha ao salvar a avaliação.', $e);
             return;
         }
-        if (!$saved) {
-            AuditLogger::log('avaliacao_publica_finish_noop', 'avaliacao_publica', (int)($record['avaliacao_id'] ?? 0), [
-                'token' => $token,
-                'status' => $record['status'] ?? null,
+        if ($avaliacaoId <= 0) {
+            AuditLogger::log('avaliacao_publica_finish_noop', 'avaliacao_publica', 0, [
+                'token' => $record['token'] ?? null,
+                'slug' => $record['slug'] ?? null,
             ]);
-            $this->renderSubmissionError(2, $record, $this->valuesFromRecord($record), $selectedMap, 'Não foi possível salvar a avaliação. Verifique se o link ainda está válido.', null);
+            $this->renderSubmissionError(2, $record, $values, $selectedMap, 'Não foi possível salvar a avaliação.', null);
             return;
         }
-        $updatedRecord = $this->publicas->findByToken($token) ?: $record;
-        if ((int)($updatedRecord['avaliacao_id'] ?? 0) <= 0) {
-            $avaliacaoId = $this->publicas->materializeStandaloneToAvaliacao($token);
-            $updatedRecord['avaliacao_id'] = $avaliacaoId > 0 ? $avaliacaoId : ($updatedRecord['avaliacao_id'] ?? null);
-            if ($avaliacaoId <= 0) {
-                AuditLogger::log('avaliacao_publica_materialization_failed', 'avaliacao_publica', 0, [
-                    'token' => $token,
-                    'status' => $updatedRecord['status'] ?? null,
-                ]);
-            }
-        }
-        AuditLogger::log('avaliacao_publica_finished', 'avaliacao_publica', (int)($record['avaliacao_id'] ?? 0), [
-            'token' => $token,
+        AuditLogger::log('avaliacao_publica_finished', 'avaliacao_publica', $avaliacaoId, [
+            'token' => $record['token'] ?? null,
+            'slug' => $record['slug'] ?? null,
+            'avaliacao_id' => $avaliacaoId,
             'nota_total' => $notaFin + $notaMer + $notaPes + $notaPro,
         ]);
-        $this->redirect($this->publicUrlByToken($token));
+        $this->redirect($this->publicUrlByRecord($record) . (str_contains($this->publicUrlByRecord($record), '?') ? '&' : '?') . 'submitted=1');
     }
 
     public function validateApi(): void
     {
         $this->applyPublicSecurityHeaders();
-        $token = $this->resolveTokenFromRequest();
-        if (!$this->allowRequest($token)) {
+        $identifier = $this->resolveIdentifierFromRequest();
+        if (!$this->allowRequest($identifier)) {
             http_response_code(429);
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode(['success' => false, 'message' => 'Muitas tentativas.', 'error' => 'rate_limited'], JSON_UNESCAPED_UNICODE);
             return;
         }
-        $record = $this->isUuid($token) ? $this->publicas->findByToken($token) : null;
-        $expired = $record ? $this->isExpired($record) : false;
-        $available = $record && !$expired && ($record['status'] ?? '') !== 'concluida';
+        $record = $this->findPublicRecord($identifier);
+        $available = (bool)$record;
         AuditLogger::log('avaliacao_publica_validate', 'avaliacao_publica', (int)($record['avaliacao_id'] ?? 0), [
-            'token' => $token,
+            'token' => $record['token'] ?? null,
+            'slug' => $record['slug'] ?? null,
             'available' => $available,
-            'status' => $record['status'] ?? null,
+            'status' => $record ? 'active' : 'invalido',
             'request_uri' => (string)($_SERVER['REQUEST_URI'] ?? ''),
             'script_name' => (string)($_SERVER['SCRIPT_NAME'] ?? ''),
             'host' => (string)($_SERVER['HTTP_HOST'] ?? ''),
@@ -324,13 +266,14 @@ class AvaliacaoPublicaController
         echo json_encode([
             'success' => true,
             'data' => [
-                'token' => $token,
+                'token' => $record['token'] ?? null,
+                'slug' => $record['slug'] ?? null,
                 'valid' => (bool)$record,
                 'available' => (bool)$available,
-                'status' => $record['status'] ?? 'invalido',
-                'permanent' => !empty($record) && empty($record['expiracao']),
-                'expired' => $expired,
-                'public_url' => $record ? $this->publicUrlByToken($token) : null,
+                'status' => $record ? 'active' : 'invalido',
+                'permanent' => (bool)$record,
+                'expired' => false,
+                'public_url' => $record ? $this->publicUrlByRecord($record) : null,
             ],
         ], JSON_UNESCAPED_UNICODE);
     }
@@ -370,9 +313,10 @@ class AvaliacaoPublicaController
             'errors' => [],
             'selectedMap' => $selectedMap,
             'qs' => AvaliacaoQuestionario::pilares(),
-            'publicUrl' => $this->publicUrlByToken((string)($record['token'] ?? '')),
-            'formAction' => $this->publicUrlByToken((string)($record['token'] ?? '')),
+            'publicUrl' => $this->publicUrlByRecord($record),
+            'formAction' => $this->publicUrlByRecord($record),
             'formError' => $debug !== '' ? ($message . ' [' . $debug . ']') : $message,
+            'submitted' => false,
         ]);
     }
 
@@ -382,7 +326,7 @@ class AvaliacaoPublicaController
         require __DIR__ . '/../views/avaliacoes/publica.php';
     }
 
-    private function redirect(string $url): void
+    protected function redirect(string $url): void
     {
         header('Location: ' . $url);
         exit;
@@ -468,67 +412,91 @@ class AvaliacaoPublicaController
             'qs' => AvaliacaoQuestionario::pilares(),
             'publicUrl' => '',
             'formAction' => '',
+            'submitted' => false,
         ]);
     }
 
-    private function renderExpiredToken(array $record): void
+    private function resolveIdentifierFromRequest(): string
     {
-        $this->render([
-            'rateLimited' => false,
-            'invalidToken' => false,
-            'expiredToken' => true,
-            'alreadyDone' => false,
-            'record' => $record,
-            'step' => 1,
-            'values' => $this->valuesFromRecord($record),
-            'errors' => [],
-            'selectedMap' => $this->selectedMapFromRecord($record),
-            'qs' => AvaliacaoQuestionario::pilares(),
-            'publicUrl' => '',
-            'formAction' => '',
-        ]);
-    }
-
-    private function resolveTokenFromRequest(): string
-    {
-        $token = trim((string)($_GET['token'] ?? $_POST['token'] ?? ''));
-        if ($token !== '') {
-            return strtolower($token);
+        $identifier = trim((string)($_GET['slug'] ?? $_POST['slug'] ?? $_GET['token'] ?? $_POST['token'] ?? $_POST['identifier'] ?? ''));
+        if ($identifier !== '') {
+            return strtolower($identifier);
         }
         $requestPath = str_replace('\\', '/', (string)(parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?? '/'));
-        if (preg_match('#/public/avaliacao/([^/]+)/?$#', $requestPath, $m)) {
+        if (preg_match('#/avaliar/([^/]+)/?$#', $requestPath, $m)) {
             return strtolower((string)$m[1]);
         }
         return '';
     }
 
-    private function publicUrlByToken(string $token): string
+    private function findPublicRecord(string $identifier): ?array
+    {
+        if ($identifier === '') {
+            return null;
+        }
+        $record = $this->publicas->findBySlug($identifier);
+        if ($record) {
+            return $record;
+        }
+        return $this->publicas->findByToken($identifier);
+    }
+
+    private function publicUrlByRecord(array $record): string
+    {
+        $slug = trim((string)($record['slug'] ?? ''));
+        $fallbackToken = trim((string)($record['token'] ?? ''));
+        $identifier = $slug !== '' ? $slug : $fallbackToken;
+        return $this->publicUrlByIdentifier($identifier);
+    }
+
+    private function publicUrlByIdentifier(string $identifier): string
     {
         $configured = trim((string)(getenv('PUBLIC_EVALUATION_BASE_URL') ?: ''));
         if ($configured !== '') {
-            return rtrim($configured, '/') . '/' . rawurlencode($token);
+            return rtrim($configured, '/') . '/' . rawurlencode($identifier);
         }
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-        $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/public/avaliacao/index.php');
+        $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/index.php');
         if (PHP_SAPI === 'cli' || strpos($scriptName, '/app/tests/') !== false) {
-            $scriptName = '/public/avaliacao/index.php';
+            $scriptName = '/index.php';
         }
         $base = rtrim(dirname($scriptName), '/');
-        if (preg_match('#/public/avaliacao/?$#', $base)) {
-            $base = preg_replace('#/public/avaliacao/?$#', '', $base) ?: '';
-        }
         if ($base === '/' || $base === '\\' || $base === '.') {
             $base = '';
         }
         if ($base !== '' && strpos($base, '/') !== 0) {
             $base = '/' . ltrim($base, '/');
         }
-        $indexBase = $base !== '' ? $base : '';
-        if (str_ends_with($indexBase, '/public/avaliacao')) {
-            $indexBase = substr($indexBase, 0, -strlen('/public/avaliacao'));
-        }
-        return $scheme . '://' . $host . $indexBase . '/index.php?route=avaliacao-publica/open&token=' . rawurlencode($token);
+        return $scheme . '://' . $host . $base . '/avaliar/' . rawurlencode($identifier);
+    }
+
+    private function createAvaliacaoFromPublicSubmission(array $record, array $values, array $selectedMap, array $totais): int
+    {
+        $avaliacoes = new AvaliacaoModel();
+        return $avaliacoes->create([
+            'cliente_id' => null,
+            'empresa_nome' => $values['empresa'],
+            'nome' => $values['nome'],
+            'whatsapp' => $values['whatsapp'],
+            'email' => $values['email'],
+            'numero_funcionarios' => (int)$values['numero_funcionarios'],
+            'numero_lideres' => (int)$values['numero_lideres'],
+            'faturamento_medio_anual' => (int)$values['faturamento_anual'],
+            'tomador_decisao' => (int)$values['tomador_decisao'],
+            'origem_cadastro' => 'potencial_cliente',
+            'created_by_user_id' => isset($record['created_by_user_id']) ? (int)$record['created_by_user_id'] : null,
+            'contato' => $values['nome'],
+            'respostas_json' => json_encode($selectedMap),
+            'nota_financeiro' => count($selectedMap['financeiro'] ?? []),
+            'nota_mercado' => count($selectedMap['mercado'] ?? []),
+            'nota_pessoas' => count($selectedMap['pessoas'] ?? []),
+            'nota_processo' => count($selectedMap['processo'] ?? []),
+            'realidade_financeiro' => $this->toPercent(count($selectedMap['financeiro'] ?? []), (int)($totais['financeiro'] ?? 1)),
+            'realidade_mercado' => $this->toPercent(count($selectedMap['mercado'] ?? []), (int)($totais['mercado'] ?? 1)),
+            'realidade_pessoas' => $this->toPercent(count($selectedMap['pessoas'] ?? []), (int)($totais['pessoas'] ?? 1)),
+            'realidade_processo' => $this->toPercent(count($selectedMap['processo'] ?? []), (int)($totais['processo'] ?? 1)),
+        ]);
     }
 
     private function isValidWhatsapp(string $digits): bool
@@ -550,22 +518,11 @@ class AvaliacaoPublicaController
         return (int)round(($nota / max(1, $total)) * 100);
     }
 
-    private function isExpired(array $record): bool
-    {
-        $expiracao = (string)($record['expiracao'] ?? '');
-        return $expiracao !== '' && strtotime($expiracao) < time();
-    }
-
-    private function isUuid(string $token): bool
-    {
-        return (bool)preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i', $token);
-    }
-
-    private function allowRequest(string $token): bool
+    private function allowRequest(string $identifier): bool
     {
         $ip = (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown');
         $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
-        $key = 'avaliacao_publica|' . $ip . '|' . $method . '|' . $token;
+        $key = 'avaliacao_publica|' . $ip . '|' . $method . '|' . $identifier;
         $limit = $method === 'POST' ? 20 : 60;
         return $this->rateLimiter->allow($key, $limit, 300);
     }

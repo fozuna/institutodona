@@ -118,6 +118,7 @@ class AvaliacaoModel extends BaseModel
         ];
         $joinPublica = '';
         if ($publicaExists) {
+            $select[] = 'ap.slug AS publico_slug';
             $select[] = 'ap.token AS publico_token';
             $select[] = 'ap.status AS publico_status';
             $select[] = 'ap.nome AS publico_nome';
@@ -127,6 +128,7 @@ class AvaliacaoModel extends BaseModel
             $select[] = 'ap.data_conclusao AS publico_data_conclusao';
             $joinPublica = ' LEFT JOIN avaliacoes_publicas ap ON ap.avaliacao_id = a.id';
         } else {
+            $select[] = 'NULL AS publico_slug';
             $select[] = 'NULL AS publico_token';
             $select[] = 'NULL AS publico_status';
             $select[] = 'NULL AS publico_nome';

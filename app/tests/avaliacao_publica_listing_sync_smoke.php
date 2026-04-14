@@ -2,10 +2,16 @@
 require __DIR__ . '/../autoload.php';
 
 use App\Controllers\AvaliacoesController;
+use App\Controllers\AvaliacaoPublicaController;
 use App\Core\Security;
-use App\Database\Database;
 use App\Models\AvaliacaoModel;
-use App\Models\AvaliacaoPublicaModel;
+
+class AvaliacaoPublicaControllerListingDouble extends AvaliacaoPublicaController
+{
+    protected function redirect(string $url): void
+    {
+    }
+}
 
 $_SESSION['user'] = [
     'id' => 1,
@@ -25,14 +31,17 @@ $controller->apiGeneratePublicLink();
 $json = (string)ob_get_clean();
 $data = json_decode($json, true);
 
-$token = (string)($data['data']['token'] ?? '');
-if ($token === '') {
-    echo 'NO_TOKEN';
+$slug = (string)($data['data']['slug'] ?? '');
+if ($slug === '') {
+    echo 'NO_SLUG';
     exit(0);
 }
 
-$publicModel = new AvaliacaoPublicaModel();
-$publicModel->startByToken($token, [
+$publicController = new AvaliacaoPublicaControllerListingDouble();
+$_SERVER['REQUEST_METHOD'] = 'POST';
+$_POST = [
+    'action' => 'finish',
+    'identifier' => $slug,
     'nome' => 'Lead Listagem',
     'empresa' => 'Empresa Standalone',
     'whatsapp' => '11999999999',
@@ -41,38 +50,28 @@ $publicModel->startByToken($token, [
     'numero_lideres' => 4,
     'faturamento_anual' => 300000,
     'tomador_decisao' => 1,
-]);
-$publicModel->concludeByToken($token, [
-    'respostas_json' => json_encode([
-        'financeiro' => [1],
-        'mercado' => [1, 2],
-        'pessoas' => [1],
-        'processo' => [1, 2],
-    ]),
-    'nota_financeiro' => 1,
-    'nota_mercado' => 2,
-    'nota_pessoas' => 1,
-    'nota_processo' => 2,
-    'realidade_financeiro' => 14,
-    'realidade_mercado' => 29,
-    'realidade_pessoas' => 14,
-    'realidade_processo' => 29,
-]);
+    'financeiro' => [1],
+    'mercado' => [1, 2],
+    'pessoas' => [1],
+    'processo' => [1, 2],
+];
+ob_start();
+$publicController->handle();
+ob_end_clean();
 
-$materializedId = $publicModel->materializeStandaloneToAvaliacao($token);
 $avaliacaoModel = new AvaliacaoModel();
 $items = $avaliacaoModel->all();
 $matched = null;
 foreach ($items as $item) {
-    if ((string)($item['publico_token'] ?? '') === $token) {
+    if ((string)($item['empresa_nome'] ?? '') === 'Empresa Standalone' && (string)($item['nome'] ?? '') === 'Lead Listagem') {
         $matched = $item;
         break;
     }
 }
 
 echo json_encode([
-    'token_generated' => $token !== '',
-    'materialized_id' => $materializedId,
+    'slug_generated' => $slug !== '',
+    'materialized_id' => (int)($matched['id'] ?? 0),
     'listed_in_avaliacoes_index' => !empty($matched),
     'listed_empresa' => $matched['empresa_nome'] ?? null,
     'listed_nome' => $matched['nome'] ?? null,

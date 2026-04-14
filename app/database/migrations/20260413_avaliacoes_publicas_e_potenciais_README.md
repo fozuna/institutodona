@@ -14,6 +14,7 @@ Arquivos:
    - contagens de colunas e índices iguais ao esperado
    - nenhuma linha inválida nos checks de dados
    - `avaliacoes_publicas.expiracao` nula para links permanentes
+   - `avaliacoes_publicas.slug` preenchido e único para links permanentes
 4. Em caso de necessidade controlada de reversão, execute o rollback.
 
 ## Observações
@@ -23,3 +24,4 @@ Arquivos:
 - As correções de dados usam `START TRANSACTION` / `COMMIT`.
 - O rollback remove a tabela `avaliacoes_publicas` e os novos campos de rastreabilidade em `avaliacoes`.
 - O índice `idx_avaliacoes_cliente_id` não é removido no rollback porque já é útil e pode vir de migração anterior.
+- O link público permanente atual usa `slug` e rota estável `/avaliar/{slug}`.

@@ -39,7 +39,7 @@ $controller->relatorioPdf();
 $pdf = ob_get_clean();
 
 $validateController = new AvaliacaoPublicaController();
-$_GET = ['resource' => 'validate', 'token' => (string)($data['data']['token'] ?? '')];
+$_GET = ['resource' => 'validate', 'slug' => (string)($data['data']['slug'] ?? '')];
 ob_start();
 $validateController->validateApi();
 $validateJson = ob_get_clean();
@@ -49,6 +49,7 @@ echo json_encode([
     'api_success' => (bool)($data['success'] ?? false),
     'api_standalone' => (int)($data['data']['avaliacao_id'] ?? -1) === 0,
     'public_id_present' => !empty($data['data']['public_id']),
+    'public_slug_present' => !empty($data['data']['slug']),
     'public_url' => $data['data']['public_url'] ?? null,
     'permanent' => $data['data']['permanent'] ?? null,
     'validate_available' => $validateData['data']['available'] ?? null,

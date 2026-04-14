@@ -4,10 +4,10 @@ Implementação do endpoint público de avaliação com acesso anônimo e isolam
 
 ### Endpoint público
 
-- Página pública: `/public_html/public/avaliacao/{token}`
-- API pública de validação: `/public_html/public/avaliacao/api/validate/{token}`
+- Página pública permanente: `/avaliar/{slug}`
+- API pública de validação: `/public_html/public/avaliacao/api/validate/{slug}`
 - Base pública configurável por ambiente: `PUBLIC_EVALUATION_BASE_URL`
-- Fallback portátil entre ambientes: `/index.php?route=avaliacao-publica/open&token={token}`
+- Fallback portátil entre ambientes: `/index.php?route=avaliacao-publica/open&slug={slug}`
 
 Essas rotas não passam pelo front controller autenticado do sistema interno e não usam `requireLogin()`.
 
@@ -17,6 +17,7 @@ Essas rotas não passam pelo front controller autenticado do sistema interno e n
 - Entrada dedicada: `public_html/public/avaliacao/index.php`
 - Rewrite dedicada em `public_html/public/avaliacao/.htaccess`
 - Roteamento local dedicado em `public_html/router.php`
+- Rewrite raiz para URL amigável em `public_html/.htaccess`
 - Rota pública fallback no front controller: `avaliacao-publica/open`
 - View pública standalone, sem menu administrativo, sem layout interno e sem links de navegação para áreas autenticadas
 
@@ -38,18 +39,17 @@ Além disso, a view pública usa meta `robots` para não indexação.
 
 - O link público funciona sem sessão autenticada
 - O link gerado pelo botão superior é standalone e não depende de `cliente_id`, `avaliacao_id` prévio ou histórico de clientes
+- O mesmo link pode ser reutilizado indefinidamente em diferentes dispositivos, abas anônimas e contextos de compartilhamento
 - Usuários anônimos permanecem restritos à página pública e à API pública de validação
 - Não há renderização do layout interno do sistema
 - Não há menu, navegação lateral ou atalhos para outras funcionalidades
-- O token UUID controla o escopo do acesso
+- O slug permanente controla o escopo do acesso
 - Rate limit por IP e método continua ativo
 
 ### Validação realizada
 
 - Teste local sem sessão autenticada garantindo renderização da página pública
 - Teste local sem sessão autenticada garantindo resposta da API pública
+- Teste local manual do endpoint amigável `/avaliar/{slug}` abrindo diretamente a etapa 1
 - Teste local de geração standalone sem criar avaliação interna
 - Teste local de render garantindo fallback de cópia no frontend
-- Verificação remota:
-  - `/public/avaliacao/...` pode não existir conforme a configuração do host
-  - `/public_html/public/avaliacao/...` respondeu como página pública sem exigir login

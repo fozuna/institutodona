@@ -1,153 +1,106 @@
 <?php
 require __DIR__ . '/../autoload.php';
 
+use App\Controllers\AvaliacaoPublicaController;
+use App\Controllers\AvaliacoesController;
+use App\Core\Security;
 use App\Database\Database;
-use App\Models\AvaliacaoPublicaModel;
 
-$pdo = Database::getConnection();
-$avaliacaoId = (int)$pdo->query('SELECT id FROM avaliacoes ORDER BY id DESC LIMIT 1')->fetchColumn();
+class AvaliacaoPublicaControllerTestDouble extends AvaliacaoPublicaController
+{
+    public string $redirectUrl = '';
 
-if ($avaliacaoId <= 0) {
-    $clienteId = (int)$pdo->query('SELECT id FROM clientes ORDER BY id ASC LIMIT 1')->fetchColumn();
-    if ($clienteId <= 0) {
-        echo "NO_CLIENTE";
-        exit(0);
+    protected function redirect(string $url): void
+    {
+        $this->redirectUrl = $url;
     }
-    $columns = $pdo->query('SHOW COLUMNS FROM avaliacoes')->fetchAll(PDO::FETCH_ASSOC);
-    $data = [];
-    foreach ($columns as $column) {
-        $field = (string)($column['Field'] ?? '');
-        if ($field === 'id') {
-            continue;
-        }
-        if ($field === 'cliente_id') {
-            $data[$field] = $clienteId;
-            continue;
-        }
-        if ($field === 'empresa_nome') {
-            $data[$field] = 'Smoke Empresa';
-            continue;
-        }
-        if ($field === 'contato' || $field === 'nome') {
-            $data[$field] = 'Smoke Cliente';
-            continue;
-        }
-        if ($field === 'email') {
-            $data[$field] = 'smoke@example.com';
-            continue;
-        }
-        if ($field === 'whatsapp') {
-            $data[$field] = '11999999999';
-            continue;
-        }
-        if ($field === 'numero_funcionarios') {
-            $data[$field] = 10;
-            continue;
-        }
-        if ($field === 'numero_lideres') {
-            $data[$field] = 2;
-            continue;
-        }
-        if ($field === 'faturamento_medio_anual') {
-            $data[$field] = 100000;
-            continue;
-        }
-        if ($field === 'tomador_decisao') {
-            $data[$field] = 1;
-            continue;
-        }
-        if ($field === 'respostas_json') {
-            $data[$field] = json_encode(['financeiro' => [], 'mercado' => [], 'pessoas' => [], 'processo' => []]);
-            continue;
-        }
-        if (in_array($field, ['nota_financeiro', 'nota_mercado', 'nota_pessoas', 'nota_processo', 'financeiro_nota', 'mercado_nota', 'pessoas_nota', 'processo_nota'], true)) {
-            $data[$field] = 0;
-            continue;
-        }
-        if (in_array($field, ['realidade_financeiro', 'realidade_mercado', 'realidade_pessoas', 'realidade_processo', 'financeiro_realidade', 'mercado_realidade', 'pessoas_realidade', 'processo_realidade'], true)) {
-            $data[$field] = 0;
-            continue;
-        }
-        if ($field === 'created_at') {
-            $data[$field] = date('Y-m-d H:i:s');
-            continue;
-        }
-        if (($column['Null'] ?? '') === 'YES') {
-            $data[$field] = null;
-            continue;
-        }
-        $type = strtolower((string)($column['Type'] ?? ''));
-        if (preg_match('/int|decimal|float|double/', $type)) {
-            $data[$field] = 0;
-            continue;
-        }
-        if (preg_match('/date|time|year/', $type)) {
-            $data[$field] = date('Y-m-d H:i:s');
-            continue;
-        }
-        $data[$field] = '';
-    }
-    $insertColumns = array_keys($data);
-    $placeholders = array_map(static fn($field) => ':' . $field, $insertColumns);
-    $sql = 'INSERT INTO avaliacoes (' . implode(',', $insertColumns) . ') VALUES (' . implode(',', $placeholders) . ')';
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($data);
-    $avaliacaoId = (int)$pdo->lastInsertId();
 }
 
-$publicaModel = new AvaliacaoPublicaModel();
-$publica = $publicaModel->createOrRefreshForAvaliacao($avaliacaoId, 'Smoke Empresa');
-if (empty($publica['token'])) {
-    echo "NO_TOKEN";
+$_SESSION['user'] = [
+    'id' => 1,
+    'tipo_acesso' => 'instituto',
+    'allowed_client_ids' => [],
+];
+
+$_SERVER['HTTP_HOST'] = 'localhost';
+$_SERVER['HTTPS'] = 'off';
+$_SERVER['SCRIPT_NAME'] = '/index.php';
+
+$pdo = Database::getConnection();
+$beforeCount = (int)$pdo->query('SELECT COUNT(*) FROM avaliacoes')->fetchColumn();
+
+$controller = new AvaliacoesController();
+$_SERVER['REQUEST_METHOD'] = 'POST';
+$_POST = ['csrf' => Security::csrfToken()];
+ob_start();
+$controller->apiGeneratePublicLink();
+$json = (string)ob_get_clean();
+$data = json_decode($json, true);
+$slug = (string)($data['data']['slug'] ?? '');
+
+if ($slug === '') {
+    echo 'NO_SLUG';
     exit(0);
 }
 
-$publicaModel->startByToken($publica['token'], [
+$publicController = new AvaliacaoPublicaControllerTestDouble();
+
+$_SERVER['REQUEST_METHOD'] = 'GET';
+$_GET = ['slug' => $slug];
+$_POST = [];
+ob_start();
+$publicController->handle();
+$step1Html = (string)ob_get_clean();
+
+$_SERVER['REQUEST_METHOD'] = 'POST';
+$_POST = [
+    'action' => 'start',
+    'identifier' => $slug,
     'nome' => 'Cliente Público',
     'empresa' => 'Empresa Pública',
     'whatsapp' => '11999999999',
     'email' => 'cliente.publico@example.com',
-    'numero_funcionarios' => 20,
-    'numero_lideres' => 3,
-    'faturamento_anual' => 200000,
-    'tomador_decisao' => 1,
-]);
+    'numero_funcionarios' => '20',
+    'numero_lideres' => '3',
+    'faturamento_anual' => '200000',
+    'tomador_decisao' => '1',
+];
+ob_start();
+$publicController->handle();
+$step2Html = (string)ob_get_clean();
 
-$aposInicio = $publicaModel->findByToken($publica['token']);
-$publicaModel->concludeByToken($publica['token'], [
-    'respostas_json' => json_encode([
-        'financeiro' => [1, 2],
-        'mercado' => [1],
-        'pessoas' => [],
-        'processo' => [1, 2, 3],
-    ]),
-    'nota_financeiro' => 2,
-    'nota_mercado' => 1,
-    'nota_pessoas' => 0,
-    'nota_processo' => 3,
-    'realidade_financeiro' => 29,
-    'realidade_mercado' => 14,
-    'realidade_pessoas' => 0,
-    'realidade_processo' => 43,
-]);
+$_SERVER['REQUEST_METHOD'] = 'POST';
+$_POST = [
+    'action' => 'finish',
+    'identifier' => $slug,
+    'nome' => 'Cliente Público',
+    'empresa' => 'Empresa Pública',
+    'whatsapp' => '11999999999',
+    'email' => 'cliente.publico@example.com',
+    'numero_funcionarios' => '20',
+    'numero_lideres' => '3',
+    'faturamento_anual' => '200000',
+    'tomador_decisao' => '1',
+    'financeiro' => [1, 2],
+    'mercado' => [1],
+    'pessoas' => [],
+    'processo' => [1, 2, 3],
+];
+ob_start();
+$publicController->handle();
+$finishOutput = (string)ob_get_clean();
 
-$aposConclusao = $publicaModel->findByToken($publica['token']);
-$novoLink = $publicaModel->createOrRefreshForAvaliacao($avaliacaoId, '', true);
-$formularioLimpo = ($novoLink['nome'] ?? null) === null
-    && ($novoLink['empresa'] ?? null) === null
-    && ($novoLink['email'] ?? null) === null
-    && ($novoLink['whatsapp'] ?? null) === null
-    && (string)($novoLink['status'] ?? '') === 'pendente';
-$expirada = $novoLink;
-$pdo->prepare('UPDATE avaliacoes_publicas SET expiracao = DATE_SUB(NOW(), INTERVAL 1 MINUTE) WHERE id = :id')
-    ->execute(['id' => (int)$expirada['id']]);
+$afterCount = (int)$pdo->query('SELECT COUNT(*) FROM avaliacoes')->fetchColumn();
+$latest = $pdo->query('SELECT nome, empresa_nome, nota_financeiro, nota_mercado, nota_pessoas, nota_processo FROM avaliacoes ORDER BY id DESC LIMIT 1')->fetch(PDO::FETCH_ASSOC);
 
 echo json_encode([
-    'token' => $publica['token'],
-    'novo_token' => $novoLink['token'] ?? null,
-    'token_expirado' => $expirada['token'] ?? null,
-    'status_inicio' => $aposInicio['status'] ?? null,
-    'status_final' => $aposConclusao['status'] ?? null,
-    'tem_conclusao' => !empty($aposConclusao['data_conclusao']),
-    'formulario_limpo' => $formularioLimpo,
+    'slug' => $slug,
+    'public_link_renders_step1' => str_contains($step1Html, 'Dados iniciais'),
+    'step1_advances_to_step2' => str_contains($step2Html, 'Questionário da avaliação'),
+    'created_new_avaliacao' => $afterCount === ($beforeCount + 1),
+    'redirected_after_finish' => str_contains($publicController->redirectUrl, 'submitted=1'),
+    'finish_output_empty' => $finishOutput === '',
+    'latest_nome' => $latest['nome'] ?? null,
+    'latest_empresa' => $latest['empresa_nome'] ?? null,
+    'latest_total' => (int)($latest['nota_financeiro'] ?? 0) + (int)($latest['nota_mercado'] ?? 0) + (int)($latest['nota_pessoas'] ?? 0) + (int)($latest['nota_processo'] ?? 0),
 ], JSON_UNESCAPED_UNICODE);

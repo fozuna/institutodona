@@ -145,6 +145,7 @@ CREATE TABLE IF NOT EXISTS avaliacoes_publicas (
   id INT AUTO_INCREMENT PRIMARY KEY,
   avaliacao_id INT NULL,
   token CHAR(36) NOT NULL UNIQUE,
+  slug VARCHAR(120) NULL UNIQUE,
   created_by_user_id INT NULL,
   nome VARCHAR(150) NULL,
   empresa VARCHAR(255) NULL,

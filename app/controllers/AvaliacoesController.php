@@ -187,8 +187,8 @@ class AvaliacoesController extends BaseController
         }
         if ($item) {
             $publicLinkData = $this->publicModel->findByAvaliacaoId((int)$item['id']);
-            if (!empty($publicLinkData['token'])) {
-                $publicLinkUrl = $this->buildPublicLink((string)$publicLinkData['token']);
+        if (!empty($publicLinkData['slug']) || !empty($publicLinkData['token'])) {
+            $publicLinkUrl = $this->buildPublicLink((string)($publicLinkData['slug'] ?: $publicLinkData['token']));
             }
         }
         $this->render('avaliacoes/show', compact('item', 'clientesAssociacao', 'publicLinkData', 'publicLinkUrl'));
@@ -259,7 +259,7 @@ class AvaliacoesController extends BaseController
             $this->redirect('index.php?route=avaliacoes/index');
             return;
         }
-        if (empty($publico['token'])) {
+        if (empty($publico['slug']) && empty($publico['token'])) {
             AuditLogger::log('avaliacao_publica_generate_failed', 'avaliacao_publica', 0, []);
             $_SESSION['flash_error'] = 'Não foi possível gerar o link público.';
             $this->redirect('index.php?route=avaliacoes/index');
@@ -278,8 +278,9 @@ class AvaliacoesController extends BaseController
             'avaliacao_id' => 0,
             'public_id' => (int)($publico['id'] ?? 0),
             'empresa' => '',
-            'url' => $this->buildPublicLink((string)($publico['token'] ?? '')),
+            'url' => $this->buildPublicLink((string)($publico['slug'] ?? $publico['token'] ?? '')),
             'token' => (string)($publico['token'] ?? ''),
+            'slug' => (string)($publico['slug'] ?? ''),
             'expiracao' => (string)($publico['expiracao'] ?? ''),
             'permanent' => empty($publico['expiracao']),
         ];
@@ -313,7 +314,8 @@ class AvaliacoesController extends BaseController
                     'avaliacao_id' => 0,
                     'public_id' => (int)($publico['id'] ?? 0),
                     'token' => $publico['token'] ?? null,
-                    'public_url' => $this->buildPublicLink((string)($publico['token'] ?? '')),
+                    'slug' => $publico['slug'] ?? null,
+                    'public_url' => $this->buildPublicLink((string)($publico['slug'] ?? $publico['token'] ?? '')),
                     'permanent' => empty($publico['expiracao']),
                 ],
             ], JSON_UNESCAPED_UNICODE);
@@ -377,7 +379,7 @@ class AvaliacoesController extends BaseController
             'Empresa' => $empresa !== '' ? $empresa : '-',
             'Nome do respondente' => (string)($item['nome'] ?? ''),
             'Data da avaliação' => !empty($item['created_at']) ? date('d/m/Y H:i', strtotime((string)$item['created_at'])) : '-',
-            'Link utilizado' => !empty($publico['token']) ? $this->buildPublicLink((string)$publico['token']) : 'Não gerado',
+            'Link utilizado' => (!empty($publico['slug']) || !empty($publico['token'])) ? $this->buildPublicLink((string)($publico['slug'] ?: $publico['token'])) : 'Não gerado',
             'Tipo de vínculo' => !empty($item['cliente_id']) ? 'Cliente associado' : 'Potencial cliente',
             'E-mail' => (string)($item['email'] ?? ''),
             'WhatsApp' => (string)($item['whatsapp'] ?? ''),
@@ -423,11 +425,11 @@ class AvaliacoesController extends BaseController
         echo $pdf;
     }
 
-    private function buildPublicLink(string $token): string
+    private function buildPublicLink(string $identifier): string
     {
         $configured = trim((string)(getenv('PUBLIC_EVALUATION_BASE_URL') ?: ''));
         if ($configured !== '') {
-            return rtrim($configured, '/') . '/' . rawurlencode($token);
+            return rtrim($configured, '/') . '/' . rawurlencode($identifier);
         }
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
@@ -445,7 +447,7 @@ class AvaliacoesController extends BaseController
         if (str_ends_with($base, '/public/avaliacao')) {
             $base = substr($base, 0, -strlen('/public/avaliacao'));
         }
-        return $scheme . '://' . $host . $base . '/index.php?route=avaliacao-publica/open&token=' . rawurlencode($token);
+        return $scheme . '://' . $host . $base . '/avaliar/' . rawurlencode($identifier);
     }
 
 
