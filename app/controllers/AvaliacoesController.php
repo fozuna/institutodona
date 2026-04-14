@@ -293,7 +293,7 @@ class AvaliacoesController extends BaseController
         if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST' || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
             http_response_code(400);
             header('Content-Type: application/json; charset=utf-8');
-            echo json_encode(['success' => false, 'message' => 'Requisição inválida.'], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['success' => false, 'message' => 'Requisição inválida.', 'error' => 'invalid_request'], JSON_UNESCAPED_UNICODE);
             return;
         }
         try {
@@ -326,7 +326,7 @@ class AvaliacoesController extends BaseController
             ]);
             http_response_code(500);
             header('Content-Type: application/json; charset=utf-8');
-            echo json_encode(['success' => false, 'message' => 'Falha ao gerar link público.'], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['success' => false, 'message' => 'Falha ao gerar link público.', 'error' => 'public_link_generation_failed'], JSON_UNESCAPED_UNICODE);
         }
     }
 

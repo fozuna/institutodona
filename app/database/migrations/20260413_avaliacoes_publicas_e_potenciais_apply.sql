@@ -176,6 +176,7 @@ CREATE TABLE IF NOT EXISTS avaliacoes_publicas (
   id INT AUTO_INCREMENT PRIMARY KEY,
   avaliacao_id INT NULL,
   token CHAR(36) NOT NULL,
+  created_by_user_id INT NULL,
   nome VARCHAR(150) NULL,
   empresa VARCHAR(255) NULL,
   whatsapp VARCHAR(20) NULL,
@@ -203,6 +204,7 @@ CREATE TABLE IF NOT EXISTS avaliacoes_publicas (
 
 CALL sp_add_column_if_missing('avaliacoes_publicas', 'expiracao', 'DATETIME NULL AFTER status');
 CALL sp_add_column_if_missing('avaliacoes_publicas', 'data_conclusao', 'DATETIME NULL AFTER data_criacao');
+CALL sp_add_column_if_missing('avaliacoes_publicas', 'created_by_user_id', 'INT NULL AFTER token');
 
 -- Ajustes de tipo para tokens UUID e links permanentes.
 ALTER TABLE avaliacoes_publicas MODIFY avaliacao_id INT NULL;

@@ -1,6 +1,9 @@
 <?php
 namespace App\Models;
 
+use App\Core\AuditLogger;
+use App\Core\Auth;
+
 class AvaliacaoPublicaModel extends BaseModel
 {
     private function ensureTable(): void
@@ -10,6 +13,7 @@ class AvaliacaoPublicaModel extends BaseModel
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 avaliacao_id INT NULL,
                 token CHAR(36) NOT NULL UNIQUE,
+                created_by_user_id INT NULL,
                 nome VARCHAR(150) NULL,
                 empresa VARCHAR(255) NULL,
                 whatsapp VARCHAR(20) NULL,
@@ -36,6 +40,9 @@ class AvaliacaoPublicaModel extends BaseModel
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             $this->db->exec("ALTER TABLE avaliacoes_publicas MODIFY avaliacao_id INT NULL");
             $this->db->exec("ALTER TABLE avaliacoes_publicas MODIFY expiracao DATETIME NULL");
+            if (!\App\Database\Database::columnExists('avaliacoes_publicas', 'created_by_user_id')) {
+                $this->db->exec("ALTER TABLE avaliacoes_publicas ADD COLUMN created_by_user_id INT NULL AFTER token");
+            }
             if (!\App\Database\Database::columnExists('avaliacoes_publicas', 'expiracao')) {
                 $this->db->exec("ALTER TABLE avaliacoes_publicas ADD COLUMN expiracao DATETIME NULL AFTER status");
             }
@@ -43,6 +50,9 @@ class AvaliacaoPublicaModel extends BaseModel
                 $this->db->exec("ALTER TABLE avaliacoes_publicas ADD COLUMN data_conclusao DATETIME NULL AFTER data_criacao");
             }
         } catch (\PDOException $e) {
+            AuditLogger::log('avaliacao_publica_schema_error', 'avaliacao_publica', 0, [
+                'message' => $e->getMessage(),
+            ]);
         }
     }
 
@@ -121,74 +131,101 @@ class AvaliacaoPublicaModel extends BaseModel
     {
         $this->ensureTable();
         $token = $this->generateToken();
-        $stmt = $this->db->prepare('INSERT INTO avaliacoes_publicas (avaliacao_id, token, empresa, status, expiracao) VALUES (NULL, :token, NULL, :status, NULL)');
-        $stmt->execute([
-            'token' => $token,
-            'status' => 'pendente',
-        ]);
-        $id = (int)$this->db->lastInsertId();
-        return $this->findById($id) ?: [];
+        try {
+            $stmt = $this->db->prepare('INSERT INTO avaliacoes_publicas (avaliacao_id, token, created_by_user_id, empresa, status, expiracao) VALUES (NULL, :token, :created_by_user_id, NULL, :status, NULL)');
+            $stmt->execute([
+                'token' => $token,
+                'created_by_user_id' => Auth::user()['id'] ?? null,
+                'status' => 'pendente',
+            ]);
+            $id = (int)$this->db->lastInsertId();
+            return $this->findById($id) ?: [];
+        } catch (\Throwable $e) {
+            AuditLogger::log('avaliacao_publica_create_error', 'avaliacao_publica', 0, [
+                'message' => $e->getMessage(),
+                'token' => $token,
+            ]);
+            throw $e;
+        }
     }
 
     public function startByToken(string $token, array $data): bool
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('UPDATE avaliacoes_publicas
-            SET nome = :nome,
-                empresa = :empresa,
-                whatsapp = :whatsapp,
-                email = :email,
-                numero_funcionarios = :numero_funcionarios,
-                numero_lideres = :numero_lideres,
-                faturamento_anual = :faturamento_anual,
-                tomador_decisao = :tomador_decisao,
-                status = :status
-            WHERE token = :token AND status <> :status_concluida AND (expiracao IS NULL OR expiracao >= NOW())');
-        return $stmt->execute([
-            'nome' => $data['nome'] ?? null,
-            'empresa' => $data['empresa'] ?? null,
-            'whatsapp' => $data['whatsapp'] ?? null,
-            'email' => $data['email'] ?? null,
-            'numero_funcionarios' => isset($data['numero_funcionarios']) ? (int)$data['numero_funcionarios'] : null,
-            'numero_lideres' => isset($data['numero_lideres']) ? (int)$data['numero_lideres'] : null,
-            'faturamento_anual' => isset($data['faturamento_anual']) ? (int)$data['faturamento_anual'] : null,
-            'tomador_decisao' => isset($data['tomador_decisao']) ? (int)$data['tomador_decisao'] : null,
-            'status' => 'iniciada',
-            'status_concluida' => 'concluida',
-            'token' => $token,
-        ]);
+        try {
+            $stmt = $this->db->prepare('UPDATE avaliacoes_publicas
+                SET nome = :nome,
+                    empresa = :empresa,
+                    whatsapp = :whatsapp,
+                    email = :email,
+                    numero_funcionarios = :numero_funcionarios,
+                    numero_lideres = :numero_lideres,
+                    faturamento_anual = :faturamento_anual,
+                    tomador_decisao = :tomador_decisao,
+                    status = :status
+                WHERE token = :token AND status <> :status_concluida AND (expiracao IS NULL OR expiracao >= NOW())');
+            $stmt->execute([
+                'nome' => $data['nome'] ?? null,
+                'empresa' => $data['empresa'] ?? null,
+                'whatsapp' => $data['whatsapp'] ?? null,
+                'email' => $data['email'] ?? null,
+                'numero_funcionarios' => isset($data['numero_funcionarios']) ? (int)$data['numero_funcionarios'] : null,
+                'numero_lideres' => isset($data['numero_lideres']) ? (int)$data['numero_lideres'] : null,
+                'faturamento_anual' => isset($data['faturamento_anual']) ? (int)$data['faturamento_anual'] : null,
+                'tomador_decisao' => isset($data['tomador_decisao']) ? (int)$data['tomador_decisao'] : null,
+                'status' => 'iniciada',
+                'status_concluida' => 'concluida',
+                'token' => $token,
+            ]);
+            return $stmt->rowCount() > 0;
+        } catch (\Throwable $e) {
+            AuditLogger::log('avaliacao_publica_start_db_error', 'avaliacao_publica', 0, [
+                'message' => $e->getMessage(),
+                'token' => $token,
+            ]);
+            throw $e;
+        }
     }
 
     public function concludeByToken(string $token, array $data): bool
     {
         $this->ensureTable();
-        $stmt = $this->db->prepare('UPDATE avaliacoes_publicas
-            SET respostas_json = :respostas_json,
-                nota_financeiro = :nota_financeiro,
-                nota_mercado = :nota_mercado,
-                nota_pessoas = :nota_pessoas,
-                nota_processo = :nota_processo,
-                realidade_financeiro = :realidade_financeiro,
-                realidade_mercado = :realidade_mercado,
-                realidade_pessoas = :realidade_pessoas,
-                realidade_processo = :realidade_processo,
-                status = :status,
-                data_conclusao = NOW()
-            WHERE token = :token AND status = :status_iniciada AND (expiracao IS NULL OR expiracao >= NOW())');
-        return $stmt->execute([
-            'respostas_json' => $data['respostas_json'] ?? null,
-            'nota_financeiro' => (int)($data['nota_financeiro'] ?? 0),
-            'nota_mercado' => (int)($data['nota_mercado'] ?? 0),
-            'nota_pessoas' => (int)($data['nota_pessoas'] ?? 0),
-            'nota_processo' => (int)($data['nota_processo'] ?? 0),
-            'realidade_financeiro' => isset($data['realidade_financeiro']) ? (int)$data['realidade_financeiro'] : null,
-            'realidade_mercado' => isset($data['realidade_mercado']) ? (int)$data['realidade_mercado'] : null,
-            'realidade_pessoas' => isset($data['realidade_pessoas']) ? (int)$data['realidade_pessoas'] : null,
-            'realidade_processo' => isset($data['realidade_processo']) ? (int)$data['realidade_processo'] : null,
-            'status' => 'concluida',
-            'status_iniciada' => 'iniciada',
-            'token' => $token,
-        ]);
+        try {
+            $stmt = $this->db->prepare('UPDATE avaliacoes_publicas
+                SET respostas_json = :respostas_json,
+                    nota_financeiro = :nota_financeiro,
+                    nota_mercado = :nota_mercado,
+                    nota_pessoas = :nota_pessoas,
+                    nota_processo = :nota_processo,
+                    realidade_financeiro = :realidade_financeiro,
+                    realidade_mercado = :realidade_mercado,
+                    realidade_pessoas = :realidade_pessoas,
+                    realidade_processo = :realidade_processo,
+                    status = :status,
+                    data_conclusao = NOW()
+                WHERE token = :token AND status = :status_iniciada AND (expiracao IS NULL OR expiracao >= NOW())');
+            $stmt->execute([
+                'respostas_json' => $data['respostas_json'] ?? null,
+                'nota_financeiro' => (int)($data['nota_financeiro'] ?? 0),
+                'nota_mercado' => (int)($data['nota_mercado'] ?? 0),
+                'nota_pessoas' => (int)($data['nota_pessoas'] ?? 0),
+                'nota_processo' => (int)($data['nota_processo'] ?? 0),
+                'realidade_financeiro' => isset($data['realidade_financeiro']) ? (int)$data['realidade_financeiro'] : null,
+                'realidade_mercado' => isset($data['realidade_mercado']) ? (int)$data['realidade_mercado'] : null,
+                'realidade_pessoas' => isset($data['realidade_pessoas']) ? (int)$data['realidade_pessoas'] : null,
+                'realidade_processo' => isset($data['realidade_processo']) ? (int)$data['realidade_processo'] : null,
+                'status' => 'concluida',
+                'status_iniciada' => 'iniciada',
+                'token' => $token,
+            ]);
+            return $stmt->rowCount() > 0;
+        } catch (\Throwable $e) {
+            AuditLogger::log('avaliacao_publica_finish_db_error', 'avaliacao_publica', 0, [
+                'message' => $e->getMessage(),
+                'token' => $token,
+            ]);
+            throw $e;
+        }
     }
 
     public function attachToAvaliacaoByToken(string $token, int $avaliacaoId): bool
@@ -229,6 +266,7 @@ class AvaliacaoPublicaModel extends BaseModel
             'faturamento_medio_anual' => (int)($record['faturamento_anual'] ?? 0),
             'tomador_decisao' => (int)($record['tomador_decisao'] ?? 0),
             'origem_cadastro' => 'potencial_cliente',
+            'created_by_user_id' => isset($record['created_by_user_id']) ? (int)$record['created_by_user_id'] : null,
             'contato' => (string)($record['nome'] ?? ''),
             'respostas_json' => json_encode($respostas),
             'nota_financeiro' => (int)($record['nota_financeiro'] ?? 0),

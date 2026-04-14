@@ -9,6 +9,7 @@ $invalidToken = !empty($invalidToken);
 $expiredToken = !empty($expiredToken);
 $alreadyDone = !empty($alreadyDone);
 $formAction = $formAction ?? '';
+$formError = $formError ?? '';
 $token = $record['token'] ?? ($_GET['token'] ?? $_POST['token'] ?? '');
 $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
 $baseUrl = rtrim(dirname(dirname(dirname($scriptName))), '/\\');
@@ -71,6 +72,9 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
               <h2 class="mt-2 text-2xl font-bold text-brand-brown">Dados iniciais</h2>
               <p class="mt-2 text-base leading-7 text-gray-600">Preencha as informações abaixo para iniciar a avaliação.</p>
             </div>
+            <?php if ($formError !== ''): ?>
+              <div class="mb-6 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><?= htmlspecialchars($formError) ?></div>
+            <?php endif; ?>
             <form method="post" action="<?= htmlspecialchars($formAction) ?>" class="space-y-6">
               <input type="hidden" name="action" value="start" />
               <input type="hidden" name="token" value="<?= htmlspecialchars((string)$token) ?>" />
@@ -128,6 +132,9 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
               <h2 class="mt-2 text-2xl font-bold text-brand-brown">Questionário da avaliação</h2>
               <p class="mt-2 text-base leading-7 text-gray-600">Marque os itens aplicáveis e finalize sua avaliação.</p>
             </div>
+            <?php if ($formError !== ''): ?>
+              <div class="mb-6 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><?= htmlspecialchars($formError) ?></div>
+            <?php endif; ?>
             <form method="post" action="<?= htmlspecialchars($formAction) ?>" class="space-y-6">
               <input type="hidden" name="action" value="finish" />
               <input type="hidden" name="token" value="<?= htmlspecialchars((string)$token) ?>" />

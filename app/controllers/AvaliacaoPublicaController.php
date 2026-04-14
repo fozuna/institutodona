@@ -182,16 +182,29 @@ class AvaliacaoPublicaController
             ]);
             return;
         }
-        $this->publicas->startByToken($token, [
-            'nome' => $values['nome'],
-            'empresa' => $values['empresa'],
-            'whatsapp' => $values['whatsapp'],
-            'email' => $values['email'],
-            'numero_funcionarios' => (int)$values['numero_funcionarios'],
-            'numero_lideres' => (int)$values['numero_lideres'],
-            'faturamento_anual' => (int)$values['faturamento_anual'],
-            'tomador_decisao' => (int)$values['tomador_decisao'],
-        ]);
+        try {
+            $saved = $this->publicas->startByToken($token, [
+                'nome' => $values['nome'],
+                'empresa' => $values['empresa'],
+                'whatsapp' => $values['whatsapp'],
+                'email' => $values['email'],
+                'numero_funcionarios' => (int)$values['numero_funcionarios'],
+                'numero_lideres' => (int)$values['numero_lideres'],
+                'faturamento_anual' => (int)$values['faturamento_anual'],
+                'tomador_decisao' => (int)$values['tomador_decisao'],
+            ]);
+        } catch (\Throwable $e) {
+            $this->renderSubmissionError(1, $record, $values, [], 'Falha ao salvar os dados iniciais.', $e);
+            return;
+        }
+        if (!$saved) {
+            AuditLogger::log('avaliacao_publica_start_noop', 'avaliacao_publica', (int)($record['avaliacao_id'] ?? 0), [
+                'token' => $token,
+                'status' => $record['status'] ?? null,
+            ]);
+            $this->renderSubmissionError(1, $record, $values, [], 'Não foi possível salvar os dados iniciais. Verifique se o link ainda está válido.', null);
+            return;
+        }
         AuditLogger::log('avaliacao_publica_started', 'avaliacao_publica', (int)($record['avaliacao_id'] ?? 0), [
             'token' => $token,
             'nome' => $values['nome'],
@@ -238,26 +251,46 @@ class AvaliacaoPublicaController
         $notaMer = count($mercado);
         $notaPes = count($pessoas);
         $notaPro = count($processo);
-        $this->publicas->concludeByToken($token, [
-            'respostas_json' => json_encode([
-                'financeiro' => $financeiro,
-                'mercado' => $mercado,
-                'pessoas' => $pessoas,
-                'processo' => $processo,
-            ]),
-            'nota_financeiro' => $notaFin,
-            'nota_mercado' => $notaMer,
-            'nota_pessoas' => $notaPes,
-            'nota_processo' => $notaPro,
-            'realidade_financeiro' => $this->toPercent($notaFin, (int)($totais['financeiro'] ?? 1)),
-            'realidade_mercado' => $this->toPercent($notaMer, (int)($totais['mercado'] ?? 1)),
-            'realidade_pessoas' => $this->toPercent($notaPes, (int)($totais['pessoas'] ?? 1)),
-            'realidade_processo' => $this->toPercent($notaPro, (int)($totais['processo'] ?? 1)),
-        ]);
+        $selectedMap = [
+            'financeiro' => $financeiro,
+            'mercado' => $mercado,
+            'pessoas' => $pessoas,
+            'processo' => $processo,
+        ];
+        try {
+            $saved = $this->publicas->concludeByToken($token, [
+                'respostas_json' => json_encode($selectedMap),
+                'nota_financeiro' => $notaFin,
+                'nota_mercado' => $notaMer,
+                'nota_pessoas' => $notaPes,
+                'nota_processo' => $notaPro,
+                'realidade_financeiro' => $this->toPercent($notaFin, (int)($totais['financeiro'] ?? 1)),
+                'realidade_mercado' => $this->toPercent($notaMer, (int)($totais['mercado'] ?? 1)),
+                'realidade_pessoas' => $this->toPercent($notaPes, (int)($totais['pessoas'] ?? 1)),
+                'realidade_processo' => $this->toPercent($notaPro, (int)($totais['processo'] ?? 1)),
+            ]);
+        } catch (\Throwable $e) {
+            $this->renderSubmissionError(2, $record, $this->valuesFromRecord($record), $selectedMap, 'Falha ao salvar a avaliação.', $e);
+            return;
+        }
+        if (!$saved) {
+            AuditLogger::log('avaliacao_publica_finish_noop', 'avaliacao_publica', (int)($record['avaliacao_id'] ?? 0), [
+                'token' => $token,
+                'status' => $record['status'] ?? null,
+            ]);
+            $this->renderSubmissionError(2, $record, $this->valuesFromRecord($record), $selectedMap, 'Não foi possível salvar a avaliação. Verifique se o link ainda está válido.', null);
+            return;
+        }
         $updatedRecord = $this->publicas->findByToken($token) ?: $record;
         if ((int)($updatedRecord['avaliacao_id'] ?? 0) <= 0) {
             $avaliacaoId = $this->publicas->materializeStandaloneToAvaliacao($token);
             $updatedRecord['avaliacao_id'] = $avaliacaoId > 0 ? $avaliacaoId : ($updatedRecord['avaliacao_id'] ?? null);
+            if ($avaliacaoId <= 0) {
+                AuditLogger::log('avaliacao_publica_materialization_failed', 'avaliacao_publica', 0, [
+                    'token' => $token,
+                    'status' => $updatedRecord['status'] ?? null,
+                ]);
+            }
         }
         AuditLogger::log('avaliacao_publica_finished', 'avaliacao_publica', (int)($record['avaliacao_id'] ?? 0), [
             'token' => $token,
@@ -273,7 +306,7 @@ class AvaliacaoPublicaController
         if (!$this->allowRequest($token)) {
             http_response_code(429);
             header('Content-Type: application/json; charset=utf-8');
-            echo json_encode(['success' => false, 'message' => 'Muitas tentativas.'], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['success' => false, 'message' => 'Muitas tentativas.', 'error' => 'rate_limited'], JSON_UNESCAPED_UNICODE);
             return;
         }
         $record = $this->isUuid($token) ? $this->publicas->findByToken($token) : null;
@@ -312,6 +345,35 @@ class AvaliacaoPublicaController
         header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
+    }
+
+    private function renderSubmissionError(int $step, array $record, array $values, array $selectedMap, string $message, ?\Throwable $e): void
+    {
+        if ($e) {
+            AuditLogger::log('avaliacao_publica_submission_error', 'avaliacao_publica', (int)($record['avaliacao_id'] ?? 0), [
+                'token' => $record['token'] ?? null,
+                'step' => $step,
+                'message' => $message,
+                'error' => $e->getMessage(),
+            ]);
+        }
+        $debug = getenv('APP_ENV') && strtolower((string)getenv('APP_ENV')) !== 'production' ? ($e ? $e->getMessage() : '') : '';
+        http_response_code(409);
+        $this->render([
+            'rateLimited' => false,
+            'invalidToken' => false,
+            'expiredToken' => false,
+            'alreadyDone' => false,
+            'record' => $record,
+            'step' => $step,
+            'values' => $values,
+            'errors' => [],
+            'selectedMap' => $selectedMap,
+            'qs' => AvaliacaoQuestionario::pilares(),
+            'publicUrl' => $this->publicUrlByToken((string)($record['token'] ?? '')),
+            'formAction' => $this->publicUrlByToken((string)($record['token'] ?? '')),
+            'formError' => $debug !== '' ? ($message . ' [' . $debug . ']') : $message,
+        ]);
     }
 
     private function render(array $params): void
