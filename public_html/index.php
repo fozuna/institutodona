@@ -443,9 +443,6 @@ switch ($route) {
     case 'avaliacoes/show':
         (new AvaliacoesController())->show();
         break;
-    case 'avaliacoes/planoacao':
-        (new AvaliacoesController())->planoacao();
-        break;
     case 'avaliacoes/relatorio_pdf':
         (new AvaliacoesController())->relatorioPdf();
         break;

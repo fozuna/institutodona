@@ -180,23 +180,7 @@ class AvaliacoesController extends BaseController
         if ($item && (int)($item['cliente_id'] ?? 0) <= 0) {
             $clientesAssociacao = (new ClienteModel())->all();
         }
-        $publicLinkUrl = $this->buildPublicLink();
-        $publicLinkData = ['static' => true, 'url' => $publicLinkUrl];
-        $this->render('avaliacoes/show', compact('item', 'clientesAssociacao', 'publicLinkData', 'publicLinkUrl'));
-    }
-
-    public function planoacao(): void
-    {
-        $this->requireLogin();
-        $id = (int)($_GET['id'] ?? 0);
-        $item = $this->model->find($id);
-        if (!$item) {
-            http_response_code(404);
-            echo 'Avaliação não encontrada.';
-            return;
-        }
-        $respostas = json_decode($item['respostas_json'] ?? '{}', true) ?: [];
-        $this->render('avaliacoes/planoacao', compact('item', 'respostas'));
+        $this->render('avaliacoes/show', compact('item', 'clientesAssociacao'));
     }
 
     public function associarCliente(): void

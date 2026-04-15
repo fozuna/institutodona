@@ -35,16 +35,37 @@ class AvaliacaoPdfService
 
     public function outputToBrowser(int $avaliacaoId, bool $download = false): bool
     {
-        $path = $this->generateToFile($avaliacaoId, true);
-        if (!$path || !is_file($path)) {
+        $pdf = $this->renderBinary($avaliacaoId, true);
+        if ($pdf === null) {
             return false;
         }
-        $pdf = (string)file_get_contents($path);
+        if (PHP_SAPI !== 'cli') {
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+        }
         header('Content-Type: application/pdf');
+        header('X-Content-Type-Options: nosniff');
+        header('Content-Transfer-Encoding: binary');
+        header('Cache-Control: private, max-age=0, must-revalidate');
+        header('Pragma: public');
         header('Content-Length: ' . strlen($pdf));
         header('Content-Disposition: ' . ($download ? 'attachment' : 'inline') . '; filename="avaliacao-' . $avaliacaoId . '.pdf"');
         echo $pdf;
         return true;
+    }
+
+    public function renderBinary(int $avaliacaoId, bool $force = false): ?string
+    {
+        $path = $this->generateToFile($avaliacaoId, $force);
+        if (!$path || !is_file($path)) {
+            return null;
+        }
+        $pdf = file_get_contents($path);
+        if ($pdf === false || !str_starts_with((string)$pdf, '%PDF')) {
+            return null;
+        }
+        return (string)$pdf;
     }
 
     public function pdfPath(int $avaliacaoId): string

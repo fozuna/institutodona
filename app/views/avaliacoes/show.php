@@ -1,13 +1,11 @@
-<?php /** @var array|null $item */ /** @var array $clientesAssociacao */ /** @var array|null $publicLinkData */ /** @var string $publicLinkUrl */ ?>
+<?php /** @var array|null $item */ /** @var array $clientesAssociacao */ ?>
 <div class="p-6">
   <div class="flex justify-between items-center mb-4">
     <h1 class="text-2xl font-bold">Avaliação</h1>
     <div class="flex items-center gap-2">
       <?php if ($item): ?>
-        <a class="px-3 py-2 rounded bg-brand-red text-white" href="<?= htmlspecialchars($publicLinkUrl) ?>" target="_blank" rel="noopener">Abrir Formulário Público</a>
         <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?route=avaliacoes/relatorio_pdf&id=<?= (int)$item['id'] ?>" target="_blank" rel="noopener">Exportar PDF</a>
         <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?route=avaliacoes/relatorio_pdf&id=<?= (int)$item['id'] ?>&download=1">Baixar PDF</a>
-        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=avaliacoes/planoacao&id=<?= (int)$item['id'] ?>">Plano de Ação</a>
       <?php endif; ?>
       <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="javascript:history.back()">Voltar</a>
     </div>
@@ -22,16 +20,6 @@
     $empresa = $item['cliente_id'] ? ($item['cliente_nome'] ?? '') : ($item['empresa_nome'] ?? '');
     $isPotencial = (int)($item['cliente_id'] ?? 0) <= 0;
   ?>
-  <?php if (!empty($publicLinkUrl)): ?>
-    <div class="bg-white shadow rounded p-4 mb-4">
-      <div class="font-semibold mb-2">Formulário público fixo</div>
-      <div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-center">
-        <input class="border rounded p-2 w-full bg-gray-50" value="<?= htmlspecialchars($publicLinkUrl) ?>" readonly />
-        <a class="px-4 py-2 rounded bg-gray-200 text-brand-brown text-center" href="<?= htmlspecialchars($publicLinkUrl) ?>" target="_blank" rel="noopener">Abrir formulário</a>
-      </div>
-      <div class="text-xs text-gray-600 mt-2">Endpoint permanente, sem token e sem expiração.</div>
-    </div>
-  <?php endif; ?>
   <div class="bg-white shadow rounded p-4 mb-4">
     <div class="mb-2 text-sm text-gray-600">Empresa</div>
     <div class="font-semibold"><?= htmlspecialchars($empresa ?: '—') ?></div>
