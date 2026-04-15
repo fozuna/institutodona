@@ -1,4 +1,8 @@
 <?php
+$vendorAutoload = __DIR__ . '/../vendor/autoload.php';
+if (file_exists($vendorAutoload)) {
+    require_once $vendorAutoload;
+}
 $env = __DIR__ . '/../.env';
 if (file_exists($env)) {
     foreach (file($env) as $line) {
@@ -23,6 +27,7 @@ spl_autoload_register(function ($class) {
         'App\\Database\\' => __DIR__ . '/database/',
         'App\\Views\\' => __DIR__ . '/views/',
         'App\\Core\\' => __DIR__ . '/core/',
+        'App\\Services\\' => __DIR__ . '/services/',
     ];
 
     foreach ($prefixes as $prefix => $baseDir) {

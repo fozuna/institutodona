@@ -154,6 +154,7 @@
             </td>
             <td class="p-3">
               <a class="text-brand-pink icon-action" href="index.php?route=avaliacoes/show&id=<?= (int)$i['id'] ?>" title="Ver" aria-label="Ver"><span data-feather="bar-chart-2"></span></a>
+              <a class="text-brand-pink icon-action ml-2" href="index.php?route=avaliacoes/relatorio_pdf&id=<?= (int)$i['id'] ?>&download=1" title="Baixar PDF" aria-label="Baixar PDF"><span data-feather="download"></span></a>
             </td>
           </tr>
         <?php endforeach; ?>

@@ -5,10 +5,10 @@ use App\Core\AuditLogger;
 use App\Core\AvaliacaoQuestionario;
 use App\Core\BaseController;
 use App\Core\Security;
-use App\Core\SimplePdfReport;
 use App\Models\AvaliacaoModel;
 use App\Models\AvaliacaoPublicaModel;
 use App\Models\ClienteModel;
+use App\Services\AvaliacaoPdfService;
 
 class AvaliacoesController extends BaseController
 {
@@ -373,56 +373,26 @@ class AvaliacoesController extends BaseController
             echo 'Avaliação não encontrada.';
             return;
         }
-        $publico = $this->publicModel->findByAvaliacaoId($id);
-        $empresa = (string)($item['cliente_nome'] ?? $item['empresa_nome'] ?? '');
-        $header = [
-            'Empresa' => $empresa !== '' ? $empresa : '-',
-            'Nome do respondente' => (string)($item['nome'] ?? ''),
-            'Data da avaliação' => !empty($item['created_at']) ? date('d/m/Y H:i', strtotime((string)$item['created_at'])) : '-',
-            'Link utilizado' => (!empty($publico['slug']) || !empty($publico['token'])) ? $this->buildPublicLink((string)($publico['slug'] ?: $publico['token'])) : 'Não gerado',
-            'Tipo de vínculo' => !empty($item['cliente_id']) ? 'Cliente associado' : 'Potencial cliente',
-            'E-mail' => (string)($item['email'] ?? ''),
-            'WhatsApp' => (string)($item['whatsapp'] ?? ''),
-        ];
-        $labels = [
-            'financeiro' => 'Financeiro',
-            'mercado' => 'Mercado',
-            'pessoas' => 'Pessoas',
-            'processo' => 'Processo',
-        ];
-        $respostas = json_decode((string)($item['respostas_json'] ?? '{}'), true) ?: [];
-        $questions = [];
-        foreach (AvaliacaoQuestionario::pilares() as $pillar => $items) {
-            foreach ($items as $idx => $question) {
-                $checked = in_array($idx + 1, array_map('intval', $respostas[$pillar] ?? []), true);
-                $questions[] = [
-                    'title' => $labels[$pillar] . ' · ' . $question,
-                    'rows' => [
-                        'Pilar' => $labels[$pillar],
-                        'Pontuação da questão' => $checked ? 'Pontuado' : 'Não pontuado',
-                        'Pontuação do pilar' => (string)((int)($item['nota_' . $pillar] ?? 0)) . '/7',
-                        'Realidade do pilar' => (string)((int)($item['realidade_' . $pillar] ?? 0)) . '%',
-                    ],
-                    'images' => [],
-                ];
+        $service = new AvaliacaoPdfService();
+        if (!empty($_GET['preview'])) {
+            $html = $service->renderHtml($id);
+            if ($html === null) {
+                http_response_code(404);
+                echo 'Prévia não disponível.';
+                return;
             }
+            header('Content-Type: text/html; charset=utf-8');
+            echo $html;
+            return;
         }
-        $logoPath = __DIR__ . '/../../public_html/assets/img/logobco.png';
-        $pdf = SimplePdfReport::fromAudit([
-            'logo_path' => is_file($logoPath) ? $logoPath : null,
-            'report_title' => 'Relatório da Avaliação',
-            'generated_at' => date('d/m/Y H:i'),
-            'version' => 'v1.0',
-            'header' => $header,
-            'questions' => $questions,
-        ]);
         AuditLogger::log('avaliacao_pdf_export', 'avaliacao', $id, [
             'avaliacao_id' => $id,
-            'public_link' => !empty($publico['token']),
+            'download' => !empty($_GET['download']),
         ]);
-        header('Content-Type: application/pdf');
-        header('Content-Disposition: inline; filename="avaliacao-' . $id . '.pdf"');
-        echo $pdf;
+        if (!$service->outputToBrowser($id, !empty($_GET['download']))) {
+            http_response_code(500);
+            echo 'Falha ao gerar PDF.';
+        }
     }
 
     private function buildPublicLink(string $identifier): string

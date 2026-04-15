@@ -47,6 +47,16 @@ Além disso, a view pública usa meta `robots` para não indexação.
 - O slug permanente controla o escopo do acesso
 - Rate limit por IP e método continua ativo
 
+### Exportação de PDF
+
+- Geração em A4 usando `dompdf` a partir de um template HTML dedicado
+- Arquivo persistido em `storage/pdfs/avaliacoes`
+- Geração automática do PDF após conclusão da avaliação pública
+- Download permanente disponível na tela interna de consulta da avaliação
+- Download público imediato disponível após submissão, protegido por assinatura HMAC do `slug` e `avaliacao_id`
+- Rota administrativa: `index.php?route=avaliacoes/relatorio_pdf&id={id}`
+- Prévia HTML para inspeção visual: `index.php?route=avaliacoes/relatorio_pdf&id={id}&preview=1`
+
 ### Validação realizada
 
 - Teste local sem sessão autenticada garantindo renderização da página pública
@@ -55,3 +65,5 @@ Além disso, a view pública usa meta `robots` para não indexação.
 - Geração padrão atual prioriza o endpoint explícito `index.php?route=avaliacao-publica/open&slug=...` para evitar redirecionamentos indevidos em produção
 - Teste local de geração standalone sem criar avaliação interna
 - Teste local de render garantindo fallback de cópia no frontend
+- Teste automatizado confirmando geração de PDF `%PDF`, cache em disco e download público assinado
+- Teste automatizado confirmando presença das seções principais na prévia HTML do PDF

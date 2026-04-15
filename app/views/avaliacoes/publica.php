@@ -11,6 +11,7 @@ $alreadyDone = !empty($alreadyDone);
 $formAction = $formAction ?? '';
 $formError = $formError ?? '';
 $submitted = !empty($submitted);
+$pdfUrl = $pdfUrl ?? '';
 $identifier = $record['slug'] ?? $record['token'] ?? ($_GET['slug'] ?? $_GET['token'] ?? $_POST['slug'] ?? $_POST['token'] ?? '');
 $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
 $baseUrl = rtrim(dirname(dirname(dirname($scriptName))), '/\\');
@@ -74,12 +75,17 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
               <p class="mt-2 text-base leading-7 text-gray-600">Preencha as informações abaixo para iniciar a avaliação.</p>
             </div>
             <?php if ($submitted): ?>
-              <div class="mb-6 rounded border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">Avaliação enviada com sucesso. Este link continua ativo e pode ser utilizado novamente.</div>
+              <div class="mb-6 rounded border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                Avaliação enviada com sucesso. Este link continua ativo e pode ser utilizado novamente.
+                <?php if ($pdfUrl !== ''): ?>
+                  <a class="ml-2 inline-flex items-center rounded bg-brand-red px-3 py-1 text-white" href="<?= htmlspecialchars($pdfUrl) ?>">Baixar PDF</a>
+                <?php endif; ?>
+              </div>
             <?php endif; ?>
             <?php if ($formError !== ''): ?>
               <div class="mb-6 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><?= htmlspecialchars($formError) ?></div>
             <?php endif; ?>
-            <form method="post" action="<?= htmlspecialchars($formAction) ?>" class="space-y-6">
+            <form method="post" action="<?= htmlspecialchars($formAction) ?>" class="space-y-6" autocomplete="off">
               <input type="hidden" name="action" value="start" />
               <input type="hidden" name="identifier" value="<?= htmlspecialchars((string)$identifier) ?>" />
               <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -128,7 +134,7 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
                   <?php if (!empty($errors['tomador_decisao'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['tomador_decisao']) ?></p><?php endif; ?>
                 </div>
               </div>
-              <button class="px-5 py-3 rounded bg-brand-red text-white font-medium" type="submit">Continuar</button>
+              <button class="px-5 py-3 rounded bg-brand-red text-white font-medium public-action-button" type="submit" data-public-action="continue" autocomplete="off">Continuar</button>
             </form>
           <?php else: ?>
             <div class="mb-8">
@@ -139,7 +145,7 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
             <?php if ($formError !== ''): ?>
               <div class="mb-6 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><?= htmlspecialchars($formError) ?></div>
             <?php endif; ?>
-            <form method="post" action="<?= htmlspecialchars($formAction) ?>" class="space-y-6">
+            <form method="post" action="<?= htmlspecialchars($formAction) ?>" class="space-y-6" autocomplete="off">
               <input type="hidden" name="action" value="finish" />
               <input type="hidden" name="identifier" value="<?= htmlspecialchars((string)$identifier) ?>" />
               <input type="hidden" name="nome" value="<?= $fieldValue('nome') ?>" />
@@ -190,7 +196,7 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
                   </div>
                 <?php endforeach; ?>
               </div>
-              <button class="px-5 py-3 rounded bg-brand-red text-white font-medium" type="submit">Finalizar avaliação</button>
+              <button class="px-5 py-3 rounded bg-brand-red text-white font-medium public-action-button" type="submit" data-public-action="finish" autocomplete="off">Finalizar avaliação</button>
             </form>
           <?php endif; ?>
         </div>
@@ -199,6 +205,38 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
   </div>
   <script>
     (function(){
+      function resetPublicActionButtons() {
+        document.querySelectorAll('.public-action-button').forEach((button) => {
+          button.disabled = false;
+          button.removeAttribute('aria-disabled');
+          button.removeAttribute('data-busy');
+          button.classList.remove('opacity-60', 'cursor-not-allowed');
+        });
+      }
+
+      function bindPublicActionButtons() {
+        document.querySelectorAll('form').forEach((form) => {
+          if (form.dataset.publicBound === '1') return;
+          form.dataset.publicBound = '1';
+          form.addEventListener('submit', () => {
+            const submitButton = form.querySelector('.public-action-button');
+            if (!submitButton) return;
+            submitButton.disabled = false;
+            submitButton.setAttribute('data-busy', '1');
+            setTimeout(() => {
+              resetPublicActionButtons();
+            }, 4000);
+          });
+        });
+      }
+
+      resetPublicActionButtons();
+      bindPublicActionButtons();
+      window.addEventListener('pageshow', resetPublicActionButtons);
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) resetPublicActionButtons();
+      });
+
       const whatsappEl = document.querySelector('input[name="whatsapp"]');
       if (whatsappEl) {
         whatsappEl.addEventListener('input', () => {

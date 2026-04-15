@@ -38,6 +38,9 @@ $data = json_decode($json, true);
 echo json_encode([
     'renders_public_page_without_auth' => str_contains($html, 'Dados iniciais'),
     'does_not_render_login' => !str_contains($html, 'Entrar'),
+    'public_buttons_reset_script_present' => str_contains($html, 'resetPublicActionButtons') && str_contains($html, 'public-action-button'),
+    'continue_button_not_disabled_in_html' => preg_match('/data-public-action="continue"[^>]*disabled/i', $html) !== 1,
+    'public_form_autocomplete_off' => str_contains($html, 'autocomplete="off"'),
     'public_api_works_without_auth' => (bool)($data['success'] ?? false),
     'public_api_valid_flag' => $data['data']['valid'] ?? null,
     'public_slug_present' => !empty($data['data']['slug']),

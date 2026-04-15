@@ -38,6 +38,11 @@ ob_start();
 $controller->relatorioPdf();
 $pdf = ob_get_clean();
 
+$_GET = ['id' => $avaliacaoId, 'preview' => 1];
+ob_start();
+$controller->relatorioPdf();
+$previewHtml = ob_get_clean();
+
 $validateController = new AvaliacaoPublicaController();
 $_GET = ['resource' => 'validate', 'slug' => (string)($data['data']['slug'] ?? '')];
 ob_start();
@@ -53,6 +58,7 @@ echo json_encode([
     'public_url' => $data['data']['public_url'] ?? null,
     'permanent' => $data['data']['permanent'] ?? null,
     'validate_available' => $validateData['data']['available'] ?? null,
+    'preview_contains_title' => str_contains((string)$previewHtml, 'Nota total dos 4 pilares'),
     'pdf_header' => substr((string)$pdf, 0, 4),
     'pdf_size' => strlen((string)$pdf),
 ], JSON_UNESCAPED_UNICODE);

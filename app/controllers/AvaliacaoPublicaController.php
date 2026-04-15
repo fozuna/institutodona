@@ -6,6 +6,7 @@ use App\Core\AuditLogger;
 use App\Core\PublicRateLimiter;
 use App\Models\AvaliacaoModel;
 use App\Models\AvaliacaoPublicaModel;
+use App\Services\AvaliacaoPdfService;
 
 class AvaliacaoPublicaController
 {
@@ -26,6 +27,10 @@ class AvaliacaoPublicaController
             return;
         }
         $identifier = $this->resolveIdentifierFromRequest();
+        if ((string)($_GET['download'] ?? '') === 'pdf') {
+            $this->downloadPdf($identifier);
+            return;
+        }
         if (!$this->allowRequest($identifier)) {
             AuditLogger::log('avaliacao_publica_rate_limited', 'avaliacao_publica', 0, [
                 'identifier' => $identifier,
@@ -80,6 +85,17 @@ class AvaliacaoPublicaController
             'script_name' => (string)($_SERVER['SCRIPT_NAME'] ?? ''),
             'host' => (string)($_SERVER['HTTP_HOST'] ?? ''),
         ]);
+        $submittedAvaliacaoId = (int)($_GET['avaliacao_id'] ?? 0);
+        $pdfUrl = '';
+        if (!empty($_GET['submitted']) && $submittedAvaliacaoId > 0 && !empty($_GET['sig'])) {
+            $pdfUrl = $this->publicUrlByRecord($record)
+                . (str_contains($this->publicUrlByRecord($record), '?') ? '&' : '?')
+                . http_build_query([
+                    'download' => 'pdf',
+                    'avaliacao_id' => $submittedAvaliacaoId,
+                    'sig' => (string)($_GET['sig'] ?? ''),
+                ]);
+        }
         $this->render([
             'rateLimited' => false,
             'invalidToken' => false,
@@ -94,6 +110,7 @@ class AvaliacaoPublicaController
             'publicUrl' => $this->publicUrlByRecord($record),
             'formAction' => $this->publicUrlByRecord($record),
             'submitted' => !empty($_GET['submitted']),
+            'pdfUrl' => $pdfUrl,
         ]);
     }
 
@@ -238,7 +255,15 @@ class AvaliacaoPublicaController
             'avaliacao_id' => $avaliacaoId,
             'nota_total' => $notaFin + $notaMer + $notaPes + $notaPro,
         ]);
-        $this->redirect($this->publicUrlByRecord($record) . (str_contains($this->publicUrlByRecord($record), '?') ? '&' : '?') . 'submitted=1');
+        $pdfService = new AvaliacaoPdfService();
+        $pdfPath = $pdfService->generateToFile($avaliacaoId, true);
+        $query = http_build_query([
+            'submitted' => 1,
+            'avaliacao_id' => $avaliacaoId,
+            'pdf' => $pdfPath ? 1 : 0,
+            'sig' => $this->downloadSignature((string)($record['slug'] ?? $record['token'] ?? ''), $avaliacaoId),
+        ]);
+        $this->redirect($this->publicUrlByRecord($record) . (str_contains($this->publicUrlByRecord($record), '?') ? '&' : '?') . $query);
     }
 
     public function validateApi(): void
@@ -290,6 +315,23 @@ class AvaliacaoPublicaController
         header('Pragma: no-cache');
     }
 
+    private function downloadPdf(string $identifier): void
+    {
+        $record = $this->findPublicRecord($identifier);
+        $avaliacaoId = (int)($_GET['avaliacao_id'] ?? 0);
+        $sig = (string)($_GET['sig'] ?? '');
+        if (!$record || $avaliacaoId <= 0 || !$this->isValidDownloadSignature((string)($record['slug'] ?? $record['token'] ?? ''), $avaliacaoId, $sig)) {
+            http_response_code(403);
+            echo 'Download não autorizado.';
+            return;
+        }
+        $service = new AvaliacaoPdfService();
+        if (!$service->outputToBrowser($avaliacaoId, true)) {
+            http_response_code(404);
+            echo 'PDF não disponível.';
+        }
+    }
+
     private function renderSubmissionError(int $step, array $record, array $values, array $selectedMap, string $message, ?\Throwable $e): void
     {
         if ($e) {
@@ -317,6 +359,7 @@ class AvaliacaoPublicaController
             'formAction' => $this->publicUrlByRecord($record),
             'formError' => $debug !== '' ? ($message . ' [' . $debug . ']') : $message,
             'submitted' => false,
+            'pdfUrl' => '',
         ]);
     }
 
@@ -344,6 +387,20 @@ class AvaliacaoPublicaController
             'faturamento_anual' => '',
             'tomador_decisao' => '',
         ];
+    }
+
+    private function downloadSignature(string $identifier, int $avaliacaoId): string
+    {
+        $secret = (string)(getenv('PUBLIC_PDF_SECRET') ?: getenv('APP_KEY') ?: 'institutodona-public-pdf');
+        return hash_hmac('sha256', strtolower($identifier) . '|' . $avaliacaoId, $secret);
+    }
+
+    private function isValidDownloadSignature(string $identifier, int $avaliacaoId, string $sig): bool
+    {
+        if ($sig === '') {
+            return false;
+        }
+        return hash_equals($this->downloadSignature($identifier, $avaliacaoId), $sig);
     }
 
     private function valuesFromRecord(array $record): array
@@ -528,8 +585,14 @@ class AvaliacaoPublicaController
     {
         $ip = (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown');
         $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
-        $key = 'avaliacao_publica|' . $ip . '|' . $method . '|' . $identifier;
-        $limit = $method === 'POST' ? 20 : 60;
+        $action = strtolower((string)($_POST['action'] ?? ($_GET['resource'] ?? 'view')));
+        $agent = substr((string)($_SERVER['HTTP_USER_AGENT'] ?? 'unknown'), 0, 120);
+        $key = 'avaliacao_publica|' . $ip . '|' . md5($agent) . '|' . $method . '|' . $action . '|' . $identifier;
+        $limit = match ($method . ':' . $action) {
+            'POST:finish' => 60,
+            'POST:start' => 120,
+            default => 300,
+        };
         return $this->rateLimiter->allow($key, $limit, 300);
     }
 }

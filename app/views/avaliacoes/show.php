@@ -10,6 +10,7 @@
           <button class="px-3 py-2 rounded bg-brand-red text-white" type="submit">Criar Link de Avaliação Pública</button>
         </form>
         <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?route=avaliacoes/relatorio_pdf&id=<?= (int)$item['id'] ?>" target="_blank" rel="noopener">Exportar PDF</a>
+        <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?route=avaliacoes/relatorio_pdf&id=<?= (int)$item['id'] ?>&download=1">Baixar PDF</a>
         <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=avaliacoes/planoacao&id=<?= (int)$item['id'] ?>">Plano de Ação</a>
       <?php endif; ?>
       <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="javascript:history.back()">Voltar</a>

@@ -5,6 +5,7 @@ use App\Controllers\AvaliacaoPublicaController;
 use App\Controllers\AvaliacoesController;
 use App\Core\Security;
 use App\Database\Database;
+use App\Services\AvaliacaoPdfService;
 
 class AvaliacaoPublicaControllerTestDouble extends AvaliacaoPublicaController
 {
@@ -91,7 +92,21 @@ $publicController->handle();
 $finishOutput = (string)ob_get_clean();
 
 $afterCount = (int)$pdo->query('SELECT COUNT(*) FROM avaliacoes')->fetchColumn();
-$latest = $pdo->query('SELECT nome, empresa_nome, nota_financeiro, nota_mercado, nota_pessoas, nota_processo FROM avaliacoes ORDER BY id DESC LIMIT 1')->fetch(PDO::FETCH_ASSOC);
+$latest = $pdo->query('SELECT id, nome, empresa_nome, nota_financeiro, nota_mercado, nota_pessoas, nota_processo FROM avaliacoes ORDER BY id DESC LIMIT 1')->fetch(PDO::FETCH_ASSOC);
+$service = new AvaliacaoPdfService();
+$pdfPath = $service->pdfPath((int)($latest['id'] ?? 0));
+parse_str((string)parse_url($publicController->redirectUrl, PHP_URL_QUERY), $redirectQuery);
+
+$_SERVER['REQUEST_METHOD'] = 'GET';
+$_GET = [
+    'slug' => $slug,
+    'download' => 'pdf',
+    'avaliacao_id' => (int)($redirectQuery['avaliacao_id'] ?? 0),
+    'sig' => (string)($redirectQuery['sig'] ?? ''),
+];
+ob_start();
+$publicController->handle();
+$publicPdf = (string)ob_get_clean();
 
 echo json_encode([
     'slug' => $slug,
@@ -99,7 +114,10 @@ echo json_encode([
     'step1_advances_to_step2' => str_contains($step2Html, 'Questionário da avaliação'),
     'created_new_avaliacao' => $afterCount === ($beforeCount + 1),
     'redirected_after_finish' => str_contains($publicController->redirectUrl, 'submitted=1'),
+    'redirect_has_pdf_signature' => !empty($redirectQuery['sig']),
     'finish_output_empty' => $finishOutput === '',
+    'pdf_cached' => is_file($pdfPath),
+    'public_pdf_header' => substr($publicPdf, 0, 4),
     'latest_nome' => $latest['nome'] ?? null,
     'latest_empresa' => $latest['empresa_nome'] ?? null,
     'latest_total' => (int)($latest['nota_financeiro'] ?? 0) + (int)($latest['nota_mercado'] ?? 0) + (int)($latest['nota_pessoas'] ?? 0) + (int)($latest['nota_processo'] ?? 0),
