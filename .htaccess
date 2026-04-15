@@ -7,5 +7,6 @@ DirectoryIndex public_html/index.php
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
 
-  RewriteRule ^avaliar/([^/]+)/?$ public_html/index.php?route=avaliacao-publica/open&slug=$1 [L,QSA]
+  RewriteRule ^avaliar/([^/]+)/?$ public/avaliacoes.php [L,QSA]
+  RewriteRule ^public/avaliacao/([A-Za-z0-9-]+)/?$ public/avaliacoes.php [L,QSA]
 </IfModule>

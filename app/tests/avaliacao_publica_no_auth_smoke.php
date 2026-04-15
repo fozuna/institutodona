@@ -1,39 +1,24 @@
 <?php
 require __DIR__ . '/../autoload.php';
 
-use App\Controllers\AvaliacaoPublicaController;
-use App\Models\AvaliacaoPublicaModel;
+use App\Controllers\PublicAvaliacoesController;
 
-$_SESSION['user'] = [
-    'id' => 1,
-    'tipo_acesso' => 'instituto',
-    'allowed_client_ids' => [],
-];
-
-$publicModel = new AvaliacaoPublicaModel();
-$public = $publicModel->createStandaloneLink();
-$slug = (string)($public['slug'] ?? '');
+putenv('PUBLIC_AVALIACOES_DEFAULT_EMPRESA=Empresa Pública Fixa');
 
 unset($_SESSION['user']);
 
 $_SERVER['REQUEST_METHOD'] = 'GET';
-$_SERVER['REQUEST_URI'] = '/avaliar/' . $slug;
-$_SERVER['SCRIPT_NAME'] = '/index.php';
+$_SERVER['REQUEST_URI'] = '/public/avaliacoes.php';
+$_SERVER['SCRIPT_NAME'] = '/public/avaliacoes.php';
 $_SERVER['HTTP_HOST'] = 'localhost';
 $_SERVER['HTTPS'] = 'off';
-$_GET = ['slug' => $slug];
+$_GET = [];
 $_POST = [];
 
-$controller = new AvaliacaoPublicaController();
+$controller = new PublicAvaliacoesController();
 ob_start();
 $controller->handle();
 $html = (string)ob_get_clean();
-
-$_GET = ['resource' => 'validate', 'slug' => $slug];
-ob_start();
-$controller->validateApi();
-$json = (string)ob_get_clean();
-$data = json_decode($json, true);
 
 echo json_encode([
     'renders_public_page_without_auth' => str_contains($html, 'Dados iniciais'),
@@ -41,7 +26,6 @@ echo json_encode([
     'public_buttons_reset_script_present' => str_contains($html, 'resetPublicActionButtons') && str_contains($html, 'public-action-button'),
     'continue_button_not_disabled_in_html' => preg_match('/data-public-action="continue"[^>]*disabled/i', $html) !== 1,
     'public_form_autocomplete_off' => str_contains($html, 'autocomplete="off"'),
-    'public_api_works_without_auth' => (bool)($data['success'] ?? false),
-    'public_api_valid_flag' => $data['data']['valid'] ?? null,
-    'public_slug_present' => !empty($data['data']['slug']),
+    'public_endpoint_is_static' => str_contains($html, '/public/avaliacoes.php'),
+    'context_empresa_visible' => str_contains($html, 'Empresa Pública Fixa'),
 ], JSON_UNESCAPED_UNICODE);

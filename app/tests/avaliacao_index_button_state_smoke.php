@@ -12,6 +12,7 @@ $_SESSION['user'] = [
 $_SERVER['SCRIPT_NAME'] = '/index.php';
 $_SERVER['HTTP_HOST'] = 'localhost';
 $_SERVER['HTTPS'] = 'off';
+putenv('PUBLIC_AVALIACOES_DEFAULT_EMPRESA=Empresa Pública Fixa');
 
 $clientes = [];
 Security::csrfToken();
@@ -49,9 +50,9 @@ $itemsWithPotential = [
         'cliente_associado_em' => '2026-04-07 09:00:00',
         'created_at' => '2026-04-07 09:00:00',
         'publico_status' => 'pendente',
-        'publico_token' => '11111111-1111-4111-8111-111111111111',
+        'publico_token' => null,
         'publico_expiracao' => null,
-        'publico_data_envio' => '2026-04-07 09:10:00',
+        'publico_data_envio' => null,
         'publico_data_conclusao' => null,
         'publico_nome' => null,
         'nota_financeiro' => 1,
@@ -64,20 +65,16 @@ $itemsWithPotential = [
 $htmlWithItems = $render($itemsWithPotential);
 $htmlWithoutItems = $render([]);
 
-$buttonEnabledWithItems = preg_match('/id="btn-gerar-link-publico"[^>]*>/m', $htmlWithItems, $buttonMatch)
-    && preg_match('/\sdisabled(\s|>|=)/', $buttonMatch[0]) !== 1;
-$firstSelected = strpos($htmlWithItems, 'id="avaliacao-publica-id" value="101"') !== false;
-$potentialDoesNotBlock = strpos($htmlWithItems, 'Potencial cliente') !== false && $buttonEnabledWithItems;
-$buttonEnabledWithoutItems = preg_match('/id="btn-gerar-link-publico"[^>]*>/m', $htmlWithoutItems, $buttonEmptyMatch)
-    && preg_match('/\sdisabled(\s|>|=)/', $buttonEmptyMatch[0]) !== 1;
-$emptyStateAllowsBlankId = strpos($htmlWithoutItems, 'id="avaliacao-publica-id" value=""') !== false;
+$fixedActionPresent = str_contains($htmlWithItems, 'Abrir Formulário Público');
+$fixedLinkPresent = str_contains($htmlWithItems, '/public/avaliacoes.php');
+$potentialDoesNotBlock = strpos($htmlWithItems, 'Potencial cliente') !== false && $fixedActionPresent;
+$fixedActionWithoutItems = str_contains($htmlWithoutItems, 'Abrir Formulário Público');
 $copyFallbackPresent = strpos($htmlWithItems, 'copyTextRobust') !== false && strpos($htmlWithItems, 'fallbackCopyText') !== false;
 
 echo json_encode([
-    'button_enabled_with_items' => $buttonEnabledWithItems,
-    'first_item_preselected' => $firstSelected,
+    'fixed_action_present' => $fixedActionPresent,
+    'fixed_link_present' => $fixedLinkPresent,
     'potential_cliente_does_not_block' => $potentialDoesNotBlock,
-    'button_enabled_without_items' => $buttonEnabledWithoutItems,
-    'empty_state_allows_blank_id' => $emptyStateAllowsBlankId,
+    'fixed_action_present_without_items' => $fixedActionWithoutItems,
     'copy_fallback_present' => $copyFallbackPresent,
 ], JSON_UNESCAPED_UNICODE);

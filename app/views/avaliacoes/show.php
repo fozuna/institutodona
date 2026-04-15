@@ -4,11 +4,7 @@
     <h1 class="text-2xl font-bold">Avaliação</h1>
     <div class="flex items-center gap-2">
       <?php if ($item): ?>
-        <form method="post" action="index.php?route=avaliacoes/gerar-link-cliente" class="inline-flex">
-          <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
-          <input type="hidden" name="avaliacao_id" value="<?= (int)$item['id'] ?>" />
-          <button class="px-3 py-2 rounded bg-brand-red text-white" type="submit">Criar Link de Avaliação Pública</button>
-        </form>
+        <a class="px-3 py-2 rounded bg-brand-red text-white" href="<?= htmlspecialchars($publicLinkUrl) ?>" target="_blank" rel="noopener">Abrir Formulário Público</a>
         <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?route=avaliacoes/relatorio_pdf&id=<?= (int)$item['id'] ?>" target="_blank" rel="noopener">Exportar PDF</a>
         <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?route=avaliacoes/relatorio_pdf&id=<?= (int)$item['id'] ?>&download=1">Baixar PDF</a>
         <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=avaliacoes/planoacao&id=<?= (int)$item['id'] ?>">Plano de Ação</a>
@@ -28,15 +24,12 @@
   ?>
   <?php if (!empty($publicLinkUrl)): ?>
     <div class="bg-white shadow rounded p-4 mb-4">
-      <div class="font-semibold mb-2">Link público permanente</div>
+      <div class="font-semibold mb-2">Formulário público fixo</div>
       <div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-center">
         <input class="border rounded p-2 w-full bg-gray-50" value="<?= htmlspecialchars($publicLinkUrl) ?>" readonly />
-        <a class="px-4 py-2 rounded bg-gray-200 text-brand-brown text-center" href="<?= htmlspecialchars($publicLinkUrl) ?>" target="_blank" rel="noopener">Abrir link</a>
+        <a class="px-4 py-2 rounded bg-gray-200 text-brand-brown text-center" href="<?= htmlspecialchars($publicLinkUrl) ?>" target="_blank" rel="noopener">Abrir formulário</a>
       </div>
-      <div class="text-xs text-gray-600 mt-2">
-        Status: <?= htmlspecialchars(ucfirst((string)($publicLinkData['status'] ?? 'pendente'))) ?> ·
-        <?= empty($publicLinkData['expiracao']) ? 'Sem expiração automática' : ('Expira em ' . htmlspecialchars(date('d/m/Y H:i', strtotime((string)$publicLinkData['expiracao'])))) ?>
-      </div>
+      <div class="text-xs text-gray-600 mt-2">Endpoint permanente, sem token e sem expiração.</div>
     </div>
   <?php endif; ?>
   <div class="bg-white shadow rounded p-4 mb-4">

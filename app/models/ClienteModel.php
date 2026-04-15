@@ -25,6 +25,9 @@ class ClienteModel extends BaseModel
             if (!\App\Database\Database::columnExists('clientes', 'acesso_restrito')) {
                 $this->db->exec('ALTER TABLE clientes ADD COLUMN acesso_restrito TINYINT(1) NOT NULL DEFAULT 0');
             }
+            if (!\App\Database\Database::columnExists('clientes', 'dominio_publico')) {
+                $this->db->exec('ALTER TABLE clientes ADD COLUMN dominio_publico VARCHAR(255) NULL');
+            }
         } catch (\PDOException $e) {
             // silencioso
         }
@@ -35,11 +38,11 @@ class ClienteModel extends BaseModel
         $this->ensureColumns();
         [$scopeCond, $params] = $this->scopedParams('ca');
         try {
-            $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato, logo_path, is_matriz, matriz_id FROM clientes WHERE $scopeCond ORDER BY nome_empresa");
+            $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato, logo_path, dominio_publico, is_matriz, matriz_id FROM clientes WHERE $scopeCond ORDER BY nome_empresa");
             $stmt->execute($params);
         } catch (\PDOException $e) {
             try {
-                $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato, logo_path FROM clientes WHERE $scopeCond ORDER BY nome_empresa");
+                $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato, logo_path, dominio_publico FROM clientes WHERE $scopeCond ORDER BY nome_empresa");
                 $stmt->execute($params);
             } catch (\PDOException $e2) {
                 $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato FROM clientes WHERE $scopeCond ORDER BY nome_empresa");
@@ -56,10 +59,10 @@ class ClienteModel extends BaseModel
         }
         $this->ensureColumns();
         try {
-            $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path, is_matriz, matriz_id FROM clientes WHERE id = :id');
+            $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path, dominio_publico, is_matriz, matriz_id FROM clientes WHERE id = :id');
         } catch (\PDOException $e) {
             try {
-                $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path FROM clientes WHERE id = :id');
+                $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path, dominio_publico FROM clientes WHERE id = :id');
             } catch (\PDOException $e2) {
                 $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato FROM clientes WHERE id = :id');
             }
@@ -73,23 +76,25 @@ class ClienteModel extends BaseModel
     {
         $this->ensureColumns();
         try {
-            $stmt = $this->db->prepare('INSERT INTO clientes (nome_empresa, CNPJ, contato, logo_path, is_matriz, matriz_id) VALUES (:nome_empresa, :cnpj, :contato, :logo_path, :is_matriz, :matriz_id)');
+            $stmt = $this->db->prepare('INSERT INTO clientes (nome_empresa, CNPJ, contato, logo_path, dominio_publico, is_matriz, matriz_id) VALUES (:nome_empresa, :cnpj, :contato, :logo_path, :dominio_publico, :is_matriz, :matriz_id)');
             $stmt->execute([
                 'nome_empresa' => $data['nome_empresa'],
                 'cnpj' => $data['CNPJ'],
                 'contato' => $data['contato'] ?? null,
                 'logo_path' => $data['logo_path'] ?? null,
+                'dominio_publico' => $data['dominio_publico'] ?? null,
                 'is_matriz' => $data['is_matriz'] ?? 1,
                 'matriz_id' => $data['matriz_id'] ?? null,
             ]);
         } catch (\PDOException $e) {
             try {
-                $stmt = $this->db->prepare('INSERT INTO clientes (nome_empresa, CNPJ, contato, logo_path) VALUES (:nome_empresa, :cnpj, :contato, :logo_path)');
+                $stmt = $this->db->prepare('INSERT INTO clientes (nome_empresa, CNPJ, contato, logo_path, dominio_publico) VALUES (:nome_empresa, :cnpj, :contato, :logo_path, :dominio_publico)');
                 $stmt->execute([
                     'nome_empresa' => $data['nome_empresa'],
                     'cnpj' => $data['CNPJ'],
                     'contato' => $data['contato'] ?? null,
                     'logo_path' => $data['logo_path'] ?? null,
+                    'dominio_publico' => $data['dominio_publico'] ?? null,
                 ]);
             } catch (\PDOException $e2) {
                 $stmt = $this->db->prepare('INSERT INTO clientes (nome_empresa, CNPJ, contato) VALUES (:nome_empresa, :cnpj, :contato)');
@@ -110,24 +115,26 @@ class ClienteModel extends BaseModel
         }
         $this->ensureColumns();
         try {
-            $stmt = $this->db->prepare('UPDATE clientes SET nome_empresa = :nome_empresa, CNPJ = :cnpj, contato = :contato, logo_path = :logo_path, is_matriz = :is_matriz, matriz_id = :matriz_id WHERE id = :id');
+            $stmt = $this->db->prepare('UPDATE clientes SET nome_empresa = :nome_empresa, CNPJ = :cnpj, contato = :contato, logo_path = :logo_path, dominio_publico = :dominio_publico, is_matriz = :is_matriz, matriz_id = :matriz_id WHERE id = :id');
             return $stmt->execute([
                 'nome_empresa' => $data['nome_empresa'],
                 'cnpj' => $data['CNPJ'],
                 'contato' => $data['contato'] ?? null,
                 'logo_path' => $data['logo_path'] ?? null,
+                'dominio_publico' => $data['dominio_publico'] ?? null,
                 'is_matriz' => $data['is_matriz'] ?? 1,
                 'matriz_id' => $data['matriz_id'] ?? null,
                 'id' => $id,
             ]);
         } catch (\PDOException $e) {
             try {
-                $stmt = $this->db->prepare('UPDATE clientes SET nome_empresa = :nome_empresa, CNPJ = :cnpj, contato = :contato, logo_path = :logo_path WHERE id = :id');
+                $stmt = $this->db->prepare('UPDATE clientes SET nome_empresa = :nome_empresa, CNPJ = :cnpj, contato = :contato, logo_path = :logo_path, dominio_publico = :dominio_publico WHERE id = :id');
                 return $stmt->execute([
                     'nome_empresa' => $data['nome_empresa'],
                     'cnpj' => $data['CNPJ'],
                     'contato' => $data['contato'] ?? null,
                     'logo_path' => $data['logo_path'] ?? null,
+                    'dominio_publico' => $data['dominio_publico'] ?? null,
                     'id' => $id,
                 ]);
             } catch (\PDOException $e2) {
@@ -185,6 +192,22 @@ class ClienteModel extends BaseModel
             return $stmt->fetchAll();
         } catch (\PDOException $e) {
             return [];
+        }
+    }
+
+    public function findByPublicHost(string $host): ?array
+    {
+        $this->ensureColumns();
+        $normalized = strtolower(trim($host));
+        $normalized = preg_replace('/:\d+$/', '', $normalized) ?: $normalized;
+        $normalized = preg_replace('/^www\./', '', $normalized) ?: $normalized;
+        try {
+            $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path, dominio_publico FROM clientes WHERE REPLACE(LOWER(dominio_publico), "www.", "") = :host LIMIT 1');
+            $stmt->execute(['host' => $normalized]);
+            $row = $stmt->fetch();
+            return $row ?: null;
+        } catch (\PDOException $e) {
+            return null;
         }
     }
 }

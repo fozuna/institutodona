@@ -2,11 +2,10 @@
 require __DIR__ . '/../autoload.php';
 
 use App\Controllers\AvaliacoesController;
-use App\Controllers\AvaliacaoPublicaController;
-use App\Core\Security;
+use App\Controllers\PublicAvaliacoesController;
 use App\Models\AvaliacaoModel;
 
-class AvaliacaoPublicaControllerListingDouble extends AvaliacaoPublicaController
+class PublicAvaliacoesControllerListingDouble extends PublicAvaliacoesController
 {
     protected function redirect(string $url): void
     {
@@ -19,31 +18,30 @@ $_SESSION['user'] = [
     'allowed_client_ids' => [],
 ];
 
+putenv('PUBLIC_AVALIACOES_DEFAULT_EMPRESA=Empresa Pública Fixa Listagem');
 $_SERVER['HTTP_HOST'] = 'localhost';
 $_SERVER['HTTPS'] = 'off';
-$_SERVER['SCRIPT_NAME'] = '/index.php';
-$_SERVER['REQUEST_METHOD'] = 'POST';
+$_SERVER['SCRIPT_NAME'] = '/public/avaliacoes.php';
 
 $controller = new AvaliacoesController();
-$_POST = ['csrf' => Security::csrfToken()];
+$_SERVER['REQUEST_METHOD'] = 'POST';
+$_POST = ['csrf' => \App\Core\Security::csrfToken()];
 ob_start();
 $controller->apiGeneratePublicLink();
 $json = (string)ob_get_clean();
 $data = json_decode($json, true);
 
-$slug = (string)($data['data']['slug'] ?? '');
-if ($slug === '') {
-    echo 'NO_SLUG';
+$publicUrl = (string)($data['data']['public_url'] ?? '');
+if ($publicUrl === '') {
+    echo 'NO_URL';
     exit(0);
 }
 
-$publicController = new AvaliacaoPublicaControllerListingDouble();
+$publicController = new PublicAvaliacoesControllerListingDouble();
 $_SERVER['REQUEST_METHOD'] = 'POST';
 $_POST = [
     'action' => 'finish',
-    'identifier' => $slug,
     'nome' => 'Lead Listagem',
-    'empresa' => 'Empresa Standalone',
     'whatsapp' => '11999999999',
     'email' => 'lead.listagem@example.com',
     'numero_funcionarios' => 30,
@@ -63,14 +61,14 @@ $avaliacaoModel = new AvaliacaoModel();
 $items = $avaliacaoModel->all();
 $matched = null;
 foreach ($items as $item) {
-    if ((string)($item['empresa_nome'] ?? '') === 'Empresa Standalone' && (string)($item['nome'] ?? '') === 'Lead Listagem') {
+    if ((string)($item['empresa_nome'] ?? '') === 'Empresa Pública Fixa Listagem' && (string)($item['nome'] ?? '') === 'Lead Listagem') {
         $matched = $item;
         break;
     }
 }
 
 echo json_encode([
-    'slug_generated' => $slug !== '',
+    'static_public_url_present' => $publicUrl !== '',
     'materialized_id' => (int)($matched['id'] ?? 0),
     'listed_in_avaliacoes_index' => !empty($matched),
     'listed_empresa' => $matched['empresa_nome'] ?? null,

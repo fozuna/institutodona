@@ -1,4 +1,8 @@
 <?php
-require dirname(__DIR__, 3) . '/app/autoload.php';
-
-(new \App\Controllers\AvaliacaoPublicaController())->handle();
+$query = $_SERVER['QUERY_STRING'] ?? '';
+$target = '/../avaliacoes.php';
+if ($query !== '') {
+    $target .= '?' . $query;
+}
+header('Location: ' . $target, true, 302);
+exit;

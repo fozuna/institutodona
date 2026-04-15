@@ -6,7 +6,8 @@ CREATE TABLE IF NOT EXISTS clientes (
   nome_empresa VARCHAR(255) NOT NULL,
   CNPJ VARCHAR(18) NOT NULL,
   contato VARCHAR(255),
-  logo_path VARCHAR(255) NULL
+  logo_path VARCHAR(255) NULL,
+  dominio_publico VARCHAR(255) NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS pilares (

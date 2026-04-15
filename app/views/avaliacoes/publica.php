@@ -12,6 +12,8 @@ $formAction = $formAction ?? '';
 $formError = $formError ?? '';
 $submitted = !empty($submitted);
 $pdfUrl = $pdfUrl ?? '';
+$isStaticPublic = !empty($isStaticPublic);
+$contextEmpresa = $contextEmpresa ?? '';
 $identifier = $record['slug'] ?? $record['token'] ?? ($_GET['slug'] ?? $_GET['token'] ?? $_POST['slug'] ?? $_POST['token'] ?? '');
 $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
 $baseUrl = rtrim(dirname(dirname(dirname($scriptName))), '/\\');
@@ -39,7 +41,7 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
         <div class="max-w-md">
           <p class="text-sm font-semibold uppercase tracking-[0.2em] text-white">Avaliação Empresarial</p>
           <h1 class="mt-4 text-3xl md:text-4xl font-bold leading-tight">Diagnóstico empresarial estruturado para sua empresa.</h1>
-          <p class="mt-4 text-base md:text-lg leading-7 text-white">Preencha em duas etapas com total autonomia. O link é individual, seguro e mantém o progresso conforme o envio.</p>
+          <p class="mt-6 max-w-xl text-base leading-8 text-white/95">Preencha em duas etapas com total autonomia. Este formulário público é fixo, permanente e pode ser reutilizado sem autenticação.</p>
           <div class="mt-10 grid grid-cols-1 gap-3 text-sm">
             <div class="rounded border border-white/25 bg-white/10 px-4 py-3">
               <div class="font-semibold">Etapa 1</div>
@@ -87,7 +89,9 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
             <?php endif; ?>
             <form method="post" action="<?= htmlspecialchars($formAction) ?>" class="space-y-6" autocomplete="off">
               <input type="hidden" name="action" value="start" />
-              <input type="hidden" name="identifier" value="<?= htmlspecialchars((string)$identifier) ?>" />
+              <?php if (!$isStaticPublic): ?>
+                <input type="hidden" name="identifier" value="<?= htmlspecialchars((string)$identifier) ?>" />
+              <?php endif; ?>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label class="block text-sm font-medium mb-2">Nome</label>
@@ -96,7 +100,7 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
                 </div>
                 <div>
                   <label class="block text-sm font-medium mb-2">Empresa</label>
-                  <input name="empresa" class="border rounded p-3 w-full" value="<?= $fieldValue('empresa') ?>" required />
+                  <input name="empresa" class="border rounded p-3 w-full bg-gray-50" value="<?= $fieldValue('empresa') ?>" <?= $isStaticPublic ? 'readonly' : '' ?> required />
                   <?php if (!empty($errors['empresa'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['empresa']) ?></p><?php endif; ?>
                 </div>
                 <div>
@@ -147,7 +151,9 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
             <?php endif; ?>
             <form method="post" action="<?= htmlspecialchars($formAction) ?>" class="space-y-6" autocomplete="off">
               <input type="hidden" name="action" value="finish" />
-              <input type="hidden" name="identifier" value="<?= htmlspecialchars((string)$identifier) ?>" />
+              <?php if (!$isStaticPublic): ?>
+                <input type="hidden" name="identifier" value="<?= htmlspecialchars((string)$identifier) ?>" />
+              <?php endif; ?>
               <input type="hidden" name="nome" value="<?= $fieldValue('nome') ?>" />
               <input type="hidden" name="empresa" value="<?= $fieldValue('empresa') ?>" />
               <input type="hidden" name="whatsapp" value="<?= $fieldValue('whatsapp') ?>" />

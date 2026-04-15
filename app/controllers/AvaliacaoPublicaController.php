@@ -7,6 +7,7 @@ use App\Core\PublicRateLimiter;
 use App\Models\AvaliacaoModel;
 use App\Models\AvaliacaoPublicaModel;
 use App\Services\AvaliacaoPdfService;
+use App\Services\PublicAvaliacaoContextResolver;
 
 class AvaliacaoPublicaController
 {
@@ -21,52 +22,7 @@ class AvaliacaoPublicaController
 
     public function handle(): void
     {
-        $this->applyPublicSecurityHeaders();
-        if ((string)($_GET['resource'] ?? '') === 'validate') {
-            $this->validateApi();
-            return;
-        }
-        $identifier = $this->resolveIdentifierFromRequest();
-        if ((string)($_GET['download'] ?? '') === 'pdf') {
-            $this->downloadPdf($identifier);
-            return;
-        }
-        if (!$this->allowRequest($identifier)) {
-            AuditLogger::log('avaliacao_publica_rate_limited', 'avaliacao_publica', 0, [
-                'identifier' => $identifier,
-                'ip' => (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'),
-                'method' => strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')),
-            ]);
-            http_response_code(429);
-            $this->render([
-                'rateLimited' => true,
-                'invalidToken' => false,
-                'expiredToken' => false,
-                'alreadyDone' => false,
-                'record' => null,
-                'step' => 1,
-                'values' => $this->defaultValues(),
-                'errors' => [],
-                'selectedMap' => [],
-                'qs' => AvaliacaoQuestionario::pilares(),
-                'publicUrl' => '',
-                'formAction' => $this->publicUrlByIdentifier($identifier),
-                'submitted' => false,
-            ]);
-            return;
-        }
-        if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'POST') {
-            $action = (string)($_POST['action'] ?? '');
-            if ($action === 'start') {
-                $this->start($identifier);
-                return;
-            }
-            if ($action === 'finish') {
-                $this->finish($identifier);
-                return;
-            }
-        }
-        $this->show($identifier);
+        (new PublicAvaliacoesController())->handle();
     }
 
     private function show(string $identifier): void
@@ -269,20 +225,22 @@ class AvaliacaoPublicaController
     public function validateApi(): void
     {
         $this->applyPublicSecurityHeaders();
-        $identifier = $this->resolveIdentifierFromRequest();
-        if (!$this->allowRequest($identifier)) {
+        $context = (new PublicAvaliacaoContextResolver())->resolveFromCurrentHost();
+        if (!$context) {
+            http_response_code(404);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'message' => 'Formulário público indisponível.', 'error' => 'public_form_unavailable'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        if (!$this->allowRequest('static-public-form')) {
             http_response_code(429);
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode(['success' => false, 'message' => 'Muitas tentativas.', 'error' => 'rate_limited'], JSON_UNESCAPED_UNICODE);
             return;
         }
-        $record = $this->findPublicRecord($identifier);
-        $available = (bool)$record;
-        AuditLogger::log('avaliacao_publica_validate', 'avaliacao_publica', (int)($record['avaliacao_id'] ?? 0), [
-            'token' => $record['token'] ?? null,
-            'slug' => $record['slug'] ?? null,
-            'available' => $available,
-            'status' => $record ? 'active' : 'invalido',
+        AuditLogger::log('avaliacao_publica_validate', 'avaliacao_publica_fixa', 0, [
+            'available' => true,
+            'status' => 'active',
             'request_uri' => (string)($_SERVER['REQUEST_URI'] ?? ''),
             'script_name' => (string)($_SERVER['SCRIPT_NAME'] ?? ''),
             'host' => (string)($_SERVER['HTTP_HOST'] ?? ''),
@@ -291,14 +249,14 @@ class AvaliacaoPublicaController
         echo json_encode([
             'success' => true,
             'data' => [
-                'token' => $record['token'] ?? null,
-                'slug' => $record['slug'] ?? null,
-                'valid' => (bool)$record,
-                'available' => (bool)$available,
-                'status' => $record ? 'active' : 'invalido',
-                'permanent' => (bool)$record,
+                'token' => null,
+                'slug' => null,
+                'valid' => true,
+                'available' => true,
+                'status' => 'active',
+                'permanent' => true,
                 'expired' => false,
-                'public_url' => $record ? $this->publicUrlByRecord($record) : null,
+                'public_url' => $this->staticPublicUrl(),
             ],
         ], JSON_UNESCAPED_UNICODE);
     }
@@ -532,6 +490,25 @@ class AvaliacaoPublicaController
             $base = '/' . ltrim($base, '/');
         }
         return $scheme . '://' . $host . $base . '/index.php?route=avaliacao-publica/open&slug=' . rawurlencode($identifier);
+    }
+
+    private function staticPublicUrl(): string
+    {
+        $configured = trim((string)(getenv('PUBLIC_AVALIACOES_STATIC_URL') ?: ''));
+        if ($configured !== '') {
+            return rtrim($configured, '/');
+        }
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/index.php');
+        $base = rtrim(dirname($scriptName), '/');
+        if ($base === '/' || $base === '\\' || $base === '.') {
+            $base = '';
+        }
+        if ($base !== '' && strpos($base, '/') !== 0) {
+            $base = '/' . ltrim($base, '/');
+        }
+        return $scheme . '://' . $host . $base . '/public/avaliacoes.php';
     }
 
     private function createAvaliacaoFromPublicSubmission(array $record, array $values, array $selectedMap, array $totais): int

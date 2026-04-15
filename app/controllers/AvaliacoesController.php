@@ -6,19 +6,16 @@ use App\Core\AvaliacaoQuestionario;
 use App\Core\BaseController;
 use App\Core\Security;
 use App\Models\AvaliacaoModel;
-use App\Models\AvaliacaoPublicaModel;
 use App\Models\ClienteModel;
 use App\Services\AvaliacaoPdfService;
 
 class AvaliacoesController extends BaseController
 {
     private AvaliacaoModel $model;
-    private AvaliacaoPublicaModel $publicModel;
 
     public function __construct()
     {
         $this->model = new AvaliacaoModel();
-        $this->publicModel = new AvaliacaoPublicaModel();
     }
 
     public function index(): void
@@ -180,17 +177,11 @@ class AvaliacoesController extends BaseController
         $id = (int)($_GET['id'] ?? 0);
         $item = $this->model->find($id);
         $clientesAssociacao = [];
-        $publicLinkData = null;
-        $publicLinkUrl = '';
         if ($item && (int)($item['cliente_id'] ?? 0) <= 0) {
             $clientesAssociacao = (new ClienteModel())->all();
         }
-        if ($item) {
-            $publicLinkData = $this->publicModel->findByAvaliacaoId((int)$item['id']);
-        if (!empty($publicLinkData['slug']) || !empty($publicLinkData['token'])) {
-            $publicLinkUrl = $this->buildPublicLink((string)($publicLinkData['slug'] ?: $publicLinkData['token']));
-            }
-        }
+        $publicLinkUrl = $this->buildPublicLink();
+        $publicLinkData = ['static' => true, 'url' => $publicLinkUrl];
         $this->render('avaliacoes/show', compact('item', 'clientesAssociacao', 'publicLinkData', 'publicLinkUrl'));
     }
 
@@ -247,44 +238,25 @@ class AvaliacoesController extends BaseController
             return;
         }
         try {
-            $publico = $this->publicModel->createStandaloneLink();
-        } catch (\Throwable $e) {
-            AuditLogger::log('avaliacao_publica_generate_error', 'avaliacao_publica', 0, [
-                'message' => $e->getMessage(),
-                'script_name' => (string)($_SERVER['SCRIPT_NAME'] ?? ''),
-                'request_uri' => (string)($_SERVER['REQUEST_URI'] ?? ''),
-                'host' => (string)($_SERVER['HTTP_HOST'] ?? ''),
-            ]);
-            $_SESSION['flash_error'] = 'Falha ao gerar o novo link público.';
-            $this->redirect('index.php?route=avaliacoes/index');
-            return;
-        }
-        if (empty($publico['slug']) && empty($publico['token'])) {
-            AuditLogger::log('avaliacao_publica_generate_failed', 'avaliacao_publica', 0, []);
-            $_SESSION['flash_error'] = 'Não foi possível gerar o link público.';
-            $this->redirect('index.php?route=avaliacoes/index');
-            return;
-        }
-        AuditLogger::log('avaliacao_publica_generate_success', 'avaliacao_publica', (int)($publico['id'] ?? 0), [
-            'token' => $publico['token'] ?? null,
-            'expiracao' => $publico['expiracao'] ?? null,
-            'permanent' => empty($publico['expiracao']),
-            'standalone' => true,
+            $_SESSION['generated_public_link'] = [
+                'avaliacao_id' => 0,
+                'public_id' => 0,
+                'empresa' => '',
+                'url' => $this->buildPublicLink(),
+                'static' => true,
+                'permanent' => true,
+            ];
+            AuditLogger::log('avaliacao_publica_static_link_access', 'avaliacao_publica_fixa', 0, [
             'script_name' => (string)($_SERVER['SCRIPT_NAME'] ?? ''),
             'request_uri' => (string)($_SERVER['REQUEST_URI'] ?? ''),
             'host' => (string)($_SERVER['HTTP_HOST'] ?? ''),
         ]);
-        $_SESSION['generated_public_link'] = [
-            'avaliacao_id' => 0,
-            'public_id' => (int)($publico['id'] ?? 0),
-            'empresa' => '',
-            'url' => $this->buildPublicLink((string)($publico['slug'] ?? $publico['token'] ?? '')),
-            'token' => (string)($publico['token'] ?? ''),
-            'slug' => (string)($publico['slug'] ?? ''),
-            'expiracao' => (string)($publico['expiracao'] ?? ''),
-            'permanent' => empty($publico['expiracao']),
-        ];
-        $_SESSION['flash_success'] = 'Link público permanente gerado com sucesso.';
+        } catch (\Throwable $e) {
+            $_SESSION['flash_error'] = 'Não foi possível disponibilizar o formulário público.';
+            $this->redirect('index.php?route=avaliacoes/index');
+            return;
+        }
+        $_SESSION['flash_success'] = 'Formulário público fixo disponibilizado com sucesso.';
         $this->redirect('index.php?route=avaliacoes/index');
     }
 
@@ -298,11 +270,7 @@ class AvaliacoesController extends BaseController
             return;
         }
         try {
-            $publico = $this->publicModel->createStandaloneLink();
-            AuditLogger::log('avaliacao_publica_api_generate', 'avaliacao_publica', (int)($publico['id'] ?? 0), [
-                'token' => $publico['token'] ?? null,
-                'permanent' => empty($publico['expiracao']),
-                'standalone' => true,
+            AuditLogger::log('avaliacao_publica_api_static_link', 'avaliacao_publica_fixa', 0, [
                 'script_name' => (string)($_SERVER['SCRIPT_NAME'] ?? ''),
                 'request_uri' => (string)($_SERVER['REQUEST_URI'] ?? ''),
                 'host' => (string)($_SERVER['HTTP_HOST'] ?? ''),
@@ -312,15 +280,16 @@ class AvaliacoesController extends BaseController
                 'success' => true,
                 'data' => [
                     'avaliacao_id' => 0,
-                    'public_id' => (int)($publico['id'] ?? 0),
-                    'token' => $publico['token'] ?? null,
-                    'slug' => $publico['slug'] ?? null,
-                    'public_url' => $this->buildPublicLink((string)($publico['slug'] ?? $publico['token'] ?? '')),
-                    'permanent' => empty($publico['expiracao']),
+                    'public_id' => 0,
+                    'token' => null,
+                    'slug' => null,
+                    'public_url' => $this->buildPublicLink(),
+                    'permanent' => true,
+                    'static' => true,
                 ],
             ], JSON_UNESCAPED_UNICODE);
         } catch (\Throwable $e) {
-            AuditLogger::log('avaliacao_publica_api_generate_error', 'avaliacao_publica', 0, [
+            AuditLogger::log('avaliacao_publica_api_static_link_error', 'avaliacao_publica_fixa', 0, [
                 'message' => $e->getMessage(),
                 'script_name' => (string)($_SERVER['SCRIPT_NAME'] ?? ''),
                 'request_uri' => (string)($_SERVER['REQUEST_URI'] ?? ''),
@@ -395,23 +364,17 @@ class AvaliacoesController extends BaseController
         }
     }
 
-    private function buildPublicLink(string $identifier): string
+    private function buildPublicLink(string $identifier = ''): string
     {
-        $configured = trim((string)(getenv('PUBLIC_EVALUATION_BASE_URL') ?: ''));
+        $configured = trim((string)(getenv('PUBLIC_AVALIACOES_STATIC_URL') ?: getenv('PUBLIC_EVALUATION_BASE_URL') ?: ''));
         if ($configured !== '') {
-            if (str_contains($configured, '{identifier}')) {
-                return str_replace('{identifier}', rawurlencode($identifier), $configured);
-            }
-            if (str_contains($configured, '?')) {
-                return rtrim($configured, '&') . rawurlencode($identifier);
-            }
-            return rtrim($configured, '/') . '/' . rawurlencode($identifier);
+            return rtrim($configured, '/');
         }
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
         $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/index.php');
         if (PHP_SAPI === 'cli' || strpos($scriptName, '/app/tests/') !== false) {
-            $scriptName = '/index.php';
+            $scriptName = '';
         }
         $base = rtrim(dirname($scriptName), '/');
         if ($base === '/' || $base === '\\' || $base === '.') {
@@ -420,7 +383,7 @@ class AvaliacoesController extends BaseController
         if ($base !== '' && strpos($base, '/') !== 0) {
             $base = '/' . ltrim($base, '/');
         }
-        return $scheme . '://' . $host . $base . '/index.php?route=avaliacao-publica/open&slug=' . rawurlencode($identifier);
+        return $scheme . '://' . $host . $base . '/public/avaliacoes.php';
     }
 
 

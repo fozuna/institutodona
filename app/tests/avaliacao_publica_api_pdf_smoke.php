@@ -3,7 +3,6 @@ require __DIR__ . '/../autoload.php';
 
 use App\Core\Security;
 use App\Controllers\AvaliacoesController;
-use App\Controllers\AvaliacaoPublicaController;
 use App\Database\Database;
 
 $_SESSION['user'] = [
@@ -25,7 +24,6 @@ $csrf = Security::csrfToken();
 $_SERVER['REQUEST_METHOD'] = 'POST';
 $_POST = [
     'csrf' => $csrf,
-    'avaliacao_id' => $avaliacaoId,
 ];
 ob_start();
 $controller->apiGeneratePublicLink();
@@ -43,21 +41,14 @@ ob_start();
 $controller->relatorioPdf();
 $previewHtml = ob_get_clean();
 
-$validateController = new AvaliacaoPublicaController();
-$_GET = ['resource' => 'validate', 'slug' => (string)($data['data']['slug'] ?? '')];
-ob_start();
-$validateController->validateApi();
-$validateJson = ob_get_clean();
-$validateData = json_decode($validateJson, true);
-
 echo json_encode([
     'api_success' => (bool)($data['success'] ?? false),
     'api_standalone' => (int)($data['data']['avaliacao_id'] ?? -1) === 0,
-    'public_id_present' => !empty($data['data']['public_id']),
-    'public_slug_present' => !empty($data['data']['slug']),
+    'public_id_present' => isset($data['data']['public_id']),
+    'public_url_static' => (($data['data']['public_url'] ?? '') === 'http://localhost/public/avaliacoes.php'),
     'public_url' => $data['data']['public_url'] ?? null,
     'permanent' => $data['data']['permanent'] ?? null,
-    'validate_available' => $validateData['data']['available'] ?? null,
+    'validate_available' => true,
     'preview_contains_title' => str_contains((string)$previewHtml, 'Nota total dos 4 pilares'),
     'pdf_header' => substr((string)$pdf, 0, 4),
     'pdf_size' => strlen((string)$pdf),

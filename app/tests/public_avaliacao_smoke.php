@@ -1,13 +1,11 @@
 <?php
 require __DIR__ . '/../autoload.php';
 
-use App\Controllers\AvaliacaoPublicaController;
-use App\Controllers\AvaliacoesController;
-use App\Core\Security;
+use App\Controllers\PublicAvaliacoesController;
 use App\Database\Database;
 use App\Services\AvaliacaoPdfService;
 
-class AvaliacaoPublicaControllerTestDouble extends AvaliacaoPublicaController
+class PublicAvaliacoesControllerTestDouble extends PublicAvaliacoesController
 {
     public string $redirectUrl = '';
 
@@ -23,31 +21,18 @@ $_SESSION['user'] = [
     'allowed_client_ids' => [],
 ];
 
+putenv('PUBLIC_AVALIACOES_DEFAULT_EMPRESA=Empresa Pública Fixa');
 $_SERVER['HTTP_HOST'] = 'localhost';
 $_SERVER['HTTPS'] = 'off';
-$_SERVER['SCRIPT_NAME'] = '/index.php';
+$_SERVER['SCRIPT_NAME'] = '/public/avaliacoes.php';
 
 $pdo = Database::getConnection();
 $beforeCount = (int)$pdo->query('SELECT COUNT(*) FROM avaliacoes')->fetchColumn();
 
-$controller = new AvaliacoesController();
-$_SERVER['REQUEST_METHOD'] = 'POST';
-$_POST = ['csrf' => Security::csrfToken()];
-ob_start();
-$controller->apiGeneratePublicLink();
-$json = (string)ob_get_clean();
-$data = json_decode($json, true);
-$slug = (string)($data['data']['slug'] ?? '');
-
-if ($slug === '') {
-    echo 'NO_SLUG';
-    exit(0);
-}
-
-$publicController = new AvaliacaoPublicaControllerTestDouble();
+$publicController = new PublicAvaliacoesControllerTestDouble();
 
 $_SERVER['REQUEST_METHOD'] = 'GET';
-$_GET = ['slug' => $slug];
+$_GET = [];
 $_POST = [];
 ob_start();
 $publicController->handle();
@@ -56,9 +41,7 @@ $step1Html = (string)ob_get_clean();
 $_SERVER['REQUEST_METHOD'] = 'POST';
 $_POST = [
     'action' => 'start',
-    'identifier' => $slug,
     'nome' => 'Cliente Público',
-    'empresa' => 'Empresa Pública',
     'whatsapp' => '11999999999',
     'email' => 'cliente.publico@example.com',
     'numero_funcionarios' => '20',
@@ -73,9 +56,7 @@ $step2Html = (string)ob_get_clean();
 $_SERVER['REQUEST_METHOD'] = 'POST';
 $_POST = [
     'action' => 'finish',
-    'identifier' => $slug,
     'nome' => 'Cliente Público',
-    'empresa' => 'Empresa Pública',
     'whatsapp' => '11999999999',
     'email' => 'cliente.publico@example.com',
     'numero_funcionarios' => '20',
@@ -99,7 +80,6 @@ parse_str((string)parse_url($publicController->redirectUrl, PHP_URL_QUERY), $red
 
 $_SERVER['REQUEST_METHOD'] = 'GET';
 $_GET = [
-    'slug' => $slug,
     'download' => 'pdf',
     'avaliacao_id' => (int)($redirectQuery['avaliacao_id'] ?? 0),
     'sig' => (string)($redirectQuery['sig'] ?? ''),
@@ -109,7 +89,7 @@ $publicController->handle();
 $publicPdf = (string)ob_get_clean();
 
 echo json_encode([
-    'slug' => $slug,
+    'static_endpoint' => '/public/avaliacoes.php',
     'public_link_renders_step1' => str_contains($step1Html, 'Dados iniciais'),
     'step1_advances_to_step2' => str_contains($step2Html, 'Questionário da avaliação'),
     'created_new_avaliacao' => $afterCount === ($beforeCount + 1),

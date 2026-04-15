@@ -5,15 +5,11 @@
   if ($baseUrl === '/' || $baseUrl === '\\') { $baseUrl = ''; }
   $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
   $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-  $configuredPublicBaseUrl = trim((string)(getenv('PUBLIC_EVALUATION_BASE_URL') ?: ''));
+  $configuredPublicBaseUrl = trim((string)(getenv('PUBLIC_AVALIACOES_STATIC_URL') ?: getenv('PUBLIC_EVALUATION_BASE_URL') ?: ''));
   if ($configuredPublicBaseUrl !== '') {
     $publicBaseUrl = rtrim($configuredPublicBaseUrl, '/');
-    $publicBaseUsesPlaceholder = str_contains($configuredPublicBaseUrl, '{identifier}');
-    $publicBaseUsesQuery = str_contains($configuredPublicBaseUrl, '?');
   } else {
-    $publicBaseUrl = $scheme . '://' . $host . $baseUrl . '/index.php?route=avaliacao-publica/open&slug=';
-    $publicBaseUsesPlaceholder = false;
-    $publicBaseUsesQuery = true;
+    $publicBaseUrl = $scheme . '://' . $host . $baseUrl . '/public/avaliacoes.php';
   }
   $generatedLink = $_SESSION['generated_public_link'] ?? null;
   unset($_SESSION['generated_public_link']);
@@ -21,11 +17,11 @@
   $generatedEmpresa = (string)($generatedLink['empresa'] ?? '');
   $generatedAvaliacaoId = (int)($generatedLink['avaliacao_id'] ?? 0);
   $generatedPublicId = (int)($generatedLink['public_id'] ?? 0);
-  $generatedExpiracao = (string)($generatedLink['expiracao'] ?? '');
-  $generatedPermanent = !empty($generatedLink['permanent']);
+  $generatedExpiracao = '';
+  $generatedPermanent = true;
   $defaultSelectedAvaliacaoId = !empty($items) ? (int)($items[0]['id'] ?? 0) : 0;
   $csrfShareToken = \App\Core\Security::csrfToken();
-  $shareText = $generatedEmpresa !== '' ? ('Olá! Segue o link da avaliação da empresa ' . $generatedEmpresa . ': ' . $generatedUrl) : ('Olá! Segue o link da avaliação: ' . $generatedUrl);
+  $shareText = $generatedEmpresa !== '' ? ('Olá! Segue o formulário público da empresa ' . $generatedEmpresa . ': ' . $generatedUrl) : ('Olá! Segue o formulário público de avaliação: ' . $generatedUrl);
   $mailtoHref = $generatedUrl !== '' ? ('mailto:?subject=' . rawurlencode('Link da avaliação pública') . '&body=' . rawurlencode($shareText)) : '';
   $whatsHref = $generatedUrl !== '' ? ('https://wa.me/?text=' . rawurlencode($shareText)) : '';
   $linkedinHref = $generatedUrl !== '' ? ('https://www.linkedin.com/sharing/share-offsite/?url=' . rawurlencode($generatedUrl)) : '';
@@ -40,14 +36,10 @@
   <div class="flex flex-col gap-3 mb-4 xl:flex-row xl:items-center xl:justify-between">
     <div>
       <h1 class="text-2xl font-bold">Avaliações</h1>
-      <p class="text-sm text-gray-600">Crie um link público permanente a qualquer momento, mesmo sem avaliações prévias cadastradas.</p>
+      <p class="text-sm text-gray-600">O formulário público utiliza um endpoint fixo, permanente e sem geração dinâmica de links.</p>
     </div>
     <div class="flex items-center gap-3">
-      <form method="post" action="index.php?route=avaliacoes/gerar-link-cliente" id="form-gerar-link-publico" class="flex items-center gap-3">
-        <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
-        <input type="hidden" name="avaliacao_id" id="avaliacao-publica-id" value="<?= $defaultSelectedAvaliacaoId > 0 ? $defaultSelectedAvaliacaoId : '' ?>" />
-        <button type="submit" id="btn-gerar-link-publico" class="px-3 py-2 rounded bg-brand-red text-white">Criar Link de Avaliação Pública</button>
-      </form>
+      <a href="<?= htmlspecialchars($publicBaseUrl) ?>" target="_blank" rel="noopener" class="px-3 py-2 rounded bg-brand-red text-white">Abrir Formulário Público</a>
       <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=avaliacoes/create">Nova Avaliação</a>
     </div>
   </div>
@@ -55,11 +47,11 @@
     <div id="generated-link-panel" class="mb-4 rounded border border-green-200 bg-green-50 p-4">
       <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
         <div class="min-w-0">
-          <div class="text-sm font-semibold text-green-800">Link público gerado e pronto para compartilhamento</div>
+          <div class="text-sm font-semibold text-green-800">Formulário público fixo pronto para compartilhamento</div>
           <div id="generated-link-feedback" class="text-sm text-green-700 mt-1">Copiando automaticamente para a área de transferência...</div>
           <div class="mt-2 text-xs text-gray-600">
             <?php if ($generatedEmpresa !== ''): ?>Empresa: <?= htmlspecialchars($generatedEmpresa) ?> · <?php endif; ?>
-            <?= $generatedPermanent ? 'Link permanente sem expiração automática' : ('Expira em ' . ($generatedExpiracao !== '' ? htmlspecialchars(date('d/m/Y H:i', strtotime($generatedExpiracao))) : '—')) ?>
+            Endpoint fixo sem token e sem expiração
           </div>
           <div class="mt-3 flex items-center gap-2">
             <input id="generated-public-link" class="border rounded p-2 w-full bg-white text-sm" value="<?= htmlspecialchars($generatedUrl) ?>" readonly />
@@ -83,14 +75,11 @@
           <th class="p-3">Empresa</th>
           <th class="p-3">Nome Cliente</th>
           <th class="p-3">Data</th>
-          <th class="p-3">Status Cliente</th>
-          <th class="p-3">Data envio</th>
-          <th class="p-3">Data conclusão</th>
           <th class="p-3">Financeiro</th>
           <th class="p-3">Mercado</th>
           <th class="p-3">Pessoas</th>
           <th class="p-3">Processo</th>
-          <th class="p-3">Link Cliente</th>
+          <th class="p-3">Formulário Público</th>
           <th class="p-3">Ações</th>
         </tr>
       </thead>
@@ -98,22 +87,7 @@
         <?php foreach ($items as $i):
           $nm = $i['cliente_nome'] ?? ($i['empresa_nome'] ?? '—');
           $isPotencial = (int)($i['cliente_id'] ?? 0) <= 0;
-          $status = $i['publico_status'] ?? '';
-          $statusMeta = $statusMap[$status] ?? null;
-          $publicSlug = (string)($i['publico_slug'] ?? '');
-          $publicToken = (string)($i['publico_token'] ?? '');
-          $expirado = !empty($i['publico_expiracao']) && strtotime((string)$i['publico_expiracao']) < time();
-          $permanente = empty($i['publico_expiracao']);
-          $publicIdentifier = $publicSlug !== '' ? $publicSlug : $publicToken;
-          if ($publicIdentifier === '') {
-            $publicLink = '';
-          } elseif ($publicBaseUsesPlaceholder) {
-            $publicLink = str_replace('{identifier}', rawurlencode($publicIdentifier), $publicBaseUrl);
-          } elseif ($publicBaseUsesQuery) {
-            $publicLink = rtrim($publicBaseUrl, '&') . rawurlencode($publicIdentifier);
-          } else {
-            $publicLink = rtrim($publicBaseUrl, '/') . '/' . rawurlencode($publicIdentifier);
-          }
+          $publicLink = $publicBaseUrl;
         ?>
           <tr class="border-b cursor-pointer row-avaliacao <?= (int)$i['id'] === $defaultSelectedAvaliacaoId ? 'bg-red-50' : '' ?>" data-avaliacao-id="<?= (int)$i['id'] ?>" data-empresa="<?= htmlspecialchars($nm) ?>">
             <td class="p-3">
@@ -124,32 +98,21 @@
                 <div class="mt-1 text-xs text-gray-500">Associado em <?= htmlspecialchars(date('d/m/Y', strtotime($i['cliente_associado_em']))) ?></div>
               <?php endif; ?>
             </td>
-            <td class="p-3"><?= htmlspecialchars((string)($i['publico_nome'] ?? '—')) ?></td>
+            <td class="p-3"><?= htmlspecialchars((string)($i['nome'] ?? '—')) ?></td>
             <td class="p-3"><?= htmlspecialchars(date('d/m/Y', strtotime($i['created_at']))) ?></td>
-            <td class="p-3">
-              <?php if ($statusMeta): ?>
-                <span class="text-xs px-2 py-1 rounded <?= $statusMeta['class'] ?>"><?= $statusMeta['label'] ?></span>
-              <?php else: ?>
-                <span class="text-xs px-2 py-1 rounded text-gray-700 bg-gray-100">Sem link</span>
-              <?php endif; ?>
-            </td>
-            <td class="p-3"><?= !empty($i['publico_data_envio']) ? htmlspecialchars(date('d/m/Y H:i', strtotime($i['publico_data_envio']))) : '—' ?></td>
-            <td class="p-3"><?= !empty($i['publico_data_conclusao']) ? htmlspecialchars(date('d/m/Y H:i', strtotime($i['publico_data_conclusao']))) : '—' ?></td>
             <td class="p-3"><?= (int)$i['nota_financeiro'] ?>/7</td>
             <td class="p-3"><?= (int)$i['nota_mercado'] ?>/7</td>
             <td class="p-3"><?= (int)$i['nota_pessoas'] ?>/7</td>
             <td class="p-3"><?= (int)$i['nota_processo'] ?>/7</td>
             <td class="p-3">
-              <?php if ($publicToken !== '' && !$expirado): ?>
+              <?php if ($publicLink !== ''): ?>
                 <div class="flex items-center gap-2">
                   <a class="text-brand-pink text-sm" href="<?= htmlspecialchars($publicLink) ?>" target="_blank" rel="noopener">Abrir</a>
                   <button type="button" class="text-xs px-2 py-1 rounded bg-gray-200 text-brand-brown btn-copy-link" data-link="<?= htmlspecialchars($publicLink) ?>" data-avaliacao-id="<?= (int)$i['id'] ?>">Copiar</button>
                 </div>
-                <div class="text-xs text-gray-500 mt-1"><?= $permanente ? 'Permanente' : 'Expira automaticamente' ?></div>
-              <?php elseif ($publicToken !== '' && $expirado): ?>
-                <span class="text-xs text-gray-500">Expirado</span>
+                <div class="text-xs text-gray-500 mt-1">Endpoint fixo</div>
               <?php else: ?>
-                <span class="text-xs text-gray-500">Nenhum link ativo</span>
+                <span class="text-xs text-gray-500">Indisponível</span>
               <?php endif; ?>
             </td>
             <td class="p-3">
@@ -231,16 +194,12 @@
         }
       });
     }
-    const form = document.getElementById('form-gerar-link-publico');
-    const hiddenId = document.getElementById('avaliacao-publica-id');
-    const generateBtn = document.getElementById('btn-gerar-link-publico');
     const rows = document.querySelectorAll('.row-avaliacao');
     function selectRow(row) {
       rows.forEach((item) => {
         item.classList.remove('bg-red-50');
       });
       row.classList.add('bg-red-50');
-      hiddenId.value = row.getAttribute('data-avaliacao-id') || '';
     }
     rows.forEach((row) => {
       row.addEventListener('click', (event) => {
@@ -248,16 +207,8 @@
         selectRow(row);
       });
     });
-    const preselectedRow = hiddenId ? Array.from(rows).find((row) => (row.getAttribute('data-avaliacao-id') || '') === hiddenId.value) : null;
-    if (preselectedRow) {
-      selectRow(preselectedRow);
-    } else if (rows.length > 0) {
+    if (rows.length > 0) {
       selectRow(rows[0]);
-    }
-    if (form && generateBtn) {
-      form.addEventListener('submit', () => {
-        generateBtn.textContent = 'Criando link...';
-      });
     }
     document.querySelectorAll('.btn-copy-link').forEach((btn)=>{
       btn.addEventListener('click', async () => {

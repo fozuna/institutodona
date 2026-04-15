@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS clientes (
   CNPJ VARCHAR(18) NOT NULL,
   contato VARCHAR(255) NULL,
   logo_path VARCHAR(255) NULL,
+  dominio_publico VARCHAR(255) NULL,
   is_matriz TINYINT(1) NOT NULL DEFAULT 1,
   matriz_id INT NULL,
   ativo TINYINT(1) NOT NULL DEFAULT 1,
