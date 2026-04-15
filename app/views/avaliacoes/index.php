@@ -13,7 +13,7 @@
   }
   $generatedLink = $_SESSION['generated_public_link'] ?? null;
   unset($_SESSION['generated_public_link']);
-  $generatedUrl = (string)($generatedLink['url'] ?? '');
+  $generatedUrl = (string)($generatedLink['url'] ?? $publicBaseUrl);
   $generatedEmpresa = (string)($generatedLink['empresa'] ?? '');
   $generatedAvaliacaoId = (int)($generatedLink['avaliacao_id'] ?? 0);
   $generatedPublicId = (int)($generatedLink['public_id'] ?? 0);
@@ -37,6 +37,16 @@
     <div>
       <h1 class="text-2xl font-bold">Avaliações</h1>
       <p class="text-sm text-gray-600">O formulário público utiliza um endpoint fixo, permanente e sem geração dinâmica de links.</p>
+    </div>
+    <div class="flex flex-col gap-2 xl:min-w-[520px]">
+      <label for="top-public-link" class="text-xs font-medium text-gray-600">Link público para compartilhar</label>
+      <div class="flex items-center gap-2">
+        <input id="top-public-link" class="border rounded p-2 w-full bg-white text-sm" value="<?= htmlspecialchars($publicBaseUrl) ?>" readonly />
+        <button type="button"
+                class="px-3 py-2 rounded bg-gray-200 text-brand-brown btn-copy-link"
+                data-link="<?= htmlspecialchars($publicBaseUrl) ?>"
+                data-avaliacao-id="0">Copiar</button>
+      </div>
     </div>
     <div class="flex items-center gap-3">
       <a href="<?= htmlspecialchars($publicBaseUrl) ?>" target="_blank" rel="noopener" class="px-3 py-2 rounded bg-brand-red text-white">Abrir Formulário Público</a>
