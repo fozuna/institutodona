@@ -90,15 +90,23 @@ class PublicAvaliacaoContextResolver
             }
         }
         $empresa = trim((string)(getenv('PUBLIC_AVALIACOES_DEFAULT_EMPRESA') ?: ''));
-        if ($empresa === '') {
-            return null;
+        if ($empresa !== '') {
+            return [
+                'host' => $host,
+                'cliente_id' => null,
+                'empresa_nome' => $empresa,
+                'logo_path' => '',
+                'source' => 'PUBLIC_AVALIACOES_DEFAULT_EMPRESA',
+            ];
         }
+
+        $empresa = $this->deriveEmpresaFromHost($host);
         return [
             'host' => $host,
             'cliente_id' => null,
             'empresa_nome' => $empresa,
             'logo_path' => '',
-            'source' => 'PUBLIC_AVALIACOES_DEFAULT_EMPRESA',
+            'source' => 'host-derived-fallback',
         ];
     }
 
@@ -107,5 +115,30 @@ class PublicAvaliacaoContextResolver
         $host = strtolower(trim($host));
         $host = preg_replace('/:\d+$/', '', $host) ?: $host;
         return preg_replace('/^www\./', '', $host) ?: '';
+    }
+
+    private function deriveEmpresaFromHost(string $host): string
+    {
+        $host = $this->normalizeHost($host);
+        if ($host === '' || $host === 'localhost' || preg_match('/^\d+\.\d+\.\d+\.\d+$/', $host)) {
+            return 'Instituto Dona';
+        }
+
+        $firstLabel = explode('.', $host)[0] ?? '';
+        $firstLabel = str_replace(['-', '_'], ' ', trim($firstLabel));
+        if ($firstLabel === '') {
+            return 'Instituto Dona';
+        }
+
+        $parts = preg_split('/\s+/', $firstLabel) ?: [];
+        $parts = array_map(static function (string $part): string {
+            $part = trim($part);
+            if ($part === '') {
+                return '';
+            }
+            return mb_convert_case($part, MB_CASE_TITLE, 'UTF-8');
+        }, $parts);
+        $empresa = trim(implode(' ', array_filter($parts)));
+        return $empresa !== '' ? $empresa : 'Instituto Dona';
     }
 }
