@@ -42,6 +42,9 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
           <p class="text-sm font-semibold uppercase tracking-[0.2em] text-white">Avaliação Empresarial</p>
           <h1 class="mt-4 text-3xl md:text-4xl font-bold leading-tight">Diagnóstico empresarial estruturado para sua empresa.</h1>
           <p class="mt-6 max-w-xl text-base leading-8 text-white/95">Preencha em duas etapas com total autonomia. Este formulário público é fixo, permanente e pode ser reutilizado sem autenticação.</p>
+          <?php if ($contextEmpresa !== ''): ?>
+            <p class="mt-4 max-w-xl text-sm leading-7 text-white/80">Contexto deste domínio: <?= htmlspecialchars($contextEmpresa) ?></p>
+          <?php endif; ?>
           <div class="mt-10 grid grid-cols-1 gap-3 text-sm">
             <div class="rounded border border-white/25 bg-white/10 px-4 py-3">
               <div class="font-semibold">Etapa 1</div>
@@ -92,45 +95,47 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
               <?php if (!$isStaticPublic): ?>
                 <input type="hidden" name="identifier" value="<?= htmlspecialchars((string)$identifier) ?>" />
               <?php endif; ?>
+              <input type="text" name="public_fake_user" value="" autocomplete="username" tabindex="-1" class="hidden" aria-hidden="true" />
+              <input type="password" name="public_fake_pass" value="" autocomplete="new-password" tabindex="-1" class="hidden" aria-hidden="true" />
               <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label class="block text-sm font-medium mb-2">Nome</label>
-                  <input name="nome" class="border rounded p-3 w-full" value="<?= $fieldValue('nome') ?>" required />
+                  <input name="public_nome" autocomplete="off" autocapitalize="words" spellcheck="false" class="border rounded p-3 w-full" value="<?= $fieldValue('nome') ?>" required />
                   <?php if (!empty($errors['nome'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['nome']) ?></p><?php endif; ?>
                 </div>
                 <div>
                   <label class="block text-sm font-medium mb-2">Empresa</label>
-                  <input name="empresa" class="border rounded p-3 w-full bg-gray-50" value="<?= $fieldValue('empresa') ?>" <?= $isStaticPublic ? 'readonly' : '' ?> required />
+                  <input name="public_empresa" autocomplete="off" autocapitalize="words" spellcheck="false" class="border rounded p-3 w-full" value="<?= $fieldValue('empresa') ?>" required />
                   <?php if (!empty($errors['empresa'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['empresa']) ?></p><?php endif; ?>
                 </div>
                 <div>
                   <label class="block text-sm font-medium mb-2">WhatsApp</label>
-                  <input name="whatsapp" inputmode="numeric" pattern="\d{10,13}" class="border rounded p-3 w-full" value="<?= $fieldValue('whatsapp') ?>" required />
+                  <input name="public_whatsapp" autocomplete="off" inputmode="numeric" pattern="\d{10,15}" class="border rounded p-3 w-full" value="<?= $fieldValue('whatsapp') ?>" required />
                   <?php if (!empty($errors['whatsapp'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['whatsapp']) ?></p><?php endif; ?>
                 </div>
                 <div>
                   <label class="block text-sm font-medium mb-2">E-mail</label>
-                  <input type="email" name="email" class="border rounded p-3 w-full" value="<?= $fieldValue('email') ?>" required />
+                  <input type="email" name="public_email" autocomplete="off" autocapitalize="none" spellcheck="false" class="border rounded p-3 w-full" value="<?= $fieldValue('email') ?>" required />
                   <?php if (!empty($errors['email'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['email']) ?></p><?php endif; ?>
                 </div>
                 <div>
                   <label class="block text-sm font-medium mb-2">Nº funcionários</label>
-                  <input type="number" min="1" step="1" name="numero_funcionarios" class="border rounded p-3 w-full" value="<?= $fieldValue('numero_funcionarios') ?>" required />
+                  <input type="number" min="1" step="1" name="public_numero_funcionarios" autocomplete="off" class="border rounded p-3 w-full" value="<?= $fieldValue('numero_funcionarios') ?>" required />
                   <?php if (!empty($errors['numero_funcionarios'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['numero_funcionarios']) ?></p><?php endif; ?>
                 </div>
                 <div>
                   <label class="block text-sm font-medium mb-2">Nº líderes</label>
-                  <input type="number" min="1" step="1" name="numero_lideres" class="border rounded p-3 w-full" value="<?= $fieldValue('numero_lideres') ?>" required />
+                  <input type="number" min="1" step="1" name="public_numero_lideres" autocomplete="off" class="border rounded p-3 w-full" value="<?= $fieldValue('numero_lideres') ?>" required />
                   <?php if (!empty($errors['numero_lideres'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['numero_lideres']) ?></p><?php endif; ?>
                 </div>
                 <div>
                   <label class="block text-sm font-medium mb-2">Faturamento anual</label>
-                  <input type="number" min="1" step="1" name="faturamento_anual" class="border rounded p-3 w-full" value="<?= $fieldValue('faturamento_anual') ?>" required />
+                  <input type="number" min="1" step="1" name="public_faturamento_anual" autocomplete="off" class="border rounded p-3 w-full" value="<?= $fieldValue('faturamento_anual') ?>" required />
                   <?php if (!empty($errors['faturamento_anual'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['faturamento_anual']) ?></p><?php endif; ?>
                 </div>
                 <div>
                   <label class="block text-sm font-medium mb-2">É tomador de decisão?</label>
-                  <select name="tomador_decisao" class="border rounded p-3 w-full" required>
+                  <select name="public_tomador_decisao" class="border rounded p-3 w-full" required>
                     <option value="">Selecione</option>
                     <option value="1" <?= ($values['tomador_decisao'] ?? '') === '1' ? 'selected' : '' ?>>Sim</option>
                     <option value="0" <?= ($values['tomador_decisao'] ?? '') === '0' ? 'selected' : '' ?>>Não</option>
@@ -138,7 +143,11 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
                   <?php if (!empty($errors['tomador_decisao'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['tomador_decisao']) ?></p><?php endif; ?>
                 </div>
               </div>
-              <button class="px-5 py-3 rounded bg-brand-red text-white font-medium public-action-button" type="submit" data-public-action="continue" autocomplete="off">Continuar</button>
+              <div class="flex flex-wrap gap-3 pt-2">
+                <button class="px-5 py-3 rounded bg-orange-600 text-white font-medium hover:bg-orange-700 public-action-button" type="submit" data-public-action="continue" autocomplete="off">Continuar</button>
+                <button class="px-5 py-3 rounded bg-gray-200 text-gray-800 font-medium hover:bg-gray-300" type="reset">Limpar formulário</button>
+                <a class="px-5 py-3 rounded border border-gray-300 text-gray-700 font-medium hover:bg-gray-50" href="<?= htmlspecialchars($publicUrl ?? $formAction) ?>">Cancelar</a>
+              </div>
             </form>
           <?php else: ?>
             <div class="mb-8">
@@ -154,14 +163,14 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
               <?php if (!$isStaticPublic): ?>
                 <input type="hidden" name="identifier" value="<?= htmlspecialchars((string)$identifier) ?>" />
               <?php endif; ?>
-              <input type="hidden" name="nome" value="<?= $fieldValue('nome') ?>" />
-              <input type="hidden" name="empresa" value="<?= $fieldValue('empresa') ?>" />
-              <input type="hidden" name="whatsapp" value="<?= $fieldValue('whatsapp') ?>" />
-              <input type="hidden" name="email" value="<?= $fieldValue('email') ?>" />
-              <input type="hidden" name="numero_funcionarios" value="<?= $fieldValue('numero_funcionarios') ?>" />
-              <input type="hidden" name="numero_lideres" value="<?= $fieldValue('numero_lideres') ?>" />
-              <input type="hidden" name="faturamento_anual" value="<?= $fieldValue('faturamento_anual') ?>" />
-              <input type="hidden" name="tomador_decisao" value="<?= $fieldValue('tomador_decisao') ?>" />
+              <input type="hidden" name="public_nome" value="<?= $fieldValue('nome') ?>" />
+              <input type="hidden" name="public_empresa" value="<?= $fieldValue('empresa') ?>" />
+              <input type="hidden" name="public_whatsapp" value="<?= $fieldValue('whatsapp') ?>" />
+              <input type="hidden" name="public_email" value="<?= $fieldValue('email') ?>" />
+              <input type="hidden" name="public_numero_funcionarios" value="<?= $fieldValue('numero_funcionarios') ?>" />
+              <input type="hidden" name="public_numero_lideres" value="<?= $fieldValue('numero_lideres') ?>" />
+              <input type="hidden" name="public_faturamento_anual" value="<?= $fieldValue('faturamento_anual') ?>" />
+              <input type="hidden" name="public_tomador_decisao" value="<?= $fieldValue('tomador_decisao') ?>" />
               <div class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-4 gap-6">
                 <?php foreach ($qs as $pillar => $questions): ?>
                   <div class="bg-white border rounded">
@@ -202,7 +211,11 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
                   </div>
                 <?php endforeach; ?>
               </div>
-              <button class="px-5 py-3 rounded bg-brand-red text-white font-medium public-action-button" type="submit" data-public-action="finish" autocomplete="off">Finalizar avaliação</button>
+              <div class="flex flex-wrap gap-3 pt-2">
+                <button class="px-5 py-3 rounded bg-orange-600 text-white font-medium hover:bg-orange-700 public-action-button" type="submit" data-public-action="finish" autocomplete="off">Enviar avaliação</button>
+                <button class="px-5 py-3 rounded bg-gray-200 text-gray-800 font-medium hover:bg-gray-300" type="reset">Limpar seleção</button>
+                <a class="px-5 py-3 rounded border border-gray-300 text-gray-700 font-medium hover:bg-gray-50" href="<?= htmlspecialchars($publicUrl ?? $formAction) ?>">Cancelar</a>
+              </div>
             </form>
           <?php endif; ?>
         </div>
@@ -243,7 +256,7 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
         if (!document.hidden) resetPublicActionButtons();
       });
 
-      const whatsappEl = document.querySelector('input[name="whatsapp"]');
+      const whatsappEl = document.querySelector('input[name="public_whatsapp"]');
       if (whatsappEl) {
         whatsappEl.addEventListener('input', () => {
           whatsappEl.value = (whatsappEl.value || '').replace(/\D+/g, '');

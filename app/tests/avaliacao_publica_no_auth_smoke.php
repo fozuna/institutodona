@@ -27,5 +27,7 @@ echo json_encode([
     'continue_button_not_disabled_in_html' => preg_match('/data-public-action="continue"[^>]*disabled/i', $html) !== 1,
     'public_form_autocomplete_off' => str_contains($html, 'autocomplete="off"'),
     'public_endpoint_is_static' => str_contains($html, '/public/avaliacoes.php'),
-    'context_empresa_visible' => str_contains($html, 'Empresa Pública Fixa'),
+    'empresa_field_editable' => preg_match('/name="public_empresa"[^>]*readonly/i', $html) !== 1,
+    'reset_button_visible' => str_contains($html, 'Limpar formulário'),
+    'submit_button_visible' => str_contains($html, 'Continuar'),
 ], JSON_UNESCAPED_UNICODE);

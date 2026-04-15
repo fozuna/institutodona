@@ -98,7 +98,7 @@ class PublicAvaliacoesController
         $totais = array_map('count', AvaliacaoQuestionario::pilares());
         $avaliacaoId = $this->avaliacoes->create([
             'cliente_id' => !empty($context['cliente_id']) ? (int)$context['cliente_id'] : null,
-            'empresa_nome' => $context['empresa_nome'],
+            'empresa_nome' => $values['empresa'],
             'nome' => $values['nome'],
             'email' => $values['email'],
             'whatsapp' => $values['whatsapp'],
@@ -152,11 +152,6 @@ class PublicAvaliacoesController
             echo 'Download nao autorizado.';
             return;
         }
-        if (!$item['cliente_id'] && strtolower((string)($item['empresa_nome'] ?? '')) !== strtolower((string)($context['empresa_nome'] ?? ''))) {
-            http_response_code(403);
-            echo 'Download nao autorizado.';
-            return;
-        }
         $ok = (new AvaliacaoPdfService())->outputToBrowser($avaliacaoId, true);
         if (!$ok) {
             http_response_code(404);
@@ -167,14 +162,14 @@ class PublicAvaliacoesController
     private function valuesFromPost(array $context): array
     {
         return [
-            'nome' => trim((string)($_POST['nome'] ?? '')),
-            'empresa' => (string)$context['empresa_nome'],
-            'whatsapp' => preg_replace('/\D+/', '', (string)($_POST['whatsapp'] ?? '')) ?: '',
-            'email' => trim((string)($_POST['email'] ?? '')),
-            'numero_funcionarios' => trim((string)($_POST['numero_funcionarios'] ?? '')),
-            'numero_lideres' => trim((string)($_POST['numero_lideres'] ?? '')),
-            'faturamento_anual' => trim((string)($_POST['faturamento_anual'] ?? '')),
-            'tomador_decisao' => (string)($_POST['tomador_decisao'] ?? ''),
+            'nome' => trim((string)($_POST['public_nome'] ?? $_POST['nome'] ?? '')),
+            'empresa' => trim((string)($_POST['public_empresa'] ?? $_POST['empresa'] ?? '')),
+            'whatsapp' => preg_replace('/\D+/', '', (string)($_POST['public_whatsapp'] ?? $_POST['whatsapp'] ?? '')) ?: '',
+            'email' => trim((string)($_POST['public_email'] ?? $_POST['email'] ?? '')),
+            'numero_funcionarios' => trim((string)($_POST['public_numero_funcionarios'] ?? $_POST['numero_funcionarios'] ?? '')),
+            'numero_lideres' => trim((string)($_POST['public_numero_lideres'] ?? $_POST['numero_lideres'] ?? '')),
+            'faturamento_anual' => trim((string)($_POST['public_faturamento_anual'] ?? $_POST['faturamento_anual'] ?? '')),
+            'tomador_decisao' => (string)($_POST['public_tomador_decisao'] ?? $_POST['tomador_decisao'] ?? ''),
         ];
     }
 
@@ -182,7 +177,7 @@ class PublicAvaliacoesController
     {
         return [
             'nome' => '',
-            'empresa' => (string)$context['empresa_nome'],
+            'empresa' => '',
             'whatsapp' => '',
             'email' => '',
             'numero_funcionarios' => '',
@@ -197,6 +192,9 @@ class PublicAvaliacoesController
         $errors = [];
         if ($values['nome'] === '') {
             $errors['nome'] = 'Nome e obrigatorio.';
+        }
+        if ($values['empresa'] === '') {
+            $errors['empresa'] = 'Empresa e obrigatoria.';
         }
         if ($values['email'] === '' || !filter_var($values['email'], FILTER_VALIDATE_EMAIL)) {
             $errors['email'] = 'Informe um e-mail valido.';
