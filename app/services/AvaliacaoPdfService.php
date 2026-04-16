@@ -14,6 +14,7 @@ class AvaliacaoPdfService
 
     public function __construct()
     {
+        $this->ensureDompdfAvailable();
         $this->model = new AvaliacaoModel();
     }
 
@@ -174,5 +175,14 @@ class AvaliacaoPdfService
             }
         }
         return '';
+    }
+
+    private function ensureDompdfAvailable(): void
+    {
+        if (!class_exists(Options::class) || !class_exists(Dompdf::class)) {
+            throw new \RuntimeException(
+                'Dependencia Dompdf indisponivel. Verifique se dompdf/dompdf esta instalado via Composer e se vendor/autoload.php foi carregado corretamente.'
+            );
+        }
     }
 }
