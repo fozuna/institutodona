@@ -10,6 +10,7 @@ use Dompdf\Options;
 class AvaliacaoPdfService
 {
     private AvaliacaoModel $model;
+    private ?string $lastError = null;
 
     public function __construct()
     {
@@ -18,20 +19,28 @@ class AvaliacaoPdfService
 
     public function generateToFile(int $avaliacaoId, bool $force = false): ?string
     {
-        $path = $this->pdfPath($avaliacaoId);
-        if (!$force && is_file($path)) {
-            return $path;
-        }
-        $item = $this->model->find($avaliacaoId);
-        if (!$item) {
+        $this->lastError = null;
+        try {
+            $path = $this->pdfPath($avaliacaoId);
+            if (!$force && is_file($path)) {
+                return $path;
+            }
+            $item = $this->model->find($avaliacaoId);
+            if (!$item) {
+                $this->lastError = 'Avaliacao nao encontrada.';
+                return null;
+            }
+            $dir = dirname($path);
+            if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+                throw new \RuntimeException('Nao foi possivel criar o diretorio do PDF.');
+            }
+            $binary = $this->renderPdfBinary($item);
+            file_put_contents($path, $binary);
+            return is_file($path) ? $path : null;
+        } catch (\Throwable $e) {
+            $this->lastError = $e->getMessage();
             return null;
         }
-        $dir = dirname($path);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0775, true);
-        }
-        file_put_contents($path, $this->renderPdfBinary($item));
-        return is_file($path) ? $path : null;
     }
 
     public function outputToBrowser(int $avaliacaoId, bool $download = false): bool
@@ -54,6 +63,11 @@ class AvaliacaoPdfService
         header('Content-Disposition: ' . ($download ? 'attachment' : 'inline') . '; filename="avaliacao-' . $avaliacaoId . '.pdf"');
         echo $pdf;
         return true;
+    }
+
+    public function getLastError(): ?string
+    {
+        return $this->lastError;
     }
 
     public function renderBinary(int $avaliacaoId, bool $force = false): ?string
@@ -90,11 +104,12 @@ class AvaliacaoPdfService
         $options->set('isHtml5ParserEnabled', true);
         $options->set('isPhpEnabled', false);
         $options->set('defaultFont', 'DejaVu Sans');
-        $options->set('dpi', 300);
+        $options->set('dpi', 120);
+        $options->setChroot(dirname(__DIR__, 2));
 
         $dompdf = new Dompdf($options);
         $dompdf->loadHtml($this->buildHtml($item), 'UTF-8');
-        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->setPaper('A4', 'landscape');
         $dompdf->render();
         return $dompdf->output();
     }
@@ -114,29 +129,6 @@ class AvaliacaoPdfService
             ];
         }
         $pillars = AvaliacaoQuestionario::pilares();
-        $brand = [
-            'navy' => '#11264f',
-            'orange' => '#d9480f',
-            'orangeSoft' => '#f97316',
-            'grayBorder' => '#d9dde6',
-            'grayText' => '#516078',
-            'bg' => '#f3f4f6',
-            'badgeBg' => '#FEF3C7',
-            'badgeText' => '#92400E',
-        ];
-        $logo = $this->logoDataUri();
-        $meta = [
-            'empresa' => (string)($item['empresa_nome'] ?: ($item['cliente_nome'] ?? '—')),
-            'nome' => (string)($item['nome'] ?? '—'),
-            'whatsapp' => (string)($item['whatsapp'] ?? '—'),
-            'email' => (string)($item['email'] ?? '—'),
-            'funcionarios' => (string)($item['numero_funcionarios'] ?? '0'),
-            'lideres' => (string)($item['numero_lideres'] ?? '0'),
-            'faturamento' => FaturamentoFaixas::descricao($item['faturamento_faixa_id'] ?? null, $item['faturamento_medio_anual'] ?? null),
-            'decisor' => !empty($item['tomador_decisao']) ? 'Sim' : 'Não',
-            'origem' => ((string)($item['origem_cadastro'] ?? '') === 'potencial_cliente') ? 'Potencial cliente' : 'Cliente efetivo',
-            'data' => !empty($item['created_at']) ? date('d/m/Y H:i', strtotime((string)$item['created_at'])) : '—',
-        ];
         $scores = [
             'eu' => (int)($item['nota_financeiro'] ?? 0),
             'lideranca' => (int)($item['nota_mercado'] ?? 0),
@@ -146,26 +138,41 @@ class AvaliacaoPdfService
         $totals = array_map(static fn(array $questions): int => count($questions), $pillars);
         $sumIdeal = array_sum($totals);
         $sumResult = array_sum($scores);
-        $sumPercent = $sumIdeal > 0 ? (int)round(($sumResult / $sumIdeal) * 100) : 0;
+        $total = $sumResult;
+        $reals = [];
+        foreach (['realidade_financeiro', 'realidade_mercado', 'realidade_pessoas', 'realidade_processo'] as $rk) {
+            if (isset($item[$rk]) && $item[$rk] !== null) {
+                $reals[] = (int)$item[$rk];
+            }
+        }
+        $realPct = $reals ? (int)round(array_sum($reals) / count($reals)) : ($sumIdeal > 0 ? (int)round(($sumResult / $sumIdeal) * 100) : 0);
+        $labels = ['EU' => (int)($item['nota_financeiro'] ?? 0), 'LIDERANÇA' => (int)($item['nota_mercado'] ?? 0), 'PROCESSO' => (int)($item['nota_pessoas'] ?? 0), 'GESTÃO' => (int)($item['nota_processo'] ?? 0)];
+        $empresa = !empty($item['cliente_id']) ? (string)($item['cliente_nome'] ?? '') : (string)($item['empresa_nome'] ?? '');
+        $isPotencial = (int)($item['cliente_id'] ?? 0) <= 0;
+        $pillarTitles = ['eu' => 'EU', 'lideranca' => 'LIDERANÇA', 'processo' => 'PROCESSO', 'gestao' => 'GESTÃO'];
+        $logoSrc = $this->logoAbsolutePath();
 
         ob_start();
-        require __DIR__ . '/../views/avaliacoes/pdf.php';
+        require __DIR__ . '/../views/avaliacoes/show_pdf.php';
         return (string)ob_get_clean();
     }
 
-    private function logoDataUri(): string
+    private function logoAbsolutePath(): string
     {
-        if (!extension_loaded('gd')) {
-            return '';
+        $candidates = [
+            dirname(__DIR__, 2) . '/public/assets/img/logovivamais.png',
+            dirname(__DIR__, 2) . '/public/assets/img/logovivamais.PNG',
+            dirname(__DIR__, 2) . '/public_html/assets/img/logovivamais.png',
+            dirname(__DIR__, 2) . '/public_html/assets/img/logovivamais.PNG',
+            dirname(__DIR__, 2) . '/public/assets/img/logobco.png',
+            dirname(__DIR__, 2) . '/public_html/assets/img/logobco.png',
+        ];
+        foreach ($candidates as $file) {
+            $real = realpath($file);
+            if ($real && is_file($real)) {
+                return 'file:///' . str_replace('\\', '/', ltrim($real, '\\/'));
+            }
         }
-        $file = dirname(__DIR__, 2) . '/public_html/assets/img/logobco.png';
-        if (!is_file($file)) {
-            return '';
-        }
-        $contents = file_get_contents($file);
-        if ($contents === false) {
-            return '';
-        }
-        return 'data:image/png;base64,' . base64_encode($contents);
+        return '';
     }
 }

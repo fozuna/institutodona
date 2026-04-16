@@ -50,6 +50,10 @@ echo json_encode([
     'permanent' => $data['data']['permanent'] ?? null,
     'validate_available' => true,
     'preview_contains_title' => str_contains((string)$previewHtml, 'Nota total dos 4 pilares'),
+    'preview_has_no_associar_section' => !str_contains((string)$previewHtml, 'Associar a um cliente efetivo'),
+    'preview_has_no_form_tag' => !str_contains((string)$previewHtml, '<form'),
+    'preview_has_no_button_tag' => !str_contains((string)$previewHtml, '<button'),
+    'preview_uses_landscape' => str_contains((string)$previewHtml, '@page { size: A4 landscape;'),
     'pdf_header' => substr((string)$pdf, 0, 4),
     'pdf_size' => strlen((string)$pdf),
 ], JSON_UNESCAPED_UNICODE);

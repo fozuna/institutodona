@@ -354,7 +354,7 @@ class AvaliacoesController extends BaseController
         ]);
         if (!$service->outputToBrowser($id, !empty($_GET['download']))) {
             http_response_code(500);
-            echo 'Falha ao gerar PDF.';
+            echo 'Falha ao gerar PDF: ' . ($service->getLastError() ?: 'erro desconhecido');
         }
     }
 
