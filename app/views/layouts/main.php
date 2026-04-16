@@ -16,10 +16,14 @@ $config = require $cfg;
         $baseUrl = rtrim(dirname($scriptName), '/\\'); // e.g., /institutodona/public_html
         if ($baseUrl === '/' || $baseUrl === '\\') { $baseUrl = ''; }
         $assetsUrl = $baseUrl . '/assets';
+        $themeCssPath = __DIR__ . '/../../../public_html/assets/css/theme.css';
+        $appJsPath = __DIR__ . '/../../../public_html/assets/js/app.js';
+        $themeCssVersion = is_file($themeCssPath) ? (string)filemtime($themeCssPath) : '1';
+        $appJsVersion = is_file($appJsPath) ? (string)filemtime($appJsPath) : '1';
     ?>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/feather-icons"></script>
-    <link rel="stylesheet" href="<?= $assetsUrl ?>/css/theme.css" />
+    <link rel="stylesheet" href="<?= $assetsUrl ?>/css/theme.css?v=<?= urlencode($themeCssVersion) ?>" />
 </head>
 <body class="bg-brand-gray-50 text-brand-black">
     <?php $user = $_SESSION['user'] ?? null; ?>
@@ -174,6 +178,6 @@ $config = require $cfg;
             <?php endif; ?>
         </main>
     </div>
-    <script src="<?= $assetsUrl ?>/js/app.js"></script>
+    <script src="<?= $assetsUrl ?>/js/app.js?v=<?= urlencode($appJsVersion) ?>"></script>
 </body>
 </html>
