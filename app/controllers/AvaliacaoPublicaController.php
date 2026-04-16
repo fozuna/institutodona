@@ -11,6 +11,13 @@ use App\Services\PublicAvaliacaoContextResolver;
 
 class AvaliacaoPublicaController
 {
+    private const PILLAR_SLOT_MAP = [
+        'eu' => 'financeiro',
+        'lideranca' => 'mercado',
+        'processo' => 'pessoas',
+        'gestao' => 'processo',
+    ];
+
     private AvaliacaoPublicaModel $publicas;
     private PublicRateLimiter $rateLimiter;
 
@@ -176,21 +183,15 @@ class AvaliacaoPublicaController
             ]);
             return;
         }
-        $financeiro = array_map('intval', (array)($_POST['financeiro'] ?? []));
-        $mercado = array_map('intval', (array)($_POST['mercado'] ?? []));
-        $pessoas = array_map('intval', (array)($_POST['pessoas'] ?? []));
-        $processo = array_map('intval', (array)($_POST['processo'] ?? []));
+        $selectedMap = [];
+        foreach (self::PILLAR_SLOT_MAP as $pillar => $slot) {
+            $selectedMap[$pillar] = array_map('intval', (array)($_POST[$pillar] ?? $_POST[$slot] ?? []));
+        }
         $totais = AvaliacaoQuestionario::totais();
-        $notaFin = count($financeiro);
-        $notaMer = count($mercado);
-        $notaPes = count($pessoas);
-        $notaPro = count($processo);
-        $selectedMap = [
-            'financeiro' => $financeiro,
-            'mercado' => $mercado,
-            'pessoas' => $pessoas,
-            'processo' => $processo,
-        ];
+        $notaFin = count($selectedMap['eu']);
+        $notaMer = count($selectedMap['lideranca']);
+        $notaPes = count($selectedMap['processo']);
+        $notaPro = count($selectedMap['gestao']);
         try {
             $avaliacaoId = $this->createAvaliacaoFromPublicSubmission($record, $values, $selectedMap, $totais);
         } catch (\Throwable $e) {
@@ -528,14 +529,14 @@ class AvaliacaoPublicaController
             'created_by_user_id' => isset($record['created_by_user_id']) ? (int)$record['created_by_user_id'] : null,
             'contato' => $values['nome'],
             'respostas_json' => json_encode($selectedMap),
-            'nota_financeiro' => count($selectedMap['financeiro'] ?? []),
-            'nota_mercado' => count($selectedMap['mercado'] ?? []),
-            'nota_pessoas' => count($selectedMap['pessoas'] ?? []),
-            'nota_processo' => count($selectedMap['processo'] ?? []),
-            'realidade_financeiro' => $this->toPercent(count($selectedMap['financeiro'] ?? []), (int)($totais['financeiro'] ?? 1)),
-            'realidade_mercado' => $this->toPercent(count($selectedMap['mercado'] ?? []), (int)($totais['mercado'] ?? 1)),
-            'realidade_pessoas' => $this->toPercent(count($selectedMap['pessoas'] ?? []), (int)($totais['pessoas'] ?? 1)),
-            'realidade_processo' => $this->toPercent(count($selectedMap['processo'] ?? []), (int)($totais['processo'] ?? 1)),
+            'nota_financeiro' => count($selectedMap['eu'] ?? []),
+            'nota_mercado' => count($selectedMap['lideranca'] ?? []),
+            'nota_pessoas' => count($selectedMap['processo'] ?? []),
+            'nota_processo' => count($selectedMap['gestao'] ?? []),
+            'realidade_financeiro' => $this->toPercent(count($selectedMap['eu'] ?? []), (int)($totais['eu'] ?? 1)),
+            'realidade_mercado' => $this->toPercent(count($selectedMap['lideranca'] ?? []), (int)($totais['lideranca'] ?? 1)),
+            'realidade_pessoas' => $this->toPercent(count($selectedMap['processo'] ?? []), (int)($totais['processo'] ?? 1)),
+            'realidade_processo' => $this->toPercent(count($selectedMap['gestao'] ?? []), (int)($totais['gestao'] ?? 1)),
         ]);
     }
 

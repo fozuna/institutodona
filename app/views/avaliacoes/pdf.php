@@ -13,6 +13,7 @@ $renderItemList = static function (array $questions, array $selectedIds): string
     }
     return $html;
 };
+$pillarLabels = ['eu' => 'EU', 'lideranca' => 'LIDERANÇA', 'processo' => 'PROCESSO', 'gestao' => 'GESTÃO'];
 ?>
 <!doctype html>
 <html lang="pt-BR">
@@ -193,11 +194,11 @@ $renderItemList = static function (array $questions, array $selectedIds): string
     </div>
 
     <div class="clearfix" style="margin-bottom: 12px;">
-      <?php $pillarOrder = ['financeiro', 'mercado', 'pessoas', 'processo']; ?>
+      <?php $pillarOrder = ['eu', 'lideranca', 'processo', 'gestao']; ?>
       <?php foreach ($pillarOrder as $index => $pillar): ?>
         <?php $questions = $pillars[$pillar] ?? []; $score = (int)($scores[$pillar] ?? 0); $total = count($questions); ?>
         <div class="pillar-card<?= $index === 3 ? ' last' : '' ?>">
-          <div class="pillar-title"><?= ucfirst($pillar) ?></div>
+          <div class="pillar-title"><?= $pillarLabels[$pillar] ?? strtoupper($pillar) ?></div>
           <div class="bar"><span style="width: <?= $formatPercent($score, $total) ?>%"></span></div>
           <div class="score-line"><?= $score ?>/<?= $total ?></div>
         </div>
@@ -228,7 +229,7 @@ $renderItemList = static function (array $questions, array $selectedIds): string
       <div class="clearfix">
         <?php foreach ($pillarOrder as $index => $pillar): ?>
           <div class="list-column<?= $index === 3 ? ' last' : '' ?>">
-            <div class="list-title"><?= ucfirst($pillar) ?></div>
+            <div class="list-title"><?= $pillarLabels[$pillar] ?? strtoupper($pillar) ?></div>
             <?= $renderItemList($pillars[$pillar] ?? [], array_map('intval', (array)($respostas[$pillar] ?? []))) ?>
           </div>
         <?php endforeach; ?>

@@ -13,7 +13,7 @@
   <?php if (!$item): ?>
     <div class="bg-white shadow rounded p-4">Registro não encontrado.</div>
   <?php else:
-    $labels = ['Financeiro' => (int)$item['nota_financeiro'], 'Mercado' => (int)$item['nota_mercado'], 'Pessoas' => (int)$item['nota_pessoas'], 'Processo' => (int)$item['nota_processo']];
+    $labels = ['EU' => (int)$item['nota_financeiro'], 'LIDERANÇA' => (int)$item['nota_mercado'], 'PROCESSO' => (int)$item['nota_pessoas'], 'GESTÃO' => (int)$item['nota_processo']];
     $max = 7;
     $total = array_sum($labels);
     $pct = fn($n) => round(($n / $max) * 100);
@@ -108,13 +108,22 @@
   <?php
     $qs = \App\Core\AvaliacaoQuestionario::pilares();
     $resp = json_decode($item['respostas_json'] ?? '{}', true) ?: [];
+    if (!isset($resp['eu']) && (isset($resp['financeiro']) || isset($resp['mercado']) || isset($resp['pessoas']) || isset($resp['processo']))) {
+      $resp = [
+        'eu' => array_map('intval', (array)($resp['financeiro'] ?? [])),
+        'lideranca' => array_map('intval', (array)($resp['mercado'] ?? [])),
+        'processo' => array_map('intval', (array)($resp['pessoas'] ?? [])),
+        'gestao' => array_map('intval', (array)($resp['processo'] ?? [])),
+      ];
+    }
+    $pillarTitles = ['eu' => 'EU', 'lideranca' => 'LIDERANÇA', 'processo' => 'PROCESSO', 'gestao' => 'GESTÃO'];
   ?>
   <div class="bg-white shadow rounded p-4 mt-4">
     <div class="font-semibold mb-3">Itens pontuados e não pontuados</div>
     <div class="grid grid-cols-1 xl:grid-cols-4 gap-6">
-      <?php foreach (['financeiro'=>'Financeiro','mercado'=>'Mercado','pessoas'=>'Pessoas','processo'=>'Processo'] as $key=>$title): ?>
+      <?php foreach (['eu', 'lideranca', 'processo', 'gestao'] as $key): ?>
         <div>
-          <div class="text-sm font-semibold mb-2"><?= $title ?></div>
+          <div class="text-sm font-semibold mb-2"><?= $pillarTitles[$key] ?? strtoupper($key) ?></div>
           <ul class="space-y-1 text-sm">
             <?php
               $selected = array_map('intval', $resp[$key] ?? []);

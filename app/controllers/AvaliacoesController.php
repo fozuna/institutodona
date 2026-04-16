@@ -11,6 +11,13 @@ use App\Services\AvaliacaoPdfService;
 
 class AvaliacoesController extends BaseController
 {
+    private const PILLAR_SLOT_MAP = [
+        'eu' => 'financeiro',
+        'lideranca' => 'mercado',
+        'processo' => 'pessoas',
+        'gestao' => 'processo',
+    ];
+
     private AvaliacaoModel $model;
 
     public function __construct()
@@ -75,18 +82,15 @@ class AvaliacoesController extends BaseController
         $faturamentoMedioAnual = $this->positiveInt($_POST['faturamento_medio_anual'] ?? null);
         $tomadorDecisao = $this->booleanFromInput($_POST['tomador_decisao'] ?? null);
         $whatsapp = preg_replace('/\D+/', '', $whatsappRaw ?? '') ?: '';
-        $fin = $_POST['financeiro'] ?? [];
-        $mer = $_POST['mercado'] ?? [];
-        $pes = $_POST['pessoas'] ?? [];
-        $pro = $_POST['processo'] ?? [];
-        $notaFin = isset($_POST['nota_financeiro']) ? (int)$_POST['nota_financeiro'] : (is_array($fin) ? count($fin) : 0);
-        $notaMer = isset($_POST['nota_mercado']) ? (int)$_POST['nota_mercado'] : (is_array($mer) ? count($mer) : 0);
-        $notaPes = isset($_POST['nota_pessoas']) ? (int)$_POST['nota_pessoas'] : (is_array($pes) ? count($pes) : 0);
-        $notaPro = isset($_POST['nota_processo']) ? (int)$_POST['nota_processo'] : (is_array($pro) ? count($pro) : 0);
-        $realFin = isset($_POST['realidade_financeiro']) ? (int)$_POST['realidade_financeiro'] : null;
-        $realMer = isset($_POST['realidade_mercado']) ? (int)$_POST['realidade_mercado'] : null;
-        $realPes = isset($_POST['realidade_pessoas']) ? (int)$_POST['realidade_pessoas'] : null;
-        $realPro = isset($_POST['realidade_processo']) ? (int)$_POST['realidade_processo'] : null;
+        $responses = [];
+        $notes = [];
+        $realities = [];
+        foreach (self::PILLAR_SLOT_MAP as $pillar => $slot) {
+            $selected = $_POST[$pillar] ?? $_POST[$slot] ?? [];
+            $responses[$pillar] = is_array($selected) ? array_map('intval', $selected) : [];
+            $notes[$slot] = isset($_POST['nota_' . $pillar]) ? (int)$_POST['nota_' . $pillar] : (isset($_POST['nota_' . $slot]) ? (int)$_POST['nota_' . $slot] : count($responses[$pillar]));
+            $realities[$slot] = isset($_POST['realidade_' . $pillar]) ? (int)$_POST['realidade_' . $pillar] : (isset($_POST['realidade_' . $slot]) ? (int)$_POST['realidade_' . $slot] : null);
+        }
         $errors = [];
         if ($modoCadastro === 'existente' && ($clienteId <= 0 || !isset($clientesById[$clienteId]))) {
             $errors['cliente_id'] = 'Selecione um cliente válido.';
@@ -144,15 +148,15 @@ class AvaliacoesController extends BaseController
             'tomador_decisao' => $tomadorDecisao,
             'origem_cadastro' => $clienteId > 0 ? 'cliente_existente' : 'potencial_cliente',
             'contato' => $nome,
-            'respostas_json' => json_encode(['financeiro' => $fin, 'mercado' => $mer, 'pessoas' => $pes, 'processo' => $pro]),
-            'nota_financeiro' => $notaFin,
-            'nota_mercado' => $notaMer,
-            'nota_pessoas' => $notaPes,
-            'nota_processo' => $notaPro,
-            'realidade_financeiro' => $realFin,
-            'realidade_mercado' => $realMer,
-            'realidade_pessoas' => $realPes,
-            'realidade_processo' => $realPro,
+            'respostas_json' => json_encode($responses),
+            'nota_financeiro' => $notes['financeiro'],
+            'nota_mercado' => $notes['mercado'],
+            'nota_pessoas' => $notes['pessoas'],
+            'nota_processo' => $notes['processo'],
+            'realidade_financeiro' => $realities['financeiro'],
+            'realidade_mercado' => $realities['mercado'],
+            'realidade_pessoas' => $realities['pessoas'],
+            'realidade_processo' => $realities['processo'],
         ];
         $id = $this->model->create($payload);
         if ($id <= 0) {

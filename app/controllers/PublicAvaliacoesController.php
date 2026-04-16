@@ -10,6 +10,13 @@ use App\Services\PublicAvaliacaoContextResolver;
 
 class PublicAvaliacoesController
 {
+    private const PILLAR_SLOT_MAP = [
+        'eu' => 'financeiro',
+        'lideranca' => 'mercado',
+        'processo' => 'pessoas',
+        'gestao' => 'processo',
+    ];
+
     private PublicRateLimiter $rateLimiter;
     private PublicAvaliacaoContextResolver $contextResolver;
     private AvaliacaoModel $avaliacoes;
@@ -89,12 +96,10 @@ class PublicAvaliacoesController
             $this->render($context, 1, $values, $errors, [], false, '', '');
             return;
         }
-        $selectedMap = [
-            'financeiro' => array_map('intval', (array)($_POST['financeiro'] ?? [])),
-            'mercado' => array_map('intval', (array)($_POST['mercado'] ?? [])),
-            'pessoas' => array_map('intval', (array)($_POST['pessoas'] ?? [])),
-            'processo' => array_map('intval', (array)($_POST['processo'] ?? [])),
-        ];
+        $selectedMap = [];
+        foreach (self::PILLAR_SLOT_MAP as $pillar => $slot) {
+            $selectedMap[$pillar] = array_map('intval', (array)($_POST[$pillar] ?? $_POST[$slot] ?? []));
+        }
         $totais = array_map('count', AvaliacaoQuestionario::pilares());
         $avaliacaoId = $this->avaliacoes->create([
             'cliente_id' => !empty($context['cliente_id']) ? (int)$context['cliente_id'] : null,
@@ -109,14 +114,14 @@ class PublicAvaliacoesController
             'origem_cadastro' => 'formulario_publico_fixo',
             'contato' => $values['nome'],
             'respostas_json' => json_encode($selectedMap),
-            'nota_financeiro' => count($selectedMap['financeiro']),
-            'nota_mercado' => count($selectedMap['mercado']),
-            'nota_pessoas' => count($selectedMap['pessoas']),
-            'nota_processo' => count($selectedMap['processo']),
-            'realidade_financeiro' => $this->toPercent(count($selectedMap['financeiro']), (int)($totais['financeiro'] ?? 1)),
-            'realidade_mercado' => $this->toPercent(count($selectedMap['mercado']), (int)($totais['mercado'] ?? 1)),
-            'realidade_pessoas' => $this->toPercent(count($selectedMap['pessoas']), (int)($totais['pessoas'] ?? 1)),
-            'realidade_processo' => $this->toPercent(count($selectedMap['processo']), (int)($totais['processo'] ?? 1)),
+            'nota_financeiro' => count($selectedMap['eu']),
+            'nota_mercado' => count($selectedMap['lideranca']),
+            'nota_pessoas' => count($selectedMap['processo']),
+            'nota_processo' => count($selectedMap['gestao']),
+            'realidade_financeiro' => $this->toPercent(count($selectedMap['eu']), (int)($totais['eu'] ?? 1)),
+            'realidade_mercado' => $this->toPercent(count($selectedMap['lideranca']), (int)($totais['lideranca'] ?? 1)),
+            'realidade_pessoas' => $this->toPercent(count($selectedMap['processo']), (int)($totais['processo'] ?? 1)),
+            'realidade_processo' => $this->toPercent(count($selectedMap['gestao']), (int)($totais['gestao'] ?? 1)),
         ]);
         if ($avaliacaoId <= 0) {
             http_response_code(500);

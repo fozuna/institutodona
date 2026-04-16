@@ -85,10 +85,10 @@
           <th class="p-3">Empresa</th>
           <th class="p-3">Nome Cliente</th>
           <th class="p-3">Data</th>
-          <th class="p-3">Financeiro</th>
-          <th class="p-3">Mercado</th>
-          <th class="p-3">Pessoas</th>
+          <th class="p-3">EU</th>
+          <th class="p-3">Liderança</th>
           <th class="p-3">Processo</th>
+          <th class="p-3">Gestão</th>
           <th class="p-3">Formulário Público</th>
           <th class="p-3">Ações</th>
         </tr>

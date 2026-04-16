@@ -104,6 +104,14 @@ class AvaliacaoPdfService
         if (!is_array($respostas)) {
             $respostas = [];
         }
+        if (!isset($respostas['eu']) && (isset($respostas['financeiro']) || isset($respostas['mercado']) || isset($respostas['pessoas']) || isset($respostas['processo']))) {
+            $respostas = [
+                'eu' => array_map('intval', (array)($respostas['financeiro'] ?? [])),
+                'lideranca' => array_map('intval', (array)($respostas['mercado'] ?? [])),
+                'processo' => array_map('intval', (array)($respostas['pessoas'] ?? [])),
+                'gestao' => array_map('intval', (array)($respostas['processo'] ?? [])),
+            ];
+        }
         $pillars = AvaliacaoQuestionario::pilares();
         $brand = [
             'navy' => '#11264f',
@@ -129,10 +137,10 @@ class AvaliacaoPdfService
             'data' => !empty($item['created_at']) ? date('d/m/Y H:i', strtotime((string)$item['created_at'])) : '—',
         ];
         $scores = [
-            'financeiro' => (int)($item['nota_financeiro'] ?? 0),
-            'mercado' => (int)($item['nota_mercado'] ?? 0),
-            'pessoas' => (int)($item['nota_pessoas'] ?? 0),
-            'processo' => (int)($item['nota_processo'] ?? 0),
+            'eu' => (int)($item['nota_financeiro'] ?? 0),
+            'lideranca' => (int)($item['nota_mercado'] ?? 0),
+            'processo' => (int)($item['nota_pessoas'] ?? 0),
+            'gestao' => (int)($item['nota_processo'] ?? 0),
         ];
         $totals = array_map(static fn(array $questions): int => count($questions), $pillars);
         $sumIdeal = array_sum($totals);

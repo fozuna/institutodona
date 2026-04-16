@@ -49,10 +49,10 @@ $_POST = [
     'public_numero_lideres' => 4,
     'public_faturamento_anual' => 300000,
     'public_tomador_decisao' => 1,
-    'financeiro' => [1],
-    'mercado' => [1, 2],
-    'pessoas' => [1],
-    'processo' => [1, 2],
+    'eu' => [1],
+    'lideranca' => [1, 2],
+    'processo' => [1],
+    'gestao' => [1, 2],
 ];
 ob_start();
 $publicController->handle();

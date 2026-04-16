@@ -100,22 +100,18 @@
     </div>
     <?php
       $qs = \App\Core\AvaliacaoQuestionario::pilares();
-      $selectedFinanceiro = array_map('intval', $_POST['financeiro'] ?? []);
-      $selectedMercado = array_map('intval', $_POST['mercado'] ?? []);
-      $selectedPessoas = array_map('intval', $_POST['pessoas'] ?? []);
-      $selectedProcesso = array_map('intval', $_POST['processo'] ?? []);
-      $selectedMap = [
-        'financeiro' => $selectedFinanceiro,
-        'mercado' => $selectedMercado,
-        'pessoas' => $selectedPessoas,
-        'processo' => $selectedProcesso,
-      ];
+      $pillarLabels = ['eu' => 'EU', 'lideranca' => 'LIDERANÇA', 'processo' => 'PROCESSO', 'gestao' => 'GESTÃO'];
+      $pillarSlotMap = ['eu' => 'financeiro', 'lideranca' => 'mercado', 'processo' => 'pessoas', 'gestao' => 'processo'];
+      $selectedMap = [];
+      foreach ($qs as $pillar => $questions) {
+        $selectedMap[$pillar] = array_map('intval', $_POST[$pillar] ?? $_POST[$pillarSlotMap[$pillar]] ?? []);
+      }
     ?>
     <div class="grid grid-cols-1 xl:grid-cols-4 gap-6">
       <?php foreach ($qs as $pillar => $questions): ?>
         <div class="bg-white shadow rounded">
           <div class="px-4 py-3 border-b flex items-center justify-between">
-            <div class="font-semibold uppercase"><?= $pillar ?></div>
+            <div class="font-semibold uppercase"><?= $pillarLabels[$pillar] ?? strtoupper($pillar) ?></div>
             <span class="text-brand-brown">✔</span>
           </div>
           <div class="p-0">
@@ -157,12 +153,7 @@
     </div>
     <script>
       (function(){
-        const totals = {
-          financeiro: 7,
-          mercado: 7,
-          pessoas: 7,
-          processo: 7
-        };
+        const totals = <?= json_encode(array_map('count', $qs), JSON_UNESCAPED_UNICODE) ?>;
         const whatsappEl = document.querySelector('input[name="whatsapp"]');
         const modoEls = document.querySelectorAll('input[name="modo_cadastro"]');
         const clienteEl = document.getElementById('cliente_id');
@@ -211,7 +202,7 @@
           if (nota) nota.value = count;
           if (real) real.value = Math.round((count / (totals[p]||1)) * 100);
         }
-        ['financeiro','mercado','pessoas','processo'].forEach(p=>{
+        Object.keys(totals).forEach(p=>{
           document.querySelectorAll('input[type="checkbox"][data-pillar="'+p+'"]').forEach(el=>{
             el.addEventListener('change', ()=>recalc(p));
           });

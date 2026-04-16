@@ -14,6 +14,7 @@ $submitted = !empty($submitted);
 $pdfUrl = $pdfUrl ?? '';
 $isStaticPublic = !empty($isStaticPublic);
 $contextEmpresa = $contextEmpresa ?? '';
+$pillarLabels = ['eu' => 'EU', 'lideranca' => 'LIDERANÇA', 'processo' => 'PROCESSO', 'gestao' => 'GESTÃO'];
 $identifier = $record['slug'] ?? $record['token'] ?? ($_GET['slug'] ?? $_GET['token'] ?? $_POST['slug'] ?? $_POST['token'] ?? '');
 $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
 $baseUrl = rtrim(dirname(dirname(dirname($scriptName))), '/\\');
@@ -175,7 +176,7 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
                 <?php foreach ($qs as $pillar => $questions): ?>
                   <div class="bg-white border rounded">
                     <div class="px-4 py-3 border-b flex items-center justify-between">
-                      <div class="font-semibold uppercase text-brand-brown"><?= htmlspecialchars($pillar) ?></div>
+                      <div class="font-semibold uppercase text-brand-brown"><?= htmlspecialchars($pillarLabels[$pillar] ?? strtoupper($pillar)) ?></div>
                       <span class="text-brand-brown">✔</span>
                     </div>
                     <div class="p-0">
