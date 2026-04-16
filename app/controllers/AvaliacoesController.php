@@ -4,6 +4,7 @@ namespace App\Controllers;
 use App\Core\AuditLogger;
 use App\Core\AvaliacaoQuestionario;
 use App\Core\BaseController;
+use App\Core\FaturamentoFaixas;
 use App\Core\Security;
 use App\Models\AvaliacaoModel;
 use App\Models\ClienteModel;
@@ -79,7 +80,10 @@ class AvaliacoesController extends BaseController
         $whatsappRaw = (string)($_POST['whatsapp'] ?? '');
         $numeroFuncionarios = $this->positiveInt($_POST['numero_funcionarios'] ?? null);
         $numeroLideres = $this->positiveInt($_POST['numero_lideres'] ?? null);
-        $faturamentoMedioAnual = $this->positiveInt($_POST['faturamento_medio_anual'] ?? null);
+        $faturamentoFaixaId = FaturamentoFaixas::normalizeId($_POST['faturamento_faixa_id'] ?? null);
+        $faturamentoMedioAnual = $faturamentoFaixaId !== null
+            ? FaturamentoFaixas::representativeAmountForId($faturamentoFaixaId)
+            : $this->positiveInt($_POST['faturamento_medio_anual'] ?? null);
         $tomadorDecisao = $this->booleanFromInput($_POST['tomador_decisao'] ?? null);
         $whatsapp = preg_replace('/\D+/', '', $whatsappRaw ?? '') ?: '';
         $responses = [];
@@ -113,8 +117,8 @@ class AvaliacoesController extends BaseController
         if ($numeroLideres === null) {
             $errors['numero_lideres'] = 'Número de líderes deve ser um inteiro positivo.';
         }
-        if ($faturamentoMedioAnual === null) {
-            $errors['faturamento_medio_anual'] = 'Faturamento médio anual deve ser um inteiro positivo.';
+        if ($faturamentoFaixaId === null && $faturamentoMedioAnual === null) {
+            $errors['faturamento_faixa_id'] = 'Selecione uma faixa de faturamento.';
         }
         if ($tomadorDecisao === null) {
             $errors['tomador_decisao'] = 'Selecione se é tomador de decisão.';
@@ -128,6 +132,7 @@ class AvaliacoesController extends BaseController
             'whatsapp' => $whatsapp,
             'numero_funcionarios' => (string)($_POST['numero_funcionarios'] ?? ''),
             'numero_lideres' => (string)($_POST['numero_lideres'] ?? ''),
+            'faturamento_faixa_id' => (string)($_POST['faturamento_faixa_id'] ?? ''),
             'faturamento_medio_anual' => (string)($_POST['faturamento_medio_anual'] ?? ''),
             'tomador_decisao' => (string)($_POST['tomador_decisao'] ?? ''),
         ];
@@ -145,6 +150,7 @@ class AvaliacoesController extends BaseController
             'numero_funcionarios' => $numeroFuncionarios,
             'numero_lideres' => $numeroLideres,
             'faturamento_medio_anual' => $faturamentoMedioAnual,
+            'faturamento_faixa_id' => $faturamentoFaixaId ?? FaturamentoFaixas::inferIdFromAmount($faturamentoMedioAnual),
             'tomador_decisao' => $tomadorDecisao,
             'origem_cadastro' => $clienteId > 0 ? 'cliente_existente' : 'potencial_cliente',
             'contato' => $nome,
@@ -386,6 +392,7 @@ class AvaliacoesController extends BaseController
             'whatsapp' => '',
             'numero_funcionarios' => '',
             'numero_lideres' => '',
+            'faturamento_faixa_id' => '',
             'faturamento_medio_anual' => '',
             'tomador_decisao' => '',
         ];

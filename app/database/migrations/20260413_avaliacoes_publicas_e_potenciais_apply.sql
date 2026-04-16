@@ -126,12 +126,6 @@ CALL sp_add_index_if_missing('avaliacoes', 'idx_avaliacoes_cliente_associado_em'
 -- FK opcional para usuário criador; mantida como SET NULL para preservar histórico.
 CALL sp_add_fk_if_missing('avaliacoes', 'fk_avaliacoes_created_by_user', 'FOREIGN KEY (created_by_user_id) REFERENCES usuarios(id) ON DELETE SET NULL');
 
--- Recria check constraint de origem para manter consistência sem impedir legado.
-CALL sp_drop_check_if_exists('avaliacoes', 'chk_avaliacoes_origem_cadastro');
-ALTER TABLE avaliacoes
-  ADD CONSTRAINT chk_avaliacoes_origem_cadastro
-  CHECK (origem_cadastro IN ('cliente_existente', 'potencial_cliente'));
-
 -- ============================================================================
 -- 2. Saneamento de dados existentes em avaliacoes
 -- ============================================================================
@@ -141,11 +135,12 @@ START TRANSACTION;
 -- Preenche origem de forma coerente para registros antigos.
 UPDATE avaliacoes
 SET origem_cadastro = CASE
+    WHEN origem_cadastro = 'formulario_publico_fixo' THEN 'formulario_publico_fixo'
     WHEN cliente_id IS NULL OR cliente_id = 0 THEN 'potencial_cliente'
     ELSE 'cliente_existente'
 END
 WHERE origem_cadastro IS NULL
-   OR origem_cadastro NOT IN ('cliente_existente', 'potencial_cliente');
+   OR origem_cadastro NOT IN ('cliente_existente', 'potencial_cliente', 'formulario_publico_fixo');
 
 -- Se a avaliação nasceu como potencial e posteriormente foi associada, registra
 -- data mínima de associação para permitir rastreabilidade em relatórios.
@@ -167,6 +162,12 @@ WHERE realidade_financeiro IS NOT NULL
    OR realidade_processo IS NOT NULL;
 
 COMMIT;
+
+-- Recria check constraint de origem após saneamento dos dados.
+CALL sp_drop_check_if_exists('avaliacoes', 'chk_avaliacoes_origem_cadastro');
+ALTER TABLE avaliacoes
+  ADD CONSTRAINT chk_avaliacoes_origem_cadastro
+  CHECK (origem_cadastro IN ('cliente_existente', 'potencial_cliente', 'formulario_publico_fixo'));
 
 -- ============================================================================
 -- 3. Estrutura de avaliacoes_publicas

@@ -47,7 +47,7 @@ $_POST = [
     'public_email' => 'cliente.publico@example.com',
     'public_numero_funcionarios' => '20',
     'public_numero_lideres' => '3',
-    'public_faturamento_anual' => '200000',
+    'public_faturamento_faixa_id' => '2',
     'public_tomador_decisao' => '1',
 ];
 ob_start();
@@ -63,7 +63,7 @@ $_POST = [
     'public_email' => 'cliente.publico@example.com',
     'public_numero_funcionarios' => '20',
     'public_numero_lideres' => '3',
-    'public_faturamento_anual' => '200000',
+    'public_faturamento_faixa_id' => '2',
     'public_tomador_decisao' => '1',
     'eu' => [1, 2],
     'lideranca' => [1],

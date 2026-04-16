@@ -43,7 +43,7 @@
       <div><span class="text-gray-600">E-mail:</span> <span class="font-medium"><?= htmlspecialchars($item['email'] ?? '—') ?></span></div>
       <div><span class="text-gray-600">Funcionários:</span> <span class="font-medium"><?= isset($item['numero_funcionarios']) ? (int)$item['numero_funcionarios'] : '—' ?></span></div>
       <div><span class="text-gray-600">Líderes:</span> <span class="font-medium"><?= isset($item['numero_lideres']) ? (int)$item['numero_lideres'] : '—' ?></span></div>
-      <div><span class="text-gray-600">Faturamento anual:</span> <span class="font-medium">R$ <?= isset($item['faturamento_medio_anual']) ? number_format((float)$item['faturamento_medio_anual'], 0, ',', '.') : '—' ?></span></div>
+      <div><span class="text-gray-600">Faturamento anual:</span> <span class="font-medium"><?= htmlspecialchars(\App\Core\FaturamentoFaixas::descricao($item['faturamento_faixa_id'] ?? null, $item['faturamento_medio_anual'] ?? null)) ?></span></div>
       <div><span class="text-gray-600">Tomador de decisão:</span> <span class="font-medium"><?= isset($item['tomador_decisao']) ? ((int)$item['tomador_decisao'] === 1 ? 'Sim' : 'Não') : '—' ?></span></div>
     </div>
   </div>

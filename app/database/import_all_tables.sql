@@ -137,6 +137,7 @@ CREATE TABLE IF NOT EXISTS avaliacoes (
   numero_funcionarios INT UNSIGNED NOT NULL DEFAULT 0,
   numero_lideres INT UNSIGNED NOT NULL DEFAULT 0,
   faturamento_medio_anual BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  faturamento_faixa_id INT NULL,
   tomador_decisao TINYINT(1) NOT NULL DEFAULT 0,
   origem_cadastro VARCHAR(30) NOT NULL DEFAULT 'cliente_existente',
   created_by_user_id INT NULL,
@@ -165,6 +166,7 @@ CREATE TABLE IF NOT EXISTS avaliacoes_publicas (
   numero_funcionarios INT UNSIGNED NULL,
   numero_lideres INT UNSIGNED NULL,
   faturamento_anual BIGINT UNSIGNED NULL,
+  faturamento_faixa_id INT NULL,
   tomador_decisao TINYINT(1) NULL,
   respostas_json TEXT NULL,
   nota_financeiro TINYINT NOT NULL DEFAULT 0,
@@ -182,6 +184,20 @@ CREATE TABLE IF NOT EXISTS avaliacoes_publicas (
   UNIQUE KEY uq_avaliacao_publica_avaliacao (avaliacao_id),
   CONSTRAINT fk_avaliacoes_publicas_avaliacao FOREIGN KEY (avaliacao_id) REFERENCES avaliacoes(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS faturamento_faixas (
+  id INT PRIMARY KEY,
+  descricao VARCHAR(100) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO faturamento_faixas (id, descricao) VALUES
+  (1, 'Até R$ 100.000,00'),
+  (2, 'De R$ 100.001,00 a R$ 250.000,00'),
+  (3, 'De R$ 250.001,00 a R$ 500.000,00'),
+  (4, 'De R$ 500.001,00 a R$ 750.000,00'),
+  (5, 'De R$ 750.001,00 a R$ 1.000.000,00'),
+  (6, 'Acima de R$ 1.000.000,00')
+ON DUPLICATE KEY UPDATE descricao = VALUES(descricao);
 
 CREATE TABLE IF NOT EXISTS aplicacao_funcoes (
   aplicacao_id INT NOT NULL,

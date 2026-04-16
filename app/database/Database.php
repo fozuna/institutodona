@@ -23,11 +23,15 @@ class Database
         $dsn = sprintf('mysql:host=%s;dbname=%s;charset=%s', $db['host'], $db['dbname'], $db['charset']);
 
         try {
-            $pdo = new PDO($dsn, $db['user'], $db['pass'], [
+            $options = [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_EMULATE_PREPARES => false,
-            ]);
+            ];
+            if (defined('PDO::MYSQL_ATTR_USE_BUFFERED_QUERY')) {
+                $options[PDO::MYSQL_ATTR_USE_BUFFERED_QUERY] = true;
+            }
+            $pdo = new PDO($dsn, $db['user'], $db['pass'], $options);
         } catch (PDOException $e) {
             // Em produção, logue o erro e mostre mensagem genérica
             die('Erro ao conectar ao banco de dados.');

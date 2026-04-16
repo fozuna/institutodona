@@ -9,6 +9,7 @@ class AvaliacaoPublicaModel extends BaseModel
     private function ensureTable(): void
     {
         try {
+            $this->ensureFaturamentoFaixas();
             $this->db->exec("CREATE TABLE IF NOT EXISTS avaliacoes_publicas (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 avaliacao_id INT NULL,
@@ -22,6 +23,7 @@ class AvaliacaoPublicaModel extends BaseModel
                 numero_funcionarios INT UNSIGNED NULL,
                 numero_lideres INT UNSIGNED NULL,
                 faturamento_anual BIGINT UNSIGNED NULL,
+                faturamento_faixa_id INT NULL,
                 tomador_decisao TINYINT(1) NULL,
                 respostas_json TEXT NULL,
                 nota_financeiro TINYINT NOT NULL DEFAULT 0,
@@ -53,11 +55,33 @@ class AvaliacaoPublicaModel extends BaseModel
             if (!\App\Database\Database::columnExists('avaliacoes_publicas', 'data_conclusao')) {
                 $this->db->exec("ALTER TABLE avaliacoes_publicas ADD COLUMN data_conclusao DATETIME NULL AFTER data_criacao");
             }
+            if (!\App\Database\Database::columnExists('avaliacoes_publicas', 'faturamento_faixa_id')) {
+                $this->db->exec("ALTER TABLE avaliacoes_publicas ADD COLUMN faturamento_faixa_id INT NULL AFTER faturamento_anual");
+            }
         } catch (\PDOException $e) {
             AuditLogger::log('avaliacao_publica_schema_error', 'avaliacao_publica', 0, [
                 'message' => $e->getMessage(),
             ]);
         }
+    }
+
+    private function ensureFaturamentoFaixas(): void
+    {
+        $this->db->exec('CREATE TABLE IF NOT EXISTS faturamento_faixas (
+            id INT PRIMARY KEY,
+            descricao VARCHAR(100) NOT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+        $stmt = $this->db->prepare('INSERT IGNORE INTO faturamento_faixas (id, descricao) VALUES
+            (1, :d1), (2, :d2), (3, :d3), (4, :d4), (5, :d5), (6, :d6)');
+        $options = \App\Core\FaturamentoFaixas::opcoes();
+        $stmt->execute([
+            'd1' => $options[1],
+            'd2' => $options[2],
+            'd3' => $options[3],
+            'd4' => $options[4],
+            'd5' => $options[5],
+            'd6' => $options[6],
+        ]);
     }
 
     public function findByAvaliacaoId(int $avaliacaoId): ?array
@@ -107,6 +131,7 @@ class AvaliacaoPublicaModel extends BaseModel
                     numero_funcionarios = NULL,
                     numero_lideres = NULL,
                     faturamento_anual = NULL,
+                    faturamento_faixa_id = NULL,
                     tomador_decisao = NULL,
                     status = :status,
                     expiracao = NULL,
@@ -180,6 +205,7 @@ class AvaliacaoPublicaModel extends BaseModel
                     numero_funcionarios = :numero_funcionarios,
                     numero_lideres = :numero_lideres,
                     faturamento_anual = :faturamento_anual,
+                    faturamento_faixa_id = :faturamento_faixa_id,
                     tomador_decisao = :tomador_decisao,
                     status = :status
                 WHERE token = :token AND status <> :status_concluida AND (expiracao IS NULL OR expiracao >= NOW())');
@@ -191,6 +217,9 @@ class AvaliacaoPublicaModel extends BaseModel
                 'numero_funcionarios' => isset($data['numero_funcionarios']) ? (int)$data['numero_funcionarios'] : null,
                 'numero_lideres' => isset($data['numero_lideres']) ? (int)$data['numero_lideres'] : null,
                 'faturamento_anual' => isset($data['faturamento_anual']) ? (int)$data['faturamento_anual'] : null,
+                'faturamento_faixa_id' => isset($data['faturamento_faixa_id']) && \App\Core\FaturamentoFaixas::isValidId($data['faturamento_faixa_id'])
+                    ? (int)$data['faturamento_faixa_id']
+                    : \App\Core\FaturamentoFaixas::inferIdFromAmount($data['faturamento_anual'] ?? null),
                 'tomador_decisao' => isset($data['tomador_decisao']) ? (int)$data['tomador_decisao'] : null,
                 'status' => 'iniciada',
                 'status_concluida' => 'concluida',
@@ -283,6 +312,7 @@ class AvaliacaoPublicaModel extends BaseModel
             'numero_funcionarios' => (int)($record['numero_funcionarios'] ?? 0),
             'numero_lideres' => (int)($record['numero_lideres'] ?? 0),
             'faturamento_medio_anual' => (int)($record['faturamento_anual'] ?? 0),
+            'faturamento_faixa_id' => isset($record['faturamento_faixa_id']) ? (int)$record['faturamento_faixa_id'] : null,
             'tomador_decisao' => (int)($record['tomador_decisao'] ?? 0),
             'origem_cadastro' => 'potencial_cliente',
             'created_by_user_id' => isset($record['created_by_user_id']) ? (int)$record['created_by_user_id'] : null,

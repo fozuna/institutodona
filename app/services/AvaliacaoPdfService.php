@@ -2,6 +2,7 @@
 namespace App\Services;
 
 use App\Core\AvaliacaoQuestionario;
+use App\Core\FaturamentoFaixas;
 use App\Models\AvaliacaoModel;
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -131,7 +132,7 @@ class AvaliacaoPdfService
             'email' => (string)($item['email'] ?? '—'),
             'funcionarios' => (string)($item['numero_funcionarios'] ?? '0'),
             'lideres' => (string)($item['numero_lideres'] ?? '0'),
-            'faturamento' => 'R$ ' . number_format((float)($item['faturamento_medio_anual'] ?? 0), 0, ',', '.'),
+            'faturamento' => FaturamentoFaixas::descricao($item['faturamento_faixa_id'] ?? null, $item['faturamento_medio_anual'] ?? null),
             'decisor' => !empty($item['tomador_decisao']) ? 'Sim' : 'Não',
             'origem' => ((string)($item['origem_cadastro'] ?? '') === 'potencial_cliente') ? 'Potencial cliente' : 'Cliente efetivo',
             'data' => !empty($item['created_at']) ? date('d/m/Y H:i', strtotime((string)$item['created_at'])) : '—',

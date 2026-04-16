@@ -8,6 +8,7 @@ class AvaliacaoModel extends BaseModel
     private function ensureTable(): void
     {
         try {
+            $this->ensureFaturamentoFaixas();
             $this->db->exec('CREATE TABLE IF NOT EXISTS avaliacoes (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 cliente_id INT NULL,
@@ -18,6 +19,7 @@ class AvaliacaoModel extends BaseModel
                 numero_funcionarios INT UNSIGNED NOT NULL DEFAULT 0,
                 numero_lideres INT UNSIGNED NOT NULL DEFAULT 0,
                 faturamento_medio_anual BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                faturamento_faixa_id INT NULL,
                 tomador_decisao TINYINT(1) NOT NULL DEFAULT 0,
                 origem_cadastro VARCHAR(30) NOT NULL DEFAULT "cliente_existente",
                 created_by_user_id INT NULL,
@@ -58,8 +60,11 @@ class AvaliacaoModel extends BaseModel
             if (!\App\Database\Database::columnExists('avaliacoes', 'faturamento_medio_anual')) {
                 $this->db->exec('ALTER TABLE avaliacoes ADD COLUMN faturamento_medio_anual BIGINT UNSIGNED NOT NULL DEFAULT 0 AFTER numero_lideres');
             }
+            if (!\App\Database\Database::columnExists('avaliacoes', 'faturamento_faixa_id')) {
+                $this->db->exec('ALTER TABLE avaliacoes ADD COLUMN faturamento_faixa_id INT NULL AFTER faturamento_medio_anual');
+            }
             if (!\App\Database\Database::columnExists('avaliacoes', 'tomador_decisao')) {
-                $this->db->exec('ALTER TABLE avaliacoes ADD COLUMN tomador_decisao TINYINT(1) NOT NULL DEFAULT 0 AFTER faturamento_medio_anual');
+                $this->db->exec('ALTER TABLE avaliacoes ADD COLUMN tomador_decisao TINYINT(1) NOT NULL DEFAULT 0 AFTER faturamento_faixa_id');
             }
             if (!\App\Database\Database::columnExists('avaliacoes', 'origem_cadastro')) {
                 $this->db->exec('ALTER TABLE avaliacoes ADD COLUMN origem_cadastro VARCHAR(30) NOT NULL DEFAULT "cliente_existente" AFTER tomador_decisao');
@@ -104,6 +109,25 @@ class AvaliacaoModel extends BaseModel
                 $this->db->exec('ALTER TABLE avaliacoes ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP');
             }
         } catch (\PDOException $e) {}
+    }
+
+    private function ensureFaturamentoFaixas(): void
+    {
+        $this->db->exec('CREATE TABLE IF NOT EXISTS faturamento_faixas (
+            id INT PRIMARY KEY,
+            descricao VARCHAR(100) NOT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+        $stmt = $this->db->prepare('INSERT IGNORE INTO faturamento_faixas (id, descricao) VALUES
+            (1, :d1), (2, :d2), (3, :d3), (4, :d4), (5, :d5), (6, :d6)');
+        $options = \App\Core\FaturamentoFaixas::opcoes();
+        $stmt->execute([
+            'd1' => $options[1],
+            'd2' => $options[2],
+            'd3' => $options[3],
+            'd4' => $options[4],
+            'd5' => $options[5],
+            'd6' => $options[6],
+        ]);
     }
  
     public function all(): array
@@ -188,6 +212,9 @@ class AvaliacaoModel extends BaseModel
             'numero_funcionarios' => isset($data['numero_funcionarios']) ? (int)$data['numero_funcionarios'] : 0,
             'numero_lideres' => isset($data['numero_lideres']) ? (int)$data['numero_lideres'] : 0,
             'faturamento_medio_anual' => isset($data['faturamento_medio_anual']) ? (int)$data['faturamento_medio_anual'] : 0,
+            'faturamento_faixa_id' => isset($data['faturamento_faixa_id']) && \App\Core\FaturamentoFaixas::isValidId($data['faturamento_faixa_id'])
+                ? (int)$data['faturamento_faixa_id']
+                : \App\Core\FaturamentoFaixas::inferIdFromAmount($data['faturamento_medio_anual'] ?? null),
             'tomador_decisao' => !empty($data['tomador_decisao']) ? 1 : 0,
             'origem_cadastro' => $data['origem_cadastro'] ?? ($clienteId ? 'cliente_existente' : 'potencial_cliente'),
             'created_by_user_id' => $data['created_by_user_id'] ?? (Auth::user()['id'] ?? null),

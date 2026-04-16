@@ -27,4 +27,8 @@ WORKDIR /var/www/html
 
 RUN composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 
+RUN chmod +x /var/www/html/docker-entrypoint.sh
+
+ENTRYPOINT ["/var/www/html/docker-entrypoint.sh"]
+
 EXPOSE 80

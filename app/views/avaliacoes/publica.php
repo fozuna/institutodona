@@ -15,6 +15,7 @@ $pdfUrl = $pdfUrl ?? '';
 $isStaticPublic = !empty($isStaticPublic);
 $contextEmpresa = $contextEmpresa ?? '';
 $pillarLabels = ['eu' => 'EU', 'lideranca' => 'LIDERANÇA', 'processo' => 'PROCESSO', 'gestao' => 'GESTÃO'];
+$faturamentoFaixas = \App\Core\FaturamentoFaixas::opcoes();
 $identifier = $record['slug'] ?? $record['token'] ?? ($_GET['slug'] ?? $_GET['token'] ?? $_POST['slug'] ?? $_POST['token'] ?? '');
 $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
 $baseUrl = rtrim(dirname(dirname(dirname($scriptName))), '/\\');
@@ -131,8 +132,13 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
                 </div>
                 <div>
                   <label class="block text-sm font-medium mb-2">Faturamento anual</label>
-                  <input type="number" min="1" step="1" name="public_faturamento_anual" autocomplete="off" class="border rounded p-3 w-full" value="<?= $fieldValue('faturamento_anual') ?>" required />
-                  <?php if (!empty($errors['faturamento_anual'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['faturamento_anual']) ?></p><?php endif; ?>
+                  <select name="public_faturamento_faixa_id" class="border rounded p-3 w-full" required>
+                    <option value="">Selecione</option>
+                    <?php foreach ($faturamentoFaixas as $faixaId => $descricao): ?>
+                      <option value="<?= $faixaId ?>" <?= (string)($values['faturamento_faixa_id'] ?? '') === (string)$faixaId ? 'selected' : '' ?>><?= htmlspecialchars($descricao) ?></option>
+                    <?php endforeach; ?>
+                  </select>
+                  <?php if (!empty($errors['faturamento_faixa_id'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['faturamento_faixa_id']) ?></p><?php endif; ?>
                 </div>
                 <div>
                   <label class="block text-sm font-medium mb-2">É tomador de decisão?</label>
@@ -170,7 +176,7 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
               <input type="hidden" name="public_email" value="<?= $fieldValue('email') ?>" />
               <input type="hidden" name="public_numero_funcionarios" value="<?= $fieldValue('numero_funcionarios') ?>" />
               <input type="hidden" name="public_numero_lideres" value="<?= $fieldValue('numero_lideres') ?>" />
-              <input type="hidden" name="public_faturamento_anual" value="<?= $fieldValue('faturamento_anual') ?>" />
+              <input type="hidden" name="public_faturamento_faixa_id" value="<?= $fieldValue('faturamento_faixa_id') ?>" />
               <input type="hidden" name="public_tomador_decisao" value="<?= $fieldValue('tomador_decisao') ?>" />
               <div class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-4 gap-6">
                 <?php foreach ($qs as $pillar => $questions): ?>

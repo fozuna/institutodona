@@ -3,6 +3,7 @@ namespace App\Controllers;
 
 use App\Core\AvaliacaoQuestionario;
 use App\Core\AuditLogger;
+use App\Core\FaturamentoFaixas;
 use App\Core\PublicRateLimiter;
 use App\Models\AvaliacaoModel;
 use App\Services\AvaliacaoPdfService;
@@ -110,6 +111,7 @@ class PublicAvaliacoesController
             'numero_funcionarios' => (int)$values['numero_funcionarios'],
             'numero_lideres' => (int)$values['numero_lideres'],
             'faturamento_medio_anual' => (int)$values['faturamento_anual'],
+            'faturamento_faixa_id' => (int)$values['faturamento_faixa_id'],
             'tomador_decisao' => (int)$values['tomador_decisao'],
             'origem_cadastro' => 'formulario_publico_fixo',
             'contato' => $values['nome'],
@@ -166,6 +168,8 @@ class PublicAvaliacoesController
 
     private function valuesFromPost(array $context): array
     {
+        $faturamentoFaixaId = FaturamentoFaixas::normalizeId($_POST['public_faturamento_faixa_id'] ?? $_POST['faturamento_faixa_id'] ?? null)
+            ?? FaturamentoFaixas::inferIdFromAmount($_POST['public_faturamento_anual'] ?? $_POST['faturamento_anual'] ?? null);
         return [
             'nome' => trim((string)($_POST['public_nome'] ?? $_POST['nome'] ?? '')),
             'empresa' => trim((string)($_POST['public_empresa'] ?? $_POST['empresa'] ?? '')),
@@ -173,7 +177,11 @@ class PublicAvaliacoesController
             'email' => trim((string)($_POST['public_email'] ?? $_POST['email'] ?? '')),
             'numero_funcionarios' => trim((string)($_POST['public_numero_funcionarios'] ?? $_POST['numero_funcionarios'] ?? '')),
             'numero_lideres' => trim((string)($_POST['public_numero_lideres'] ?? $_POST['numero_lideres'] ?? '')),
-            'faturamento_anual' => trim((string)($_POST['public_faturamento_anual'] ?? $_POST['faturamento_anual'] ?? '')),
+            'faturamento_faixa_id' => (string)($faturamentoFaixaId ?? ''),
+            'faturamento_anual' => (string)(FaturamentoFaixas::representativeAmountForId(
+                $faturamentoFaixaId
+                ?? 0
+            )),
             'tomador_decisao' => (string)($_POST['public_tomador_decisao'] ?? $_POST['tomador_decisao'] ?? ''),
         ];
     }
@@ -187,6 +195,7 @@ class PublicAvaliacoesController
             'email' => '',
             'numero_funcionarios' => '',
             'numero_lideres' => '',
+            'faturamento_faixa_id' => '',
             'faturamento_anual' => '',
             'tomador_decisao' => '',
         ];
@@ -207,10 +216,13 @@ class PublicAvaliacoesController
         if (!preg_match('/^\d{10,15}$/', (string)$values['whatsapp'])) {
             $errors['whatsapp'] = 'Informe um WhatsApp valido.';
         }
-        foreach (['numero_funcionarios', 'numero_lideres', 'faturamento_anual'] as $field) {
+        foreach (['numero_funcionarios', 'numero_lideres'] as $field) {
             if (!preg_match('/^\d+$/', (string)$values[$field])) {
                 $errors[$field] = 'Informe um numero inteiro positivo.';
             }
+        }
+        if (!FaturamentoFaixas::isValidId($values['faturamento_faixa_id'] ?? null)) {
+            $errors['faturamento_faixa_id'] = 'Selecione uma faixa de faturamento.';
         }
         if (!in_array((string)$values['tomador_decisao'], ['0', '1'], true)) {
             $errors['tomador_decisao'] = 'Selecione se e tomador de decisao.';

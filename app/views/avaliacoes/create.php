@@ -1,4 +1,5 @@
 <?php /** @var int $cliente */ /** @var array $clientes */ /** @var array $values */ /** @var array $errors */ ?>
+<?php $faturamentoFaixas = \App\Core\FaturamentoFaixas::opcoes(); ?>
 <div class="p-6">
   <?php
     $values = $values ?? [];
@@ -73,9 +74,14 @@
         <?php if (!empty($errors['numero_lideres'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['numero_lideres']) ?></p><?php endif; ?>
       </div>
       <div>
-        <label class="block text-sm">Faturamento médio anual (R$)</label>
-        <input type="number" min="1" step="1" name="faturamento_medio_anual" class="border rounded p-2 w-full" value="<?= $fieldValue('faturamento_medio_anual') ?>" required />
-        <?php if (!empty($errors['faturamento_medio_anual'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['faturamento_medio_anual']) ?></p><?php endif; ?>
+        <label class="block text-sm">Faturamento anual</label>
+        <select name="faturamento_faixa_id" class="border rounded p-2 w-full" required>
+          <option value="">Selecione</option>
+          <?php foreach ($faturamentoFaixas as $faixaId => $descricao): ?>
+            <option value="<?= $faixaId ?>" <?= (string)($values['faturamento_faixa_id'] ?? '') === (string)$faixaId ? 'selected' : '' ?>><?= htmlspecialchars($descricao) ?></option>
+          <?php endforeach; ?>
+        </select>
+        <?php if (!empty($errors['faturamento_faixa_id'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['faturamento_faixa_id']) ?></p><?php endif; ?>
       </div>
       <div>
         <label class="block text-sm">É tomador de decisão?</label>

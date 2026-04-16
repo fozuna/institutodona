@@ -28,6 +28,7 @@ echo json_encode([
     'public_form_autocomplete_off' => str_contains($html, 'autocomplete="off"'),
     'public_endpoint_is_static' => str_contains($html, '/public/avaliacoes.php'),
     'empresa_field_editable' => preg_match('/name="public_empresa"[^>]*readonly/i', $html) !== 1,
+    'faturamento_is_select' => str_contains($html, 'name="public_faturamento_faixa_id"') && !str_contains($html, 'name="public_faturamento_anual"'),
     'reset_button_visible' => str_contains($html, 'Limpar formulário'),
     'submit_button_visible' => str_contains($html, 'Continuar'),
 ], JSON_UNESCAPED_UNICODE);

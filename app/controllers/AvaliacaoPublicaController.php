@@ -3,6 +3,7 @@ namespace App\Controllers;
 
 use App\Core\AvaliacaoQuestionario;
 use App\Core\AuditLogger;
+use App\Core\FaturamentoFaixas;
 use App\Core\PublicRateLimiter;
 use App\Models\AvaliacaoModel;
 use App\Models\AvaliacaoPublicaModel;
@@ -86,6 +87,8 @@ class AvaliacaoPublicaController
             $this->renderInvalidToken();
             return;
         }
+        $faturamentoFaixaId = FaturamentoFaixas::normalizeId($_POST['faturamento_faixa_id'] ?? null)
+            ?? FaturamentoFaixas::inferIdFromAmount($_POST['faturamento_anual'] ?? null);
         $values = [
             'nome' => trim((string)($_POST['nome'] ?? '')),
             'empresa' => trim((string)($_POST['empresa'] ?? '')),
@@ -93,7 +96,11 @@ class AvaliacaoPublicaController
             'email' => trim((string)($_POST['email'] ?? '')),
             'numero_funcionarios' => trim((string)($_POST['numero_funcionarios'] ?? '')),
             'numero_lideres' => trim((string)($_POST['numero_lideres'] ?? '')),
-            'faturamento_anual' => trim((string)($_POST['faturamento_anual'] ?? '')),
+            'faturamento_faixa_id' => (string)($faturamentoFaixaId ?? ''),
+            'faturamento_anual' => (string)$this->legacyFaturamentoFromInput(
+                $faturamentoFaixaId,
+                $_POST['faturamento_anual'] ?? null
+            ),
             'tomador_decisao' => (string)($_POST['tomador_decisao'] ?? ''),
         ];
         $errors = $this->validateStep1($values);
@@ -153,6 +160,8 @@ class AvaliacaoPublicaController
             $this->renderInvalidToken();
             return;
         }
+        $faturamentoFaixaId = FaturamentoFaixas::normalizeId($_POST['faturamento_faixa_id'] ?? null)
+            ?? FaturamentoFaixas::inferIdFromAmount($_POST['faturamento_anual'] ?? null);
         $values = [
             'nome' => trim((string)($_POST['nome'] ?? '')),
             'empresa' => trim((string)($_POST['empresa'] ?? '')),
@@ -160,7 +169,11 @@ class AvaliacaoPublicaController
             'email' => trim((string)($_POST['email'] ?? '')),
             'numero_funcionarios' => trim((string)($_POST['numero_funcionarios'] ?? '')),
             'numero_lideres' => trim((string)($_POST['numero_lideres'] ?? '')),
-            'faturamento_anual' => trim((string)($_POST['faturamento_anual'] ?? '')),
+            'faturamento_faixa_id' => (string)($faturamentoFaixaId ?? ''),
+            'faturamento_anual' => (string)$this->legacyFaturamentoFromInput(
+                $faturamentoFaixaId,
+                $_POST['faturamento_anual'] ?? null
+            ),
             'tomador_decisao' => (string)($_POST['tomador_decisao'] ?? ''),
         ];
         $errors = $this->validateStep1($values);
@@ -343,6 +356,7 @@ class AvaliacaoPublicaController
             'email' => '',
             'numero_funcionarios' => '',
             'numero_lideres' => '',
+            'faturamento_faixa_id' => '',
             'faturamento_anual' => '',
             'tomador_decisao' => '',
         ];
@@ -371,6 +385,7 @@ class AvaliacaoPublicaController
             'email' => (string)($record['email'] ?? ''),
             'numero_funcionarios' => (string)($record['numero_funcionarios'] ?? ''),
             'numero_lideres' => (string)($record['numero_lideres'] ?? ''),
+            'faturamento_faixa_id' => (string)($record['faturamento_faixa_id'] ?? (\App\Core\FaturamentoFaixas::inferIdFromAmount($record['faturamento_anual'] ?? null) ?? '')),
             'faturamento_anual' => (string)($record['faturamento_anual'] ?? ''),
             'tomador_decisao' => isset($record['tomador_decisao']) ? (string)(int)$record['tomador_decisao'] : '',
         ];
@@ -402,10 +417,13 @@ class AvaliacaoPublicaController
         if (!$this->isValidWhatsapp($values['whatsapp'])) {
             $errors['whatsapp'] = 'Informe um WhatsApp válido apenas com números.';
         }
-        foreach (['numero_funcionarios', 'numero_lideres', 'faturamento_anual'] as $field) {
+        foreach (['numero_funcionarios', 'numero_lideres'] as $field) {
             if (!preg_match('/^[1-9]\d*$/', (string)$values[$field])) {
                 $errors[$field] = 'Informe um inteiro positivo.';
             }
+        }
+        if (!FaturamentoFaixas::isValidId($values['faturamento_faixa_id'] ?? null)) {
+            $errors['faturamento_faixa_id'] = 'Selecione uma faixa de faturamento.';
         }
         if ($values['tomador_decisao'] !== '0' && $values['tomador_decisao'] !== '1') {
             $errors['tomador_decisao'] = 'Selecione sim ou não.';
@@ -524,6 +542,7 @@ class AvaliacaoPublicaController
             'numero_funcionarios' => (int)$values['numero_funcionarios'],
             'numero_lideres' => (int)$values['numero_lideres'],
             'faturamento_medio_anual' => (int)$values['faturamento_anual'],
+            'faturamento_faixa_id' => (int)($values['faturamento_faixa_id'] ?? 0),
             'tomador_decisao' => (int)$values['tomador_decisao'],
             'origem_cadastro' => 'potencial_cliente',
             'created_by_user_id' => isset($record['created_by_user_id']) ? (int)$record['created_by_user_id'] : null,
@@ -552,6 +571,19 @@ class AvaliacaoPublicaController
             $digits = substr($digits, 2);
         }
         return (bool)preg_match('/^\d{10,11}$/', $digits);
+    }
+
+    private function legacyFaturamentoFromInput($faixaId, $legacyAmount): int
+    {
+        $id = FaturamentoFaixas::normalizeId($faixaId);
+        if ($id !== null) {
+            return FaturamentoFaixas::representativeAmountForId($id);
+        }
+        $inferred = FaturamentoFaixas::inferIdFromAmount($legacyAmount);
+        if ($inferred !== null) {
+            return FaturamentoFaixas::representativeAmountForId($inferred);
+        }
+        return 0;
     }
 
     private function toPercent(int $nota, int $total): int

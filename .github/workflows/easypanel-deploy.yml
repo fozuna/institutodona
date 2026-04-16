@@ -7,7 +7,52 @@ concurrency:
   group: easypanel-deploy
   cancel-in-progress: true
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: institutodona_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DB_HOST: 127.0.0.1
+      DB_NAME: institutodona_ci
+      DB_USER: root
+      DB_PASS: root
+      DB_CHARSET: utf8mb4
+      APP_BASE_URL: /
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_mysql, mysqli, gd, zip
+          coverage: none
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+      - name: Apply migrations twice to verify idempotency
+        run: |
+          php app/database/migrate.php
+          php app/database/migrate.php
+      - name: Check migration status
+        run: php app/tests/migration_runner_status_smoke.php
+      - name: Validate resulting schema
+        run: php app/tests/migration_schema_validation_smoke.php
+      - name: Run focused smoke tests
+        run: |
+          php app/tests/public_avaliacao_smoke.php
+          php app/tests/avaliacao_publica_listing_sync_smoke.php
+          php app/tests/avaliacao_publica_no_auth_smoke.php
   deploy:
+    needs: validate
     runs-on: ubuntu-latest
     steps:
       - name: Check secret
