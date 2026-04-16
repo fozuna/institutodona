@@ -37,19 +37,52 @@ $config = require $cfg;
                         </div>
                     </div>
                 </div>
-                <?php $r = $_GET['route'] ?? ''; ?>
+                <?php
+                    $r = $_GET['route'] ?? '';
+                    $isCadastrosActive = strpos($r, 'clientes/') === 0 || strpos($r, 'usuarios/') === 0 || strpos($r, 'consultores/') === 0;
+                    $isProcessosActive = strpos($r, 'planoacao/') === 0 || strpos($r, 'indicadores/') === 0 || strpos($r, 'auditorias/') === 0;
+                ?>
                 <nav class="px-4 py-4 space-y-1">
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'dashboard/')===0?'is-active':'' ?>" href="index.php?route=dashboard/index"><span data-feather="home" class="inline-block mr-2"></span>Dashboard</a>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'clientes/')===0?'is-active':'' ?>" href="index.php?route=clientes/index"><span data-feather="users" class="inline-block mr-2"></span>Clientes</a>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'usuarios/')===0?'is-active':'' ?>" href="index.php?route=usuarios/index"><span data-feather="user" class="inline-block mr-2"></span>Usuários</a>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'pilares/')===0?'is-active':'' ?>" href="index.php?route=pilares/index"><span data-feather="layers" class="inline-block mr-2"></span>Pilares</a>
+                    <div class="submenu-group">
+                        <button type="button"
+                                class="w-full px-3 py-2 rounded nav-link submenu-trigger <?= $isCadastrosActive ? 'is-active' : '' ?>"
+                                data-submenu-trigger="cadastros"
+                                data-default-open="<?= $isCadastrosActive ? 'true' : 'false' ?>"
+                                aria-expanded="<?= $isCadastrosActive ? 'true' : 'false' ?>">
+                            <span class="flex items-center">
+                                <span data-feather="folder" class="inline-block mr-2"></span>
+                                <span class="flex-1 text-left">Cadastros</span>
+                                <span data-feather="chevron-down" class="submenu-chevron"></span>
+                            </span>
+                        </button>
+                        <div class="submenu-panel <?= $isCadastrosActive ? '' : 'hidden' ?>" data-submenu-panel="cadastros">
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'clientes/')===0?'is-active':'' ?>" href="index.php?route=clientes/index"><span data-feather="briefcase" class="inline-block mr-2"></span>Cliente</a>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'usuarios/')===0?'is-active':'' ?>" href="index.php?route=usuarios/index"><span data-feather="user" class="inline-block mr-2"></span>Usuários</a>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'consultores/')===0?'is-active':'' ?>" href="index.php?route=consultores/index"><span data-feather="users" class="inline-block mr-2"></span>Consultores</a>
+                        </div>
+                    </div>
+                    <div class="submenu-group">
+                        <button type="button"
+                                class="w-full px-3 py-2 rounded nav-link submenu-trigger <?= $isProcessosActive ? 'is-active' : '' ?>"
+                                data-submenu-trigger="processos"
+                                data-default-open="<?= $isProcessosActive ? 'true' : 'false' ?>"
+                                aria-expanded="<?= $isProcessosActive ? 'true' : 'false' ?>">
+                            <span class="flex items-center">
+                                <span data-feather="layers" class="inline-block mr-2"></span>
+                                <span class="flex-1 text-left">Processos</span>
+                                <span data-feather="chevron-down" class="submenu-chevron"></span>
+                            </span>
+                        </button>
+                        <div class="submenu-panel <?= $isProcessosActive ? '' : 'hidden' ?>" data-submenu-panel="processos">
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'planoacao/')===0?'is-active':'' ?>" href="index.php?route=planoacao/index"><span data-feather="activity" class="inline-block mr-2"></span>Planos de Ação</a>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'indicadores/')===0?'is-active':'' ?>" href="index.php?route=indicadores/index"><span data-feather="bar-chart-2" class="inline-block mr-2"></span>Indicadores</a>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'auditorias/')===0?'is-active':'' ?>" href="index.php?route=auditorias/index"><span data-feather="clipboard" class="inline-block mr-2"></span>Auditorias</a>
+                        </div>
+                    </div>
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'agenda/')===0?'is-active':'' ?>" href="index.php?route=agenda/index"><span data-feather="calendar" class="inline-block mr-2"></span>Agenda</a>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'consultores/')===0?'is-active':'' ?>" href="index.php?route=consultores/index"><span data-feather="users" class="inline-block mr-2"></span>Consultores</a>
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'cronograma/')===0?'is-active':'' ?>" href="index.php?route=cronograma/index"><span data-feather="calendar" class="inline-block mr-2"></span>Cronograma</a>
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'avaliacoes/')===0?'is-active':'' ?>" href="index.php?route=avaliacoes/index"><span data-feather="check-square" class="inline-block mr-2"></span>Avaliações</a>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'planoacao/')===0?'is-active':'' ?>" href="index.php?route=planoacao/index"><span data-feather="activity" class="inline-block mr-2"></span>Plano de Ação</a>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'indicadores/')===0?'is-active':'' ?>" href="index.php?route=indicadores/index"><span data-feather="bar-chart-2" class="inline-block mr-2"></span>Indicadores</a>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'auditorias/')===0?'is-active':'' ?>" href="index.php?route=auditorias/index"><span data-feather="clipboard" class="inline-block mr-2"></span>Auditorias</a>
                     <?php if (($user['email'] ?? '') === 'admin@agencialester.com.br'): ?>
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'logs/')===0?'is-active':'' ?>" href="index.php?route=logs/index"><span data-feather="file-text" class="inline-block mr-2"></span>Logs</a>
                     <?php endif; ?>

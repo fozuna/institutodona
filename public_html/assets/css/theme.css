@@ -34,6 +34,11 @@
 .nav-link:hover { background-color: rgba(255,255,255,0.08); box-shadow: inset 4px 0 0 var(--brand-red); }
 .nav-link:focus { outline: 2px solid var(--brand-red); outline-offset: 2px; }
 .nav-link.is-active { background-color: rgba(255,255,255,0.12); box-shadow: inset 4px 0 0 var(--brand-red); }
+.submenu-trigger { text-align: left; }
+.submenu-chevron { width: 16px; height: 16px; transition: transform .2s ease; }
+.submenu-trigger[aria-expanded="true"] .submenu-chevron { transform: rotate(180deg); }
+.submenu-panel { margin-top: 0.25rem; margin-left: 0.75rem; padding-left: 0.5rem; border-left: 1px solid rgba(255,255,255,0.12); }
+.submenu-link { font-size: 0.95rem; padding-left: 0.75rem; }
 
 /* Botões/links de ação com ícones */
 .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; border-radius: 0.25rem; }
@@ -53,6 +58,7 @@
 @media (max-width: 900px) {
   aside { position: fixed; width: 18rem; }
   main { margin-left: 18rem; }
+  .submenu-panel { margin-left: 0.5rem; }
 }
 
 /* Dark mode overrides básicos */
