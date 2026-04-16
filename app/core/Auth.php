@@ -109,4 +109,11 @@ class Auth
         }
         return in_array($clienteId, self::allowedClientIds(), true);
     }
+
+    public static function canExportPlanosAcao(): bool
+    {
+        // Modelo atual nao usa RBAC granular. A permissao exportar_planos_acao
+        // fica liberada para instituto e perfis de cliente.
+        return self::isInstituto() || self::isCliente();
+    }
 }

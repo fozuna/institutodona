@@ -2,6 +2,7 @@
 <?php
   $importEnabled = getenv('PLANOACAO_IMPORT_ENABLED') === '1';
   $importAlreadyRun = is_file(__DIR__ . '/../../storage/imports/planoacao_import_done.flag');
+  $canExportPlanos = \App\Core\Auth::canExportPlanosAcao();
 ?>
 <div class="p-6">
   <div class="mb-4">
@@ -149,7 +150,7 @@
                 <span>Importar planos</span>
               </button>
             <?php endif; ?>
-            <?php if (($_SESSION['user']['tipo_acesso'] ?? '') === 'instituto'): ?>
+            <?php if ($canExportPlanos): ?>
             <form method="get" action="index.php" id="planoExportForm" class="inline">
               <input type="hidden" name="route" value="clientes/exportPlanos" />
               <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />

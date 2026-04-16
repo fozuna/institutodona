@@ -2,6 +2,7 @@
 namespace App\Controllers;
 
 use App\Core\BaseController;
+use App\Core\Auth;
 use App\Core\Security;
 use App\Models\ClienteModel;
 use App\Models\AplicacaoModel;
@@ -204,6 +205,11 @@ class ClientesController extends BaseController
     public function exportPlanos(): void
     {
         $this->requireLogin();
+        if (!Auth::canExportPlanosAcao()) {
+            http_response_code(403);
+            echo 'Sem permissao para exportar planos de acao.';
+            return;
+        }
         $requestedId = (int)($_GET['id'] ?? 0);
         $id = (int)($this->resolveScopedClienteId($requestedId > 0 ? $requestedId : null) ?? 0);
         if ($id <= 0) {
