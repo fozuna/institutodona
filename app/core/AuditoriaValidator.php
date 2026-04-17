@@ -94,20 +94,11 @@ class AuditoriaValidator
         return $errors;
     }
 
+    // Mantido por compatibilidade com testes/fluxos antigos; a validação de responsável
+    // não deve mais bloquear texto livre (agentes externos).
     public static function validateResponsaveisCadastrados(array $questoes, callable $isValidName): array
     {
-        $errors = [];
-        foreach ($questoes as $idx => $questao) {
-            $nome = trim((string)($questao['responsavel_nome'] ?? ''));
-            if ($nome === '') {
-                continue;
-            }
-            if (!(bool)$isValidName($nome)) {
-                $qIndex = $idx + 1;
-                $errors['questao_' . $qIndex . '_responsavel_nome'] = "Questão {$qIndex}: responsável inválido. Selecione um colaborador cadastrado.";
-            }
-        }
-        return $errors;
+        return [];
     }
 
     public static function normalizeQuestoes(array|string $input): array

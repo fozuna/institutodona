@@ -155,14 +155,62 @@
         };
 
         const syncHidden = ()=>{ questoesJson.value = JSON.stringify(questoes); dirty = true; };
+        const normalizeResponsavelTokens = (raw)=>Array.from(new Set(
+            String(raw || '')
+                .split(',')
+                .map((v)=>v.trim())
+                .filter(Boolean)
+                .map((v)=>v.replace(/\s+/g, ' '))
+        ));
         const ensureResponsaveisShape = (idx)=>{
             questoes[idx].responsavel_ids = Array.isArray(questoes[idx].responsavel_ids) ? questoes[idx].responsavel_ids : [];
             questoes[idx].responsavel_labels = Array.isArray(questoes[idx].responsavel_labels) ? questoes[idx].responsavel_labels : [];
             if (!questoes[idx].responsavel_labels.length && (questoes[idx].responsavel_nome || '').trim()) {
-                questoes[idx].responsavel_labels = String(questoes[idx].responsavel_nome).split(',').map((v)=>v.trim()).filter(Boolean);
+                questoes[idx].responsavel_labels = normalizeResponsavelTokens(questoes[idx].responsavel_nome);
+            }
+            if (questoes[idx].responsavel_labels.length > questoes[idx].responsavel_ids.length) {
+                questoes[idx].responsavel_ids = questoes[idx].responsavel_ids.concat(Array(questoes[idx].responsavel_labels.length - questoes[idx].responsavel_ids.length).fill(0));
+            } else if (questoes[idx].responsavel_ids.length > questoes[idx].responsavel_labels.length) {
+                questoes[idx].responsavel_ids = questoes[idx].responsavel_ids.slice(0, questoes[idx].responsavel_labels.length);
             }
         };
         const syncResponsavelNome = (idx)=>{ ensureResponsaveisShape(idx); questoes[idx].responsavel_nome = questoes[idx].responsavel_labels.join(', '); syncHidden(); };
+        const hasResponsavelPreenchido = (idx)=>{
+            ensureResponsaveisShape(idx);
+            return questoes[idx].responsavel_labels.some((label)=>String(label || '').trim() !== '');
+        };
+        const addResponsavelItem = (idx, item)=>{
+            ensureResponsaveisShape(idx);
+            const nome = String(item?.nome || '').trim().replace(/\s+/g, ' ');
+            const id = Number(item?.id || 0);
+            if (!nome) {
+                return false;
+            }
+            const exists = questoes[idx].responsavel_labels.some((label, pos)=>{
+                const sameLabel = String(label || '').trim().toLowerCase() === nome.toLowerCase();
+                const sameId = id > 0 && Number(questoes[idx].responsavel_ids[pos] || 0) === id;
+                return sameLabel || sameId;
+            });
+            if (exists) {
+                return false;
+            }
+            questoes[idx].responsavel_labels.push(nome);
+            questoes[idx].responsavel_ids.push(id > 0 ? id : 0);
+            syncResponsavelNome(idx);
+            return true;
+        };
+        const addResponsaveisFromInput = (idx, raw)=>{
+            const tokens = normalizeResponsavelTokens(raw);
+            const sugestoes = Array.isArray(responsavelSugestoesPorQuestao.get(idx)) ? responsavelSugestoesPorQuestao.get(idx) : [];
+            let added = 0;
+            tokens.forEach((token)=>{
+                const exactMatch = sugestoes.find((item)=>String(item?.nome || '').trim().toLowerCase() === token.toLowerCase());
+                if (addResponsavelItem(idx, exactMatch ? { id: Number(exactMatch.id || 0), nome: String(exactMatch.nome || '') } : { id: 0, nome: token })) {
+                    added++;
+                }
+            });
+            return added;
+        };
         const syncAvaliacoes = ()=>{
             if (!avaliacoesJson || !avaliacoesContainer) return;
             avaliacoes = Array.from(avaliacoesContainer.querySelectorAll('[data-avaliacao-card]')).map((card)=>{
@@ -294,7 +342,7 @@
                         <div class="md:col-span-4">
                             <label class="block text-xs">Responsáveis</label>
                             <div class="flex gap-2">
-                                <input type="text" class="border rounded p-2 w-full" data-responsavel-search="${index}" autocomplete="off" placeholder="Buscar colaborador" />
+                                <input type="text" class="border rounded p-2 w-full" data-responsavel-search="${index}" autocomplete="off" placeholder="Buscar colaborador ou digitar nomes externos" />
                                 <button type="button" class="px-2 py-1 rounded bg-brand-pink text-white text-xs" data-add-responsavel="${index}">Adicionar</button>
                             </div>
                             <div class="hidden absolute z-10 w-full mt-1 bg-white border rounded shadow max-h-52 overflow-auto" data-responsavel-menu="${index}"></div>
@@ -328,7 +376,10 @@
                 const input = questoesContainer.querySelector(`[data-responsavel-search="${idx}"]`);
                 const value = (input?.value || '').trim();
                 if (!value) return;
-                fetchSugestoesResponsavel(idx, value, true);
+                const added = addResponsaveisFromInput(idx, value);
+                if (input) input.value = '';
+                renderQuestoes();
+                setResponsavelStatus(idx, added > 0 ? 'Responsável(eis) adicionados.' : 'Responsável já informado.');
             }));
             questoesContainer.querySelectorAll('[data-responsavel-search]').forEach((el)=>{
                 el.addEventListener('input', ()=>{
@@ -348,6 +399,17 @@
                         if (menu) menu.classList.add('hidden');
                     }, 150);
                 });
+                el.addEventListener('keydown', (ev)=>{
+                    if (ev.key !== 'Enter') return;
+                    ev.preventDefault();
+                    const idx = Number(el.getAttribute('data-responsavel-search'));
+                    const value = (el.value || '').trim();
+                    if (!value) return;
+                    const added = addResponsaveisFromInput(idx, value);
+                    el.value = '';
+                    renderQuestoes();
+                    setResponsavelStatus(idx, added > 0 ? 'Responsável(eis) adicionados.' : 'Responsável já informado.');
+                });
             });
             questoesContainer.querySelectorAll('[data-pergunta]').forEach((el)=>el.addEventListener('input', ()=>{ questoes[Number(el.getAttribute('data-pergunta'))].pergunta = el.value; syncHidden(); renderQuestoes(); }));
             questoesContainer.querySelectorAll('[data-referencia]').forEach((el)=>el.addEventListener('input', ()=>{ questoes[Number(el.getAttribute('data-referencia'))].referencia_esperada = el.value; syncHidden(); }));
@@ -363,9 +425,7 @@
                     chip.textContent = label + ' x';
                     chip.addEventListener('click', ()=>{
                         questoes[index].responsavel_labels.splice(pos, 1);
-                        if (questoes[index].responsavel_ids[pos]) {
-                            questoes[index].responsavel_ids.splice(pos, 1);
-                        }
+                        questoes[index].responsavel_ids.splice(pos, 1);
                         syncResponsavelNome(index);
                         renderQuestoes();
                     });
@@ -385,12 +445,12 @@
         const applySugestoesResponsavel = (idx, items, autoAddFirst=false)=>{
             const menu = questoesContainer.querySelector(`[data-responsavel-menu="${idx}"]`);
             if (menu) menu.innerHTML = '';
-            const nomes = [];
+            const validItems = [];
             items.forEach((item)=>{
                 const id = Number(item?.id || 0);
                 const nome = (item && item.nome) ? String(item.nome).trim() : '';
                 if (!nome || id <= 0) return;
-                nomes.push(nome);
+                validItems.push({ id, nome });
                 if (menu) {
                     const btn = document.createElement('button');
                     btn.type = 'button';
@@ -398,14 +458,9 @@
                     btn.textContent = nome;
                     btn.addEventListener('mousedown', (e)=>{
                         e.preventDefault();
-                        ensureResponsaveisShape(idx);
-                        if (!questoes[idx].responsavel_ids.includes(id)) {
-                            questoes[idx].responsavel_ids.push(id);
-                            questoes[idx].responsavel_labels.push(nome);
-                        }
+                        addResponsavelItem(idx, { id, nome });
                         const input = questoesContainer.querySelector(`[data-responsavel-search="${idx}"]`);
                         if (input) input.value = '';
-                        syncResponsavelNome(idx);
                         renderQuestoes();
                     });
                     menu.appendChild(btn);
@@ -415,10 +470,10 @@
                 menu.firstElementChild.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
                 return;
             }
-            responsavelSugestoesPorQuestao.set(idx, nomes);
-            setResponsavelStatus(idx, nomes.length ? `${nomes.length} sugestão(ões) encontrada(s)` : 'Nenhum colaborador encontrado');
+            responsavelSugestoesPorQuestao.set(idx, validItems);
+            setResponsavelStatus(idx, validItems.length ? `${validItems.length} sugestão(ões) encontrada(s)` : 'Nenhum colaborador encontrado. Você pode adicionar o nome manualmente.');
             if (menu) {
-                if (nomes.length) menu.classList.remove('hidden');
+                if (validItems.length) menu.classList.remove('hidden');
                 else menu.classList.add('hidden');
             }
         };
@@ -431,7 +486,8 @@
                 return;
             }
             if (q.length < 2) {
-                setResponsavelStatus(idx, 'Digite ao menos 2 caracteres para sugerir colaboradores.');
+                responsavelSugestoesPorQuestao.set(idx, []);
+                setResponsavelStatus(idx, q.length ? 'Clique em Adicionar para usar texto livre ou digite mais para buscar colaboradores.' : 'Digite um nome externo ou busque um colaborador.');
                 return;
             }
             fetch('index.php?route=auditorias/api_colaboradores&cliente_id=' + encodeURIComponent(clienteId) + '&q=' + encodeURIComponent(q))
@@ -561,7 +617,12 @@
                 const q = questoes[i];
                 if (!q.pergunta || q.pergunta.trim().length < 10) { e.preventDefault(); alert(`Questão ${i + 1}: pergunta deve ter no mínimo 10 caracteres.`); return; }
                 if (!q.referencia_esperada || q.referencia_esperada.trim().length < 3) { e.preventDefault(); alert(`Questão ${i + 1}: referência esperada obrigatória.`); return; }
-                if (!Array.isArray(q.responsavel_ids) || q.responsavel_ids.length <= 0) { e.preventDefault(); alert(`Questão ${i + 1}: selecione pelo menos 1 responsável.`); return; }
+                const input = questoesContainer.querySelector(`[data-responsavel-search="${i}"]`);
+                if (input && (input.value || '').trim()) {
+                    addResponsaveisFromInput(i, input.value || '');
+                    input.value = '';
+                }
+                if (!hasResponsavelPreenchido(i)) { e.preventDefault(); alert(`Questão ${i + 1}: selecione pelo menos 1 responsável.`); return; }
             }
             syncHidden();
             btnSalvar.disabled = true;

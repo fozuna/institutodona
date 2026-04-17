@@ -149,6 +149,63 @@ try {
     }
     ok('Duplicacao preserva responsaveis e compatibilidade');
 
+    $externaId = $model->create([
+        'cliente_id' => $clienteId,
+        'setor_id' => $setorId,
+        'nome_auditoria' => 'Auditoria Externa ' . $suffix,
+        'data_auditoria' => date('Y-m-d'),
+        'questoes' => [[
+            'responsavel_nome' => 'Agente Externo A, Agente Externo B',
+            'responsavel_ids' => [],
+            'responsavel_labels' => ['Agente Externo A', 'Agente Externo B'],
+            'pergunta' => 'Pergunta com responsáveis externos em texto livre',
+            'referencia_esperada' => 'REF-EXT',
+            'processos' => ['Proc Ext'],
+        ]],
+    ], 1);
+    if ($externaId <= 0) {
+        failFast('Criacao de auditoria com agentes externos falhou');
+    }
+    $auditoriaIds[] = $externaId;
+    $externa = $model->findWithQuestoes($externaId);
+    if ((int)($externa['responsavel_id'] ?? 0) !== 0) {
+        failFast('Auditoria apenas com agentes externos nao deveria exigir responsavel_id interno');
+    }
+    $externaQuestao = $externa['questoes'][0] ?? [];
+    if ((string)($externaQuestao['responsavel_nome'] ?? '') !== 'Agente Externo A, Agente Externo B') {
+        failFast('Responsáveis externos deveriam ser persistidos como texto na questão');
+    }
+    ok('Persistencia apenas com agentes externos');
+
+    $mistaId = $model->create([
+        'cliente_id' => $clienteId,
+        'setor_id' => $setorId,
+        'nome_auditoria' => 'Auditoria Mista ' . $suffix,
+        'data_auditoria' => date('Y-m-d'),
+        'questoes' => [[
+            'responsavel_nome' => '',
+            'responsavel_ids' => [$colaborador1],
+            'responsavel_labels' => ['Colaborador 1 ' . $suffix, 'Agente Externo C'],
+            'pergunta' => 'Pergunta com responsável interno e agente externo',
+            'referencia_esperada' => 'REF-MIX',
+            'processos' => ['Proc Mix'],
+        ]],
+    ], 1);
+    if ($mistaId <= 0) {
+        failFast('Criacao de auditoria mista falhou');
+    }
+    $auditoriaIds[] = $mistaId;
+    $mista = $model->findWithQuestoes($mistaId);
+    $mistaQuestao = $mista['questoes'][0] ?? [];
+    if (strpos((string)($mistaQuestao['responsavel_nome'] ?? ''), 'Agente Externo C') === false) {
+        failFast('Fluxo misto deveria preservar o nome externo na questão');
+    }
+    $mistaIds = array_values(array_filter(array_map('intval', $mistaQuestao['responsavel_ids'] ?? [])));
+    if ($mistaIds !== [$colaborador1]) {
+        failFast('Fluxo misto deveria manter apenas IDs internos na relação');
+    }
+    ok('Persistencia com responsáveis internos e externos misturados');
+
     echo "Auditoria responsaveis smoke passed.\n";
 } catch (Throwable $e) {
     failFast('Excecao: ' . $e->getMessage());

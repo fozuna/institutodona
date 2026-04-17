@@ -406,7 +406,10 @@ class AuditoriaModel extends BaseModel
             $qid = (int)$row['id'];
             $selected = $questaoResponsaveis[$qid] ?? [];
             $row['responsavel_ids'] = array_map(static fn($item) => (int)$item['id'], $selected);
-            $row['responsavel_labels'] = array_map(static fn($item) => (string)$item['nome'], $selected);
+            $storedLabels = array_values(array_filter(array_map('trim', explode(',', (string)($row['responsavel_nome'] ?? '')))));
+            $selectedLabels = array_map(static fn($item) => (string)$item['nome'], $selected);
+            $row['responsavel_labels'] = array_values(array_unique(array_merge($selectedLabels, $storedLabels)));
+            $row['responsavel_ids'] = array_pad($row['responsavel_ids'], count($row['responsavel_labels']), 0);
             if (!empty($row['responsavel_labels'])) {
                 $row['responsavel_nome'] = implode(', ', $row['responsavel_labels']);
             }

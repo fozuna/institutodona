@@ -31,10 +31,10 @@ $errors = AuditoriaValidator::validateCadastro($payload);
 $errors = array_merge($errors, AuditoriaValidator::validateResponsaveisCadastrados($payload['questoes'], function (string $nome): bool {
     return in_array($nome, ['Fabio Ozuna', 'Maria Silva'], true);
 }));
-if (empty($errors['questao_2_responsavel_nome'])) {
-    failFast('Fluxo integrado deveria bloquear responsável não cadastrado');
+if (!empty($errors)) {
+    failFast('Fluxo integrado deveria aceitar responsável externo em texto livre');
 }
-ok('Fluxo integrado bloqueia responsável inválido');
+ok('Fluxo integrado aceita responsável externo');
 
 $payload['questoes'][1]['responsavel_nome'] = 'Maria Silva';
 $errors = AuditoriaValidator::validateCadastro($payload);
@@ -42,8 +42,8 @@ $errors = array_merge($errors, AuditoriaValidator::validateResponsaveisCadastrad
     return in_array($nome, ['Fabio Ozuna', 'Maria Silva'], true);
 }));
 if (!empty($errors)) {
-    failFast('Fluxo integrado deveria aceitar responsáveis cadastrados');
+    failFast('Fluxo integrado deveria aceitar responsáveis internos cadastrados');
 }
-ok('Fluxo integrado aceita responsáveis válidos');
+ok('Fluxo integrado aceita responsáveis internos');
 
 echo "All auditoria responsavel integration tests passed.\n";

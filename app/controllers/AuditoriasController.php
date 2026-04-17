@@ -1128,8 +1128,14 @@ class AuditoriasController extends BaseController
 
         foreach (($payload['questoes'] ?? []) as $index => $questao) {
             $ids = array_values(array_unique(array_filter(array_map('intval', $questao['responsavel_ids'] ?? []))));
-            if (empty($ids)) {
-                $errors['questao_' . ($index + 1) . '_responsavel_nome'] = 'Questão ' . ($index + 1) . ': selecione pelo menos 1 responsável.';
+            $labels = array_values(array_unique(array_filter(array_map(static function ($value): string {
+                return trim((string)$value);
+            }, $questao['responsavel_labels'] ?? []))));
+            if (empty($labels)) {
+                $labels = array_values(array_unique(array_filter(array_map('trim', preg_split('/\s*,\s*/', (string)($questao['responsavel_nome'] ?? '')) ?: []))));
+            }
+            if (empty($ids) && empty($labels)) {
+                $errors['questao_' . ($index + 1) . '_responsavel_nome'] = 'Questão ' . ($index + 1) . ': informe pelo menos 1 responsável.';
             }
             $questaoIds = array_merge($questaoIds, $ids);
         }

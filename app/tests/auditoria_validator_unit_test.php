@@ -60,20 +60,20 @@ $errors = AuditoriaValidator::validateResponsaveisCadastrados($questoesResponsav
     return in_array($nome, ['Fabio Ozuna', 'Maria Silva'], true);
 });
 if (!empty($errors)) {
-    failFast('Responsáveis válidos não deveriam retornar erro');
+    failFast('Responsáveis preenchidos não deveriam retornar erro');
 }
-ok('Validação de responsáveis válidos');
+ok('Validação aceita responsáveis internos');
 
-$questoesResponsavelFail = [
+$questoesResponsavelExterno = [
     ['responsavel_nome' => 'Fabio Ozuna'],
     ['responsavel_nome' => 'Nome Inexistente'],
 ];
-$errors = AuditoriaValidator::validateResponsaveisCadastrados($questoesResponsavelFail, function (string $nome): bool {
+$errors = AuditoriaValidator::validateResponsaveisCadastrados($questoesResponsavelExterno, function (string $nome): bool {
     return in_array($nome, ['Fabio Ozuna', 'Maria Silva'], true);
 });
-if (empty($errors['questao_2_responsavel_nome'])) {
-    failFast('Responsável inválido deveria retornar erro na questão 2');
+if (!empty($errors)) {
+    failFast('Agente externo em texto livre não deveria retornar erro');
 }
-ok('Validação de responsável inválido');
+ok('Validação aceita agente externo em texto livre');
 
 echo "All auditoria validator unit tests passed.\n";
