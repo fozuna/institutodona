@@ -1112,14 +1112,11 @@ class AuditoriasController extends BaseController
 
     private function payloadFromRequest(array $src): array
     {
-        $responsaveis = AuditoriaValidator::normalizeResponsaveis($src['responsaveis_json'] ?? '[]');
         return [
             'cliente_id' => (int)($src['cliente_id'] ?? 0),
             'setor_id' => (int)($src['setor_id'] ?? 0),
             'nome_auditoria' => trim((string)($src['nome_auditoria'] ?? '')),
             'data_auditoria' => AuditoriaValidator::normalizeDate((string)($src['data_auditoria'] ?? '')),
-            'responsavel_ids' => array_map(static fn($item) => (int)$item['id'], $responsaveis),
-            'responsavel_labels' => array_map(static fn($item) => (string)$item['nome'], $responsaveis),
             'questoes' => AuditoriaValidator::normalizeQuestoes($src['questoes_json'] ?? ($src['questoes'] ?? [])),
         ];
     }
@@ -1127,7 +1124,6 @@ class AuditoriasController extends BaseController
     private function appendResponsavelValidationErrors(array $payload, array &$errors): void
     {
         $clienteId = (int)($payload['cliente_id'] ?? 0);
-        $gerais = array_values(array_unique(array_filter(array_map('intval', $payload['responsavel_ids'] ?? []))));
         $questaoIds = [];
 
         foreach (($payload['questoes'] ?? []) as $index => $questao) {
@@ -1138,11 +1134,7 @@ class AuditoriasController extends BaseController
             $questaoIds = array_merge($questaoIds, $ids);
         }
 
-        $todosIds = array_values(array_unique(array_merge($gerais, $questaoIds)));
-        if (empty($todosIds)) {
-            $errors['responsaveis'] = 'Selecione pelo menos 1 responsável para a auditoria.';
-            return;
-        }
+        $todosIds = array_values(array_unique($questaoIds));
         if ($clienteId <= 0) {
             return;
         }
@@ -1155,7 +1147,7 @@ class AuditoriasController extends BaseController
 
         $invalidos = array_values(array_diff($todosIds, array_keys($validosMap)));
         if (!empty($invalidos)) {
-            $errors['responsaveis'] = 'Um ou mais responsáveis selecionados não pertencem à empresa informada.';
+            $errors['questoes'] = 'Um ou mais responsáveis selecionados nas questões não pertencem à empresa informada.';
         }
     }
 
@@ -1168,30 +1160,7 @@ class AuditoriasController extends BaseController
         $item['nome_auditoria'] = (string)($payload['nome_auditoria'] ?? ($current['nome_auditoria'] ?? ''));
         $item['data_auditoria'] = (string)($payload['data_auditoria'] ?? ($current['data_auditoria'] ?? ''));
         $item['questoes'] = is_array($payload['questoes'] ?? null) ? $payload['questoes'] : ($current['questoes'] ?? []);
-        $item['responsaveis'] = $this->buildResponsaveisForView($payload, $current['responsaveis'] ?? []);
-        $item['responsaveis_nomes'] = implode(', ', array_filter(array_map(static fn($resp) => trim((string)($resp['nome'] ?? '')), $item['responsaveis'])));
         return $item;
-    }
-
-    private function buildResponsaveisForView(array $payload, array $fallback = []): array
-    {
-        $ids = array_values(array_unique(array_filter(array_map('intval', $payload['responsavel_ids'] ?? []))));
-        $labels = array_values(array_filter(array_map('trim', $payload['responsavel_labels'] ?? [])));
-        if (empty($ids) && empty($labels)) {
-            return $fallback;
-        }
-
-        $items = [];
-        $max = max(count($ids), count($labels));
-        for ($i = 0; $i < $max; $i++) {
-            $id = (int)($ids[$i] ?? 0);
-            $nome = (string)($labels[$i] ?? '');
-            if ($id <= 0 && $nome === '') {
-                continue;
-            }
-            $items[] = ['id' => $id, 'nome' => $nome];
-        }
-        return $items;
     }
 
     private function isPost(): bool

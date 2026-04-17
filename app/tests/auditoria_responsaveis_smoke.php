@@ -69,7 +69,6 @@ try {
         'setor_id' => $setorId,
         'nome_auditoria' => 'Auditoria Multi Responsaveis ' . $suffix,
         'data_auditoria' => date('Y-m-d'),
-        'responsavel_ids' => [$colaborador1, $colaborador2],
         'questoes' => [[
             'responsavel_nome' => '',
             'responsavel_ids' => [$colaborador2, $colaborador1, $colaborador1],
@@ -85,13 +84,33 @@ try {
     $auditoriaIds[] = $auditoriaId;
 
     $auditRow = $model->find($auditoriaId);
-    if ((int)($auditRow['responsavel_id'] ?? 0) !== $colaborador1) {
-        failFast('Campo legado responsavel_id deveria manter o primeiro responsavel da lista');
+    if ((int)($auditRow['responsavel_id'] ?? 0) !== $colaborador2) {
+        failFast('Campo legado responsavel_id deveria usar o primeiro responsável derivado das questões');
     }
     if (strpos((string)($auditRow['responsaveis_nomes'] ?? ''), 'Colaborador 1 ' . $suffix) === false || strpos((string)($auditRow['responsaveis_nomes'] ?? ''), 'Colaborador 2 ' . $suffix) === false) {
         failFast('Listagem deveria exibir todos os responsaveis da auditoria');
     }
     ok('Persistencia da auditoria com multiplos responsaveis');
+
+    $updated = $model->updateAgendada($auditoriaId, [
+        'cliente_id' => $clienteId,
+        'setor_id' => $setorId,
+        'nome_auditoria' => 'Auditoria Editada ' . $suffix,
+        'data_auditoria' => date('Y-m-d'),
+        'questoes' => [[
+            'id' => (int)(($model->findWithQuestoes($auditoriaId)['questoes'][0]['id'] ?? 0)),
+            'responsavel_nome' => '',
+            'responsavel_ids' => [$colaborador1],
+            'responsavel_labels' => ['Colaborador 1 ' . $suffix],
+            'pergunta' => 'Pergunta para validar persistencia de responsaveis multiplos',
+            'referencia_esperada' => 'REF-RESP',
+            'processos' => ['Proc 1'],
+        ]],
+    ], 1, $auditRow['updated_at'] ?? null, (int)($auditRow['lock_version'] ?? 0));
+    if (!$updated) {
+        failFast('Edicao da auditoria nao deveria exigir responsavel geral');
+    }
+    ok('Edicao sem responsavel geral no payload');
 
     $full = $model->findWithQuestoes($auditoriaId);
     $questao = $full['questoes'][0] ?? null;
@@ -100,8 +119,8 @@ try {
     }
     $questaoIds = array_map('intval', $questao['responsavel_ids'] ?? []);
     sort($questaoIds);
-    if ($questaoIds !== [$colaborador1, $colaborador2]) {
-        failFast('Questao deveria manter responsaveis unicos');
+    if ($questaoIds !== [$colaborador1]) {
+        failFast('Questao deveria manter os responsaveis definidos na edicao sem duplicidade');
     }
     ok('Edicao/leitura preserva responsaveis das questoes');
 

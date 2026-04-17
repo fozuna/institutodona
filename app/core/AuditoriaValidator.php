@@ -137,32 +137,6 @@ class AuditoriaValidator
         return $questoes;
     }
 
-    public static function normalizeResponsaveis(array|string $input): array
-    {
-        if (is_string($input)) {
-            $decoded = json_decode($input, true);
-            $input = is_array($decoded) ? $decoded : [];
-        }
-        if (!is_array($input)) {
-            return [];
-        }
-        $items = [];
-        foreach ($input as $raw) {
-            if (!is_array($raw)) {
-                continue;
-            }
-            $id = (int)($raw['id'] ?? 0);
-            if ($id <= 0) {
-                continue;
-            }
-            $items[] = [
-                'id' => $id,
-                'nome' => trim((string)($raw['nome'] ?? '')),
-            ];
-        }
-        return $items;
-    }
-
     public static function normalizeAvaliacoes(array|string $input): array
     {
         if (is_string($input)) {

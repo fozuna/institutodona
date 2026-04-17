@@ -1,6 +1,5 @@
 <?php use App\Core\Security; /** @var array $item */ /** @var array $clientes */ /** @var array $setores */ /** @var array $errors */ /** @var array $respostas */ ?>
 <?php $questoesServer = $item['questoes'] ?? []; ?>
-<?php $responsaveisServer = $item['responsaveis'] ?? []; ?>
 <?php
     $respostasMap = [];
     foreach (($respostas ?? []) as $resp) {
@@ -20,7 +19,6 @@
     <form method="post" action="index.php?route=auditorias/update" id="auditoriaEditForm" class="bg-white shadow rounded p-4 space-y-4">
         <input type="hidden" name="csrf" value="<?= Security::csrfToken() ?>" />
         <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
-        <input type="hidden" name="responsaveis_json" id="responsaveisJson" value="<?= htmlspecialchars(json_encode($responsaveisServer, JSON_UNESCAPED_UNICODE)) ?>" />
         <input type="hidden" name="questoes_json" id="questoesJson" value="<?= htmlspecialchars(json_encode($questoesServer, JSON_UNESCAPED_UNICODE)) ?>" />
         <input type="hidden" name="avaliacoes_json" id="avaliacoesJson" value="<?= htmlspecialchars(json_encode(array_values($respostasMap), JSON_UNESCAPED_UNICODE)) ?>" />
         <input type="hidden" name="prev_updated_at" value="<?= htmlspecialchars((string)($item['updated_at'] ?? '')) ?>" />
@@ -61,19 +59,6 @@
                 <label class="block text-sm">Nome da Auditoria</label>
                 <input type="text" name="nome_auditoria" id="nomeAuditoria" class="border rounded p-2 w-full" minlength="5" maxlength="180" required value="<?= htmlspecialchars($item['nome_auditoria'] ?? '') ?>" />
                 <?php if (!empty($errors['nome_auditoria'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['nome_auditoria']) ?></p><?php endif; ?>
-            </div>
-            <div class="md:col-span-12">
-                <label class="block text-sm">Responsáveis da Auditoria</label>
-                <div class="relative">
-                    <div class="flex gap-2">
-                        <input type="text" id="responsavelSearch" class="border rounded p-2 w-full" autocomplete="off" placeholder="Buscar colaborador da empresa" />
-                        <button type="button" id="btnAddResponsavel" class="px-3 py-2 rounded bg-brand-pink text-white">Adicionar responsável</button>
-                    </div>
-                    <div id="responsavelMenu" class="hidden absolute z-10 w-full mt-1 bg-white border rounded shadow max-h-52 overflow-auto"></div>
-                </div>
-                <div id="selectedResponsaveis" class="mt-2 flex flex-wrap gap-2"></div>
-                <div id="responsavelStatus" class="text-xs text-gray-500 mt-1"></div>
-                <?php if (!empty($errors['responsaveis'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['responsaveis']) ?></p><?php endif; ?>
             </div>
         </div>
         <?php if (!empty($errors['questoes'])): ?><p class="text-sm text-red-600"><?= htmlspecialchars($errors['questoes']) ?></p><?php endif; ?>
@@ -149,18 +134,11 @@
         const btnCancelar = document.getElementById('btnCancelar');
         let dirty = false;
         const clienteDebugStatus = document.getElementById('clienteDebugStatus');
-        const responsaveisJson = document.getElementById('responsaveisJson');
-        const responsavelSearch = document.getElementById('responsavelSearch');
-        const responsavelMenu = document.getElementById('responsavelMenu');
-        const responsavelStatus = document.getElementById('responsavelStatus');
-        const selectedResponsaveis = document.getElementById('selectedResponsaveis');
         const backendErrors = <?= json_encode($errors, JSON_UNESCAPED_UNICODE) ?>;
         let questoes = [];
         let avaliacoes = [];
-        let responsaveis = [];
         const responsavelSugestoesPorQuestao = new Map();
         const responsavelDebounce = new Map();
-        let responsavelDebounceTop = null;
 
         const parseInitialQuestoes = ()=>{
             try {
@@ -175,23 +153,8 @@
                 questoes = [{ responsavel_nome: '', responsavel_ids: [], responsavel_labels: [], pergunta: '', referencia_esperada: '', processos: [] }];
             }
         };
-        const parseInitialResponsaveis = ()=>{
-            try {
-                const parsed = JSON.parse(responsaveisJson.value || '[]');
-                responsaveis = Array.isArray(parsed) ? parsed : [];
-            } catch (e) {
-                responsaveis = [];
-            }
-            responsaveis = responsaveis
-                .map((item)=>({
-                    id: Number(item?.id || 0),
-                    nome: String(item?.nome || '').trim()
-                }))
-                .filter((item)=>item.id > 0 || item.nome !== '');
-        };
 
         const syncHidden = ()=>{ questoesJson.value = JSON.stringify(questoes); dirty = true; };
-        const syncResponsaveisHidden = ()=>{ responsaveisJson.value = JSON.stringify(responsaveis); dirty = true; };
         const ensureResponsaveisShape = (idx)=>{
             questoes[idx].responsavel_ids = Array.isArray(questoes[idx].responsavel_ids) ? questoes[idx].responsavel_ids : [];
             questoes[idx].responsavel_labels = Array.isArray(questoes[idx].responsavel_labels) ? questoes[idx].responsavel_labels : [];
@@ -200,92 +163,6 @@
             }
         };
         const syncResponsavelNome = (idx)=>{ ensureResponsaveisShape(idx); questoes[idx].responsavel_nome = questoes[idx].responsavel_labels.join(', '); syncHidden(); };
-        const setTopResponsavelStatus = (message, isError=false)=>{
-            if (!responsavelStatus) return;
-            responsavelStatus.textContent = message;
-            responsavelStatus.className = `text-xs mt-1 ${isError ? 'text-red-600' : 'text-gray-500'}`;
-        };
-        const renderResponsaveisSelecionados = ()=>{
-            if (!selectedResponsaveis) return;
-            selectedResponsaveis.innerHTML = '';
-            responsaveis.forEach((item, index)=>{
-                const chip = document.createElement('button');
-                chip.type = 'button';
-                chip.className = 'px-2 py-1 rounded bg-gray-200 text-brand-brown text-xs';
-                chip.textContent = `${item.nome || ('Responsável #' + item.id)} x`;
-                chip.addEventListener('click', ()=>{
-                    responsaveis.splice(index, 1);
-                    syncResponsaveisHidden();
-                    renderResponsaveisSelecionados();
-                });
-                selectedResponsaveis.appendChild(chip);
-            });
-            syncResponsaveisHidden();
-        };
-        const addResponsavelSelecionado = (item)=>{
-            const id = Number(item?.id || 0);
-            const nome = String(item?.nome || '').trim();
-            if (id <= 0 || nome === '') {
-                return;
-            }
-            if (!responsaveis.some((current)=>Number(current.id) === id)) {
-                responsaveis.push({ id, nome });
-            }
-            syncResponsaveisHidden();
-            renderResponsaveisSelecionados();
-        };
-        const applyTopResponsavelSugestoes = (items, autoAddFirst=false)=>{
-            responsavelMenu.innerHTML = '';
-            const validItems = (items || [])
-                .map((item)=>({ id: Number(item?.id || 0), nome: String(item?.nome || '').trim() }))
-                .filter((item)=>item.id > 0 && item.nome !== '');
-            validItems.slice(0, 10).forEach((item)=>{
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'block w-full text-left px-3 py-2 hover:bg-gray-100';
-                btn.textContent = item.nome;
-                btn.addEventListener('mousedown', (e)=>{
-                    e.preventDefault();
-                    addResponsavelSelecionado(item);
-                    responsavelSearch.value = '';
-                    responsavelMenu.classList.add('hidden');
-                    setTopResponsavelStatus('Responsável adicionado.');
-                });
-                responsavelMenu.appendChild(btn);
-            });
-            if (autoAddFirst && responsavelMenu.firstElementChild) {
-                responsavelMenu.firstElementChild.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-                return;
-            }
-            if (validItems.length) {
-                responsavelMenu.classList.remove('hidden');
-                setTopResponsavelStatus(`${validItems.length} sugestão(ões) encontrada(s)`);
-            } else {
-                responsavelMenu.classList.add('hidden');
-                setTopResponsavelStatus('Nenhum colaborador encontrado.');
-            }
-        };
-        const fetchTopResponsavelSugestoes = (query, autoAddFirst=false)=>{
-            const clienteId = clienteSelect.value;
-            const q = (query || '').trim();
-            if (!clienteId) {
-                setTopResponsavelStatus('Selecione a empresa para buscar responsáveis.');
-                return;
-            }
-            if (q.length < 2) {
-                setTopResponsavelStatus('Digite ao menos 2 caracteres para sugerir colaboradores.');
-                responsavelMenu.classList.add('hidden');
-                return;
-            }
-            fetch('index.php?route=auditorias/api_colaboradores&cliente_id=' + encodeURIComponent(clienteId) + '&q=' + encodeURIComponent(q))
-                .then((r)=>r.json())
-                .then((json)=>applyTopResponsavelSugestoes((json && Array.isArray(json.items)) ? json.items : [], autoAddFirst))
-                .catch((err)=>{
-                    console.error('[auditorias/edit] falha ao carregar responsáveis da auditoria', err);
-                    setTopResponsavelStatus('Erro ao consultar colaboradores.', true);
-                    responsavelMenu.classList.add('hidden');
-                });
-        };
         const syncAvaliacoes = ()=>{
             if (!avaliacoesJson || !avaliacoesContainer) return;
             avaliacoes = Array.from(avaliacoesContainer.querySelectorAll('[data-avaliacao-card]')).map((card)=>{
@@ -648,28 +525,8 @@
             questoes.push({ responsavel_nome: '', responsavel_ids: [], responsavel_labels: [], pergunta: '', referencia_esperada: '', processos: [] });
             renderQuestoes();
         });
-        document.getElementById('btnAddResponsavel')?.addEventListener('click', ()=>{
-            fetchTopResponsavelSugestoes(responsavelSearch?.value || '', true);
-        });
-        responsavelSearch?.addEventListener('input', ()=>{
-            if (responsavelDebounceTop) {
-                clearTimeout(responsavelDebounceTop);
-            }
-            responsavelDebounceTop = setTimeout(()=>fetchTopResponsavelSugestoes(responsavelSearch.value || ''), 250);
-        });
-        responsavelSearch?.addEventListener('focus', ()=>{
-            if (responsavelMenu.childElementCount > 0) {
-                responsavelMenu.classList.remove('hidden');
-            }
-        });
-        responsavelSearch?.addEventListener('blur', ()=>{
-            setTimeout(()=>responsavelMenu.classList.add('hidden'), 150);
-        });
         clienteSelect?.addEventListener('change', ()=>{
             loadSetores();
-            responsaveis = [];
-            syncResponsaveisHidden();
-            renderResponsaveisSelecionados();
             questoes.forEach((questao)=>{
                 questao.responsavel_ids = [];
                 questao.responsavel_labels = [];
@@ -704,9 +561,9 @@
                 const q = questoes[i];
                 if (!q.pergunta || q.pergunta.trim().length < 10) { e.preventDefault(); alert(`Questão ${i + 1}: pergunta deve ter no mínimo 10 caracteres.`); return; }
                 if (!q.referencia_esperada || q.referencia_esperada.trim().length < 3) { e.preventDefault(); alert(`Questão ${i + 1}: referência esperada obrigatória.`); return; }
+                if (!Array.isArray(q.responsavel_ids) || q.responsavel_ids.length <= 0) { e.preventDefault(); alert(`Questão ${i + 1}: selecione pelo menos 1 responsável.`); return; }
             }
             syncHidden();
-            syncResponsaveisHidden();
             btnSalvar.disabled = true;
             btnSalvarTopo.disabled = true;
             btnSalvar.textContent = 'Salvando...';
@@ -715,17 +572,14 @@
         });
 
         parseInitialQuestoes();
-        parseInitialResponsaveis();
         renderQuestoes();
-        renderResponsaveisSelecionados();
         loadClientesIfEmpty();
         initAvaliacoesUI();
         document.addEventListener('click', (e)=>{
             const t = e.target;
             if (!(t instanceof HTMLElement)) return;
-            if (t.closest('[data-responsavel-menu]') || t.closest('[data-responsavel-search]') || t.closest('#responsavelMenu') || t.closest('#responsavelSearch')) return;
+            if (t.closest('[data-responsavel-menu]') || t.closest('[data-responsavel-search]')) return;
             questoesContainer.querySelectorAll('[data-responsavel-menu]').forEach((m)=>m.classList.add('hidden'));
-            responsavelMenu?.classList.add('hidden');
         });
     })();
 </script>
