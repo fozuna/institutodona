@@ -1,4 +1,10 @@
-<?php use App\Core\Security; /** @var array $items */ /** @var array $filters */ /** @var array $clientes */ /** @var array $setores */ /** @var bool $canManage */ ?>
+<?php use App\Core\DateHelper; use App\Core\Security; /** @var array $items */ /** @var array $filters */ /** @var array $clientes */ /** @var array $departamentos */ /** @var array $setores */ /** @var array $metrics */ /** @var bool $canManage */ ?>
+<?php
+    $mediaGeral = $metrics['geral']['media'] ?? null;
+    $countGeral = (int)($metrics['geral']['count'] ?? 0);
+    $mediaFiltrada = $metrics['filtrada']['media'] ?? null;
+    $countFiltrada = (int)($metrics['filtrada']['count'] ?? 0);
+?>
 <div class="p-6">
     <div class="flex items-center justify-between mb-4">
         <h1 class="text-2xl font-bold">Auditorias</h1>
@@ -15,6 +21,15 @@
                 <option value="">Todas</option>
                 <?php foreach ($clientes as $c): ?>
                     <option value="<?= (int)$c['id'] ?>" <?= ((int)($filters['cliente'] ?? 0) === (int)$c['id']) ? 'selected' : '' ?>><?= htmlspecialchars($c['nome_empresa']) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="md:col-span-2">
+            <label class="block text-sm">Departamento</label>
+            <select name="departamento" id="filtroDepartamento" class="border rounded p-2 w-full">
+                <option value="">Todos</option>
+                <?php foreach ($departamentos as $d): ?>
+                    <option value="<?= (int)$d['id'] ?>" data-cliente="<?= (int)($d['cliente_id'] ?? 0) ?>" <?= ((int)($filters['departamento'] ?? 0) === (int)$d['id']) ? 'selected' : '' ?>><?= htmlspecialchars($d['nome']) ?></option>
                 <?php endforeach; ?>
             </select>
         </div>
@@ -36,22 +51,55 @@
             </select>
         </div>
         <div class="md:col-span-2">
+            <label class="block text-sm">Farol</label>
+            <select name="farol" class="border rounded p-2 w-full">
+                <option value="">Todos</option>
+                <option value="vermelho" <?= (($filters['farol'] ?? '') === 'vermelho') ? 'selected' : '' ?>>Vermelho</option>
+                <option value="amarelo" <?= (($filters['farol'] ?? '') === 'amarelo') ? 'selected' : '' ?>>Amarelo</option>
+                <option value="verde" <?= (($filters['farol'] ?? '') === 'verde') ? 'selected' : '' ?>>Verde</option>
+            </select>
+        </div>
+        <div class="md:col-span-2">
             <label class="block text-sm">Início</label>
-            <input name="inicio" value="<?= htmlspecialchars(isset($filters['inicio']) && $filters['inicio'] ? date('d/m/Y', strtotime($filters['inicio'])) : '') ?>" placeholder="DD/MM/YYYY" class="border rounded p-2 w-full" />
+            <input name="inicio" value="<?= htmlspecialchars(isset($filters['inicio']) && $filters['inicio'] ? DateHelper::formatDate((string)$filters['inicio']) : '') ?>" placeholder="DD/MM/YYYY" class="border rounded p-2 w-full" />
         </div>
         <div class="md:col-span-2">
             <label class="block text-sm">Fim</label>
-            <input name="fim" value="<?= htmlspecialchars(isset($filters['fim']) && $filters['fim'] ? date('d/m/Y', strtotime($filters['fim'])) : '') ?>" placeholder="DD/MM/YYYY" class="border rounded p-2 w-full" />
+            <input name="fim" value="<?= htmlspecialchars(isset($filters['fim']) && $filters['fim'] ? DateHelper::formatDate((string)$filters['fim']) : '') ?>" placeholder="DD/MM/YYYY" class="border rounded p-2 w-full" />
         </div>
-        <div class="md:col-span-6">
+        <div class="md:col-span-4">
             <label class="block text-sm">Busca por nome</label>
-            <input name="q" id="filtroNomeTempoReal" value="<?= htmlspecialchars($filters['q'] ?? '') ?>" placeholder="Nome da auditoria, empresa ou setor" class="border rounded p-2 w-full" />
+            <input name="q" id="filtroNomeTempoReal" value="<?= htmlspecialchars($filters['q'] ?? '') ?>" placeholder="Nome da auditoria, empresa, setor ou departamento" class="border rounded p-2 w-full" />
         </div>
         <input type="hidden" name="sort_col" id="sortCol" value="<?= htmlspecialchars($filters['sort_col'] ?? 'data') ?>" />
         <input type="hidden" name="sort_dir" id="sortDir" value="<?= htmlspecialchars($filters['sort_dir'] ?? 'desc') ?>" />
-        <div class="md:col-span-4 flex items-end gap-2">
+        <div class="md:col-span-2 flex items-end gap-2">
             <button type="submit" id="btnFiltrar" class="px-4 py-2 rounded bg-brand-red text-white">Filtrar</button>
             <a href="index.php?route=auditorias/index" class="px-4 py-2 rounded bg-gray-200 text-brand-brown">Limpar</a>
+        </div>
+        <div class="md:col-span-6">
+            <div class="h-full border rounded p-3 bg-gray-50">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="bg-white border rounded p-3">
+                        <div class="text-xs uppercase tracking-wide text-gray-500">Média Geral Abrangente</div>
+                        <?php if ($countGeral > 0 && $mediaGeral !== null): ?>
+                            <div class="text-2xl font-bold text-brand-brown mt-1"><?= number_format((float)$mediaGeral, 2, ',', '.') ?></div>
+                            <div class="text-xs text-gray-500 mt-1">Base: <?= $countGeral ?> auditoria(s) realizada(s)</div>
+                        <?php else: ?>
+                            <div class="text-sm text-gray-500 mt-2">Sem dados suficientes para cálculo.</div>
+                        <?php endif; ?>
+                    </div>
+                    <div class="bg-white border rounded p-3">
+                        <div class="text-xs uppercase tracking-wide text-gray-500">Média Filtrada Pelo Farol</div>
+                        <?php if ($countFiltrada > 0 && $mediaFiltrada !== null): ?>
+                            <div class="text-2xl font-bold text-brand-brown mt-1"><?= number_format((float)$mediaFiltrada, 2, ',', '.') ?></div>
+                            <div class="text-xs text-gray-500 mt-1">Base: <?= $countFiltrada ?> auditoria(s) com filtros ativos</div>
+                        <?php else: ?>
+                            <div class="text-sm text-gray-500 mt-2">Nenhuma auditoria compatível com os filtros atuais.</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
         </div>
     </form>
     <div id="auditoriasSkeleton" class="hidden bg-white shadow rounded p-4 mb-4">
@@ -78,6 +126,7 @@
                     <tr class="text-left border-b">
                         <th class="p-3"><button type="button" class="sort-link" data-col="nome">Nome da Auditoria</button></th>
                         <th class="p-3"><button type="button" class="sort-link" data-col="setor">Setor</button></th>
+                        <th class="p-3"><button type="button" class="sort-link" data-col="departamento">Departamento</button></th>
                         <th class="p-3"><button type="button" class="sort-link" data-col="data">Data Agendada</button></th>
                         <th class="p-3"><button type="button" class="sort-link" data-col="status">Status</button></th>
                         <th class="p-3">Farol</th>
@@ -92,9 +141,13 @@
                             <td class="p-3">
                                 <div class="font-semibold"><?= htmlspecialchars($row['nome_auditoria'] ?? '') ?></div>
                                 <div class="text-xs text-gray-500"><?= htmlspecialchars($row['cliente_nome'] ?? '') ?></div>
+                                <?php if (!empty($row['responsaveis_nomes'])): ?>
+                                    <div class="text-xs text-gray-500">Responsáveis: <?= htmlspecialchars($row['responsaveis_nomes']) ?></div>
+                                <?php endif; ?>
                             </td>
                             <td class="p-3"><?= htmlspecialchars($row['setor_nome'] ?? '') ?></td>
-                            <td class="p-3"><?= htmlspecialchars(date('d/m/Y', strtotime($row['data_auditoria']))) ?></td>
+                            <td class="p-3"><?= htmlspecialchars($row['departamento_nome'] ?? 'Não informado') ?></td>
+                            <td class="p-3"><?= htmlspecialchars(DateHelper::formatDate((string)($row['data_auditoria'] ?? ''))) ?></td>
                             <td class="p-3">
                                 <span class="px-2 py-1 rounded text-xs <?= $isAgendada ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700' ?>">
                                     <?= htmlspecialchars($row['status']) ?>
@@ -125,9 +178,6 @@
                                 <?php endif; ?>
                                 <?php if (!empty($canManage) && (($row['status'] ?? '') !== 'Realizada')): ?>
                                     <a class="text-brand-red icon-action mr-2" href="index.php?route=auditorias/auditar&id=<?= (int)$row['id'] ?>" title="Auditar"><span data-feather="check-circle"></span></a>
-                                <?php endif; ?>
-                                <?php if (!empty($canManage) && (($row['status'] ?? '') === 'Realizada')): ?>
-                                    <a class="text-brand-pink icon-action mr-2" href="index.php?route=auditorias/editar_realizada&id=<?= (int)$row['id'] ?>" title="Editar Obs. (Realizada)"><span data-feather="edit-2"></span></a>
                                 <?php endif; ?>
                                 <?php if (!empty($canManage)): ?>
                                     <button type="button" class="text-brand-brown icon-action" data-open-delete="<?= (int)$row['id'] ?>" title="Excluir"><span data-feather="trash-2"></span></button>
@@ -225,7 +275,27 @@
         const sortCol = document.getElementById('sortCol');
         const sortDir = document.getElementById('sortDir');
         const filtroNome = document.getElementById('filtroNomeTempoReal');
+        const filtroCliente = filtroForm.querySelector('[name="cliente"]');
+        const filtroDepartamento = document.getElementById('filtroDepartamento');
         let debounce = null;
+        const syncDepartamentos = ()=>{
+            if (!filtroCliente || !filtroDepartamento) return;
+            const clienteId = filtroCliente.value;
+            Array.from(filtroDepartamento.options).forEach((option, idx)=>{
+                if (idx === 0) return;
+                const optCliente = option.getAttribute('data-cliente') || '';
+                const matches = !clienteId || optCliente === clienteId;
+                option.hidden = !matches;
+                if (!matches && option.selected) {
+                    filtroDepartamento.value = '';
+                }
+            });
+        };
+        syncDepartamentos();
+        filtroCliente?.addEventListener('change', ()=>{
+            syncDepartamentos();
+            filtroForm.submit();
+        });
         document.querySelectorAll('.sort-link').forEach((el)=>{
             el.addEventListener('click', ()=>{
                 const col = el.getAttribute('data-col');
@@ -242,6 +312,8 @@
             clearTimeout(debounce);
             debounce = setTimeout(()=>filtroForm.submit(), 450);
         });
+        filtroForm.querySelector('[name="farol"]')?.addEventListener('change', ()=>filtroForm.submit());
+        filtroForm.querySelector('[name="departamento"]')?.addEventListener('change', ()=>filtroForm.submit());
         filtroForm.querySelector('[name="setor"]')?.addEventListener('change', ()=>filtroForm.submit());
         filtroForm?.addEventListener('submit', ()=>{
             btnFiltrar.disabled = true;

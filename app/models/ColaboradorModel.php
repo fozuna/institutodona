@@ -196,6 +196,54 @@ class ColaboradorModel extends BaseModel
         return $stmt->fetchAll();
     }
 
+    public function searchActiveByCliente(int $clienteId, string $q, int $limit = 15): array
+    {
+        $this->ensureTable();
+        $q = trim($q);
+        $params = ['cid' => $clienteId];
+        $scope = $this->tenantInCondition('col.cliente_id', $params, 'csrc');
+        $sql = "SELECT col.id, col.nome, col.email, col.cliente_id, f.id AS funcao_id, s.id AS setor_id
+                FROM colaboradores col
+                JOIN funcoes f ON f.id = col.funcao_id
+                JOIN setores s ON s.id = f.setor_id
+                WHERE col.cliente_id = :cid AND $scope";
+        if ($q !== '') {
+            $sql .= ' AND col.nome LIKE :q';
+            $params['q'] = '%' . $q . '%';
+        }
+        $sql .= ' ORDER BY col.nome LIMIT :lim';
+        $stmt = $this->db->prepare($sql);
+        foreach ($params as $k => $v) {
+            $stmt->bindValue(':' . $k, $v, $k === 'q' ? \PDO::PARAM_STR : \PDO::PARAM_INT);
+        }
+        $stmt->bindValue(':lim', $limit, \PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function findByIdsCliente(array $ids, int $clienteId): array
+    {
+        $this->ensureTable();
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if ($clienteId <= 0 || empty($ids)) {
+            return [];
+        }
+        $params = ['cid' => $clienteId];
+        $scope = $this->tenantInCondition('col.cliente_id', $params, 'cfids');
+        $placeholders = [];
+        foreach ($ids as $i => $id) {
+            $key = 'id' . $i;
+            $params[$key] = $id;
+            $placeholders[] = ':' . $key;
+        }
+        $stmt = $this->db->prepare("SELECT col.id, col.nome, col.email
+            FROM colaboradores col
+            WHERE col.cliente_id = :cid AND $scope AND col.id IN (" . implode(',', $placeholders) . ')
+            ORDER BY col.nome');
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
     public function allBySetor(int $setorId, ?int $clienteId = null): array
     {
         $this->ensureTable();

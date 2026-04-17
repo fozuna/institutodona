@@ -18,7 +18,7 @@ class SimplePdfReport
     {
         $data = [
             'report_title' => 'Relatório de Auditoria',
-            'generated_at' => date('d/m/Y H:i'),
+            'generated_at' => DateHelper::now(),
             'version' => 'v1.0',
             'header' => [],
             'questions' => [],
@@ -142,7 +142,7 @@ class SimplePdfReport
         }
         $title = (string)($data['report_title'] ?? 'Relatório de Auditoria');
         $this->writeText($this->marginX + $logoW, $this->cursorY, $title, 16, true);
-        $meta = 'Gerado em ' . (string)($data['generated_at'] ?? date('d/m/Y H:i'));
+        $meta = 'Gerado em ' . (string)($data['generated_at'] ?? DateHelper::now());
         $this->writeText($this->marginX + $logoW, $this->cursorY - 16, $meta, 10, false);
         $this->cursorY -= 34;
     }
@@ -241,7 +241,7 @@ class SimplePdfReport
     private function build(array $data): string
     {
         $version = (string)($data['version'] ?? 'v1.0');
-        $generated = (string)($data['generated_at'] ?? date('d/m/Y H:i'));
+        $generated = (string)($data['generated_at'] ?? DateHelper::now());
         $pageCount = count($this->pages);
         for ($i = 0; $i < $pageCount; $i++) {
             $footer = 'Página ' . ($i + 1) . '/' . $pageCount . '  •  ' . $generated . '  •  ' . $version;

@@ -1,4 +1,4 @@
-<?php /** @var array $item */ /** @var array $respostas */ /** @var bool $canManage */ ?>
+<?php use App\Core\DateHelper; /** @var array $item */ /** @var array $respostas */ /** @var bool $canManage */ ?>
 <div class="p-6 max-w-6xl">
     <div class="flex items-center justify-between mb-4">
         <div>
@@ -7,6 +7,9 @@
         </div>
         <div class="flex items-center gap-2">
             <a href="index.php?route=auditorias/index" class="px-4 py-2 rounded bg-gray-200 text-brand-brown">Voltar</a>
+            <?php if (!empty($canManage)): ?>
+                <a href="index.php?route=auditorias/edit&id=<?= (int)$item['id'] ?>" class="px-4 py-2 rounded bg-brand-pink text-white">Editar</a>
+            <?php endif; ?>
             <?php if (!empty($canManage) && (($item['status'] ?? '') !== 'Realizada')): ?>
                 <a href="index.php?route=auditorias/auditar&id=<?= (int)$item['id'] ?>" class="px-4 py-2 rounded bg-brand-red text-white">Auditar</a>
             <?php endif; ?>
@@ -14,11 +17,17 @@
         </div>
     </div>
     <div class="bg-white rounded shadow p-4 mb-4 grid grid-cols-1 md:grid-cols-4 gap-3">
-        <div><span class="text-xs text-gray-500">Data agendada</span><div class="font-semibold"><?= htmlspecialchars(date('d/m/Y', strtotime((string)$item['data_auditoria']))) ?></div></div>
+        <div><span class="text-xs text-gray-500">Data agendada</span><div class="font-semibold"><?= htmlspecialchars(DateHelper::formatDate((string)($item['data_auditoria'] ?? ''))) ?></div></div>
         <div><span class="text-xs text-gray-500">Status</span><div class="font-semibold"><?= htmlspecialchars($item['status'] ?? '') ?></div></div>
-        <div><span class="text-xs text-gray-500">Realizada em</span><div class="font-semibold"><?= !empty($item['realizada_at']) ? htmlspecialchars(date('d/m/Y H:i', strtotime((string)$item['realizada_at']))) : '-' ?></div></div>
+        <div><span class="text-xs text-gray-500">Realizada em</span><div class="font-semibold"><?= !empty($item['realizada_at']) ? htmlspecialchars(DateHelper::formatDateTime((string)$item['realizada_at'])) : '-' ?></div></div>
         <div><span class="text-xs text-gray-500">Total de questões</span><div class="font-semibold"><?= count($item['questoes'] ?? []) ?></div></div>
     </div>
+    <?php if (!empty($item['responsaveis_nomes'])): ?>
+    <div class="bg-white rounded shadow p-4 mb-4">
+        <span class="text-xs text-gray-500">Responsáveis da auditoria</span>
+        <div class="font-semibold"><?= htmlspecialchars((string)$item['responsaveis_nomes']) ?></div>
+    </div>
+    <?php endif; ?>
     <?php
         $totConforme = 0;
         $totNaoConforme = 0;

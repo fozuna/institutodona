@@ -5,12 +5,14 @@ use App\Core\AuditLogger;
 use App\Core\AuditoriaValidator;
 use App\Core\Auth;
 use App\Core\BaseController;
+use App\Core\DateHelper;
 use App\Core\JwtService;
 use App\Core\Security;
 use App\Core\SimplePdfReport;
 use App\Models\AuditoriaModel;
 use App\Models\ClienteModel;
 use App\Models\ColaboradorModel;
+use App\Models\DepartamentoModel;
 use App\Models\SetorModel;
 use App\Models\UsuarioModel;
 use App\Models\AuditoriaArquivoModel;
@@ -20,6 +22,7 @@ class AuditoriasController extends BaseController
 {
     private AuditoriaModel $auditorias;
     private ClienteModel $clientes;
+    private DepartamentoModel $departamentos;
     private SetorModel $setores;
     private ColaboradorModel $colaboradores;
     private UsuarioModel $usuarios;
@@ -29,6 +32,7 @@ class AuditoriasController extends BaseController
     {
         $this->auditorias = new AuditoriaModel();
         $this->clientes = new ClienteModel();
+        $this->departamentos = new DepartamentoModel();
         $this->setores = new SetorModel();
         $this->colaboradores = new ColaboradorModel();
         $this->usuarios = new UsuarioModel();
@@ -43,15 +47,26 @@ class AuditoriasController extends BaseController
         $page = max(1, (int)($_GET['page'] ?? 1));
         $per = max(10, min(50, (int)($_GET['per'] ?? 15)));
         $result = $this->auditorias->list($filters, $page, $per);
+        $metrics = $this->auditorias->summarizeMetrics($filters);
         $total = (int)$result['total'];
         $totalPages = max(1, (int)ceil($total / $per));
         $clientes = $this->clientesCached();
+        $departamentos = !empty($filters['cliente']) ? $this->departamentosCached((int)$filters['cliente']) : $this->departamentosCached(0);
         $setores = !empty($filters['cliente']) ? $this->setoresCached((int)$filters['cliente']) : [];
+        AuditLogger::log('auditoria_metrics_calculated', 'auditoria', null, [
+            'filters' => $filters,
+            'geral_count' => (int)($metrics['geral']['count'] ?? 0),
+            'geral_media' => $metrics['geral']['media'],
+            'filtrada_count' => (int)($metrics['filtrada']['count'] ?? 0),
+            'filtrada_media' => $metrics['filtrada']['media'],
+        ]);
         $this->render('auditorias/index', [
             'items' => $result['items'],
             'filters' => $filters,
             'clientes' => $clientes,
+            'departamentos' => $departamentos,
             'setores' => $setores,
+            'metrics' => $metrics,
             'page' => $page,
             'per' => $per,
             'total' => $total,
@@ -134,6 +149,7 @@ class AuditoriasController extends BaseController
             'item' => $item,
             'clientes' => $clientes,
             'setores' => $this->setoresCached((int)$item['cliente_id']),
+            'respostas' => $this->auditorias->respostasByAuditoria((int)$item['id']),
             'errors' => [],
         ]);
     }
@@ -149,16 +165,26 @@ class AuditoriasController extends BaseController
         }
         $id = (int)($_POST['id'] ?? 0);
         $payload = $this->payloadFromRequest($_POST);
+        $current = $this->auditorias->findWithQuestoes($id);
+        if (!$current) {
+            $_SESSION['flash_error'] = 'Auditoria não encontrada.';
+            $this->redirect('index.php?route=auditorias/index');
+            return;
+        }
         $saveMode = (string)($_POST['save_mode'] ?? 'full'); // 'full' ou 'partial'
         $prevUpdatedAt = (string)($_POST['prev_updated_at'] ?? '');
         $prevLockVersionRaw = $_POST['prev_lock_version'] ?? null;
         $prevLockVersion = is_numeric($prevLockVersionRaw) ? (int)$prevLockVersionRaw : null;
+        if (($current['status'] ?? '') === 'Realizada') {
+            $payload['cliente_id'] = (int)$current['cliente_id'];
+            $payload['setor_id'] = (int)$current['setor_id'];
+        }
         if ($saveMode === 'partial') {
             $ok = $this->auditorias->updatePartial($id, $payload, (int)($_SESSION['user']['id'] ?? 0), $prevUpdatedAt !== '' ? $prevUpdatedAt : null, $prevLockVersion);
             if (!$ok) {
                 $reason = (string)($this->auditorias->getLastError() ?? '');
                 $_SESSION['flash_error'] = $reason === 'concurrency_conflict'
-                    ? 'Outro usuário alterou esta auditoria. Reabra a edição para sincronizar os dados antes de salvar.'
+                    ? 'Este registro foi alterado por outro usuário. Recarregue antes de salvar.'
                     : 'Não foi possível salvar alterações.';
                 $this->redirect('index.php?route=auditorias/index');
                 return;
@@ -171,26 +197,49 @@ class AuditoriasController extends BaseController
         $errors = AuditoriaValidator::validateCadastro($payload);
         $this->appendResponsavelValidationErrors($payload, $errors);
         if (!empty($errors)) {
-            $item = $this->auditorias->findWithQuestoes($id);
             $this->render('auditorias/edit', [
-                'item' => $item ?: ['id' => $id] + $payload,
+                'item' => $this->mergeItemWithPayload($current, $payload, $id),
                 'clientes' => $this->clientesCached(),
                 'setores' => !empty($payload['cliente_id']) ? $this->setoresCached((int)$payload['cliente_id']) : [],
+                'respostas' => $this->auditorias->respostasByAuditoria($id),
                 'errors' => $errors,
             ]);
             return;
         }
-        $ok = $this->auditorias->updateAgendada(
-            $id,
-            $payload,
-            (int)($_SESSION['user']['id'] ?? 0),
-            $prevUpdatedAt !== '' ? $prevUpdatedAt : null,
-            $prevLockVersion
-        );
+        if (($current['status'] ?? '') === 'Realizada') {
+            $avaliacoes = AuditoriaValidator::normalizeAvaliacoes($_POST['avaliacoes_json'] ?? '[]');
+            $execErrors = AuditoriaValidator::validateExecucao($avaliacoes, count($current['questoes'] ?? []));
+            if (!empty($execErrors)) {
+                $this->render('auditorias/edit', [
+                    'item' => $this->mergeItemWithPayload($current, $payload, $id),
+                    'clientes' => $this->clientesCached(),
+                    'setores' => $this->setoresCached((int)$current['cliente_id']),
+                    'respostas' => $this->auditorias->respostasByAuditoria($id),
+                    'errors' => $execErrors,
+                ]);
+                return;
+            }
+            $ok = $this->auditorias->updateRealizadaCompleta(
+                $id,
+                $payload,
+                $avaliacoes,
+                (int)($_SESSION['user']['id'] ?? 0),
+                $prevUpdatedAt !== '' ? $prevUpdatedAt : null,
+                $prevLockVersion
+            );
+        } else {
+            $ok = $this->auditorias->updateAgendada(
+                $id,
+                $payload,
+                (int)($_SESSION['user']['id'] ?? 0),
+                $prevUpdatedAt !== '' ? $prevUpdatedAt : null,
+                $prevLockVersion
+            );
+        }
         if (!$ok) {
             $reason = (string)($this->auditorias->getLastError() ?? '');
             $_SESSION['flash_error'] = $reason === 'concurrency_conflict'
-                ? 'Outro usuário alterou esta auditoria enquanto você editava. Atualize a página e tente novamente.'
+                ? 'Este registro foi alterado por outro usuário. Recarregue antes de salvar.'
                 : 'Não foi possível atualizar. Verifique se os dados não foram alterados por outro usuário.';
             $this->redirect('index.php?route=auditorias/index');
             return;
@@ -308,8 +357,9 @@ class AuditoriasController extends BaseController
             'Empresa' => (string)($item['cliente_nome'] ?? ''),
             'Setor' => (string)($item['setor_nome'] ?? ''),
             'Status' => (string)($item['status'] ?? ''),
-            'Data agendada' => date('d/m/Y', strtotime((string)$item['data_auditoria'])),
-            'Data de finalização' => !empty($item['realizada_at']) ? date('d/m/Y H:i', strtotime((string)$item['realizada_at'])) : '-',
+            'Responsáveis' => !empty($item['responsaveis_nomes']) ? (string)$item['responsaveis_nomes'] : '-',
+            'Data agendada' => DateHelper::formatDate((string)($item['data_auditoria'] ?? '')),
+            'Data de finalização' => !empty($item['realizada_at']) ? DateHelper::formatDateTime((string)$item['realizada_at']) : '-',
             'Auditor responsável' => (string)($auditor ?? '-'),
         ];
         $questions = [];
@@ -339,7 +389,7 @@ class AuditoriasController extends BaseController
         $pdf = SimplePdfReport::fromAudit([
             'logo_path' => is_file($logoPath) ? $logoPath : null,
             'report_title' => 'Relatório de Auditoria',
-            'generated_at' => date('d/m/Y H:i'),
+            'generated_at' => DateHelper::now(),
             'version' => 'v2.0',
             'header' => $header,
             'questions' => $questions,
@@ -473,6 +523,9 @@ class AuditoriasController extends BaseController
             return;
         }
         $payload = json_decode((string)($_POST['observacoes_json'] ?? '[]'), true) ?: [];
+        $prevUpdatedAt = (string)($_POST['prev_updated_at'] ?? '');
+        $prevLockVersionRaw = $_POST['prev_lock_version'] ?? null;
+        $prevLockVersion = is_numeric($prevLockVersionRaw) ? (int)$prevLockVersionRaw : null;
         $map = [];
         foreach ($payload as $row) {
             $qid = (int)($row['questao_id'] ?? 0);
@@ -486,6 +539,25 @@ class AuditoriasController extends BaseController
         $updated = 0;
         try {
             $this->auditorias->db->beginTransaction();
+            $concurrencyParams = ['id' => $id, 'updated_by' => $userId];
+            if ($prevLockVersion !== null) {
+                $concurrencyParams['prev_lock_version'] = $prevLockVersion;
+                $concurrency = ' AND lock_version = :prev_lock_version';
+            } elseif ($prevUpdatedAt !== '') {
+                $concurrencyParams['prev'] = $prevUpdatedAt;
+                $concurrency = ' AND updated_at = :prev';
+            } else {
+                $concurrency = '';
+            }
+            $lockStmt = $this->auditorias->db->prepare("UPDATE auditorias SET updated_by = :updated_by, lock_version = lock_version + 1 WHERE id = :id AND deleted_at IS NULL$concurrency");
+            $lockStmt->execute($concurrencyParams);
+            if ($lockStmt->rowCount() <= 0) {
+                try { if ($this->auditorias->db->inTransaction()) $this->auditorias->db->rollBack(); } catch (\Throwable $e2) {}
+                $_SESSION['flash_error'] = 'Este registro foi alterado por outro usuário. Recarregue antes de salvar.';
+                $this->redirect('index.php?route=auditorias/editar_realizada&id=' . $id);
+                return;
+            }
+            $this->auditorias->saveHistorySnapshot($id, $userId);
             $stmtUp = $this->auditorias->db->prepare('UPDATE auditoria_avaliacoes SET observacoes = :obs, updated_by = :uid, updated_at = NOW() WHERE auditoria_id = :aid AND questao_id = :qid');
             $stmtLog = $this->auditorias->db->prepare('INSERT INTO auditoria_avaliacoes_log (auditoria_id, questao_id, old_observacoes, new_observacoes, updated_by) VALUES (:aid, :qid, :old, :new, :uid)');
             foreach ($map as $qid => $newObs) {
@@ -569,16 +641,14 @@ class AuditoriasController extends BaseController
     {
         $this->requireApiAuth(false);
         header('Content-Type: application/json; charset=utf-8');
-        $setor = (int)($_GET['setor_id'] ?? 0);
         $cliente = (int)($this->resolveScopedClienteId((int)($_GET['cliente_id'] ?? 0)) ?? 0);
         $q = trim((string)($_GET['q'] ?? ''));
-        if ($setor <= 0 || $cliente <= 0 || mb_strlen($q) < 2) {
+        if ($cliente <= 0 || mb_strlen($q) < 2) {
             echo json_encode(['success' => true, 'items' => []], JSON_UNESCAPED_UNICODE);
             return;
         }
-        $items = $this->colaboradores->searchActiveBySetor($setor, $cliente, $q, 15);
+        $items = $this->colaboradores->searchActiveByCliente($cliente, $q, 15);
         AuditLogger::log('auditoria_api_colaboradores', 'auditoria', null, [
-            'setor_id' => $setor,
             'cliente_id' => $cliente,
             'q_len' => mb_strlen($q),
             'total' => count($items),
@@ -606,11 +676,6 @@ class AuditoriasController extends BaseController
         if (!$item) {
             http_response_code(404);
             echo json_encode(['success' => false, 'message' => 'Auditoria não encontrada'], JSON_UNESCAPED_UNICODE);
-            return;
-        }
-        if (($item['status'] ?? '') === 'Realizada') {
-            http_response_code(403);
-            echo json_encode(['success' => false, 'message' => 'Upload permitido apenas durante a auditoria.'], JSON_UNESCAPED_UNICODE);
             return;
         }
         if (!$this->auditorias->questaoPertence($auditoriaId, $questaoId)) {
@@ -710,12 +775,80 @@ class AuditoriasController extends BaseController
             $out[] = [
                 'id' => (int)$it['id'],
                 'name' => (string)($it['original_name'] ?? ''),
+                'descricao' => (string)($it['descricao'] ?? ''),
                 'size' => (int)($it['size'] ?? 0),
                 'mime' => $it['mime'] ?? null,
                 'has_thumb' => !empty($it['thumb_path']),
             ];
         }
         echo json_encode(['success' => true, 'items' => $out], JSON_UNESCAPED_UNICODE);
+    }
+
+    public function apiDeleteAnexo(): void
+    {
+        $this->requireApiAuth(true);
+        header('Content-Type: application/json; charset=utf-8');
+        if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'CSRF inválido'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        $file = $this->arquivos->find($id);
+        if (!$file) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'Anexo não encontrado'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $auditoria = $this->auditorias->find((int)$file['auditoria_id']);
+        if (!$auditoria || !$this->canAccessCliente((int)$auditoria['cliente_id'])) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => 'Sem permissão'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $this->auditorias->saveHistorySnapshot((int)$file['auditoria_id'], (int)($_SESSION['user']['id'] ?? 0));
+        $this->arquivos->delete($id);
+        foreach (['path', 'compressed_path', 'thumb_path'] as $field) {
+            $path = (string)($file[$field] ?? '');
+            if ($path !== '' && is_file($path)) {
+                @unlink($path);
+            }
+        }
+        echo json_encode(['success' => true], JSON_UNESCAPED_UNICODE);
+    }
+
+    public function apiUpdateAnexo(): void
+    {
+        $this->requireApiAuth(true);
+        header('Content-Type: application/json; charset=utf-8');
+        if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'CSRF inválido'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        $file = $this->arquivos->find($id);
+        if (!$file) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'Anexo não encontrado'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $auditoria = $this->auditorias->find((int)$file['auditoria_id']);
+        if (!$auditoria || !$this->canAccessCliente((int)$auditoria['cliente_id'])) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => 'Sem permissão'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $name = trim((string)($_POST['name'] ?? ''));
+        $descricao = trim((string)($_POST['descricao'] ?? ''));
+        if ($name === '' || mb_strlen($name) > 255 || mb_strlen($descricao) > 500) {
+            http_response_code(422);
+            echo json_encode(['success' => false, 'message' => 'Metadados inválidos'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $this->auditorias->saveHistorySnapshot((int)$file['auditoria_id'], (int)($_SESSION['user']['id'] ?? 0));
+        $this->arquivos->updateMetadata($id, $name, $descricao);
+        echo json_encode(['success' => true], JSON_UNESCAPED_UNICODE);
     }
 
     public function downloadAnexo(): void
@@ -963,8 +1096,10 @@ class AuditoriasController extends BaseController
         $cliente = (int)($this->resolveScopedClienteId((int)($_GET['cliente'] ?? 0)) ?? 0);
         return [
             'cliente' => $cliente > 0 ? $cliente : null,
+            'departamento' => (int)($_GET['departamento'] ?? 0) ?: null,
             'setor' => (int)($_GET['setor'] ?? 0) ?: null,
             'status' => ($_GET['status'] ?? '') ?: null,
+            'farol' => ($_GET['farol'] ?? '') ?: null,
             'inicio' => $inicio,
             'fim' => $fim,
             'sort_col' => ($_GET['sort_col'] ?? 'data'),
@@ -975,18 +1110,86 @@ class AuditoriasController extends BaseController
 
     private function payloadFromRequest(array $src): array
     {
+        $responsaveis = AuditoriaValidator::normalizeResponsaveis($src['responsaveis_json'] ?? '[]');
         return [
             'cliente_id' => (int)($src['cliente_id'] ?? 0),
             'setor_id' => (int)($src['setor_id'] ?? 0),
             'nome_auditoria' => trim((string)($src['nome_auditoria'] ?? '')),
             'data_auditoria' => AuditoriaValidator::normalizeDate((string)($src['data_auditoria'] ?? '')),
+            'responsavel_ids' => array_map(static fn($item) => (int)$item['id'], $responsaveis),
+            'responsavel_labels' => array_map(static fn($item) => (string)$item['nome'], $responsaveis),
             'questoes' => AuditoriaValidator::normalizeQuestoes($src['questoes_json'] ?? ($src['questoes'] ?? [])),
         ];
     }
 
     private function appendResponsavelValidationErrors(array $payload, array &$errors): void
     {
-        return;
+        $clienteId = (int)($payload['cliente_id'] ?? 0);
+        $gerais = array_values(array_unique(array_filter(array_map('intval', $payload['responsavel_ids'] ?? []))));
+        $questaoIds = [];
+
+        foreach (($payload['questoes'] ?? []) as $index => $questao) {
+            $ids = array_values(array_unique(array_filter(array_map('intval', $questao['responsavel_ids'] ?? []))));
+            if (empty($ids)) {
+                $errors['questao_' . ($index + 1) . '_responsavel_nome'] = 'Questão ' . ($index + 1) . ': selecione pelo menos 1 responsável.';
+            }
+            $questaoIds = array_merge($questaoIds, $ids);
+        }
+
+        $todosIds = array_values(array_unique(array_merge($gerais, $questaoIds)));
+        if (empty($todosIds)) {
+            $errors['responsaveis'] = 'Selecione pelo menos 1 responsável para a auditoria.';
+            return;
+        }
+        if ($clienteId <= 0) {
+            return;
+        }
+
+        $validos = $this->colaboradores->findByIdsCliente($todosIds, $clienteId);
+        $validosMap = [];
+        foreach ($validos as $item) {
+            $validosMap[(int)$item['id']] = (string)($item['nome'] ?? '');
+        }
+
+        $invalidos = array_values(array_diff($todosIds, array_keys($validosMap)));
+        if (!empty($invalidos)) {
+            $errors['responsaveis'] = 'Um ou mais responsáveis selecionados não pertencem à empresa informada.';
+        }
+    }
+
+    private function mergeItemWithPayload(array $current, array $payload, int $id): array
+    {
+        $item = $current;
+        $item['id'] = $id;
+        $item['cliente_id'] = (int)($payload['cliente_id'] ?? ($current['cliente_id'] ?? 0));
+        $item['setor_id'] = (int)($payload['setor_id'] ?? ($current['setor_id'] ?? 0));
+        $item['nome_auditoria'] = (string)($payload['nome_auditoria'] ?? ($current['nome_auditoria'] ?? ''));
+        $item['data_auditoria'] = (string)($payload['data_auditoria'] ?? ($current['data_auditoria'] ?? ''));
+        $item['questoes'] = is_array($payload['questoes'] ?? null) ? $payload['questoes'] : ($current['questoes'] ?? []);
+        $item['responsaveis'] = $this->buildResponsaveisForView($payload, $current['responsaveis'] ?? []);
+        $item['responsaveis_nomes'] = implode(', ', array_filter(array_map(static fn($resp) => trim((string)($resp['nome'] ?? '')), $item['responsaveis'])));
+        return $item;
+    }
+
+    private function buildResponsaveisForView(array $payload, array $fallback = []): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $payload['responsavel_ids'] ?? []))));
+        $labels = array_values(array_filter(array_map('trim', $payload['responsavel_labels'] ?? [])));
+        if (empty($ids) && empty($labels)) {
+            return $fallback;
+        }
+
+        $items = [];
+        $max = max(count($ids), count($labels));
+        for ($i = 0; $i < $max; $i++) {
+            $id = (int)($ids[$i] ?? 0);
+            $nome = (string)($labels[$i] ?? '');
+            if ($id <= 0 && $nome === '') {
+                continue;
+            }
+            $items[] = ['id' => $id, 'nome' => $nome];
+        }
+        return $items;
     }
 
     private function isPost(): bool
@@ -1112,6 +1315,32 @@ class AuditoriasController extends BaseController
             $cache = $this->setores->allByCliente($clienteId);
             $_SESSION['cache_auditoria_setores'][$clienteId] = $cache;
             $_SESSION['cache_auditoria_setores_ts'][$clienteId] = time();
+        }
+        return $cache;
+    }
+
+    private function departamentosCached(int $clienteId = 0, bool $force = false): array
+    {
+        if (!isset($_SESSION['cache_auditoria_departamentos']) || !is_array($_SESSION['cache_auditoria_departamentos'])) {
+            $_SESSION['cache_auditoria_departamentos'] = [];
+        }
+        if (!isset($_SESSION['cache_auditoria_departamentos_ts']) || !is_array($_SESSION['cache_auditoria_departamentos_ts'])) {
+            $_SESSION['cache_auditoria_departamentos_ts'] = [];
+        }
+        $key = $clienteId > 0 ? ('cliente:' . $clienteId) : 'all';
+        $cache = $_SESSION['cache_auditoria_departamentos'][$key] ?? null;
+        $ts = (int)($_SESSION['cache_auditoria_departamentos_ts'][$key] ?? 0);
+        $expired = ($ts <= 0 || (time() - $ts) > 60);
+        $needsRefresh = $force || !is_array($cache) || $expired;
+        if ($needsRefresh) {
+            $cache = $clienteId > 0 ? $this->departamentos->allByCliente($clienteId) : $this->departamentos->all();
+            $_SESSION['cache_auditoria_departamentos'][$key] = $cache;
+            $_SESSION['cache_auditoria_departamentos_ts'][$key] = time();
+        }
+        if (empty($cache)) {
+            $cache = $clienteId > 0 ? $this->departamentos->allByCliente($clienteId) : $this->departamentos->all();
+            $_SESSION['cache_auditoria_departamentos'][$key] = $cache;
+            $_SESSION['cache_auditoria_departamentos_ts'][$key] = time();
         }
         return $cache;
     }

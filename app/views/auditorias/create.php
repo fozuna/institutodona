@@ -4,6 +4,16 @@ $questoesServer = [];
 if (!empty($values['questoes']) && is_array($values['questoes'])) {
     $questoesServer = $values['questoes'];
 }
+$responsaveisServer = [];
+$responsavelIdsServer = array_values(array_unique(array_filter(array_map('intval', $values['responsavel_ids'] ?? []))));
+$responsavelLabelsServer = array_values(array_filter(array_map('trim', $values['responsavel_labels'] ?? [])));
+$responsavelServerTotal = max(count($responsavelIdsServer), count($responsavelLabelsServer));
+for ($i = 0; $i < $responsavelServerTotal; $i++) {
+    $responsaveisServer[] = [
+        'id' => (int)($responsavelIdsServer[$i] ?? 0),
+        'nome' => (string)($responsavelLabelsServer[$i] ?? ''),
+    ];
+}
 ?>
 <div class="p-6 max-w-6xl">
     <div class="sticky top-2 z-20 bg-white border rounded shadow-sm px-4 py-3 mb-4 flex items-center justify-between">
@@ -12,6 +22,7 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
     </div>
     <form method="post" action="index.php?route=auditorias/store" id="auditoriaForm" class="bg-white shadow rounded p-4 space-y-4">
         <input type="hidden" name="csrf" value="<?= Security::csrfToken() ?>" />
+        <input type="hidden" name="responsaveis_json" id="responsaveisJson" value="<?= htmlspecialchars(json_encode($responsaveisServer, JSON_UNESCAPED_UNICODE)) ?>" />
         <input type="hidden" name="questoes_json" id="questoesJson" value="<?= htmlspecialchars(json_encode($questoesServer, JSON_UNESCAPED_UNICODE)) ?>" />
         <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
             <div class="md:col-span-4">
@@ -48,6 +59,19 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
                 <input type="text" name="nome_auditoria" id="nomeAuditoria" class="border rounded p-2 w-full" minlength="5" maxlength="180" required value="<?= htmlspecialchars($values['nome_auditoria'] ?? '') ?>" />
                 <?php if (!empty($errors['nome_auditoria'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['nome_auditoria']) ?></p><?php endif; ?>
             </div>
+            <div class="md:col-span-12">
+                <label class="block text-sm">Responsáveis da Auditoria</label>
+                <div class="relative">
+                    <div class="flex gap-2">
+                        <input type="text" id="responsavelSearch" class="border rounded p-2 w-full" autocomplete="off" placeholder="Buscar colaborador da empresa" />
+                        <button type="button" id="btnAddResponsavel" class="px-3 py-2 rounded bg-brand-pink text-white">Adicionar responsável</button>
+                    </div>
+                    <div id="responsavelMenu" class="hidden absolute z-10 w-full mt-1 bg-white border rounded shadow max-h-52 overflow-auto"></div>
+                </div>
+                <div id="selectedResponsaveis" class="mt-2 flex flex-wrap gap-2"></div>
+                <div id="responsavelStatus" class="text-xs text-gray-500 mt-1"></div>
+                <?php if (!empty($errors['responsaveis'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['responsaveis']) ?></p><?php endif; ?>
+            </div>
         </div>
         <?php if (!empty($errors['questoes'])): ?><p class="text-sm text-red-600"><?= htmlspecialchars($errors['questoes']) ?></p><?php endif; ?>
         <div class="flex items-center justify-between">
@@ -74,10 +98,17 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
         const btnSalvarTopo = document.getElementById('btnSalvarTopo');
         const clienteDebugStatus = document.getElementById('clienteDebugStatus');
         const setorStatus = document.getElementById('setorStatus');
+        const responsaveisJson = document.getElementById('responsaveisJson');
+        const responsavelSearch = document.getElementById('responsavelSearch');
+        const responsavelMenu = document.getElementById('responsavelMenu');
+        const responsavelStatus = document.getElementById('responsavelStatus');
+        const selectedResponsaveis = document.getElementById('selectedResponsaveis');
         const backendErrors = <?= json_encode($errors, JSON_UNESCAPED_UNICODE) ?>;
         let questoes = [];
+        let responsaveis = [];
         const responsavelSugestoesPorQuestao = new Map();
         const responsavelDebounce = new Map();
+        let responsavelDebounceTop = null;
 
         const parseInitialQuestoes = ()=>{
             try {
@@ -89,12 +120,127 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
                 questoes = [];
             }
             if (!questoes.length) {
-                questoes = [{ responsavel_nome: '', pergunta: '', referencia_esperada: '', processos: [] }];
+                questoes = [{ responsavel_nome: '', responsavel_ids: [], responsavel_labels: [], pergunta: '', referencia_esperada: '', processos: [] }];
             }
+        };
+        const parseInitialResponsaveis = ()=>{
+            try {
+                const parsed = JSON.parse(responsaveisJson.value || '[]');
+                responsaveis = Array.isArray(parsed) ? parsed : [];
+            } catch (e) {
+                responsaveis = [];
+            }
+            responsaveis = responsaveis
+                .map((item)=>({
+                    id: Number(item?.id || 0),
+                    nome: String(item?.nome || '').trim()
+                }))
+                .filter((item)=>item.id > 0 || item.nome !== '');
         };
 
         const syncHidden = ()=>{
             questoesJson.value = JSON.stringify(questoes);
+        };
+        const syncResponsaveisHidden = ()=>{
+            responsaveisJson.value = JSON.stringify(responsaveis);
+        };
+        const ensureResponsaveisShape = (idx)=>{
+            questoes[idx].responsavel_ids = Array.isArray(questoes[idx].responsavel_ids) ? questoes[idx].responsavel_ids : [];
+            questoes[idx].responsavel_labels = Array.isArray(questoes[idx].responsavel_labels) ? questoes[idx].responsavel_labels : [];
+            if (!questoes[idx].responsavel_labels.length && (questoes[idx].responsavel_nome || '').trim()) {
+                questoes[idx].responsavel_labels = String(questoes[idx].responsavel_nome).split(',').map((v)=>v.trim()).filter(Boolean);
+            }
+        };
+        const syncResponsavelNome = (idx)=>{
+            ensureResponsaveisShape(idx);
+            questoes[idx].responsavel_nome = questoes[idx].responsavel_labels.join(', ');
+            syncHidden();
+        };
+        const setTopResponsavelStatus = (message, isError=false)=>{
+            if (!responsavelStatus) return;
+            responsavelStatus.textContent = message;
+            responsavelStatus.className = `text-xs mt-1 ${isError ? 'text-red-600' : 'text-gray-500'}`;
+        };
+        const renderResponsaveisSelecionados = ()=>{
+            if (!selectedResponsaveis) return;
+            selectedResponsaveis.innerHTML = '';
+            responsaveis.forEach((item, index)=>{
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'px-2 py-1 rounded bg-gray-200 text-brand-brown text-xs';
+                chip.textContent = `${item.nome || ('Responsável #' + item.id)} x`;
+                chip.addEventListener('click', ()=>{
+                    responsaveis.splice(index, 1);
+                    syncResponsaveisHidden();
+                    renderResponsaveisSelecionados();
+                });
+                selectedResponsaveis.appendChild(chip);
+            });
+            syncResponsaveisHidden();
+        };
+        const addResponsavelSelecionado = (item)=>{
+            const id = Number(item?.id || 0);
+            const nome = String(item?.nome || '').trim();
+            if (id <= 0 || nome === '') {
+                return;
+            }
+            if (!responsaveis.some((current)=>Number(current.id) === id)) {
+                responsaveis.push({ id, nome });
+            }
+            syncResponsaveisHidden();
+            renderResponsaveisSelecionados();
+        };
+        const applyTopResponsavelSugestoes = (items, autoAddFirst=false)=>{
+            responsavelMenu.innerHTML = '';
+            const validItems = (items || [])
+                .map((item)=>({ id: Number(item?.id || 0), nome: String(item?.nome || '').trim() }))
+                .filter((item)=>item.id > 0 && item.nome !== '');
+            validItems.slice(0, 10).forEach((item)=>{
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'block w-full text-left px-3 py-2 hover:bg-gray-100';
+                btn.textContent = item.nome;
+                btn.addEventListener('mousedown', (e)=>{
+                    e.preventDefault();
+                    addResponsavelSelecionado(item);
+                    responsavelSearch.value = '';
+                    responsavelMenu.classList.add('hidden');
+                    setTopResponsavelStatus('Responsável adicionado.');
+                });
+                responsavelMenu.appendChild(btn);
+            });
+            if (autoAddFirst && responsavelMenu.firstElementChild) {
+                responsavelMenu.firstElementChild.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                return;
+            }
+            if (validItems.length) {
+                responsavelMenu.classList.remove('hidden');
+                setTopResponsavelStatus(`${validItems.length} sugestão(ões) encontrada(s)`);
+            } else {
+                responsavelMenu.classList.add('hidden');
+                setTopResponsavelStatus('Nenhum colaborador encontrado.');
+            }
+        };
+        const fetchTopResponsavelSugestoes = (query, autoAddFirst=false)=>{
+            const clienteId = clienteSelect.value;
+            const q = (query || '').trim();
+            if (!clienteId) {
+                setTopResponsavelStatus('Selecione a empresa para buscar responsáveis.');
+                return;
+            }
+            if (q.length < 2) {
+                setTopResponsavelStatus('Digite ao menos 2 caracteres para sugerir colaboradores.');
+                responsavelMenu.classList.add('hidden');
+                return;
+            }
+            fetch('index.php?route=auditorias/api_colaboradores&cliente_id=' + encodeURIComponent(clienteId) + '&q=' + encodeURIComponent(q))
+                .then((r)=>r.json())
+                .then((json)=>applyTopResponsavelSugestoes((json && Array.isArray(json.items)) ? json.items : [], autoAddFirst))
+                .catch((err)=>{
+                    console.error('[auditorias/create] falha ao carregar responsáveis da auditoria', err);
+                    setTopResponsavelStatus('Erro ao consultar colaboradores.', true);
+                    responsavelMenu.classList.add('hidden');
+                });
         };
 
         const openProcessEditor = (index)=>{
@@ -114,6 +260,7 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
                 const count = (q.pergunta || '').length;
                 const processos = Array.isArray(q.processos) ? q.processos : [];
                 const erroResponsavel = backendErrors[`questao_${index + 1}_responsavel_nome`] || '';
+                ensureResponsaveisShape(index);
                 card.innerHTML = `
                     <div class="flex items-center justify-between mb-3">
                         <h3 class="font-semibold">Questão ${index + 1}</h3>
@@ -124,12 +271,15 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
                         <div class="md:col-span-4">
-                            <label class="block text-xs">Responsável</label>
+                            <label class="block text-xs">Responsáveis</label>
                             <div class="relative">
-                                <input type="text" class="border rounded p-2 w-full" data-responsavel="${index}" list="responsavelList_${index}" autocomplete="off" value="${(q.responsavel_nome || '').replace(/"/g, '&quot;')}" />
+                                <div class="flex gap-2">
+                                    <input type="text" class="border rounded p-2 w-full" data-responsavel-search="${index}" autocomplete="off" placeholder="Buscar colaborador" />
+                                    <button type="button" class="px-2 py-1 rounded bg-brand-pink text-white text-xs" data-add-responsavel="${index}">Adicionar</button>
+                                </div>
                                 <div class="hidden absolute z-10 w-full mt-1 bg-white border rounded shadow max-h-52 overflow-auto" data-responsavel-menu="${index}"></div>
                             </div>
-                            <datalist id="responsavelList_${index}"></datalist>
+                            <div class="mt-2 flex flex-wrap gap-2" data-selected-responsaveis="${index}"></div>
                             <div class="text-xs text-gray-500 mt-1" data-responsavel-status="${index}"></div>
                             ${erroResponsavel ? `<div class="text-xs text-red-600 mt-1">${erroResponsavel}</div>` : ''}
                         </div>
@@ -159,11 +309,16 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
             questoesContainer.querySelectorAll('[data-processo]').forEach((el)=>{
                 el.addEventListener('click', ()=>openProcessEditor(Number(el.getAttribute('data-processo'))));
             });
-            questoesContainer.querySelectorAll('[data-responsavel]').forEach((el)=>{
+            questoesContainer.querySelectorAll('[data-add-responsavel]').forEach((el)=>el.addEventListener('click', ()=>{
+                const idx = Number(el.getAttribute('data-add-responsavel'));
+                const input = questoesContainer.querySelector(`[data-responsavel-search="${idx}"]`);
+                const value = (input?.value || '').trim();
+                if (!value) return;
+                fetchSugestoesResponsavel(idx, value, true);
+            }));
+            questoesContainer.querySelectorAll('[data-responsavel-search]').forEach((el)=>{
                 el.addEventListener('input', ()=>{
-                    const idx = Number(el.getAttribute('data-responsavel'));
-                    questoes[idx].responsavel_nome = el.value;
-                    syncHidden();
+                    const idx = Number(el.getAttribute('data-responsavel-search'));
                     const key = `q_${idx}`;
                     if (responsavelDebounce.has(key)) {
                         clearTimeout(responsavelDebounce.get(key));
@@ -173,7 +328,7 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
                     }, 250));
                 });
                 el.addEventListener('focus', ()=>{
-                    const idx = Number(el.getAttribute('data-responsavel'));
+                    const idx = Number(el.getAttribute('data-responsavel-search'));
                     const menu = questoesContainer.querySelector(`[data-responsavel-menu="${idx}"]`);
                     const sugestoes = responsavelSugestoesPorQuestao.get(idx) || [];
                     if (menu && sugestoes.length) {
@@ -181,10 +336,7 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
                     }
                 });
                 el.addEventListener('blur', ()=>{
-                    const idx = Number(el.getAttribute('data-responsavel'));
-                    if ((el.value || '').trim().length >= 2) {
-                        fetchSugestoesResponsavel(idx, el.value || '');
-                    }
+                    const idx = Number(el.getAttribute('data-responsavel-search'));
                     setTimeout(()=>{
                         const menu = questoesContainer.querySelector(`[data-responsavel-menu="${idx}"]`);
                         if (menu) menu.classList.add('hidden');
@@ -208,6 +360,27 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
                     syncHidden();
                 });
             });
+            questoes.forEach((_, index)=>{
+                const selected = questoesContainer.querySelector(`[data-selected-responsaveis="${index}"]`);
+                if (!selected) return;
+                ensureResponsaveisShape(index);
+                selected.innerHTML = '';
+                questoes[index].responsavel_labels.forEach((label, pos)=>{
+                    const chip = document.createElement('button');
+                    chip.type = 'button';
+                    chip.className = 'px-2 py-1 rounded bg-gray-200 text-brand-brown text-xs';
+                    chip.textContent = label + ' x';
+                    chip.addEventListener('click', ()=>{
+                        questoes[index].responsavel_labels.splice(pos, 1);
+                        if (questoes[index].responsavel_ids[pos]) {
+                            questoes[index].responsavel_ids.splice(pos, 1);
+                        }
+                        syncResponsavelNome(index);
+                        renderQuestoes();
+                    });
+                    selected.appendChild(chip);
+                });
+            });
             syncHidden();
         };
 
@@ -218,20 +391,15 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
             el.className = `text-xs mt-1 ${isError ? 'text-red-600' : 'text-gray-500'}`;
         };
 
-        const applySugestoesResponsavel = (idx, items)=>{
-            const list = document.getElementById(`responsavelList_${idx}`);
+        const applySugestoesResponsavel = (idx, items, autoAddFirst=false)=>{
             const menu = questoesContainer.querySelector(`[data-responsavel-menu="${idx}"]`);
-            if (!list) return;
-            list.innerHTML = '';
             if (menu) menu.innerHTML = '';
             const nomes = [];
             (items || []).slice(0, 10).forEach((item)=>{
+                const id = Number(item?.id || 0);
                 const nome = (item && item.nome) ? String(item.nome).trim() : '';
-                if (!nome) return;
+                if (!nome || id <= 0) return;
                 nomes.push(nome);
-                const op = document.createElement('option');
-                op.value = nome;
-                list.appendChild(op);
                 if (menu) {
                     const btn = document.createElement('button');
                     btn.type = 'button';
@@ -239,17 +407,25 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
                     btn.textContent = nome;
                     btn.addEventListener('mousedown', (e)=>{
                         e.preventDefault();
-                        const input = questoesContainer.querySelector(`input[data-responsavel="${idx}"]`);
-                        if (!input) return;
-                        input.value = nome;
-                        questoes[idx].responsavel_nome = nome;
-                        syncHidden();
+                        ensureResponsaveisShape(idx);
+                        if (!questoes[idx].responsavel_ids.includes(id)) {
+                            questoes[idx].responsavel_ids.push(id);
+                            questoes[idx].responsavel_labels.push(nome);
+                        }
+                        const input = questoesContainer.querySelector(`[data-responsavel-search="${idx}"]`);
+                        if (input) input.value = '';
+                        syncResponsavelNome(idx);
+                        renderQuestoes();
                         if (menu) menu.classList.add('hidden');
                         setResponsavelStatus(idx, 'Responsável selecionado.');
                     });
                     menu.appendChild(btn);
                 }
             });
+            if (autoAddFirst && menu && menu.firstElementChild) {
+                menu.firstElementChild.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                return;
+            }
             responsavelSugestoesPorQuestao.set(idx, nomes);
             setResponsavelStatus(idx, nomes.length ? `${nomes.length} sugestão(ões) encontrada(s)` : 'Nenhum colaborador encontrado');
             if (menu) {
@@ -258,23 +434,22 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
             }
         };
 
-        const fetchSugestoesResponsavel = (idx, query)=>{
+        const fetchSugestoesResponsavel = (idx, query, autoAddFirst=false)=>{
             const clienteId = clienteSelect.value;
-            const setorId = setorSelect.value;
             const q = (query || '').trim();
-            if (!clienteId || !setorId) {
-                setResponsavelStatus(idx, 'Selecione empresa e setor para validar responsável.');
+            if (!clienteId) {
+                setResponsavelStatus(idx, 'Selecione a empresa para buscar responsáveis.');
                 return;
             }
             if (q.length < 2) {
                 setResponsavelStatus(idx, 'Digite ao menos 2 caracteres para sugerir colaboradores.');
                 return;
             }
-            fetch('index.php?route=auditorias/api_colaboradores&cliente_id=' + encodeURIComponent(clienteId) + '&setor_id=' + encodeURIComponent(setorId) + '&q=' + encodeURIComponent(q))
+            fetch('index.php?route=auditorias/api_colaboradores&cliente_id=' + encodeURIComponent(clienteId) + '&q=' + encodeURIComponent(q))
                 .then((r)=>r.json())
                 .then((json)=>{
                     const items = (json && Array.isArray(json.items)) ? json.items : [];
-                    applySugestoesResponsavel(idx, items);
+                    applySugestoesResponsavel(idx, items, autoAddFirst);
                 })
                 .catch((err)=>{
                     console.error('[auditorias/create] falha ao carregar sugestões de responsável', err);
@@ -379,12 +554,37 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
         };
 
         document.getElementById('btnAddQuestao')?.addEventListener('click', ()=>{
-            questoes.push({ responsavel_nome: '', pergunta: '', referencia_esperada: '', processos: [] });
+            questoes.push({ responsavel_nome: '', responsavel_ids: [], responsavel_labels: [], pergunta: '', referencia_esperada: '', processos: [] });
             renderQuestoes();
+        });
+        document.getElementById('btnAddResponsavel')?.addEventListener('click', ()=>{
+            fetchTopResponsavelSugestoes(responsavelSearch?.value || '', true);
+        });
+        responsavelSearch?.addEventListener('input', ()=>{
+            if (responsavelDebounceTop) {
+                clearTimeout(responsavelDebounceTop);
+            }
+            responsavelDebounceTop = setTimeout(()=>fetchTopResponsavelSugestoes(responsavelSearch.value || ''), 250);
+        });
+        responsavelSearch?.addEventListener('focus', ()=>{
+            if (responsavelMenu.childElementCount > 0) {
+                responsavelMenu.classList.remove('hidden');
+            }
+        });
+        responsavelSearch?.addEventListener('blur', ()=>{
+            setTimeout(()=>responsavelMenu.classList.add('hidden'), 150);
         });
 
         clienteSelect?.addEventListener('change', ()=>{
             loadSetores();
+            responsaveis = [];
+            syncResponsaveisHidden();
+            renderResponsaveisSelecionados();
+            questoes.forEach((questao)=>{
+                questao.responsavel_ids = [];
+                questao.responsavel_labels = [];
+                questao.responsavel_nome = '';
+            });
             responsavelSugestoesPorQuestao.clear();
             renderQuestoes();
         });
@@ -430,7 +630,14 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
                     return;
                 }
             }
+            const totalResponsaveisQuestoes = questoes.reduce((sum, questao)=>sum + (Array.isArray(questao.responsavel_ids) ? questao.responsavel_ids.length : 0), 0);
+            if (!responsaveis.length && totalResponsaveisQuestoes <= 0) {
+                e.preventDefault();
+                alert('Selecione pelo menos 1 responsável para a auditoria.');
+                return;
+            }
             syncHidden();
+            syncResponsaveisHidden();
             btnSalvar.disabled = true;
             btnSalvarTopo.disabled = true;
             btnSalvar.textContent = 'Cadastrando...';
@@ -438,12 +645,15 @@ if (!empty($values['questoes']) && is_array($values['questoes'])) {
         });
 
         parseInitialQuestoes();
+        parseInitialResponsaveis();
         renderQuestoes();
+        renderResponsaveisSelecionados();
         document.addEventListener('click', (e)=>{
             const t = e.target;
             if (!(t instanceof HTMLElement)) return;
-            if (t.closest('[data-responsavel-menu]') || t.closest('[data-responsavel]')) return;
+            if (t.closest('[data-responsavel-menu]') || t.closest('[data-responsavel-search]') || t.closest('#responsavelMenu') || t.closest('#responsavelSearch')) return;
             questoesContainer.querySelectorAll('[data-responsavel-menu]').forEach((m)=>m.classList.add('hidden'));
+            responsavelMenu?.classList.add('hidden');
         });
         loadClientesIfEmpty().then(()=>{
             if (clienteSelect.value) {

@@ -20,6 +20,8 @@ if (file_exists($env)) {
         $_SERVER[$key] = $val;
     }
 }
+date_default_timezone_set('America/Campo_Grande');
+
 spl_autoload_register(function ($class) {
     $prefixes = [
         'App\\Controllers\\' => __DIR__ . '/controllers/',

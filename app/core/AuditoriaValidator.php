@@ -125,13 +125,42 @@ class AuditoriaValidator
                 continue;
             }
             $questoes[] = [
+                'id' => (int)($raw['id'] ?? 0),
                 'responsavel_nome' => trim((string)($raw['responsavel_nome'] ?? '')),
+                'responsavel_ids' => array_values(array_unique(array_filter(array_map('intval', $raw['responsavel_ids'] ?? [])))),
+                'responsavel_labels' => array_values(array_filter(array_map('trim', $raw['responsavel_labels'] ?? []))),
                 'pergunta' => trim((string)($raw['pergunta'] ?? '')),
                 'referencia_esperada' => trim((string)($raw['referencia_esperada'] ?? '')),
                 'processos' => self::normalizeProcessos($raw['processos'] ?? []),
             ];
         }
         return $questoes;
+    }
+
+    public static function normalizeResponsaveis(array|string $input): array
+    {
+        if (is_string($input)) {
+            $decoded = json_decode($input, true);
+            $input = is_array($decoded) ? $decoded : [];
+        }
+        if (!is_array($input)) {
+            return [];
+        }
+        $items = [];
+        foreach ($input as $raw) {
+            if (!is_array($raw)) {
+                continue;
+            }
+            $id = (int)($raw['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $items[] = [
+                'id' => $id,
+                'nome' => trim((string)($raw['nome'] ?? '')),
+            ];
+        }
+        return $items;
     }
 
     public static function normalizeAvaliacoes(array|string $input): array

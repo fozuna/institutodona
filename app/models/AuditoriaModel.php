@@ -108,6 +108,26 @@ class AuditoriaModel extends BaseModel
                 INDEX idx_auditoria_questoes_auditoria (auditoria_id),
                 CONSTRAINT fk_auditoria_questoes_auditoria FOREIGN KEY (auditoria_id) REFERENCES auditorias(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            $this->db->exec("CREATE TABLE IF NOT EXISTS auditoria_responsaveis (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                auditoria_id INT NOT NULL,
+                colaborador_id INT NOT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uniq_auditoria_responsavel (auditoria_id, colaborador_id),
+                INDEX idx_auditoria_responsaveis_auditoria (auditoria_id),
+                INDEX idx_auditoria_responsaveis_colaborador (colaborador_id),
+                CONSTRAINT fk_auditoria_responsaveis_auditoria FOREIGN KEY (auditoria_id) REFERENCES auditorias(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            $this->db->exec("CREATE TABLE IF NOT EXISTS auditoria_questao_responsaveis (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                questao_id INT NOT NULL,
+                colaborador_id INT NOT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uniq_questao_responsavel (questao_id, colaborador_id),
+                INDEX idx_auditoria_qresp_questao (questao_id),
+                INDEX idx_auditoria_qresp_colaborador (colaborador_id),
+                CONSTRAINT fk_auditoria_qresp_questao FOREIGN KEY (questao_id) REFERENCES auditoria_questoes(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             $this->db->exec("CREATE TABLE IF NOT EXISTS auditoria_avaliacoes (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 auditoria_id INT NOT NULL,
@@ -134,6 +154,15 @@ class AuditoriaModel extends BaseModel
                 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 INDEX idx_aud_av_log_aud (auditoria_id),
                 INDEX idx_aud_av_log_q (questao_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            $this->db->exec("CREATE TABLE IF NOT EXISTS auditoria_historico (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                auditoria_id INT NOT NULL,
+                dados_anteriores JSON NOT NULL,
+                usuario_id INT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_aud_hist_auditoria (auditoria_id),
+                CONSTRAINT fk_aud_hist_auditoria FOREIGN KEY (auditoria_id) REFERENCES auditorias(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             try {
                 $this->db->exec("ALTER TABLE auditoria_avaliacoes MODIFY COLUMN conformidade ENUM('pendente','conforme','nao_conforme','nao_aplica') NOT NULL DEFAULT 'pendente'");
@@ -168,31 +197,7 @@ class AuditoriaModel extends BaseModel
         $offset = max(0, ($page - 1) * $per);
         $where = ['a.deleted_at IS NULL'];
         $params = [];
-
-        if (!empty($filters['cliente'])) {
-            $where[] = 'a.cliente_id = :cliente';
-            $params['cliente'] = (int)$filters['cliente'];
-        }
-        if (!empty($filters['setor'])) {
-            $where[] = 'a.setor_id = :setor';
-            $params['setor'] = (int)$filters['setor'];
-        }
-        if (!empty($filters['status'])) {
-            $where[] = 'a.status = :status';
-            $params['status'] = (string)$filters['status'];
-        }
-        if (!empty($filters['inicio'])) {
-            $where[] = 'a.data_auditoria >= :inicio';
-            $params['inicio'] = (string)$filters['inicio'];
-        }
-        if (!empty($filters['fim'])) {
-            $where[] = 'a.data_auditoria <= :fim';
-            $params['fim'] = (string)$filters['fim'];
-        }
-        if (!empty($filters['q'])) {
-            $where[] = '(a.nome_auditoria LIKE :q OR a.pergunta LIKE :q OR c.nome_empresa LIKE :q OR s.nome LIKE :q)';
-            $params['q'] = '%' . trim((string)$filters['q']) . '%';
-        }
+        $where = array_merge($where, $this->buildListFilterConditions($filters, $params, 'lst'));
 
         if ($this->hasScopeRestriction()) {
             $where[] = $this->tenantInCondition('a.cliente_id', $params, 'audsc');
@@ -203,6 +208,7 @@ class AuditoriaModel extends BaseModel
         $columnMap = [
             'nome' => 'a.nome_auditoria',
             'setor' => 's.nome',
+            'departamento' => 'd.nome',
             'data' => 'a.data_auditoria',
             'status' => 'a.status',
             'empresa' => 'c.nome_empresa',
@@ -213,15 +219,26 @@ class AuditoriaModel extends BaseModel
         $countStmt = $this->db->prepare("SELECT COUNT(*) FROM auditorias a
             JOIN clientes c ON c.id = a.cliente_id
             JOIN setores s ON s.id = a.setor_id
+            LEFT JOIN departamentos d ON d.id = s.departamento_id
             WHERE $whereSql");
         $countStmt->execute($params);
         $total = (int)$countStmt->fetchColumn();
 
         $sql = "SELECT a.*, c.nome_empresa AS cliente_nome, s.nome AS setor_nome,
+                       COALESCE(d.nome, 'Não informado') AS departamento_nome,
+                       COALESCE(NULLIF(resp.responsaveis_nomes, ''), legacy_resp.nome, '') AS responsaveis_nomes,
                        (SELECT COUNT(*) FROM auditoria_questoes q WHERE q.auditoria_id = a.id) AS total_questoes
                 FROM auditorias a
                 JOIN clientes c ON c.id = a.cliente_id
                 JOIN setores s ON s.id = a.setor_id
+                LEFT JOIN departamentos d ON d.id = s.departamento_id
+                LEFT JOIN colaboradores legacy_resp ON legacy_resp.id = a.responsavel_id
+                LEFT JOIN (
+                    SELECT ar.auditoria_id, GROUP_CONCAT(DISTINCT col.nome ORDER BY col.nome SEPARATOR ', ') AS responsaveis_nomes
+                    FROM auditoria_responsaveis ar
+                    JOIN colaboradores col ON col.id = ar.colaborador_id
+                    GROUP BY ar.auditoria_id
+                ) resp ON resp.auditoria_id = a.id
                 WHERE $whereSql
                 ORDER BY $order
                 LIMIT :lim OFFSET :off";
@@ -235,6 +252,104 @@ class AuditoriaModel extends BaseModel
         return ['items' => $stmt->fetchAll(), 'total' => $total];
     }
 
+    public function summarizeMetrics(array $filters): array
+    {
+        $this->ensureTables();
+        if (!$this->canBypassScope() && count($this->tenantClientIds()) === 0) {
+            return [
+                'geral' => ['count' => 0, 'media' => null],
+                'filtrada' => ['count' => 0, 'media' => null],
+            ];
+        }
+
+        $baseWhere = ['a.deleted_at IS NULL', "a.status = 'Realizada'", 'a.conformidade_pct IS NOT NULL'];
+        $generalParams = [];
+        $filteredParams = [];
+        $generalFilters = $filters;
+        unset($generalFilters['farol']);
+        $baseWhere = array_merge($baseWhere, $this->buildListFilterConditions($generalFilters, $generalParams, 'smg'));
+        if ($this->hasScopeRestriction()) {
+            $baseWhere[] = $this->tenantInCondition('a.cliente_id', $generalParams, 'audmg');
+        }
+        $generalWhereSql = implode(' AND ', $baseWhere);
+
+        $generalSql = "SELECT COUNT(*) AS total, AVG(a.conformidade_pct) AS media
+                       FROM auditorias a
+                       JOIN clientes c ON c.id = a.cliente_id
+                       JOIN setores s ON s.id = a.setor_id
+                       LEFT JOIN departamentos d ON d.id = s.departamento_id
+                       WHERE $generalWhereSql";
+        $stmt = $this->db->prepare($generalSql);
+        $stmt->execute($generalParams);
+        $general = $stmt->fetch() ?: [];
+
+        $filteredWhere = ['a.deleted_at IS NULL', "a.status = 'Realizada'", 'a.conformidade_pct IS NOT NULL'];
+        $filteredWhere = array_merge($filteredWhere, $this->buildListFilterConditions($filters, $filteredParams, 'smf'));
+        if ($this->hasScopeRestriction()) {
+            $filteredWhere[] = $this->tenantInCondition('a.cliente_id', $filteredParams, 'audmf');
+        }
+        $filteredWhereSql = implode(' AND ', $filteredWhere);
+
+        $filteredSql = "SELECT COUNT(*) AS total, AVG(a.conformidade_pct) AS media
+                        FROM auditorias a
+                        JOIN clientes c ON c.id = a.cliente_id
+                        JOIN setores s ON s.id = a.setor_id
+                        LEFT JOIN departamentos d ON d.id = s.departamento_id
+                        WHERE $filteredWhereSql";
+        $stmt = $this->db->prepare($filteredSql);
+        $stmt->execute($filteredParams);
+        $filtered = $stmt->fetch() ?: [];
+
+        return [
+            'geral' => [
+                'count' => (int)($general['total'] ?? 0),
+                'media' => isset($general['media']) ? (float)$general['media'] : null,
+            ],
+            'filtrada' => [
+                'count' => (int)($filtered['total'] ?? 0),
+                'media' => isset($filtered['media']) ? (float)$filtered['media'] : null,
+            ],
+        ];
+    }
+
+    private function buildListFilterConditions(array $filters, array &$params, string $prefix): array
+    {
+        $where = [];
+        if (!empty($filters['cliente'])) {
+            $where[] = 'a.cliente_id = :' . $prefix . '_cliente';
+            $params[$prefix . '_cliente'] = (int)$filters['cliente'];
+        }
+        if (!empty($filters['setor'])) {
+            $where[] = 'a.setor_id = :' . $prefix . '_setor';
+            $params[$prefix . '_setor'] = (int)$filters['setor'];
+        }
+        if (!empty($filters['departamento'])) {
+            $where[] = 's.departamento_id = :' . $prefix . '_departamento';
+            $params[$prefix . '_departamento'] = (int)$filters['departamento'];
+        }
+        if (!empty($filters['status'])) {
+            $where[] = 'a.status = :' . $prefix . '_status';
+            $params[$prefix . '_status'] = (string)$filters['status'];
+        }
+        if (!empty($filters['farol'])) {
+            $where[] = 'a.semaforo = :' . $prefix . '_farol';
+            $params[$prefix . '_farol'] = (string)$filters['farol'];
+        }
+        if (!empty($filters['inicio'])) {
+            $where[] = 'a.data_auditoria >= :' . $prefix . '_inicio';
+            $params[$prefix . '_inicio'] = (string)$filters['inicio'];
+        }
+        if (!empty($filters['fim'])) {
+            $where[] = 'a.data_auditoria <= :' . $prefix . '_fim';
+            $params[$prefix . '_fim'] = (string)$filters['fim'];
+        }
+        if (!empty($filters['q'])) {
+            $where[] = '(a.nome_auditoria LIKE :' . $prefix . '_q OR a.pergunta LIKE :' . $prefix . '_q OR c.nome_empresa LIKE :' . $prefix . '_q OR s.nome LIKE :' . $prefix . '_q OR d.nome LIKE :' . $prefix . '_q)';
+            $params[$prefix . '_q'] = '%' . trim((string)$filters['q']) . '%';
+        }
+        return $where;
+    }
+
     public function find(int $id): ?array
     {
         $this->ensureTables();
@@ -243,10 +358,18 @@ class AuditoriaModel extends BaseModel
         }
         $params = ['id' => $id];
         $scope = $this->hasScopeRestriction() ? (' AND ' . $this->tenantInCondition('a.cliente_id', $params, 'audf')) : '';
-        $stmt = $this->db->prepare("SELECT a.*, c.nome_empresa AS cliente_nome, s.nome AS setor_nome
+        $stmt = $this->db->prepare("SELECT a.*, c.nome_empresa AS cliente_nome, s.nome AS setor_nome,
+                                           COALESCE(NULLIF(resp.responsaveis_nomes, ''), legacy_resp.nome, '') AS responsaveis_nomes
                                     FROM auditorias a
                                     JOIN clientes c ON c.id = a.cliente_id
                                     JOIN setores s ON s.id = a.setor_id
+                                    LEFT JOIN colaboradores legacy_resp ON legacy_resp.id = a.responsavel_id
+                                    LEFT JOIN (
+                                        SELECT ar.auditoria_id, GROUP_CONCAT(DISTINCT col.nome ORDER BY col.nome SEPARATOR ', ') AS responsaveis_nomes
+                                        FROM auditoria_responsaveis ar
+                                        JOIN colaboradores col ON col.id = ar.colaborador_id
+                                        GROUP BY ar.auditoria_id
+                                    ) resp ON resp.auditoria_id = a.id
                                     WHERE a.id = :id AND a.deleted_at IS NULL$scope
                                     LIMIT 1");
         $stmt->execute($params);
@@ -261,6 +384,10 @@ class AuditoriaModel extends BaseModel
             return null;
         }
         $item['questoes'] = $this->questoesByAuditoria((int)$item['id']);
+        $item['responsaveis'] = $this->responsaveisByAuditoria((int)$item['id']);
+        if (empty($item['responsaveis']) && !empty($item['responsaveis_nomes'])) {
+            $item['responsaveis'] = $this->responsaveisFromNames((string)$item['responsaveis_nomes']);
+        }
         return $item;
     }
 
@@ -273,6 +400,16 @@ class AuditoriaModel extends BaseModel
         foreach ($rows as &$row) {
             $decoded = json_decode((string)($row['processos_json'] ?? ''), true);
             $row['processos'] = is_array($decoded) ? $decoded : [];
+        }
+        $questaoResponsaveis = $this->responsaveisByQuestaoIds(array_map(static fn($row) => (int)$row['id'], $rows));
+        foreach ($rows as &$row) {
+            $qid = (int)$row['id'];
+            $selected = $questaoResponsaveis[$qid] ?? [];
+            $row['responsavel_ids'] = array_map(static fn($item) => (int)$item['id'], $selected);
+            $row['responsavel_labels'] = array_map(static fn($item) => (string)$item['nome'], $selected);
+            if (!empty($row['responsavel_labels'])) {
+                $row['responsavel_nome'] = implode(', ', $row['responsavel_labels']);
+            }
         }
         return $rows;
     }
@@ -359,7 +496,7 @@ class AuditoriaModel extends BaseModel
                 'data_auditoria' => (string)($newData['data_auditoria'] ?? $src['data_auditoria']),
                 'nome_auditoria' => (string)($newData['nome_auditoria'] ?? ($src['nome_auditoria'] ?? 'Cópia')),
                 'pergunta' => (string)$primeira['pergunta'],
-                'objetivo' => (string)$primeira['responsavel_nome'],
+                'objetivo' => (string)($primeira['responsavel_nome'] ?? ''),
                 'referencia_esperada' => (string)$primeira['referencia_esperada'],
                 'status' => $status,
                 'created_by' => $userId,
@@ -379,7 +516,11 @@ class AuditoriaModel extends BaseModel
                     'proc' => isset($q['processos_json']) ? (string)$q['processos_json'] : json_encode($q['processos'] ?? []),
                     'ord' => $ordem++,
                 ]);
+                $this->syncQuestaoResponsaveis((int)$this->db->lastInsertId(), $this->normalizeResponsavelIds($q['responsavel_ids'] ?? []));
             }
+            $duplicatedResponsavelIds = $this->resolveAuditoriaResponsavelIds($src);
+            $this->syncAuditoriaResponsaveis($newId, $duplicatedResponsavelIds);
+            $this->syncLegacyResponsavelId($newId, $duplicatedResponsavelIds);
             $this->db->commit();
             return $newId;
             } catch (\Throwable $e) {
@@ -401,23 +542,27 @@ class AuditoriaModel extends BaseModel
         $this->db->beginTransaction();
         try {
             $primeira = $data['questoes'][0] ?? ['pergunta' => '', 'referencia_esperada' => '', 'responsavel_nome' => ''];
+            $responsavelIds = $this->resolveAuditoriaResponsavelIds($data);
             $stmt = $this->db->prepare("INSERT INTO auditorias
                 (cliente_id, setor_id, responsavel_id, data_auditoria, nome_auditoria, pergunta, objetivo, referencia_esperada, status, created_by, updated_by)
                 VALUES
-                (:cliente_id, :setor_id, NULL, :data_auditoria, :nome_auditoria, :pergunta, :objetivo, :referencia_esperada, 'Agendada', :created_by, :updated_by)");
+                (:cliente_id, :setor_id, :responsavel_id, :data_auditoria, :nome_auditoria, :pergunta, :objetivo, :referencia_esperada, 'Agendada', :created_by, :updated_by)");
             $stmt->execute([
                 'cliente_id' => $clienteId,
                 'setor_id' => (int)$data['setor_id'],
+                'responsavel_id' => !empty($responsavelIds) ? $responsavelIds[0] : null,
                 'data_auditoria' => (string)$data['data_auditoria'],
                 'nome_auditoria' => (string)$data['nome_auditoria'],
                 'pergunta' => (string)$primeira['pergunta'],
-                'objetivo' => (string)$primeira['responsavel_nome'],
+                'objetivo' => (string)($primeira['responsavel_nome'] ?? ''),
                 'referencia_esperada' => (string)$primeira['referencia_esperada'],
                 'created_by' => $userId,
                 'updated_by' => $userId,
             ]);
             $id = (int)$this->db->lastInsertId();
             $this->persistQuestoes($id, $data['questoes']);
+            $this->syncAuditoriaResponsaveis($id, $responsavelIds);
+            $this->syncLegacyResponsavelId($id, $responsavelIds);
             $this->db->commit();
             return $id;
         } catch (\Throwable $e) {
@@ -438,14 +583,16 @@ class AuditoriaModel extends BaseModel
         $this->db->beginTransaction();
         try {
             $primeira = $data['questoes'][0] ?? ['pergunta' => '', 'referencia_esperada' => '', 'responsavel_nome' => ''];
+            $responsavelIds = $this->resolveAuditoriaResponsavelIds($data);
             $params = [
             'id' => $id,
             'cliente_id' => $clienteId,
             'setor_id' => (int)$data['setor_id'],
+            'responsavel_id' => !empty($responsavelIds) ? (int)$responsavelIds[0] : null,
             'data_auditoria' => $data['data_auditoria'],
             'nome_auditoria' => (string)$data['nome_auditoria'],
             'pergunta' => (string)$primeira['pergunta'],
-            'objetivo' => (string)$primeira['responsavel_nome'],
+            'objetivo' => (string)($primeira['responsavel_nome'] ?? ''),
             'referencia_esperada' => (string)$primeira['referencia_esperada'],
             'updated_by' => $userId,
             ];
@@ -462,11 +609,12 @@ class AuditoriaModel extends BaseModel
             } else {
                 $concurrency = '';
             }
+            $this->saveHistorySnapshot($id, $userId);
             $stmt = $this->db->prepare("UPDATE auditorias
-                SET cliente_id = :cliente_id, setor_id = :setor_id, data_auditoria = :data_auditoria, nome_auditoria = :nome_auditoria,
+                SET cliente_id = :cliente_id, setor_id = :setor_id, responsavel_id = :responsavel_id, data_auditoria = :data_auditoria, nome_auditoria = :nome_auditoria,
                     pergunta = :pergunta, objetivo = :objetivo, referencia_esperada = :referencia_esperada, updated_by = :updated_by,
                     lock_version = lock_version + 1
-                WHERE id = :id AND deleted_at IS NULL AND realizada_at IS NULL AND status IN ('Rascunho','Agendada')$scope$concurrency");
+                WHERE id = :id AND deleted_at IS NULL$scope$concurrency");
             $updated = $stmt->execute($params) && $stmt->rowCount() > 0;
             if (!$updated) {
                 $this->db->rollBack();
@@ -475,6 +623,8 @@ class AuditoriaModel extends BaseModel
             }
             $this->db->prepare('DELETE FROM auditoria_questoes WHERE auditoria_id = :id')->execute(['id' => $id]);
             $this->persistQuestoes($id, $data['questoes']);
+            $this->syncAuditoriaResponsaveis($id, $responsavelIds);
+            $this->syncLegacyResponsavelId($id, $responsavelIds);
             $this->db->prepare('DELETE FROM auditoria_avaliacoes WHERE auditoria_id = :id AND finalized_at IS NULL')->execute(['id' => $id]);
             $this->db->commit();
             return true;
@@ -499,6 +649,13 @@ class AuditoriaModel extends BaseModel
             }
             $params['cliente_id'] = $clienteId;
             $set[] = 'cliente_id = :cliente_id';
+        }
+        if (array_key_exists('responsavel_ids', $data)) {
+            $responsavelIds = $this->resolveAuditoriaResponsavelIds($data);
+            $params['responsavel_id'] = !empty($responsavelIds) ? $responsavelIds[0] : null;
+            $set[] = 'responsavel_id = :responsavel_id';
+        } else {
+            $responsavelIds = null;
         }
         $setorId = (int)($data['setor_id'] ?? 0);
         if ($setorId > 0) {
@@ -529,7 +686,8 @@ class AuditoriaModel extends BaseModel
         $scope = $this->hasScopeRestriction() ? (' AND ' . $this->tenantInCondition('cliente_id', $params, 'audup')) : '';
         $this->db->beginTransaction();
         try {
-            $stmt = $this->db->prepare("UPDATE auditorias SET " . implode(', ', $set) . " WHERE id = :id AND deleted_at IS NULL AND realizada_at IS NULL AND status IN ('Rascunho','Agendada')$scope$concurrency");
+            $this->saveHistorySnapshot($id, $userId);
+            $stmt = $this->db->prepare("UPDATE auditorias SET " . implode(', ', $set) . " WHERE id = :id AND deleted_at IS NULL$scope$concurrency");
             $ok = $stmt->execute($params);
             if (!$ok || $stmt->rowCount() <= 0) {
                 $this->db->rollBack();
@@ -540,6 +698,149 @@ class AuditoriaModel extends BaseModel
                 $this->db->prepare('DELETE FROM auditoria_questoes WHERE auditoria_id = :id')->execute(['id' => $id]);
                 $this->persistQuestoes($id, $data['questoes']);
             }
+            if (is_array($responsavelIds)) {
+                $this->syncAuditoriaResponsaveis($id, $responsavelIds);
+                $this->syncLegacyResponsavelId($id, $responsavelIds);
+            }
+            $this->db->commit();
+            return true;
+        } catch (\Throwable $e) {
+            $this->safeRollback();
+            $this->lastError = 'exception';
+            return false;
+        }
+    }
+
+    public function updateRealizadaCompleta(int $id, array $data, array $avaliacoes, int $userId, ?string $prevUpdatedAt = null, ?int $prevLockVersion = null): bool
+    {
+        $this->ensureTables();
+        $this->lastError = null;
+        $current = $this->findWithQuestoes($id);
+        if (!$current) {
+            $this->lastError = 'not_found';
+            return false;
+        }
+        $clienteId = (int)($current['cliente_id'] ?? 0);
+        if ($clienteId <= 0 || (!$this->canBypassScope() && !$this->canAccessClienteId($clienteId))) {
+            $this->lastError = 'scope';
+            return false;
+        }
+
+        $existingQuestions = [];
+        foreach (($current['questoes'] ?? []) as $q) {
+            $qid = (int)($q['id'] ?? 0);
+            if ($qid > 0) {
+                $existingQuestions[$qid] = $q;
+            }
+        }
+        if (empty($existingQuestions)) {
+            $this->lastError = 'no_questions';
+            return false;
+        }
+
+        $incomingQuestions = [];
+        foreach (($data['questoes'] ?? []) as $q) {
+            $qid = (int)($q['id'] ?? 0);
+            if ($qid <= 0 || !isset($existingQuestions[$qid])) {
+                $this->lastError = 'invalid_question_set';
+                return false;
+            }
+            $incomingQuestions[$qid] = $q;
+        }
+        if (count($incomingQuestions) !== count($existingQuestions)) {
+            $this->lastError = 'invalid_question_set';
+            return false;
+        }
+
+        $avaliacoesMap = [];
+        foreach ($avaliacoes as $a) {
+            $qid = (int)($a['questao_id'] ?? 0);
+            if ($qid > 0) {
+                $avaliacoesMap[$qid] = $a;
+            }
+        }
+
+        $this->db->beginTransaction();
+        try {
+            $responsavelIds = $this->resolveAuditoriaResponsavelIds($data);
+            $params = [
+                'id' => $id,
+                'responsavel_id' => !empty($responsavelIds) ? (int)$responsavelIds[0] : null,
+                'data_auditoria' => $data['data_auditoria'],
+                'nome_auditoria' => (string)$data['nome_auditoria'],
+                'pergunta' => (string)(($data['questoes'][0]['pergunta'] ?? '') ?: ($current['pergunta'] ?? '')),
+                'objetivo' => (string)(($data['questoes'][0]['responsavel_nome'] ?? '') ?: ($current['objetivo'] ?? '')),
+                'referencia_esperada' => (string)(($data['questoes'][0]['referencia_esperada'] ?? '') ?: ($current['referencia_esperada'] ?? '')),
+                'updated_by' => $userId,
+            ];
+            if ($prevLockVersion !== null) {
+                $params['prev_lock_version'] = $prevLockVersion;
+                $concurrency = ' AND lock_version = :prev_lock_version';
+            } elseif ($prevUpdatedAt !== null) {
+                $params['prev'] = $prevUpdatedAt;
+                $concurrency = ' AND updated_at = :prev';
+            } else {
+                $concurrency = '';
+            }
+            $scope = $this->hasScopeRestriction() ? (' AND ' . $this->tenantInCondition('cliente_id', $params, 'audur')) : '';
+            $this->saveHistorySnapshot($id, $userId);
+            $stmt = $this->db->prepare("UPDATE auditorias
+                SET data_auditoria = :data_auditoria,
+                    nome_auditoria = :nome_auditoria,
+                    responsavel_id = :responsavel_id,
+                    pergunta = :pergunta,
+                    objetivo = :objetivo,
+                    referencia_esperada = :referencia_esperada,
+                    updated_by = :updated_by,
+                    lock_version = lock_version + 1
+                WHERE id = :id AND deleted_at IS NULL$scope$concurrency");
+            $ok = $stmt->execute($params) && $stmt->rowCount() > 0;
+            if (!$ok) {
+                $this->db->rollBack();
+                $this->lastError = $this->detectWriteConflict($id, $prevUpdatedAt, $prevLockVersion);
+                return false;
+            }
+
+            $upQuestao = $this->db->prepare('UPDATE auditoria_questoes SET responsavel_nome = :responsavel_nome, pergunta = :pergunta, referencia_esperada = :referencia_esperada, processos_json = :processos_json, ordem = :ordem WHERE id = :id AND auditoria_id = :auditoria_id');
+            $ordem = 1;
+            foreach ($data['questoes'] as $q) {
+                $qid = (int)$q['id'];
+                $upQuestao->execute([
+                    'id' => $qid,
+                    'auditoria_id' => $id,
+                    'responsavel_nome' => $this->joinResponsavelLabels($q),
+                    'pergunta' => (string)($q['pergunta'] ?? ''),
+                    'referencia_esperada' => (string)($q['referencia_esperada'] ?? ''),
+                    'processos_json' => json_encode(array_values($q['processos'] ?? []), JSON_UNESCAPED_UNICODE),
+                    'ordem' => $ordem++,
+                ]);
+                $this->syncQuestaoResponsaveis($qid, $this->normalizeResponsavelIds($q['responsavel_ids'] ?? []));
+            }
+            $this->syncAuditoriaResponsaveis($id, $responsavelIds);
+            $this->syncLegacyResponsavelId($id, $responsavelIds);
+
+            $payloadAvaliacoes = [];
+            foreach (array_keys($existingQuestions) as $qid) {
+                $payloadAvaliacoes[] = [
+                    'questao_id' => $qid,
+                    'conformidade' => (string)($avaliacoesMap[$qid]['conformidade'] ?? 'pendente'),
+                    'observacoes' => (string)($avaliacoesMap[$qid]['observacoes'] ?? ''),
+                ];
+            }
+            $this->persistAvaliacoesNoTx($id, $payloadAvaliacoes, $userId);
+
+            $stats = $this->computeConformidadeStats($id);
+            $resumo = 'Conforme: ' . $stats['conforme'] . ' | Não conforme: ' . $stats['nao_conforme'] . ' | N/A: ' . $stats['nao_aplica'];
+            $this->db->prepare("UPDATE auditorias
+                SET avaliacao = :avaliacao, conformidade_pct = :pct, semaforo = :sem
+                WHERE id = :id")
+                ->execute([
+                    'id' => $id,
+                    'avaliacao' => $resumo,
+                    'pct' => $stats['pct'],
+                    'sem' => $stats['semaforo'],
+                ]);
+
             $this->db->commit();
             return true;
         } catch (\Throwable $e) {
@@ -686,12 +987,14 @@ class AuditoriaModel extends BaseModel
         foreach ($questoes as $questao) {
             $stmt->execute([
                 'auditoria_id' => $auditoriaId,
-                'responsavel_nome' => (string)($questao['responsavel_nome'] ?? ''),
+                'responsavel_nome' => $this->joinResponsavelLabels($questao),
                 'pergunta' => (string)($questao['pergunta'] ?? ''),
                 'referencia_esperada' => (string)($questao['referencia_esperada'] ?? ''),
                 'processos_json' => json_encode(array_values($questao['processos'] ?? []), JSON_UNESCAPED_UNICODE),
                 'ordem' => $ordem++,
             ]);
+            $questaoId = (int)$this->db->lastInsertId();
+            $this->syncQuestaoResponsaveis($questaoId, $this->normalizeResponsavelIds($questao['responsavel_ids'] ?? []));
         }
     }
 
@@ -767,6 +1070,168 @@ class AuditoriaModel extends BaseModel
             'pct_conforme' => $split['conforme'],
             'pct_nao_conforme' => $split['nao_conforme'],
             'semaforo' => $semaforo,
+        ];
+    }
+
+    public function responsaveisByAuditoria(int $auditoriaId): array
+    {
+        $this->ensureTables();
+        $stmt = $this->db->prepare("SELECT ar.colaborador_id AS id, c.nome
+                                    FROM auditoria_responsaveis ar
+                                    JOIN colaboradores c ON c.id = ar.colaborador_id
+                                    WHERE ar.auditoria_id = :id
+                                    ORDER BY c.nome");
+        $stmt->execute(['id' => $auditoriaId]);
+        $items = $stmt->fetchAll() ?: [];
+        if (!empty($items)) {
+            return $items;
+        }
+
+        $legacyStmt = $this->db->prepare("SELECT c.id, c.nome
+                                          FROM auditorias a
+                                          JOIN colaboradores c ON c.id = a.responsavel_id
+                                          WHERE a.id = :id AND a.responsavel_id IS NOT NULL
+                                          LIMIT 1");
+        $legacyStmt->execute(['id' => $auditoriaId]);
+        $legacy = $legacyStmt->fetch();
+        return $legacy ? [[
+            'id' => (int)$legacy['id'],
+            'nome' => (string)$legacy['nome'],
+        ]] : [];
+    }
+
+    private function responsaveisByQuestaoIds(array $questaoIds): array
+    {
+        $this->ensureTables();
+        $questaoIds = array_values(array_filter(array_map('intval', $questaoIds)));
+        if (empty($questaoIds)) {
+            return [];
+        }
+        $params = [];
+        $placeholders = [];
+        foreach ($questaoIds as $i => $id) {
+            $key = 'qid' . $i;
+            $params[$key] = $id;
+            $placeholders[] = ':' . $key;
+        }
+        $stmt = $this->db->prepare("SELECT qr.questao_id, qr.colaborador_id AS id, c.nome
+                                    FROM auditoria_questao_responsaveis qr
+                                    JOIN colaboradores c ON c.id = qr.colaborador_id
+                                    WHERE qr.questao_id IN (" . implode(',', $placeholders) . ")
+                                    ORDER BY c.nome");
+        $stmt->execute($params);
+        $map = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $map[(int)$row['questao_id']][] = ['id' => (int)$row['id'], 'nome' => (string)$row['nome']];
+        }
+        return $map;
+    }
+
+    private function syncAuditoriaResponsaveis(int $auditoriaId, array $responsavelIds): void
+    {
+        $this->db->prepare('DELETE FROM auditoria_responsaveis WHERE auditoria_id = :id')->execute(['id' => $auditoriaId]);
+        $responsavelIds = $this->normalizeResponsavelIds($responsavelIds);
+        if (empty($responsavelIds)) {
+            return;
+        }
+        $stmt = $this->db->prepare('INSERT INTO auditoria_responsaveis (auditoria_id, colaborador_id) VALUES (:auditoria_id, :colaborador_id)');
+        foreach ($responsavelIds as $responsavelId) {
+            $stmt->execute([
+                'auditoria_id' => $auditoriaId,
+                'colaborador_id' => $responsavelId,
+            ]);
+        }
+    }
+
+    private function syncLegacyResponsavelId(int $auditoriaId, array $responsavelIds): void
+    {
+        $responsavelIds = $this->normalizeResponsavelIds($responsavelIds);
+        $this->db->prepare('UPDATE auditorias SET responsavel_id = :responsavel_id WHERE id = :id')
+            ->execute([
+                'id' => $auditoriaId,
+                'responsavel_id' => !empty($responsavelIds) ? $responsavelIds[0] : null,
+            ]);
+    }
+
+    private function syncQuestaoResponsaveis(int $questaoId, array $responsavelIds): void
+    {
+        $this->db->prepare('DELETE FROM auditoria_questao_responsaveis WHERE questao_id = :id')->execute(['id' => $questaoId]);
+        $responsavelIds = $this->normalizeResponsavelIds($responsavelIds);
+        if (empty($responsavelIds)) {
+            return;
+        }
+        $stmt = $this->db->prepare('INSERT INTO auditoria_questao_responsaveis (questao_id, colaborador_id) VALUES (:questao_id, :colaborador_id)');
+        foreach ($responsavelIds as $responsavelId) {
+            $stmt->execute([
+                'questao_id' => $questaoId,
+                'colaborador_id' => $responsavelId,
+            ]);
+        }
+    }
+
+    private function normalizeResponsavelIds(array $responsavelIds): array
+    {
+        return array_values(array_unique(array_filter(array_map('intval', $responsavelIds), static fn($id) => $id > 0)));
+    }
+
+    private function resolveAuditoriaResponsavelIds(array $data): array
+    {
+        $ids = $this->normalizeResponsavelIds($data['responsavel_ids'] ?? []);
+        if (!empty($ids)) {
+            return $ids;
+        }
+        $derived = [];
+        foreach (($data['questoes'] ?? []) as $questao) {
+            $derived = array_merge($derived, $this->normalizeResponsavelIds($questao['responsavel_ids'] ?? []));
+        }
+        return $this->normalizeResponsavelIds($derived);
+    }
+
+    private function joinResponsavelLabels(array $questao): string
+    {
+        $labels = array_values(array_filter(array_map('trim', $questao['responsavel_labels'] ?? [])));
+        if (!empty($labels)) {
+            return implode(', ', array_unique($labels));
+        }
+        return trim((string)($questao['responsavel_nome'] ?? ''));
+    }
+
+    private function responsaveisFromNames(string $names): array
+    {
+        $items = [];
+        foreach (explode(',', $names) as $name) {
+            $label = trim($name);
+            if ($label === '') {
+                continue;
+            }
+            $items[] = ['id' => 0, 'nome' => $label];
+        }
+        return $items;
+    }
+
+    public function saveHistorySnapshot(int $auditoriaId, int $userId): bool
+    {
+        $snapshot = $this->snapshotForHistory($auditoriaId);
+        if ($snapshot === null) {
+            return false;
+        }
+        $stmt = $this->db->prepare('INSERT INTO auditoria_historico (auditoria_id, dados_anteriores, usuario_id) VALUES (:auditoria_id, :dados_anteriores, :usuario_id)');
+        return $stmt->execute([
+            'auditoria_id' => $auditoriaId,
+            'dados_anteriores' => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'usuario_id' => $userId,
+        ]);
+    }
+
+    private function snapshotForHistory(int $auditoriaId): ?array
+    {
+        $item = $this->findWithQuestoes($auditoriaId);
+        if (!$item) {
+            return null;
+        }
+        return [
+            'auditoria' => $item,
+            'respostas' => $this->respostasByAuditoria($auditoriaId),
         ];
     }
 }

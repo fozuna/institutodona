@@ -51,6 +51,35 @@ CREATE TABLE IF NOT EXISTS departamentos (
   CONSTRAINT fk_dep_cliente FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS manuais (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  empresa_id INT NOT NULL,
+  departamento_id INT NOT NULL,
+  nome VARCHAR(255) NOT NULL,
+  descricao VARCHAR(500) NULL,
+  arquivo VARCHAR(255) NOT NULL,
+  tipo_arquivo VARCHAR(10) NOT NULL,
+  tamanho INT UNSIGNED NOT NULL DEFAULT 0,
+  usuario_id INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_manuais_empresa (empresa_id),
+  INDEX idx_manuais_departamento (departamento_id),
+  INDEX idx_manuais_nome (nome),
+  CONSTRAINT fk_manuais_empresa FOREIGN KEY (empresa_id) REFERENCES clientes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_manuais_departamento FOREIGN KEY (departamento_id) REFERENCES departamentos(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS manual_portal_tokens (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  empresa_id INT NOT NULL,
+  token VARCHAR(64) NOT NULL UNIQUE,
+  ativo TINYINT(1) NOT NULL DEFAULT 1,
+  expira_em DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_manual_portal_empresa (empresa_id),
+  CONSTRAINT fk_manual_portal_empresa FOREIGN KEY (empresa_id) REFERENCES clientes(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS setores (
   id INT AUTO_INCREMENT PRIMARY KEY,
   nome VARCHAR(180) NOT NULL,
@@ -331,6 +360,40 @@ CREATE TABLE IF NOT EXISTS auditoria_avaliacoes (
   INDEX idx_auditoria_avaliacoes_auditoria (auditoria_id),
   CONSTRAINT fk_auditoria_avaliacoes_auditoria FOREIGN KEY (auditoria_id) REFERENCES auditorias(id) ON DELETE CASCADE,
   CONSTRAINT fk_auditoria_avaliacoes_questao FOREIGN KEY (questao_id) REFERENCES auditoria_questoes(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS auditoria_historico (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  auditoria_id INT NOT NULL,
+  dados_anteriores JSON NOT NULL,
+  usuario_id INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_aud_hist_auditoria (auditoria_id),
+  CONSTRAINT fk_aud_hist_auditoria FOREIGN KEY (auditoria_id) REFERENCES auditorias(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS auditoria_responsaveis (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  auditoria_id INT NOT NULL,
+  colaborador_id INT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_auditoria_responsavel (auditoria_id, colaborador_id),
+  INDEX idx_auditoria_responsaveis_auditoria (auditoria_id),
+  INDEX idx_auditoria_responsaveis_colaborador (colaborador_id),
+  CONSTRAINT fk_auditoria_responsaveis_auditoria FOREIGN KEY (auditoria_id) REFERENCES auditorias(id) ON DELETE CASCADE,
+  CONSTRAINT fk_auditoria_responsaveis_colaborador FOREIGN KEY (colaborador_id) REFERENCES colaboradores(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS auditoria_questao_responsaveis (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  questao_id INT NOT NULL,
+  colaborador_id INT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_auditoria_questao_responsavel (questao_id, colaborador_id),
+  INDEX idx_auditoria_questao_responsaveis_questao (questao_id),
+  INDEX idx_auditoria_questao_responsaveis_colaborador (colaborador_id),
+  CONSTRAINT fk_auditoria_questao_responsaveis_questao FOREIGN KEY (questao_id) REFERENCES auditoria_questoes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_auditoria_questao_responsaveis_colaborador FOREIGN KEY (colaborador_id) REFERENCES colaboradores(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS usuario_empresas (

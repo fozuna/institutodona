@@ -61,7 +61,7 @@
       <img src="<?= htmlspecialchars($logoSrc, ENT_QUOTES, 'UTF-8') ?>" class="logo" alt="Logo" />
     <?php endif; ?>
     <div class="title">Avaliação</div>
-    <div class="muted">Empresa: <strong><?= htmlspecialchars((string)$empresa, ENT_QUOTES, 'UTF-8') ?></strong> · Data: <?= htmlspecialchars(date('d/m/Y H:i', strtotime((string)$item['created_at'])), ENT_QUOTES, 'UTF-8') ?></div>
+    <div class="muted">Empresa: <strong><?= htmlspecialchars((string)$empresa, ENT_QUOTES, 'UTF-8') ?></strong> · Data: <?= htmlspecialchars(\App\Core\DateHelper::formatDateTime((string)($item['created_at'] ?? '')), ENT_QUOTES, 'UTF-8') ?></div>
   </div>
 
   <div class="card">
@@ -74,7 +74,7 @@
         <span class="badge green">Cliente associado</span>
       <?php endif; ?>
       <?php if (!empty($item['cliente_associado_em'])): ?>
-        <span class="badge">Associado em <?= htmlspecialchars(date('d/m/Y H:i', strtotime((string)$item['cliente_associado_em'])), ENT_QUOTES, 'UTF-8') ?></span>
+        <span class="badge">Associado em <?= htmlspecialchars(\App\Core\DateHelper::formatDateTime((string)$item['cliente_associado_em']), ENT_QUOTES, 'UTF-8') ?></span>
       <?php endif; ?>
     </div>
 
