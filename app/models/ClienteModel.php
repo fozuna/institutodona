@@ -210,4 +210,59 @@ class ClienteModel extends BaseModel
             return null;
         }
     }
+
+    public function findAny(int $id): ?array
+    {
+        $this->ensureColumns();
+        try {
+            $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path, dominio_publico, is_matriz, matriz_id FROM clientes WHERE id = :id');
+            $stmt->execute(['id' => $id]);
+            $row = $stmt->fetch();
+            return $row ?: null;
+        } catch (\PDOException $e) {
+            try {
+                $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path, dominio_publico FROM clientes WHERE id = :id');
+                $stmt->execute(['id' => $id]);
+                $row = $stmt->fetch();
+                return $row ?: null;
+            } catch (\PDOException $e2) {
+                try {
+                    $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path FROM clientes WHERE id = :id');
+                    $stmt->execute(['id' => $id]);
+                    $row = $stmt->fetch();
+                    return $row ?: null;
+                } catch (\PDOException $e3) {
+                    try {
+                        $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato FROM clientes WHERE id = :id');
+                        $stmt->execute(['id' => $id]);
+                        $row = $stmt->fetch();
+                        return $row ?: null;
+                    } catch (\PDOException $e4) {
+                        return null;
+                    }
+                }
+            }
+        }
+    }
+
+    public function manualPortalScopeIds(int $empresaId): array
+    {
+        $empresa = $this->findAny($empresaId);
+        if (!$empresa) {
+            return [];
+        }
+        if ((int)($empresa['is_matriz'] ?? 1) !== 1) {
+            return [$empresaId];
+        }
+        $ids = [$empresaId];
+        try {
+            $stmt = $this->db->prepare('SELECT id FROM clientes WHERE is_matriz = 0 AND matriz_id = :mid ORDER BY id');
+            $stmt->execute(['mid' => $empresaId]);
+            foreach ($stmt->fetchAll() as $row) {
+                $ids[] = (int)$row['id'];
+            }
+        } catch (\PDOException $e) {
+        }
+        return array_values(array_unique(array_filter($ids)));
+    }
 }

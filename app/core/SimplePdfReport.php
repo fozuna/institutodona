@@ -3,6 +3,7 @@ namespace App\Core;
 
 class SimplePdfReport
 {
+    private array $branding = [];
     private array $pages = [];
     private int $currentPage = -1;
     private float $cursorY = 0.0;
@@ -35,7 +36,10 @@ class SimplePdfReport
 
     public static function fromAudit(array $data): string
     {
+        $data = ReportBranding::aplicarBrandingRelatorio('pdf', $data);
         $pdf = new self();
+        $pdf->branding = $data;
+        $pdf->applyBrandingConfig($data);
         $pdf->addPage();
         $pdf->drawHeader($data);
         $pdf->drawSummary($data);
@@ -68,6 +72,16 @@ class SimplePdfReport
         $page = $this->page();
         $page['content'] .= $cmd;
         $this->setPage($page);
+    }
+
+    private function applyBrandingConfig(array $data): void
+    {
+        $margins = is_array($data['margins'] ?? null) ? $data['margins'] : [];
+        $this->marginX = (float)(((int)($margins['left'] ?? 12)) * 2.83465);
+        $topMargin = (float)(((int)($margins['top'] ?? 16)) * 2.83465);
+        $bottomMargin = (float)(((int)($margins['bottom'] ?? 14)) * 2.83465);
+        $this->topY = $this->pageHeight - $topMargin;
+        $this->bottomY = max(32.0, $bottomMargin + 18.0);
     }
 
     private function lineHeight(int $size): float
@@ -134,17 +148,25 @@ class SimplePdfReport
         if (!empty($data['logo_path']) && is_file((string)$data['logo_path'])) {
             $im = $this->registerImage((string)$data['logo_path']);
             if ($im) {
-                $targetW = 95.0;
+                $targetW = max(56.0, (float)($data['logo_width'] ?? 96));
                 $targetH = $targetW * ($im['h'] / max(1.0, $im['w']));
-                $this->placeImage($im['name'], $this->marginX, $this->cursorY - $targetH + 8, $targetW, $targetH);
+                $imageX = ($data['logo_position'] ?? 'left') === 'right'
+                    ? ($this->pageWidth - $this->marginX - $targetW)
+                    : $this->marginX;
+                $this->placeImage($im['name'], $imageX, $this->cursorY - $targetH + 8, $targetW, $targetH);
                 $logoW = $targetW + 12.0;
             }
         }
         $title = (string)($data['report_title'] ?? 'Relatório de Auditoria');
-        $this->writeText($this->marginX + $logoW, $this->cursorY, $title, 16, true);
+        $textX = ($data['logo_position'] ?? 'left') === 'right' ? $this->marginX : ($this->marginX + $logoW);
+        $this->writeText($textX, $this->cursorY, $title, 16, true);
+        if (!empty($data['header_subtitle'])) {
+            $this->writeText($textX, $this->cursorY - 14, (string)$data['header_subtitle'], 10, false);
+        }
         $meta = 'Gerado em ' . (string)($data['generated_at'] ?? DateHelper::now());
-        $this->writeText($this->marginX + $logoW, $this->cursorY - 16, $meta, 10, false);
-        $this->cursorY -= 34;
+        $metaY = !empty($data['header_subtitle']) ? $this->cursorY - 28 : $this->cursorY - 16;
+        $this->writeText($textX, $metaY, $meta, 10, false);
+        $this->cursorY -= !empty($data['header_subtitle']) ? 44 : 34;
     }
 
     private function drawSummary(array $data): void
@@ -240,11 +262,11 @@ class SimplePdfReport
 
     private function build(array $data): string
     {
-        $version = (string)($data['version'] ?? 'v1.0');
         $generated = (string)($data['generated_at'] ?? DateHelper::now());
+        $footerText = (string)($data['footer_text'] ?? '');
         $pageCount = count($this->pages);
         for ($i = 0; $i < $pageCount; $i++) {
-            $footer = 'Página ' . ($i + 1) . '/' . $pageCount . '  •  ' . $generated . '  •  ' . $version;
+            $footer = ReportBranding::footerLabel($i + 1, $pageCount, $generated, $footerText);
             $safe = self::escapePdfText($footer);
             $this->pages[$i]['content'] .= "BT /F1 9 Tf 1 0 0 1 {$this->marginX} 28 Tm ({$safe}) Tj ET\n";
         }

@@ -228,19 +228,23 @@ try {
     $updateAfterAudit = $model->updateAgendada($first, [
         'cliente_id' => $clienteA,
         'setor_id' => $setorA,
-        'nome_auditoria' => 'Tentativa indevida',
+        'nome_auditoria' => 'Auditoria Reaberta Controlada',
         'data_auditoria' => date('Y-m-d'),
         'questoes' => [[
-            'responsavel_nome' => 'Resp Bloqueio',
-            'pergunta' => 'Tentativa indevida',
+            'responsavel_nome' => 'Resp Pos Finalizacao',
+            'pergunta' => 'Auditoria editada apos finalizacao',
             'referencia_esperada' => 'POP-102',
             'processos' => [],
         ]],
-    ], 2001);
-    if ($updateAfterAudit) {
-        failFast('Edição após auditoria realizada deveria ser bloqueada');
+    ], 2001, (string)($model->find($first)['updated_at'] ?? ''), (int)($model->find($first)['lock_version'] ?? 0));
+    if (!$updateAfterAudit) {
+        failFast('Edição após auditoria realizada deveria ser permitida com controle de concorrência');
     }
-    ok('Bloqueio de edição pós-auditoria');
+    $histCount = (int)$pdo->query('SELECT COUNT(*) FROM auditoria_historico WHERE auditoria_id = ' . (int)$first)->fetchColumn();
+    if ($histCount < 2) {
+        failFast('Histórico de auditoria deveria registrar versões anteriores');
+    }
+    ok('Edição pós-auditoria e histórico de alterações');
 
     $pdo->exec("INSERT INTO auditoria_relatorios (auditoria_id, relatorio_ref, ativo) VALUES ($first, 'REL-001', 1)");
     $cannotDelete = $model->softDelete($first, 2001);

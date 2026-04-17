@@ -22,6 +22,9 @@ class AuditoriaArquivoModel extends BaseModel
                 INDEX idx_aud_arquivos_auditoria (auditoria_id),
                 INDEX idx_aud_arquivos_questao (questao_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            if (!\App\Database\Database::columnExists('auditoria_arquivos', 'descricao')) {
+                $this->db->exec('ALTER TABLE auditoria_arquivos ADD COLUMN descricao VARCHAR(500) NULL');
+            }
         } catch (\PDOException $e) {}
     }
 
@@ -68,5 +71,23 @@ class AuditoriaArquivoModel extends BaseModel
         $stmt->execute(['id' => $id]);
         $row = $stmt->fetch();
         return $row ?: null;
+    }
+
+    public function updateMetadata(int $id, string $name, ?string $descricao): bool
+    {
+        $this->ensureTable();
+        $stmt = $this->db->prepare('UPDATE auditoria_arquivos SET original_name = :name, descricao = :descricao WHERE id = :id');
+        return $stmt->execute([
+            'id' => $id,
+            'name' => $name,
+            'descricao' => $descricao !== '' ? $descricao : null,
+        ]);
+    }
+
+    public function delete(int $id): bool
+    {
+        $this->ensureTable();
+        $stmt = $this->db->prepare('DELETE FROM auditoria_arquivos WHERE id = :id');
+        return $stmt->execute(['id' => $id]);
     }
 }

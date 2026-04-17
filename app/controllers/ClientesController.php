@@ -6,9 +6,6 @@ use App\Core\Auth;
 use App\Core\Security;
 use App\Models\ClienteModel;
 use App\Models\AplicacaoModel;
-use App\Models\MetodologiaModel;
-use App\Models\PilarModel;
-use App\Models\FuncaoModel;
 
 class ClientesController extends BaseController
 {
@@ -140,21 +137,7 @@ class ClientesController extends BaseController
         }
         \App\Core\AuditLogger::log('cliente_view', 'cliente', $id, ['route' => 'clientes/show']);
         $item = $this->clientes->find($id);
-        // Garante que a tabela de pilares exista antes dos JOINs em aplicacoes
-        $pilares = (new PilarModel())->all();
-        $apl = new AplicacaoModel();
-        $statusFilter = $_GET['status'] ?? '';
-        $consultorFilter = isset($_GET['consultor']) ? (int)$_GET['consultor'] : 0;
-        $apps = $apl->byClienteWithFilters($id, [
-            'status' => $statusFilter ?: null,
-            'consultor_id' => $consultorFilter ?: null,
-        ]);
-        $met = new MetodologiaModel();
-        $metodologias = $met->byCliente($id);
-        $funcoes = (new FuncaoModel())->allByCliente($id);
-        $filiais = $this->clientes->filiaisByMatriz($id);
         $matrizes = $this->clientes->matrizes();
-        $avaliacoes = (new \App\Models\AvaliacaoModel())->byCliente($id);
         $planoPage = isset($_GET['plano_page']) ? max(1, (int)$_GET['plano_page']) : 1;
         $planoPer = isset($_GET['plano_per']) ? max(1, (int)$_GET['plano_per']) : 20;
         $planoStatusFilters = $_GET['plano_status'] ?? [];
@@ -163,42 +146,20 @@ class ClientesController extends BaseController
         }
         $planoStatusFilters = array_values(array_filter(array_map('trim', $planoStatusFilters)));
         $taskModel = new \App\Models\PlanoAcaoTaskModel();
-        $planoTotal = $taskModel->countByClienteMulti($id, $planoStatusFilters);
+        $planoResumo = $taskModel->summarizeByClienteMulti($id, $planoStatusFilters);
+        $planoTotal = (int)($planoResumo['total_planos'] ?? 0);
         $planoTasks = $taskModel->paginateByClienteMulti($id, $planoPage, $planoPer, $planoStatusFilters);
         $planoTotalPages = max(1, (int)ceil($planoTotal / $planoPer));
-        $arquivosCliente = [];
-        foreach ($apps as $row) {
-            foreach ($apl->arquivosForAplicacao((int)$row['id']) as $f) {
-                $arquivosCliente[] = [
-                    'aplicacao_id' => (int)$row['id'],
-                    'pilar' => $row['pilar_nome'],
-                    'tarefa' => $row['item_pilar'],
-                    'nome' => $f['nome_original'],
-                    'path' => $f['arquivo_path'],
-                    'mime' => $f['mime'],
-                    'tamanho' => $f['tamanho'],
-                    'uploaded_at' => $f['uploaded_at'],
-                ];
-            }
-        }
         $this->render('clientes/show', [
             'item' => $item,
-            'apps' => $apps,
-            'metodologias' => $metodologias,
-            'pilares' => $pilares,
-            'funcoes' => $funcoes,
-            'filiais' => $filiais,
             'matrizes' => $matrizes,
-            'avaliacoes' => $avaliacoes,
             'planoTasks' => $planoTasks,
+            'planoResumo' => $planoResumo,
             'planoTotal' => $planoTotal,
             'planoPage' => $planoPage,
             'planoPer' => $planoPer,
             'planoTotalPages' => $planoTotalPages,
             'planoStatusFilters' => $planoStatusFilters,
-            'statusFilter' => $statusFilter,
-            'consultorFilter' => $consultorFilter,
-            'arquivosCliente' => $arquivosCliente,
         ]);
     }
 

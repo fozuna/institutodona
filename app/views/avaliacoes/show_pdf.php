@@ -12,6 +12,7 @@
 /** @var int $realPct */
 /** @var string $logoSrc */
 /** @var array $pillarTitles */
+/** @var array $branding */
 ?>
 <!doctype html>
 <html lang="pt-BR">
@@ -19,13 +20,24 @@
   <meta charset="utf-8">
   <title>Avaliação <?= htmlspecialchars((string)$empresa, ENT_QUOTES, 'UTF-8') ?></title>
   <style>
-    @page { size: A4 landscape; margin: 10mm; }
+    @page {
+      size: A4 landscape;
+      margin: <?= (int)($branding['margins']['top'] ?? 18) ?>mm <?= (int)($branding['margins']['right'] ?? 12) ?>mm <?= (int)($branding['margins']['bottom'] ?? 18) ?>mm <?= (int)($branding['margins']['left'] ?? 12) ?>mm;
+    }
     * { box-sizing: border-box; }
     body { margin: 0; font-family: DejaVu Sans, sans-serif; font-size: 11px; color: #111827; }
-    .header { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
-    .logo { height: 32px; margin-bottom: 8px; }
+    .header { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+    .header::after, .row.clearfix::after { content: ""; display: block; clear: both; }
+    .logo-wrap { width: <?= (int)($branding['logo_width'] ?? 108) ?>px; }
+    .logo-wrap.left { float: left; margin-right: 14px; }
+    .logo-wrap.right { float: right; margin-left: 14px; text-align: right; }
+    .header-body { overflow: hidden; }
+    .logo { max-width: 100%; height: auto; max-height: 40px; margin-bottom: 8px; }
     .title { font-size: 18px; font-weight: bold; margin: 0 0 4px 0; }
     .muted { color: #6b7280; }
+    .report-footer { position: fixed; bottom: -10mm; left: 0; right: 0; font-size: 9px; color: #6b7280; text-align: center; }
+    .report-footer .page-number:before { content: counter(page); }
+    .report-footer .page-count:before { content: counter(pages); }
     .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; page-break-inside: avoid; }
     .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 10px; border: 1px solid #e5e7eb; background: #f9fafb; color: #374151; }
     .badge.yellow { background: #FEF3C7; color: #92400E; border-color: #FDE68A; }
@@ -58,10 +70,17 @@
 <body>
   <div class="header">
     <?php if (!empty($logoSrc)): ?>
-      <img src="<?= htmlspecialchars($logoSrc, ENT_QUOTES, 'UTF-8') ?>" class="logo" alt="Logo" />
+      <div class="logo-wrap <?= (($branding['logo_position'] ?? 'left') === 'right') ? 'right' : 'left' ?>">
+        <img src="<?= htmlspecialchars($logoSrc, ENT_QUOTES, 'UTF-8') ?>" class="logo" alt="Logo" />
+      </div>
     <?php endif; ?>
-    <div class="title">Avaliação</div>
-    <div class="muted">Empresa: <strong><?= htmlspecialchars((string)$empresa, ENT_QUOTES, 'UTF-8') ?></strong> · Data: <?= htmlspecialchars(\App\Core\DateHelper::formatDateTime((string)($item['created_at'] ?? '')), ENT_QUOTES, 'UTF-8') ?></div>
+    <div class="header-body">
+      <div class="title"><?= htmlspecialchars((string)($branding['header_title'] ?? 'Avaliação'), ENT_QUOTES, 'UTF-8') ?></div>
+      <?php if (!empty($branding['header_subtitle'])): ?>
+        <div class="muted" style="margin-bottom: 4px;"><?= htmlspecialchars((string)$branding['header_subtitle'], ENT_QUOTES, 'UTF-8') ?></div>
+      <?php endif; ?>
+      <div class="muted">Empresa: <strong><?= htmlspecialchars((string)$empresa, ENT_QUOTES, 'UTF-8') ?></strong> · Data: <?= htmlspecialchars(\App\Core\DateHelper::formatDateTime((string)($item['created_at'] ?? '')), ENT_QUOTES, 'UTF-8') ?></div>
+    </div>
   </div>
 
   <div class="card">
@@ -192,6 +211,9 @@
         </div>
       <?php endforeach; ?>
     </div>
+  </div>
+  <div class="report-footer">
+    Página <span class="page-number"></span> de <span class="page-count"></span> · Gerado em <?= htmlspecialchars((string)($branding['generated_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
   </div>
 </body>
 </html>

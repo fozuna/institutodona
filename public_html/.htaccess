@@ -17,6 +17,8 @@ DirectoryIndex index.php
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
 
+  RewriteRule ^manuais/download/([0-9]+)/?$ index.php?route=manuais/download&id=$1 [L,QSA]
+  RewriteRule ^manuais/portal/([A-Za-z0-9]+)/?$ index.php?route=manuais/portal&token=$1 [L,QSA]
   RewriteRule ^avaliar/([^/]+)/?$ public/avaliacoes.php [L,QSA]
   RewriteRule ^public/avaliacao/([A-Za-z0-9-]+)/?$ public/avaliacoes.php [L,QSA]
 </IfModule>

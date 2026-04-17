@@ -27,6 +27,16 @@ use App\Controllers\LogsController;
 use App\Controllers\AboutController;
 use App\Controllers\AuditoriasController;
 use App\Controllers\AvaliacaoPublicaController;
+use App\Controllers\ManuaisController;
+
+$requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
+if ($requestPath !== '' && preg_match('#/manuais/download/(\d+)$#', $requestPath, $m)) {
+    $_GET['route'] = 'manuais/download';
+    $_GET['id'] = $m[1];
+} elseif ($requestPath !== '' && preg_match('#/manuais/portal/([A-Za-z0-9]+)$#', $requestPath, $m)) {
+    $_GET['route'] = 'manuais/portal';
+    $_GET['token'] = $m[1];
+}
 
 $route = $_GET['route'] ?? 'auth/login';
 
@@ -233,6 +243,24 @@ switch ($route) {
     case 'clientes/exportPlanos':
         (new ClientesController())->exportPlanos();
         break;
+    case 'manuais/index':
+        (new ManuaisController())->index();
+        break;
+    case 'manuais/create':
+        (new ManuaisController())->create();
+        break;
+    case 'manuais/store':
+        (new ManuaisController())->store();
+        break;
+    case 'manuais/download':
+        (new ManuaisController())->download();
+        break;
+    case 'manuais/portal':
+        (new ManuaisController())->portal();
+        break;
+    case 'manuais/generatePortalLink':
+        (new ManuaisController())->generatePortalLink();
+        break;
     case 'aplicacoes/set_status':
         (new AplicacoesController())->set_status();
         break;
@@ -289,6 +317,12 @@ switch ($route) {
         break;
     case 'auditorias/api_list_anexos':
         (new AuditoriasController())->apiListAnexos();
+        break;
+    case 'auditorias/api_delete_anexo':
+        (new AuditoriasController())->apiDeleteAnexo();
+        break;
+    case 'auditorias/api_update_anexo':
+        (new AuditoriasController())->apiUpdateAnexo();
         break;
     case 'auditorias/download_anexo':
         (new AuditoriasController())->downloadAnexo();

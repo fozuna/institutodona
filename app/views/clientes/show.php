@@ -1,4 +1,4 @@
-<?php /** @var array $item */ /** @var array $apps */ /** @var array $metodologias */ ?>
+<?php /** @var array $item */ ?>
 <?php
   $importEnabled = getenv('PLANOACAO_IMPORT_ENABLED') === '1';
   $importAlreadyRun = is_file(__DIR__ . '/../../storage/imports/planoacao_import_done.flag');
@@ -58,6 +58,7 @@
       <div class="font-semibold mb-3">Estrutura Organizacional</div>
       <div class="flex flex-wrap gap-3">
         <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=departamentos/index&cliente=<?= (int)$item['id'] ?>">Departamentos</a>
+        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=manuais/index&empresa_id=<?= (int)$item['id'] ?>">Ver Manuais</a>
         <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=setores/index&cliente=<?= (int)$item['id'] ?>">Setores</a>
         <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=funcoes/index&cliente=<?= (int)$item['id'] ?>">Funções</a>
         <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=colaboradores/index&cliente=<?= (int)$item['id'] ?>">Colaboradores</a>
@@ -66,20 +67,14 @@
     </div>
   </div>
 
-  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    <div class="lg:col-span-2">
+  <div class="grid grid-cols-1 gap-6">
+    <div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <?php
           $cronCount = count((new \App\Models\CronogramaModel())->byCliente((int)$item['id']));
-          $planoCount = (int)($planoTotal ?? 0);
-          $planoDone = 0;
-          if (!empty($planoTasks)) {
-              foreach ($planoTasks as $t) {
-                  if (($t['status'] ?? '') === 'Concluído') {
-                      $planoDone++;
-                  }
-              }
-          }
+          $planoCount = (int)($planoResumo['total_planos'] ?? 0);
+          $planoDone = (int)($planoResumo['total_concluidos'] ?? 0);
+          $planoNotDone = (int)($planoResumo['total_nao_concluidos'] ?? 0);
         ?>
         <a class="bg-white shadow rounded p-4 block hover:shadow-md transition-shadow" href="index.php?route=cronograma/index&id_cliente=<?= (int)$item['id'] ?>" data-loading>
           <div class="flex items-center justify-between">
@@ -94,7 +89,7 @@
             <div class="font-semibold">Planos de Ação</div>
             <span class="badge"><span data-feather="activity"></span></span>
           </div>
-          <div class="text-sm text-gray-600 mt-2">Planos: <?= $planoCount ?> · Concluídos: <?= $planoDone ?></div>
+          <div class="text-sm text-gray-600 mt-2">Total: <?= $planoCount ?> · Concluídos: <?= $planoDone ?> · Não concluídos: <?= $planoNotDone ?></div>
           <div class="text-xs text-gray-500 mt-1">Clique para abrir planos de ação do cliente</div>
         </a>
       </div>
@@ -317,138 +312,6 @@
     </div>
     <?php endif; ?>
 
-    <div class="self-start">
-      <!-- Seção de aplicar tarefa movida para o menu (aplicacoes/create) -->
-      <div class="bg-white shadow rounded">
-        <div class="px-4 py-3 border-b font-semibold">Criar nova tarefa</div>
-        <div class="p-4">
-          <form method="post" action="index.php?route=metodologias/store" class="space-y-3" enctype="multipart/form-data">
-            <input type="hidden" name="id_cliente" value="<?= (int)$item['id'] ?>" />
-            <label class="block text-sm">Pilar</label>
-            <select name="id_pilar" class="w-full" required>
-              <?php foreach ($pilares as $p): ?>
-                <option value="<?= (int)$p['id'] ?>"><?= htmlspecialchars($p['nome']) ?></option>
-              <?php endforeach; ?>
-            </select>
-            <label class="block text-sm">Item do Pilar</label>
-            <input name="item_pilar" class="border rounded p-2 w-full" required />
-            <label class="block text-sm">Tipo</label>
-            <select name="tipo" class="w-full">
-              <option value="tarefa">Tarefa</option>
-              <option value="manual">Manual</option>
-            </select>
-            <label class="block text-sm">Arquivo (opcional)</label>
-            <input type="file" name="arquivo" class="border rounded p-2 w-full" />
-            <div class="text-xs text-gray-500">PDF, DOC, DOCX, XLS, XLSX ou TXT</div>
-            <div class="flex items-center gap-3">
-              <button type="submit" class="px-4 py-2 rounded bg-brand-red text-white">SALVAR</button>
-              <button type="button" class="px-4 py-2 rounded bg-gray-200 text-brand-brown" onclick="history.back()">CANCELAR</button>
-            </div>
-          </form>
-        </div>
-      </div>
-      <div class="bg-white shadow rounded mt-6">
-        <div class="px-4 py-3 border-b font-semibold">Biblioteca de Arquivos</div>
-        <div class="p-4">
-          <?php if (empty($arquivosCliente)): ?>
-            <div class="text-sm text-gray-600">Nenhum arquivo enviado ainda.</div>
-          <?php else: ?>
-            <table class="min-w-full text-sm">
-              <thead>
-                <tr class="text-left border-b">
-                  <th class="p-2">Arquivo</th>
-                  <th class="p-2">Tarefa</th>
-                  <th class="p-2">Pilar</th>
-                  <th class="p-2">Tipo</th>
-                  <th class="p-2">Tamanho</th>
-                  <th class="p-2">Data</th>
-                  <th class="p-2">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                <?php foreach ($arquivosCliente as $it): ?>
-                  <tr class="border-b">
-                    <td class="p-2"><?= htmlspecialchars($it['nome']) ?></td>
-                    <td class="p-2"><?= htmlspecialchars($it['tarefa']) ?> (#<?= (int)$it['aplicacao_id'] ?>)</td>
-                    <td class="p-2"><?= htmlspecialchars($it['pilar']) ?></td>
-                    <td class="p-2"><?= htmlspecialchars($it['mime']) ?></td>
-                    <td class="p-2"><?= number_format((int)$it['tamanho']/1024,1) ?> KB</td>
-                    <td class="p-2"><?= htmlspecialchars(date('d/m/Y H:i', strtotime($it['uploaded_at']))) ?></td>
-                    <td class="p-2">
-                      <a class="text-brand-red hover:underline" target="_blank" href="../<?= htmlspecialchars($it['path']) ?>">Abrir</a>
-                      <a class="ml-2 hover:underline" href="index.php?route=aplicacoes/show&id=<?= (int)$it['aplicacao_id'] ?>">Tarefa</a>
-                    </td>
-                  </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
-          <?php endif; ?>
-        </div>
-      </div>
-      <div class="bg-white shadow rounded mt-6">
-        <div class="px-4 py-3 border-b font-semibold flex justify-between items-center">
-          <span>Avaliações</span>
-          <a class="px-3 py-1 rounded bg-brand-red text-white" href="index.php?route=avaliacoes/create&cliente=<?= (int)$item['id'] ?>">Nova Avaliação</a>
-        </div>
-        <div class="p-4">
-          <?php if (empty($avaliacoes)): ?>
-            <div class="text-sm text-gray-600">Nenhuma avaliação registrada.</div>
-          <?php else: ?>
-            <table class="min-w-full">
-              <thead>
-                <tr class="text-left border-b">
-                  <th class="p-3">Data</th>
-                  <th class="p-3">Financeiro</th>
-                  <th class="p-3">Mercado</th>
-                  <th class="p-3">Pessoas</th>
-                  <th class="p-3">Processo</th>
-                  <th class="p-3">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                <?php foreach ($avaliacoes as $av): ?>
-                  <tr class="border-b">
-                    <td class="p-3"><?= htmlspecialchars(date('d/m/Y', strtotime($av['created_at']))) ?></td>
-                    <td class="p-3"><?= (int)$av['nota_financeiro'] ?>/7</td>
-                    <td class="p-3"><?= (int)$av['nota_mercado'] ?>/7</td>
-                    <td class="p-3"><?= (int)$av['nota_pessoas'] ?>/7</td>
-                    <td class="p-3"><?= (int)$av['nota_processo'] ?>/7</td>
-                    <td class="p-3"><a class="text-brand-pink icon-action" href="index.php?route=avaliacoes/show&id=<?= (int)$av['id'] ?>" title="Ver" aria-label="Ver"><span data-feather="bar-chart-2"></span></a></td>
-                  </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
-          <?php endif; ?>
-        </div>
-      </div>
-      <?php if ((int)($item['is_matriz'] ?? 1) === 1): ?>
-      <div class="bg-white shadow rounded mt-6">
-        <div class="px-4 py-3 border-b font-semibold">Filiais</div>
-        <div class="p-4">
-          <?php if (empty($filiais)): ?>
-            <div class="text-sm text-gray-600 mb-3">Nenhuma filial cadastrada.</div>
-          <?php else: ?>
-            <ul class="list-disc pl-5 mb-3">
-              <?php foreach ($filiais as $f): ?>
-                <li><a class="text-brand-red hover:underline" href="index.php?route=clientes/show&id=<?= (int)$f['id'] ?>"><?= htmlspecialchars($f['nome_empresa']) ?></a> — CNPJ: <?= htmlspecialchars($f['CNPJ']) ?></li>
-              <?php endforeach; ?>
-            </ul>
-          <?php endif; ?>
-          <form method="post" action="index.php?route=clientes/storeFilial" class="space-y-3">
-            <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
-            <input type="hidden" name="matriz_id" value="<?= (int)$item['id'] ?>" />
-            <label class="block text-sm">Nome da Filial</label>
-            <input name="nome_empresa" class="border rounded p-2 w-full" required />
-            <label class="block text-sm">CNPJ</label>
-            <input name="CNPJ" class="border rounded p-2 w-full" required />
-            <label class="block text-sm">Contato</label>
-            <input name="contato" class="border rounded p-2 w-full" />
-            <button type="submit" class="px-4 py-2 rounded bg-brand-red text-white">SALVAR</button>
-          </form>
-        </div>
-      </div>
-      <?php endif; ?>
-    </div>
   </div>
 
 <!-- Quick Edit Modal -->

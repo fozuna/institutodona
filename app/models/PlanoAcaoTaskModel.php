@@ -205,32 +205,7 @@ class PlanoAcaoTaskModel extends BaseModel
         $sql = 'SELECT COUNT(*) AS total FROM pdca_tasks WHERE id_cliente = :id';
         $params = ['id' => $idCliente];
         $sql .= ' AND ' . $this->tenantInCondition('id_cliente', $params, 'ptcm');
-
-        $realStatuses = [];
-        $includeOverdue = false;
-        foreach ($statuses as $st) {
-            if ($st === 'Atrasado') {
-                $includeOverdue = true;
-            } elseif (in_array($st, ['Planejado','Em Andamento','Concluído','Pendente'], true)) {
-                $realStatuses[] = $st;
-            }
-        }
-        if (!empty($realStatuses)) {
-            $placeholders = [];
-            foreach ($realStatuses as $i => $st) {
-                $ph = 'st' . $i; // store without leading colon
-                $placeholders[] = ':' . $ph;
-                $params[$ph] = $st;
-            }
-            $sql .= ' AND status IN (' . implode(',', $placeholders) . ')';
-        }
-        if ($includeOverdue) {
-            $sql .= ' AND (prazo IS NOT NULL AND prazo < CURRENT_DATE AND status <> \'Concluído\')';
-        }
-        if ($search !== '') {
-            $sql .= ' AND (titulo LIKE :q OR responsavel LIKE :q)';
-            $params['q'] = '%' . $search . '%';
-        }
+        $sql .= $this->buildMultiFilterClause($statuses, $search, $params, 'ptcmf');
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         return (int)$stmt->fetchColumn();
@@ -245,32 +220,7 @@ class PlanoAcaoTaskModel extends BaseModel
         $sql = 'SELECT * FROM pdca_tasks WHERE id_cliente = :id';
         $params = ['id' => $idCliente];
         $sql .= ' AND ' . $this->tenantInCondition('id_cliente', $params, 'ptpm');
-
-        $realStatuses = [];
-        $includeOverdue = false;
-        foreach ($statuses as $st) {
-            if ($st === 'Atrasado') {
-                $includeOverdue = true;
-            } elseif (in_array($st, ['Planejado','Em Andamento','Concluído','Pendente'], true)) {
-                $realStatuses[] = $st;
-            }
-        }
-        if (!empty($realStatuses)) {
-            $placeholders = [];
-            foreach ($realStatuses as $i => $st) {
-                $ph = 'st' . $i; // store without leading colon
-                $placeholders[] = ':' . $ph;
-                $params[$ph] = $st;
-            }
-            $sql .= ' AND status IN (' . implode(',', $placeholders) . ')';
-        }
-        if ($includeOverdue) {
-            $sql .= ' AND (prazo IS NOT NULL AND prazo < CURRENT_DATE AND status <> \'Concluído\')';
-        }
-        if ($search !== '') {
-            $sql .= ' AND (titulo LIKE :q OR responsavel LIKE :q)';
-            $params['q'] = '%' . $search . '%';
-        }
+        $sql .= $this->buildMultiFilterClause($statuses, $search, $params, 'ptpmf');
 
         $sql .= ' ORDER BY prazo IS NULL, prazo, created_at DESC LIMIT :limit OFFSET :offset';
         $stmt = $this->db->prepare($sql);
@@ -292,7 +242,39 @@ class PlanoAcaoTaskModel extends BaseModel
                 FROM pdca_tasks WHERE id_cliente = :id';
         $params = ['id' => $idCliente];
         $sql .= ' AND ' . $this->tenantInCondition('id_cliente', $params, 'ptfe');
+        $sql .= $this->buildMultiFilterClause($statuses, $search, $params, 'ptfef');
+        $sql .= ' ORDER BY prazo IS NULL, prazo, created_at DESC';
 
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    public function summarizeByClienteMulti(int $idCliente, array $statuses = [], string $search = ''): array
+    {
+        $this->ensure();
+        $sql = "SELECT
+                    COUNT(*) AS total_planos,
+                    SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) AS total_concluidos,
+                    SUM(CASE WHEN status <> 'Concluído' THEN 1 ELSE 0 END) AS total_nao_concluidos
+                FROM pdca_tasks
+                WHERE id_cliente = :id";
+        $params = ['id' => $idCliente];
+        $sql .= ' AND ' . $this->tenantInCondition('id_cliente', $params, 'ptsum');
+        $sql .= $this->buildMultiFilterClause($statuses, $search, $params, 'ptsumf');
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $row = $stmt->fetch() ?: [];
+        return [
+            'total_planos' => (int)($row['total_planos'] ?? 0),
+            'total_concluidos' => (int)($row['total_concluidos'] ?? 0),
+            'total_nao_concluidos' => (int)($row['total_nao_concluidos'] ?? 0),
+        ];
+    }
+
+    private function buildMultiFilterClause(array $statuses, string $search, array &$params, string $prefix = 'ptmf'): string
+    {
+        $sql = '';
         $realStatuses = [];
         $includeOverdue = false;
         foreach ($statuses as $st) {
@@ -302,27 +284,28 @@ class PlanoAcaoTaskModel extends BaseModel
                 $realStatuses[] = $st;
             }
         }
+
+        $conditions = [];
         if (!empty($realStatuses)) {
             $placeholders = [];
-            foreach ($realStatuses as $i => $st) {
-                $ph = 'st' . $i; // store without leading colon
+            foreach (array_values(array_unique($realStatuses)) as $i => $st) {
+                $ph = $prefix . '_st' . $i;
                 $placeholders[] = ':' . $ph;
                 $params[$ph] = $st;
             }
-            $sql .= ' AND status IN (' . implode(',', $placeholders) . ')';
+            $conditions[] = 'status IN (' . implode(',', $placeholders) . ')';
         }
         if ($includeOverdue) {
-            $sql .= ' AND (prazo IS NOT NULL AND prazo < CURRENT_DATE AND status <> \'Concluído\')';
+            $conditions[] = "(prazo IS NOT NULL AND prazo < CURRENT_DATE AND status <> 'Concluído')";
+        }
+        if (!empty($conditions)) {
+            $sql .= ' AND (' . implode(' OR ', $conditions) . ')';
         }
         if ($search !== '') {
-            $sql .= ' AND (titulo LIKE :q OR responsavel LIKE :q)';
-            $params['q'] = '%' . $search . '%';
+            $params[$prefix . '_q'] = '%' . $search . '%';
+            $sql .= ' AND (titulo LIKE :' . $prefix . '_q OR responsavel LIKE :' . $prefix . '_q)';
         }
-        $sql .= ' ORDER BY prazo IS NULL, prazo, created_at DESC';
-
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetchAll();
+        return $sql;
     }
 
     public function find(int $id): ?array

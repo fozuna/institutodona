@@ -3,6 +3,7 @@ namespace App\Services;
 
 use App\Core\AvaliacaoQuestionario;
 use App\Core\FaturamentoFaixas;
+use App\Core\ReportBranding;
 use App\Models\AvaliacaoModel;
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -151,30 +152,20 @@ class AvaliacaoPdfService
         $empresa = !empty($item['cliente_id']) ? (string)($item['cliente_nome'] ?? '') : (string)($item['empresa_nome'] ?? '');
         $isPotencial = (int)($item['cliente_id'] ?? 0) <= 0;
         $pillarTitles = ['eu' => 'EU', 'lideranca' => 'LIDERANÇA', 'processo' => 'PROCESSO', 'gestao' => 'GESTÃO'];
-        $logoSrc = $this->logoAbsolutePath();
+        $branding = ReportBranding::aplicarBrandingRelatorio('pdf', [
+            'report_title' => 'Avaliação',
+            'header_title' => 'Avaliação',
+            'header_subtitle' => 'Diagnóstico empresarial consolidado',
+            'logo_position' => 'left',
+            'logo_width' => 108,
+            'margins' => ['top' => 18, 'right' => 12, 'bottom' => 18, 'left' => 12],
+            'footer_text' => 'Relatório do sistema',
+        ]);
+        $logoSrc = $branding['logo_uri'] ?? '';
 
         ob_start();
         require __DIR__ . '/../views/avaliacoes/show_pdf.php';
         return (string)ob_get_clean();
-    }
-
-    private function logoAbsolutePath(): string
-    {
-        $candidates = [
-            dirname(__DIR__, 2) . '/public/assets/img/logovivamais.png',
-            dirname(__DIR__, 2) . '/public/assets/img/logovivamais.PNG',
-            dirname(__DIR__, 2) . '/public_html/assets/img/logovivamais.png',
-            dirname(__DIR__, 2) . '/public_html/assets/img/logovivamais.PNG',
-            dirname(__DIR__, 2) . '/public/assets/img/logobco.png',
-            dirname(__DIR__, 2) . '/public_html/assets/img/logobco.png',
-        ];
-        foreach ($candidates as $file) {
-            $real = realpath($file);
-            if ($real && is_file($real)) {
-                return 'file:///' . str_replace('\\', '/', ltrim($real, '\\/'));
-            }
-        }
-        return '';
     }
 
     private function ensureDompdfAvailable(): void

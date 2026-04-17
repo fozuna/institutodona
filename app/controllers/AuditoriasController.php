@@ -385,12 +385,14 @@ class AuditoriasController extends BaseController
                 'images' => $images,
             ];
         }
-        $logoPath = __DIR__ . '/../../public_html/assets/img/logobco.png';
         $pdf = SimplePdfReport::fromAudit([
-            'logo_path' => is_file($logoPath) ? $logoPath : null,
             'report_title' => 'Relatório de Auditoria',
+            'header_subtitle' => 'Documento padronizado do sistema',
+            'logo_position' => 'left',
+            'logo_width' => 108,
+            'margins' => ['top' => 18, 'right' => 12, 'bottom' => 14, 'left' => 12],
             'generated_at' => DateHelper::now(),
-            'version' => 'v2.0',
+            'footer_text' => 'Relatório do sistema',
             'header' => $header,
             'questions' => $questions,
         ]);

@@ -14,6 +14,11 @@
     <input type="hidden" name="csrf" value="<?= Security::csrfToken() ?>" />
     <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
     <input type="hidden" name="observacoes_json" id="observacoesJson" value="[]" />
+    <input type="hidden" name="prev_updated_at" value="<?= htmlspecialchars((string)($item['updated_at'] ?? '')) ?>" />
+    <input type="hidden" name="prev_lock_version" value="<?= (int)($item['lock_version'] ?? 0) ?>" />
+    <div class="rounded border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-900">
+      Esta auditoria está finalizada. Alterações serão registradas no histórico.
+    </div>
     <?php foreach (($item['questoes'] ?? []) as $idx => $questao): ?>
       <?php $resp = $respostas[(int)$questao['id']] ?? []; ?>
       <div class="bg-white rounded shadow p-4">
