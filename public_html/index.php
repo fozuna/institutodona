@@ -114,6 +114,9 @@ switch ($route) {
     case 'agenda/index':
         (new AgendaController())->index();
         break;
+    case 'agenda/api_events':
+        (new AgendaController())->apiEvents();
+        break;
     case 'consultores/index':
         (new ConsultoresController())->index();
         break;
