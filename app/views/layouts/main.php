@@ -44,7 +44,7 @@ $config = require $cfg;
                 <?php
                     $r = $_GET['route'] ?? '';
                     $isCadastrosActive = strpos($r, 'clientes/') === 0 || strpos($r, 'usuarios/') === 0 || strpos($r, 'consultores/') === 0;
-                    $isProcessosActive = strpos($r, 'planoacao/') === 0 || strpos($r, 'indicadores/') === 0 || strpos($r, 'auditorias/') === 0;
+                    $isProcessosActive = strpos($r, 'planoacao/') === 0 || strpos($r, 'indicadores/') === 0 || strpos($r, 'auditorias/') === 0 || strpos($r, 'treinamentos/') === 0;
                 ?>
                 <nav class="px-4 py-4 space-y-1">
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'dashboard/')===0?'is-active':'' ?>" href="index.php?route=dashboard/index"><span data-feather="home" class="inline-block mr-2"></span>Dashboard</a>
@@ -82,6 +82,7 @@ $config = require $cfg;
                             <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'planoacao/')===0?'is-active':'' ?>" href="index.php?route=planoacao/index"><span data-feather="activity" class="inline-block mr-2"></span>Planos de Ação</a>
                             <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'indicadores/')===0?'is-active':'' ?>" href="index.php?route=indicadores/index"><span data-feather="bar-chart-2" class="inline-block mr-2"></span>Indicadores</a>
                             <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'auditorias/')===0?'is-active':'' ?>" href="index.php?route=auditorias/index"><span data-feather="clipboard" class="inline-block mr-2"></span>Auditorias</a>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'treinamentos/')===0?'is-active':'' ?>" href="index.php?route=treinamentos/index"><span data-feather="award" class="inline-block mr-2"></span>Treinamentos</a>
                         </div>
                     </div>
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'agenda/')===0?'is-active':'' ?>" href="index.php?route=agenda/index"><span data-feather="calendar" class="inline-block mr-2"></span>Agenda</a>
@@ -131,7 +132,9 @@ $config = require $cfg;
                             'store','update','delete','attach','upload','set_status',
                             'upsertMetric','addCheck','createAction','updateTask',
                             'updateAction','importRun','delete_update','storeFilial',
-                            'updateAplicacao','deleteAplicacao'
+                            'updateAplicacao','deleteAplicacao','add_colaboradores',
+                            'remove_colaborador','store_agenda','add_participantes',
+                            'save_presence'
                         ];
                         document.querySelectorAll('form').forEach((form)=>{
                             const method = (form.getAttribute('method') || 'get').toLowerCase();

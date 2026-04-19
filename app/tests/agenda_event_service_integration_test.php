@@ -3,6 +3,8 @@ require_once __DIR__ . '/../autoload.php';
 
 use App\Core\Auth;
 use App\Database\Database;
+use App\Models\TreinamentoAgendaModel;
+use App\Models\TreinamentoModel;
 use App\Services\AgendaEventService;
 
 function ok(string $msg): void { echo "OK: $msg\n"; }
@@ -13,9 +15,13 @@ $suffix = 'agenda_' . date('YmdHis') . '_' . random_int(100, 999);
 $clienteIds = [];
 $departamentoIds = [];
 $setorIds = [];
+$funcaoIds = [];
+$colaboradorIds = [];
 $taskIds = [];
 $actionIds = [];
 $auditoriaIds = [];
+$treinamentoIds = [];
+$agendaTreinamentoIds = [];
 
 try {
     $pdo->prepare('INSERT INTO clientes (nome_empresa, CNPJ, contato) VALUES (:n,:c,:t)')
@@ -40,6 +46,21 @@ try {
         ->execute(['n' => 'Setor Agenda ' . $suffix, 'd' => $departamentoId]);
     $setorId = (int)$pdo->lastInsertId();
     $setorIds[] = $setorId;
+
+    $pdo->prepare('INSERT INTO funcoes (nome, setor_id) VALUES (:n,:s)')
+        ->execute(['n' => 'Funcao Agenda ' . $suffix, 's' => $setorId]);
+    $funcaoId = (int)$pdo->lastInsertId();
+    $funcaoIds[] = $funcaoId;
+
+    $pdo->prepare('INSERT INTO colaboradores (nome, email, funcao_id, cliente_id) VALUES (:n,:e,:f,:c)')
+        ->execute([
+            'n' => 'Colaborador Agenda ' . $suffix,
+            'e' => 'colab.agenda.' . $suffix . '@test.local',
+            'f' => $funcaoId,
+            'c' => $clienteId,
+        ]);
+    $colaboradorId = (int)$pdo->lastInsertId();
+    $colaboradorIds[] = $colaboradorId;
 
     $pdo->prepare('INSERT INTO pdca_tasks (id_cliente, titulo, descricao, meta_valor, meta_unidade, prazo, responsavel, fase, status, progresso) VALUES (:c,:t,:d,:m,:u,:p,:r,:f,:s,:g)')
         ->execute([
@@ -81,6 +102,33 @@ try {
     $auditoriaId = (int)$pdo->lastInsertId();
     $auditoriaIds[] = $auditoriaId;
 
+    $treinamentoModel = new TreinamentoModel();
+    $agendaModel = new TreinamentoAgendaModel();
+    $treinamentoId = $treinamentoModel->create([
+        'nome' => 'Treinamento Agenda ' . $suffix,
+        'objetivo' => 'Objetivo treinamento agenda',
+        'publico' => 'Equipe operacional',
+        'carga_horaria' => '4',
+        'departamento_id' => $departamentoId,
+        'periodicidade' => 'anual',
+        'fornecedor' => 'Fornecedor Agenda',
+        'setor_ids' => [$setorId],
+        'funcao_ids' => [$funcaoId],
+    ]);
+    $treinamentoIds[] = $treinamentoId;
+    $treinamentoModel->syncColaboradores($treinamentoId, [$colaboradorId]);
+    $agendaTreinamentoId = $agendaModel->create([
+        'treinamento_id' => $treinamentoId,
+        'data' => '2026-04-19 09:00:00',
+        'unidade_id' => $clienteId,
+        'responsavel_id' => null,
+        'instrutor' => 'Instrutor Agenda',
+        'local' => 'Sala 1',
+        'observacoes' => 'Turma da manhã',
+    ]);
+    $agendaTreinamentoIds[] = $agendaTreinamentoId;
+    $agendaModel->syncParticipants($agendaTreinamentoId, [$colaboradorId]);
+
     $service = new AgendaEventService($pdo);
     $events = $service->eventsForRange('2026-04-01', '2026-04-30', 'all');
     $titles = array_map(static fn(array $item): string => (string)($item['title'] ?? ''), $events);
@@ -93,7 +141,10 @@ try {
     if (!in_array('Auditoria Agenda ' . $suffix, $titles, true)) {
         failFast('Agenda deveria sincronizar a auditoria');
     }
-    ok('Sincronização integrada de planos e auditorias');
+    if (!in_array('Treinamento Agenda ' . $suffix, $titles, true)) {
+        failFast('Agenda deveria sincronizar o treinamento agendado');
+    }
+    ok('Sincronização integrada de planos, auditorias e treinamentos');
 
     $planOnly = $service->eventsForRange('2026-04-01', '2026-04-30', 'planoacao');
     if (count(array_filter($planOnly, static fn(array $item): bool => ($item['type'] ?? '') === 'auditoria')) > 0) {
@@ -107,8 +158,14 @@ try {
     }
     ok('Filtro apenas auditorias');
 
+    $trainingOnly = $service->eventsForRange('2026-04-01', '2026-04-30', 'treinamento');
+    if (count($trainingOnly) !== 1 || ($trainingOnly[0]['title'] ?? '') !== 'Treinamento Agenda ' . $suffix) {
+        failFast('Filtro de treinamento deveria retornar apenas o agendamento do período');
+    }
+    ok('Filtro apenas treinamentos');
+
     $grouped = AgendaEventService::groupByDate($events);
-    if (count($grouped['2026-04-19'] ?? []) < 3) {
+    if (count($grouped['2026-04-19'] ?? []) < 4) {
         failFast('Data clicável deveria concentrar todos os eventos do mesmo dia');
     }
     ok('Agrupamento diário para modal/listagem');
@@ -117,6 +174,16 @@ try {
 } catch (Throwable $e) {
     failFast('Excecao: ' . $e->getMessage());
 } finally {
+    if (!empty($agendaTreinamentoIds)) {
+        $pdo->exec('DELETE FROM treinamento_participantes WHERE agenda_id IN (' . implode(',', array_map('intval', $agendaTreinamentoIds)) . ')');
+        $pdo->exec('DELETE FROM treinamentos_agenda WHERE id IN (' . implode(',', array_map('intval', $agendaTreinamentoIds)) . ')');
+    }
+    if (!empty($treinamentoIds)) {
+        $pdo->exec('DELETE FROM treinamento_colaboradores WHERE treinamento_id IN (' . implode(',', array_map('intval', $treinamentoIds)) . ')');
+        $pdo->exec('DELETE FROM treinamento_funcoes WHERE treinamento_id IN (' . implode(',', array_map('intval', $treinamentoIds)) . ')');
+        $pdo->exec('DELETE FROM treinamento_setores WHERE treinamento_id IN (' . implode(',', array_map('intval', $treinamentoIds)) . ')');
+        $pdo->exec('DELETE FROM treinamentos WHERE id IN (' . implode(',', array_map('intval', $treinamentoIds)) . ')');
+    }
     if (!empty($auditoriaIds)) {
         $pdo->exec('DELETE FROM auditorias WHERE id IN (' . implode(',', array_map('intval', $auditoriaIds)) . ')');
     }
@@ -125,6 +192,12 @@ try {
     }
     if (!empty($taskIds)) {
         $pdo->exec('DELETE FROM pdca_tasks WHERE id IN (' . implode(',', array_map('intval', $taskIds)) . ')');
+    }
+    if (!empty($colaboradorIds)) {
+        $pdo->exec('DELETE FROM colaboradores WHERE id IN (' . implode(',', array_map('intval', $colaboradorIds)) . ')');
+    }
+    if (!empty($funcaoIds)) {
+        $pdo->exec('DELETE FROM funcoes WHERE id IN (' . implode(',', array_map('intval', $funcaoIds)) . ')');
     }
     if (!empty($setorIds)) {
         $pdo->exec('DELETE FROM setores WHERE id IN (' . implode(',', array_map('intval', $setorIds)) . ')');

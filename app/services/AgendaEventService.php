@@ -18,7 +18,7 @@ final class AgendaEventService
     public static function normalizeTypeFilter(?string $type): string
     {
         $type = strtolower(trim((string)$type));
-        return in_array($type, ['all', 'planoacao', 'auditoria'], true) ? $type : 'all';
+        return in_array($type, ['all', 'planoacao', 'auditoria', 'treinamento'], true) ? $type : 'all';
     }
 
     public static function buildMonthContext(int $year, int $month): array
@@ -90,6 +90,9 @@ final class AgendaEventService
         }
         if ($type === 'all' || $type === 'auditoria') {
             $events = array_merge($events, $this->fetchAuditoriaEvents($startDate, $endDate));
+        }
+        if ($type === 'all' || $type === 'treinamento') {
+            $events = array_merge($events, $this->fetchTreinamentoEvents($startDate, $endDate));
         }
 
         usort($events, static function (array $a, array $b): int {
@@ -302,6 +305,93 @@ final class AgendaEventService
                     'setor' => (string)($row['setor_nome'] ?? ''),
                     'created_at' => (string)($row['created_at'] ?? ''),
                     'updated_at' => (string)($row['updated_at'] ?? ''),
+                ],
+            ];
+        }, $stmt->fetchAll() ?: []);
+    }
+
+    private function fetchTreinamentoEvents(string $startDate, string $endDate): array
+    {
+        if (!Database::tableExists('treinamentos_agenda') || !Database::tableExists('treinamentos')) {
+            return [];
+        }
+
+        $params = ['start' => $startDate, 'end' => $endDate];
+        $where = [
+            'DATE(ta.data) BETWEEN :start AND :end',
+        ];
+        $scope = $this->tenantCondition('ta.unidade_id', $params, 'agttr');
+        if ($scope !== null) {
+            $where[] = $scope;
+        }
+
+        $sql = "SELECT
+                    ta.id,
+                    ta.treinamento_id,
+                    ta.data,
+                    ta.instrutor,
+                    ta.local,
+                    ta.observacoes,
+                    ta.created_at,
+                    t.nome AS treinamento_nome,
+                    t.publico,
+                    t.periodicidade,
+                    t.fornecedor,
+                    c.nome_empresa AS unidade_nome,
+                    u.nome AS responsavel_nome,
+                    (
+                        SELECT COUNT(*)
+                        FROM treinamento_participantes tp
+                        WHERE tp.agenda_id = ta.id
+                    ) AS total_participantes,
+                    (
+                        SELECT COUNT(*)
+                        FROM treinamento_participantes tp
+                        WHERE tp.agenda_id = ta.id AND tp.presenca = 1
+                    ) AS total_presentes
+                FROM treinamentos_agenda ta
+                JOIN treinamentos t ON t.id = ta.treinamento_id
+                JOIN clientes c ON c.id = ta.unidade_id
+                LEFT JOIN usuarios u ON u.id = ta.responsavel_id
+                WHERE " . implode(' AND ', $where);
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+
+        return array_map(static function (array $row): array {
+            $dateTime = (string)($row['data'] ?? '');
+            $timeSort = strlen($dateTime) >= 16 ? substr($dateTime, 11, 5) : '11:00';
+            $hasExplicitTime = $timeSort !== '00:00' && $timeSort !== '';
+            $descriptionParts = array_filter([
+                !empty($row['publico']) ? 'Publico: ' . trim((string)$row['publico']) : '',
+                !empty($row['instrutor']) ? 'Instrutor: ' . trim((string)$row['instrutor']) : '',
+                empty($row['instrutor']) && !empty($row['responsavel_nome']) ? 'Responsavel: ' . trim((string)$row['responsavel_nome']) : '',
+                !empty($row['local']) ? 'Local: ' . trim((string)$row['local']) : '',
+                !empty($row['observacoes']) ? trim((string)$row['observacoes']) : '',
+                !empty($row['unidade_nome']) ? 'Unidade: ' . trim((string)$row['unidade_nome']) : '',
+            ]);
+
+            return [
+                'id' => 'treinamento-agenda-' . (int)$row['id'],
+                'source_id' => (int)$row['id'],
+                'type' => 'treinamento',
+                'subtype' => 'agenda',
+                'type_label' => 'Treinamento',
+                'date' => substr($dateTime, 0, 10),
+                'time' => $hasExplicitTime ? DateHelper::formatDateTime($dateTime, 'd/m/Y H:i') : 'Dia todo',
+                'time_sort' => $hasExplicitTime ? $timeSort : '11:00',
+                'title' => (string)($row['treinamento_nome'] ?? 'Treinamento'),
+                'status' => sprintf('%d/%d presentes', (int)($row['total_presentes'] ?? 0), (int)($row['total_participantes'] ?? 0)),
+                'description' => implode(' | ', $descriptionParts),
+                'client' => (string)($row['unidade_nome'] ?? ''),
+                'link' => 'index.php?route=treinamentos/presenca&agenda_id=' . (int)$row['id'],
+                'color' => '#7c3aed',
+                'badge_class' => 'bg-violet-100 text-violet-700 border-violet-200',
+                'meta' => [
+                    'treinamento_id' => (string)($row['treinamento_id'] ?? ''),
+                    'periodicidade' => (string)($row['periodicidade'] ?? ''),
+                    'fornecedor' => (string)($row['fornecedor'] ?? ''),
+                    'created_at' => (string)($row['created_at'] ?? ''),
                 ],
             ];
         }, $stmt->fetchAll() ?: []);

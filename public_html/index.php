@@ -28,6 +28,7 @@ use App\Controllers\AboutController;
 use App\Controllers\AuditoriasController;
 use App\Controllers\AvaliacaoPublicaController;
 use App\Controllers\ManuaisController;
+use App\Controllers\TreinamentosController;
 
 $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
 if ($requestPath !== '' && preg_match('#/manuais/download/(\d+)$#', $requestPath, $m)) {
@@ -368,6 +369,51 @@ switch ($route) {
         break;
     case 'auditorias/api_auditar':
         (new AuditoriasController())->apiAuditar();
+        break;
+    case 'treinamentos/index':
+        (new TreinamentosController())->index();
+        break;
+    case 'treinamentos/dashboard':
+        (new TreinamentosController())->dashboard();
+        break;
+    case 'treinamentos/create':
+        (new TreinamentosController())->create();
+        break;
+    case 'treinamentos/store':
+        (new TreinamentosController())->store();
+        break;
+    case 'treinamentos/edit':
+        (new TreinamentosController())->edit();
+        break;
+    case 'treinamentos/update':
+        (new TreinamentosController())->update();
+        break;
+    case 'treinamentos/delete':
+        (new TreinamentosController())->delete();
+        break;
+    case 'treinamentos/show':
+        (new TreinamentosController())->show();
+        break;
+    case 'treinamentos/add_colaboradores':
+        (new TreinamentosController())->addColaboradores();
+        break;
+    case 'treinamentos/remove_colaborador':
+        (new TreinamentosController())->removeColaborador();
+        break;
+    case 'treinamentos/store_agenda':
+        (new TreinamentosController())->storeAgenda();
+        break;
+    case 'treinamentos/presenca':
+        (new TreinamentosController())->presenca();
+        break;
+    case 'treinamentos/add_participantes':
+        (new TreinamentosController())->addParticipantes();
+        break;
+    case 'treinamentos/save_presence':
+        (new TreinamentosController())->savePresence();
+        break;
+    case 'treinamentos/certificado':
+        (new TreinamentosController())->certificado();
         break;
     case 'aplicacoes/delete_update':
         (new AplicacoesController())->delete_update();

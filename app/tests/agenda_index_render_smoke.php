@@ -38,6 +38,21 @@ $events = [
         'client' => 'Cliente Render',
         'link' => 'index.php?route=auditorias/show&id=1',
     ],
+    [
+        'id' => 'treinamento-agenda-1',
+        'source_id' => 1,
+        'type' => 'treinamento',
+        'subtype' => 'agenda',
+        'type_label' => 'Treinamento',
+        'date' => '2026-04-19',
+        'time' => '19/04/2026 09:00',
+        'time_sort' => '09:00',
+        'title' => 'Treinamento Render',
+        'status' => '3/4 presentes',
+        'description' => 'Descricao do treinamento',
+        'client' => 'Cliente Render',
+        'link' => 'index.php?route=treinamentos/presenca&agenda_id=1',
+    ],
 ];
 $eventType = 'all';
 
@@ -52,6 +67,7 @@ foreach ([
     'agenda/api_events',
     'Planos de Acao',
     'Auditorias',
+    'Treinamentos',
 ] as $needle) {
     if (!str_contains($html, $needle)) {
         failFast('View da agenda deveria conter: ' . $needle);

@@ -18,6 +18,9 @@ ok('Contexto mensal do calendário');
 if (AgendaEventService::normalizeTypeFilter('auditoria') !== 'auditoria') {
     failFast('Filtro auditoria deveria ser mantido');
 }
+if (AgendaEventService::normalizeTypeFilter('treinamento') !== 'treinamento') {
+    failFast('Filtro treinamento deveria ser mantido');
+}
 if (AgendaEventService::normalizeTypeFilter('invalido') !== 'all') {
     failFast('Filtro inválido deveria cair para all');
 }
