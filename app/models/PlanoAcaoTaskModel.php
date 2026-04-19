@@ -238,12 +238,22 @@ class PlanoAcaoTaskModel extends BaseModel
     {
         // Return all rows that match filters (no pagination)
         $this->ensure();
-        $sql = 'SELECT id, id_cliente, titulo, descricao, meta_valor, meta_unidade, prazo, responsavel, status, progresso, created_at
-                FROM pdca_tasks WHERE id_cliente = :id';
+        $sql = "SELECT
+                    t.*,
+                    c.nome_empresa AS cliente_nome,
+                    COALESCE((
+                        SELECT MAX(h.created_at)
+                        FROM planoacao_history h
+                        WHERE h.item_type = 'task'
+                          AND h.item_id = t.id
+                    ), t.created_at) AS updated_at
+                FROM pdca_tasks t
+                JOIN clientes c ON c.id = t.id_cliente
+                WHERE t.id_cliente = :id";
         $params = ['id' => $idCliente];
-        $sql .= ' AND ' . $this->tenantInCondition('id_cliente', $params, 'ptfe');
+        $sql .= ' AND ' . $this->tenantInCondition('t.id_cliente', $params, 'ptfe');
         $sql .= $this->buildMultiFilterClause($statuses, $search, $params, 'ptfef');
-        $sql .= ' ORDER BY prazo IS NULL, prazo, created_at DESC';
+        $sql .= ' ORDER BY t.prazo IS NULL, t.prazo, t.created_at DESC';
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);

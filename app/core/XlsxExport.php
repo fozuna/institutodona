@@ -145,8 +145,7 @@ class XlsxExport
 
     private static function sheet1(array $rows, array $branding): string
     {
-        $columns = ['ID','Título','Descrição','Responsável','Data de Início','Data de Término','Status','Progresso','Observações'];
-        $colWidths = [10,40,60,25,18,18,18,12,30];
+        [$columns, $keys, $colWidths] = self::buildPlanosColumns($rows);
         $title = (string)($branding['header_title'] ?? 'Relatório');
         $subtitle = trim((string)($branding['header_subtitle'] ?? ''));
         $meta = 'Gerado em ' . (string)($branding['generated_at'] ?? DateHelper::now());
@@ -154,11 +153,12 @@ class XlsxExport
         $headerRow = 4;
         $firstDataRow = 5;
         $maxR = count($rows) + 4;
+        $lastColName = self::coord(max(count($columns) - 1, 0), 1);
         $xml = '<?xml version="1.0" encoding="UTF-8"?>';
         $xml .= '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
               . 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
               . '<sheetPr><pageSetUpPr/></sheetPr>'
-              . '<dimension ref="A1:I'.$maxR.'"/>'
+              . '<dimension ref="A1:' . $lastColName . $maxR . '"/>'
               . '<sheetViews><sheetView workbookViewId="0"/></sheetViews>'
               . '<cols>';
         $colCount = count($columns);
@@ -184,17 +184,10 @@ class XlsxExport
         $rIdx = $firstDataRow;
         foreach ($rows as $row) {
             $xml .= '<row r="'.$rIdx.'">';
-            $cells = [
-                $row['id'] ?? '',
-                $row['titulo'] ?? '',
-                $row['descricao'] ?? '',
-                $row['responsavel'] ?? '',
-                isset($row['created_at']) ? substr((string)$row['created_at'],0,10) : '',
-                $row['prazo'] ?? '',
-                $row['status'] ?? '',
-                isset($row['progresso']) ? (string)$row['progresso'] : '',
-                $row['meta_unidade'] ?? '' // usando meta_unidade como Observações por ora
-            ];
+            $cells = [];
+            foreach ($keys as $key) {
+                $cells[] = self::formatPlanoCell($key, $row[$key] ?? null);
+            }
             foreach ($cells as $j => $val) {
                 $xml .= '<c r="'.self::coord($j,$rIdx).'" t="inlineStr" s="4"><is><t>'.self::esc($val).'</t></is></c>';
             }
@@ -202,11 +195,133 @@ class XlsxExport
             $rIdx++;
         }
         $xml .= '</sheetData>'
-              . '<mergeCells count="2"><mergeCell ref="A1:I1"/><mergeCell ref="A2:I2"/></mergeCells>'
+              . '<mergeCells count="2"><mergeCell ref="A1:' . $lastColName . '1"/><mergeCell ref="A2:' . $lastColName . '2"/></mergeCells>'
               . '<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>'
               . '<pageSetup orientation="landscape" paperSize="9" fitToWidth="1" fitToHeight="0"/>'
               . '</worksheet>';
         return $xml;
+    }
+
+    private static function buildPlanosColumns(array $rows): array
+    {
+        $preferred = [
+            'id',
+            'id_cliente',
+            'cliente_nome',
+            'titulo',
+            'descricao',
+            'meta_valor',
+            'meta_unidade',
+            'responsavel',
+            'fase',
+            'status',
+            'progresso',
+            'prazo',
+            'created_at',
+            'updated_at',
+        ];
+
+        $labels = [
+            'id' => 'ID',
+            'id_cliente' => 'ID Cliente',
+            'cliente_nome' => 'Cliente',
+            'titulo' => 'Título',
+            'descricao' => 'Descrição',
+            'meta_valor' => 'Meta / Objetivo',
+            'meta_unidade' => 'Origem',
+            'responsavel' => 'Responsável',
+            'fase' => 'Fase',
+            'status' => 'Status',
+            'progresso' => 'Progresso (%)',
+            'prazo' => 'Prazo',
+            'created_at' => 'Data de Criação',
+            'updated_at' => 'Data de Atualização',
+        ];
+
+        $widths = [
+            'id' => 10,
+            'id_cliente' => 12,
+            'cliente_nome' => 28,
+            'titulo' => 36,
+            'descricao' => 54,
+            'meta_valor' => 42,
+            'meta_unidade' => 24,
+            'responsavel' => 28,
+            'fase' => 12,
+            'status' => 18,
+            'progresso' => 14,
+            'prazo' => 16,
+            'created_at' => 20,
+            'updated_at' => 20,
+        ];
+
+        $available = [];
+        foreach ($rows as $row) {
+            foreach (array_keys($row) as $key) {
+                $available[$key] = true;
+            }
+        }
+        if (empty($available)) {
+            $available = array_fill_keys($preferred, true);
+        }
+
+        $keys = [];
+        foreach ($preferred as $key) {
+            if (isset($available[$key])) {
+                $keys[] = $key;
+                unset($available[$key]);
+            }
+        }
+        $extraKeys = array_keys($available);
+        sort($extraKeys);
+        $keys = array_merge($keys, $extraKeys);
+
+        $columns = [];
+        $colWidths = [];
+        foreach ($keys as $key) {
+            $columns[] = $labels[$key] ?? self::humanizeKey($key);
+            $colWidths[] = $widths[$key] ?? self::guessWidth($key);
+        }
+
+        return [$columns, $keys, $colWidths];
+    }
+
+    private static function formatPlanoCell(string $key, $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+        if (in_array($key, ['created_at', 'updated_at'], true)) {
+            $raw = trim((string)$value);
+            if ($raw === '') {
+                return '';
+            }
+            return DateHelper::formatDateTime($raw);
+        }
+        if ($key === 'prazo') {
+            return DateHelper::formatDate((string)$value);
+        }
+        if ($key === 'progresso') {
+            return trim((string)$value) === '' ? '' : ((string)$value . '%');
+        }
+        return (string)$value;
+    }
+
+    private static function humanizeKey(string $key): string
+    {
+        $label = str_replace('_', ' ', trim($key));
+        return $label === '' ? 'Campo' : mb_convert_case($label, MB_CASE_TITLE, 'UTF-8');
+    }
+
+    private static function guessWidth(string $key): int
+    {
+        if (str_contains($key, 'descricao') || str_contains($key, 'texto')) {
+            return 40;
+        }
+        if (str_contains($key, 'data') || str_contains($key, 'prazo')) {
+            return 18;
+        }
+        return 22;
     }
 
     private static function coord(int $colIndexZero, int $row): string
