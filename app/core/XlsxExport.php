@@ -153,7 +153,7 @@ class XlsxExport
         $headerRow = 4;
         $firstDataRow = 5;
         $maxR = count($rows) + 4;
-        $lastColName = self::coord(max(count($columns) - 1, 0), 1);
+        $lastColName = self::coordCol(max(count($columns) - 1, 0));
         $xml = '<?xml version="1.0" encoding="UTF-8"?>';
         $xml .= '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
               . 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
@@ -326,6 +326,11 @@ class XlsxExport
 
     private static function coord(int $colIndexZero, int $row): string
     {
+        return self::coordCol($colIndexZero) . $row;
+    }
+
+    private static function coordCol(int $colIndexZero): string
+    {
         $colName = '';
         $n = $colIndexZero + 1;
         while ($n > 0) {
@@ -333,7 +338,7 @@ class XlsxExport
             $colName = chr(65 + $rem) . $colName;
             $n = intdiv($n - 1, 26);
         }
-        return $colName . $row;
+        return $colName;
     }
 }
 
