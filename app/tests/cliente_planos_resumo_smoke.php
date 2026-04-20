@@ -14,7 +14,15 @@ $_SESSION['user'] = [
 
 $model = new PlanoAcaoTaskModel();
 $pdo = Database::getConnection();
-$clienteId = 987654;
+$stmtCliente = $pdo->prepare('INSERT INTO clientes (nome_empresa, CNPJ, contato, is_matriz, matriz_id) VALUES (:n,:c,:ct,1,NULL)');
+$cnpjBase = str_pad((string)random_int(1, 99999999999999), 14, '0', STR_PAD_LEFT);
+$cnpjFmt = substr($cnpjBase, 0, 2) . '.' . substr($cnpjBase, 2, 3) . '.' . substr($cnpjBase, 5, 3) . '/' . substr($cnpjBase, 8, 4) . '-' . substr($cnpjBase, 12, 2);
+$stmtCliente->execute([
+    'n' => 'Cliente Resumo Smoke ' . uniqid('', true),
+    'c' => $cnpjFmt,
+    'ct' => 'Contato',
+]);
+$clienteId = (int)$pdo->lastInsertId();
 $prefix = 'smoke resumo ' . uniqid('', true);
 
 $model->create([
@@ -46,6 +54,7 @@ $stmt->execute([
     'id' => $clienteId,
     'prefix' => $prefix . '%',
 ]);
+$pdo->prepare('DELETE FROM clientes WHERE id = :id')->execute(['id' => $clienteId]);
 
 echo json_encode([
     'todos_total_ok' => (int)$resumoTodos['total_planos'] === 3,

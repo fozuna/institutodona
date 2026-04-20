@@ -3,6 +3,8 @@ require_once __DIR__ . '/../autoload.php';
 
 use App\Core\Auth;
 use App\Database\Database;
+use App\Models\CronogramaEventoModel;
+use App\Models\CronogramaModel;
 use App\Models\TreinamentoAgendaModel;
 use App\Models\TreinamentoModel;
 use App\Services\AgendaEventService;
@@ -20,6 +22,8 @@ $colaboradorIds = [];
 $taskIds = [];
 $actionIds = [];
 $auditoriaIds = [];
+$cronogramaIds = [];
+$cronogramaEventoRootIds = [];
 $treinamentoIds = [];
 $agendaTreinamentoIds = [];
 
@@ -129,6 +133,26 @@ try {
     $agendaTreinamentoIds[] = $agendaTreinamentoId;
     $agendaModel->syncParticipants($agendaTreinamentoId, [$colaboradorId]);
 
+    $cronogramaModel = new CronogramaModel();
+    $cronogramaEventoModel = new CronogramaEventoModel();
+    $cronogramaId = $cronogramaModel->create([
+        'id_cliente' => $clienteId,
+        'nome' => 'Cronograma Agenda ' . $suffix,
+        'ano' => 2026,
+    ]);
+    $cronogramaIds[] = $cronogramaId;
+    $cronogramaEventoRootId = $cronogramaEventoModel->create($cronogramaId, [
+        'data' => '2026-04-19',
+        'periodicidade' => 'unico',
+        'topico' => 'Pilar Agenda',
+        'unidade' => 'Departamento Agenda',
+        'atividade' => 'Evento Cronograma ' . $suffix,
+        'responsavel' => 'Responsavel Cronograma',
+        'modelo' => 'Presencial',
+        'status' => 'Planejado',
+    ]);
+    $cronogramaEventoRootIds[] = $cronogramaEventoRootId;
+
     $service = new AgendaEventService($pdo);
     $events = $service->eventsForRange('2026-04-01', '2026-04-30', 'all');
     $titles = array_map(static fn(array $item): string => (string)($item['title'] ?? ''), $events);
@@ -144,7 +168,10 @@ try {
     if (!in_array('Treinamento Agenda ' . $suffix, $titles, true)) {
         failFast('Agenda deveria sincronizar o treinamento agendado');
     }
-    ok('Sincronização integrada de planos, auditorias e treinamentos');
+    if (!in_array('Evento Cronograma ' . $suffix, $titles, true)) {
+        failFast('Agenda deveria sincronizar o evento de cronograma');
+    }
+    ok('Sincronização integrada de planos, auditorias, treinamentos e cronograma');
 
     $planOnly = $service->eventsForRange('2026-04-01', '2026-04-30', 'planoacao');
     if (count(array_filter($planOnly, static fn(array $item): bool => ($item['type'] ?? '') === 'auditoria')) > 0) {
@@ -164,8 +191,14 @@ try {
     }
     ok('Filtro apenas treinamentos');
 
+    $cronogramaOnly = $service->eventsForRange('2026-04-01', '2026-04-30', 'cronograma');
+    if (count($cronogramaOnly) !== 1 || ($cronogramaOnly[0]['title'] ?? '') !== 'Evento Cronograma ' . $suffix) {
+        failFast('Filtro de cronograma deveria retornar apenas o evento do período');
+    }
+    ok('Filtro apenas cronograma');
+
     $grouped = AgendaEventService::groupByDate($events);
-    if (count($grouped['2026-04-19'] ?? []) < 4) {
+    if (count($grouped['2026-04-19'] ?? []) < 5) {
         failFast('Data clicável deveria concentrar todos os eventos do mesmo dia');
     }
     ok('Agrupamento diário para modal/listagem');
@@ -174,6 +207,12 @@ try {
 } catch (Throwable $e) {
     failFast('Excecao: ' . $e->getMessage());
 } finally {
+    if (!empty($cronogramaEventoRootIds)) {
+        $pdo->exec('DELETE FROM cronograma_eventos WHERE id IN (' . implode(',', array_map('intval', $cronogramaEventoRootIds)) . ') OR evento_pai_id IN (' . implode(',', array_map('intval', $cronogramaEventoRootIds)) . ')');
+    }
+    if (!empty($cronogramaIds)) {
+        $pdo->exec('DELETE FROM cronogramas WHERE id IN (' . implode(',', array_map('intval', $cronogramaIds)) . ')');
+    }
     if (!empty($agendaTreinamentoIds)) {
         $pdo->exec('DELETE FROM treinamento_participantes WHERE agenda_id IN (' . implode(',', array_map('intval', $agendaTreinamentoIds)) . ')');
         $pdo->exec('DELETE FROM treinamentos_agenda WHERE id IN (' . implode(',', array_map('intval', $agendaTreinamentoIds)) . ')');

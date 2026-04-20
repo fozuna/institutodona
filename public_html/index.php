@@ -202,6 +202,9 @@ switch ($route) {
     case 'cronograma/updateEvento':
         (new CronogramaController())->updateEvento();
         break;
+    case 'cronograma/toggleStatus':
+        (new CronogramaController())->toggleStatus();
+        break;
     case 'cronograma/deleteEvento':
         (new CronogramaController())->deleteEvento();
         break;

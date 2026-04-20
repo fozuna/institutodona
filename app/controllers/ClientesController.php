@@ -137,29 +137,58 @@ class ClientesController extends BaseController
         }
         \App\Core\AuditLogger::log('cliente_view', 'cliente', $id, ['route' => 'clientes/show']);
         $item = $this->clientes->find($id);
+        if (!$item) {
+            header('Location: index.php?route=clientes/index');
+            return;
+        }
         $matrizes = $this->clientes->matrizes();
+        $filiais = ((int)($item['is_matriz'] ?? 1) === 1) ? $this->clientes->filiaisByMatriz($id) : [];
+        $selectedFilialId = $this->resolveSelectedFilialId($id, $filiais);
+        $scopeClienteIds = $this->buildClienteScopeIds($id, $filiais, $selectedFilialId);
+        $clienteAlvoId = $selectedFilialId > 0 ? $selectedFilialId : $id;
         $planoPage = isset($_GET['plano_page']) ? max(1, (int)$_GET['plano_page']) : 1;
-        $planoPer = isset($_GET['plano_per']) ? max(1, (int)$_GET['plano_per']) : 20;
+        [$planoPer, $planoPerValue] = $this->normalizePlanoPerSelection($_GET['plano_per'] ?? null);
         $planoStatusFilters = $_GET['plano_status'] ?? [];
         if (!is_array($planoStatusFilters)) {
             $planoStatusFilters = [$planoStatusFilters];
         }
         $planoStatusFilters = array_values(array_filter(array_map('trim', $planoStatusFilters)));
+        $planoSearch = trim((string)($_GET['plano_q'] ?? ''));
         $taskModel = new \App\Models\PlanoAcaoTaskModel();
-        $planoResumo = $taskModel->summarizeByClienteMulti($id, $planoStatusFilters);
-        $planoTotal = (int)($planoResumo['total_planos'] ?? 0);
-        $planoTasks = $taskModel->paginateByClienteMulti($id, $planoPage, $planoPer, $planoStatusFilters);
-        $planoTotalPages = max(1, (int)ceil($planoTotal / $planoPer));
+        $planoResumoBase = $taskModel->summarizeByClientesMulti($scopeClienteIds, [], '');
+        $planoResumo = $taskModel->summarizeByClientesMulti($scopeClienteIds, $planoStatusFilters, $planoSearch);
+        $planoDatasetTotal = $taskModel->countByClientesMulti($scopeClienteIds, [], '');
+        $planoFilteredTotal = $taskModel->countByClientesMulti($scopeClienteIds, $planoStatusFilters, $planoSearch);
+        $planoTasks = $planoPerValue === null
+            ? $taskModel->filteredByClientesMulti($scopeClienteIds, $planoStatusFilters, $planoSearch)
+            : $taskModel->paginateByClientesMulti($scopeClienteIds, $planoPage, $planoPerValue, $planoStatusFilters, $planoSearch);
+        $planoDisplayedCount = count($planoTasks);
+        $planoTotalPages = $planoPerValue === null
+            ? 1
+            : max(1, (int)ceil($planoFilteredTotal / $planoPerValue));
+        if ($planoPerValue !== null && $planoPage > $planoTotalPages) {
+            $planoPage = $planoTotalPages;
+            $planoTasks = $taskModel->paginateByClientesMulti($scopeClienteIds, $planoPage, $planoPerValue, $planoStatusFilters, $planoSearch);
+            $planoDisplayedCount = count($planoTasks);
+        }
         $this->render('clientes/show', [
             'item' => $item,
             'matrizes' => $matrizes,
+            'filiais' => $filiais,
+            'selectedFilialId' => $selectedFilialId,
+            'clienteAlvoId' => $clienteAlvoId,
+            'scopeClienteIds' => $scopeClienteIds,
             'planoTasks' => $planoTasks,
+            'planoResumoBase' => $planoResumoBase,
             'planoResumo' => $planoResumo,
-            'planoTotal' => $planoTotal,
+            'planoDatasetTotal' => $planoDatasetTotal,
+            'planoFilteredTotal' => $planoFilteredTotal,
+            'planoDisplayedCount' => $planoDisplayedCount,
             'planoPage' => $planoPage,
             'planoPer' => $planoPer,
             'planoTotalPages' => $planoTotalPages,
             'planoStatusFilters' => $planoStatusFilters,
+            'planoSearch' => $planoSearch,
         ]);
     }
 
@@ -178,6 +207,15 @@ class ClientesController extends BaseController
             echo 'Cliente inválido para exportação.';
             return;
         }
+        $item = $this->clientes->find($id);
+        if (!$item) {
+            http_response_code(400);
+            echo 'Cliente inválido para exportação.';
+            return;
+        }
+        $filiais = ((int)($item['is_matriz'] ?? 1) === 1) ? $this->clientes->filiaisByMatriz($id) : [];
+        $selectedFilialId = $this->resolveSelectedFilialId($id, $filiais);
+        $scopeClienteIds = $this->buildClienteScopeIds($id, $filiais, $selectedFilialId);
         $statusFilters = $_GET['plano_status'] ?? [];
         if (!is_array($statusFilters)) {
             $statusFilters = [$statusFilters];
@@ -185,7 +223,7 @@ class ClientesController extends BaseController
         $statusFilters = array_values(array_filter(array_map('trim', $statusFilters)));
 
         $taskModel = new \App\Models\PlanoAcaoTaskModel();
-        $rows = $taskModel->filterForExport($id, $statusFilters);
+        $rows = $taskModel->filterForExportByClientes($scopeClienteIds, $statusFilters);
         if (empty($rows)) {
             http_response_code(400);
             echo 'Nenhum plano de ação encontrado para os filtros selecionados.';
@@ -195,6 +233,8 @@ class ClientesController extends BaseController
         $path = \App\Core\XlsxExport::exportPlanos($rows, $filename);
         \App\Core\AuditLogger::log('planoacao_export', 'pdca_tasks', null, [
             'cliente_id' => $id,
+            'filial_id' => $selectedFilialId > 0 ? $selectedFilialId : null,
+            'scope_cliente_ids' => $scopeClienteIds,
             'status_filters' => $statusFilters,
             'count' => count($rows),
             'file' => $filename,
@@ -205,6 +245,48 @@ class ClientesController extends BaseController
         readfile($path);
         @unlink($path);
         exit;
+    }
+
+    private function resolveSelectedFilialId(int $clienteId, array $filiais): int
+    {
+        $sessionKey = 'clientes_show_filial_' . $clienteId;
+        $selected = array_key_exists('filial_id', $_GET)
+            ? (int)$_GET['filial_id']
+            : (int)($_SESSION[$sessionKey] ?? 0);
+
+        $validIds = array_map(static fn(array $row): int => (int)($row['id'] ?? 0), $filiais);
+        if ($selected > 0 && !in_array($selected, $validIds, true)) {
+            $selected = 0;
+        }
+        $_SESSION[$sessionKey] = $selected;
+        return $selected;
+    }
+
+    private function buildClienteScopeIds(int $clienteId, array $filiais, int $selectedFilialId): array
+    {
+        if ($selectedFilialId > 0) {
+            return [$selectedFilialId];
+        }
+        $ids = [$clienteId];
+        foreach ($filiais as $filial) {
+            $ids[] = (int)($filial['id'] ?? 0);
+        }
+        return array_values(array_unique(array_filter($ids)));
+    }
+
+    private function normalizePlanoPerSelection($raw): array
+    {
+        $raw = trim((string)($raw ?? '20'));
+        if ($raw === '' || $raw === '20') {
+            return ['20', 20];
+        }
+        if (in_array($raw, ['10', '25', '50', '100'], true)) {
+            return [$raw, (int)$raw];
+        }
+        if (in_array(strtolower($raw), ['all', 'todos'], true)) {
+            return ['all', null];
+        }
+        return ['20', 20];
     }
 
     public function storeFilial(): void

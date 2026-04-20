@@ -224,13 +224,17 @@ CREATE TABLE IF NOT EXISTS cronogramas (
 CREATE TABLE IF NOT EXISTS cronograma_eventos (
   id INT AUTO_INCREMENT PRIMARY KEY,
   id_cronograma INT NOT NULL,
+  evento_pai_id INT NULL,
   data DATE NOT NULL,
+  periodicidade VARCHAR(20) NOT NULL DEFAULT 'unico',
   topico VARCHAR(120) NOT NULL,
   unidade VARCHAR(120) NULL,
   atividade VARCHAR(255) NOT NULL,
   responsavel VARCHAR(255) NULL,
   modelo ENUM('Online','Presencial') NULL,
   status ENUM('Planejado','Realizado','Não Realizado') NOT NULL DEFAULT 'Planejado',
+  INDEX idx_crono_eventos_pai (evento_pai_id),
+  INDEX idx_crono_eventos_data (id_cronograma, data),
   CONSTRAINT fk_crono_ev_crono FOREIGN KEY (id_cronograma) REFERENCES cronogramas(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

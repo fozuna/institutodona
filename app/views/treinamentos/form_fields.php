@@ -50,7 +50,7 @@
         </option>
       <?php endforeach; ?>
     </select>
-    <p class="text-xs text-gray-500 mt-1">Relacionamento N:N com setores. Não restringe a vinculação de colaboradores.</p>
+    <p class="text-xs text-gray-500 mt-1">Você pode selecionar várias opções neste campo e também em Funções Aplicáveis para definir com clareza o público do treinamento.</p>
   </div>
   <div>
     <label class="block text-sm">Funções Aplicáveis</label>
@@ -61,6 +61,6 @@
         </option>
       <?php endforeach; ?>
     </select>
-    <p class="text-xs text-gray-500 mt-1">Relacionamento N:N com funções. A participação continua livre por colaborador.</p>
+    <p class="text-xs text-gray-500 mt-1">Selecione quantas funções forem necessárias para complementar a escolha feita em Setores Aplicáveis.</p>
   </div>
 </div>

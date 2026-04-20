@@ -18,7 +18,7 @@ final class AgendaEventService
     public static function normalizeTypeFilter(?string $type): string
     {
         $type = strtolower(trim((string)$type));
-        return in_array($type, ['all', 'planoacao', 'auditoria', 'treinamento'], true) ? $type : 'all';
+        return in_array($type, ['all', 'planoacao', 'auditoria', 'treinamento', 'cronograma'], true) ? $type : 'all';
     }
 
     public static function buildMonthContext(int $year, int $month): array
@@ -93,6 +93,9 @@ final class AgendaEventService
         }
         if ($type === 'all' || $type === 'treinamento') {
             $events = array_merge($events, $this->fetchTreinamentoEvents($startDate, $endDate));
+        }
+        if ($type === 'all' || $type === 'cronograma') {
+            $events = array_merge($events, $this->fetchCronogramaEvents($startDate, $endDate));
         }
 
         usort($events, static function (array $a, array $b): int {
@@ -392,6 +395,79 @@ final class AgendaEventService
                     'periodicidade' => (string)($row['periodicidade'] ?? ''),
                     'fornecedor' => (string)($row['fornecedor'] ?? ''),
                     'created_at' => (string)($row['created_at'] ?? ''),
+                ],
+            ];
+        }, $stmt->fetchAll() ?: []);
+    }
+
+    private function fetchCronogramaEvents(string $startDate, string $endDate): array
+    {
+        if (!Database::tableExists('cronograma_eventos') || !Database::tableExists('cronogramas')) {
+            return [];
+        }
+        if (!Database::columnExists('cronograma_eventos', 'periodicidade') || !Database::columnExists('cronograma_eventos', 'evento_pai_id')) {
+            return [];
+        }
+
+        $params = ['start' => $startDate, 'end' => $endDate];
+        $where = ['ce.data BETWEEN :start AND :end'];
+        $scope = $this->tenantCondition('cr.id_cliente', $params, 'agcr');
+        if ($scope !== null) {
+            $where[] = $scope;
+        }
+
+        $sql = "SELECT
+                    ce.id,
+                    ce.id_cronograma,
+                    ce.evento_pai_id,
+                    ce.data,
+                    ce.periodicidade,
+                    ce.topico,
+                    ce.unidade,
+                    ce.atividade,
+                    ce.responsavel,
+                    ce.modelo,
+                    ce.status,
+                    cr.nome AS cronograma_nome,
+                    cr.ano,
+                    c.nome_empresa AS cliente_nome
+                FROM cronograma_eventos ce
+                JOIN cronogramas cr ON cr.id = ce.id_cronograma
+                JOIN clientes c ON c.id = cr.id_cliente
+                WHERE " . implode(' AND ', $where);
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+
+        return array_map(static function (array $row): array {
+            $descriptionParts = array_filter([
+                !empty($row['topico']) ? 'Pilar: ' . trim((string)$row['topico']) : '',
+                !empty($row['unidade']) ? 'Departamento: ' . trim((string)$row['unidade']) : '',
+                !empty($row['responsavel']) ? 'Responsavel: ' . trim((string)$row['responsavel']) : '',
+                !empty($row['periodicidade']) ? 'Periodicidade: ' . trim((string)$row['periodicidade']) : '',
+                !empty($row['cronograma_nome']) ? 'Cronograma: ' . trim((string)$row['cronograma_nome']) : '',
+            ]);
+
+            return [
+                'id' => 'cronograma-evento-' . (int)$row['id'],
+                'source_id' => (int)$row['id'],
+                'type' => 'cronograma',
+                'subtype' => 'evento',
+                'type_label' => 'Evento de Cronograma',
+                'date' => (string)$row['data'],
+                'time' => 'Dia todo',
+                'time_sort' => '07:30',
+                'title' => (string)($row['atividade'] ?? 'Evento de Cronograma'),
+                'status' => (string)($row['status'] ?? 'Planejado'),
+                'description' => implode(' | ', $descriptionParts),
+                'client' => (string)($row['cliente_nome'] ?? ''),
+                'link' => 'index.php?route=cronograma/show&id=' . (int)$row['id_cronograma'],
+                'color' => '#0f766e',
+                'badge_class' => 'bg-teal-100 text-teal-700 border-teal-200',
+                'meta' => [
+                    'cronograma_id' => (string)($row['id_cronograma'] ?? ''),
+                    'serie_id' => (string)($row['evento_pai_id'] ?: $row['id']),
+                    'ano' => (string)($row['ano'] ?? ''),
                 ],
             ];
         }, $stmt->fetchAll() ?: []);

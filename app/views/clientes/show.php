@@ -3,6 +3,11 @@
   $importEnabled = getenv('PLANOACAO_IMPORT_ENABLED') === '1';
   $importAlreadyRun = is_file(__DIR__ . '/../../storage/imports/planoacao_import_done.flag');
   $canExportPlanos = \App\Core\Auth::canExportPlanosAcao();
+  $selectedFilialId = (int)($selectedFilialId ?? 0);
+  $clienteAlvoId = (int)($clienteAlvoId ?? (int)($item['id'] ?? 0));
+  $filiais = $filiais ?? [];
+  $filialQuery = $selectedFilialId > 0 ? '&filial_id=' . $selectedFilialId : '';
+  $planoSearch = trim((string)($planoSearch ?? ''));
 ?>
 <div class="p-6">
   <div class="mb-4">
@@ -14,7 +19,7 @@
             <span data-feather="edit" class="w-4 h-4"></span> Editar
           </a>
         <?php endif; ?>
-        <a class="px-3 py-2 rounded bg-brand-red text-white flex items-center gap-2" href="index.php?route=metodologias/create&cliente=<?= (int)$item['id'] ?>">
+        <a class="px-3 py-2 rounded bg-brand-red text-white flex items-center gap-2" href="index.php?route=metodologias/create&cliente=<?= $clienteAlvoId ?>">
           <span data-feather="plus" class="w-4 h-4"></span> Criar Tarefa
         </a>
       </div>
@@ -42,6 +47,23 @@
           <div class="text-sm text-gray-500">Tipo</div>
           <div class="font-semibold"><?= ((int)($item['is_matriz'] ?? 1) === 1) ? 'Matriz' : 'Filial' ?></div>
         </div>
+        <?php if (!empty($filiais)): ?>
+        <div>
+          <div class="text-sm text-gray-500">Filial</div>
+          <form method="get" action="index.php">
+            <input type="hidden" name="route" value="clientes/show" />
+            <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
+            <select name="filial_id" class="border rounded p-2 w-full text-sm" onchange="this.form.submit()">
+              <option value="0">Todas as filiais</option>
+              <?php foreach ($filiais as $filial): ?>
+                <option value="<?= (int)$filial['id'] ?>" <?= $selectedFilialId === (int)$filial['id'] ? 'selected' : '' ?>>
+                  <?= htmlspecialchars($filial['nome_empresa'] ?? '') ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </form>
+        </div>
+        <?php endif; ?>
         <?php if (!empty($item['matriz_id'])): ?>
         <div>
           <div class="text-sm text-gray-500">Matriz</div>
@@ -57,12 +79,12 @@
     <div class="bg-white shadow rounded p-4">
       <div class="font-semibold mb-3">Estrutura Organizacional</div>
       <div class="flex flex-wrap gap-3">
-        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=departamentos/index&cliente=<?= (int)$item['id'] ?>">Departamentos</a>
-        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=manuais/index&empresa_id=<?= (int)$item['id'] ?>">Ver Manuais</a>
-        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=setores/index&cliente=<?= (int)$item['id'] ?>">Setores</a>
-        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=funcoes/index&cliente=<?= (int)$item['id'] ?>">Funções</a>
-        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=colaboradores/index&cliente=<?= (int)$item['id'] ?>">Colaboradores</a>
-        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=dashboard/index&cliente=<?= (int)$item['id'] ?>">Tarefas</a>
+        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=departamentos/index&cliente=<?= $clienteAlvoId ?>">Departamentos</a>
+        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=manuais/index&empresa_id=<?= $clienteAlvoId ?>">Ver Manuais</a>
+        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=setores/index&cliente=<?= $clienteAlvoId ?>">Setores</a>
+        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=funcoes/index&cliente=<?= $clienteAlvoId ?>">Funções</a>
+        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=colaboradores/index&cliente=<?= $clienteAlvoId ?>">Colaboradores</a>
+        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=dashboard/index&cliente=<?= $clienteAlvoId ?>">Tarefas</a>
       </div>
     </div>
   </div>
@@ -71,12 +93,12 @@
     <div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <?php
-          $cronCount = count((new \App\Models\CronogramaModel())->byCliente((int)$item['id']));
-          $planoCount = (int)($planoResumo['total_planos'] ?? 0);
-          $planoDone = (int)($planoResumo['total_concluidos'] ?? 0);
-          $planoNotDone = (int)($planoResumo['total_nao_concluidos'] ?? 0);
+          $cronCount = count((new \App\Models\CronogramaModel())->byClientes($scopeClienteIds ?? [(int)$item['id']]));
+          $planoCount = (int)(($planoResumoBase['total_planos'] ?? null) ?? ($planoResumo['total_planos'] ?? 0));
+          $planoDone = (int)(($planoResumoBase['total_concluidos'] ?? null) ?? ($planoResumo['total_concluidos'] ?? 0));
+          $planoNotDone = (int)(($planoResumoBase['total_nao_concluidos'] ?? null) ?? ($planoResumo['total_nao_concluidos'] ?? 0));
         ?>
-        <a class="bg-white shadow rounded p-4 block hover:shadow-md transition-shadow" href="index.php?route=cronograma/index&id_cliente=<?= (int)$item['id'] ?>" data-loading>
+        <a class="bg-white shadow rounded p-4 block hover:shadow-md transition-shadow" href="index.php?route=cronograma/index&id_cliente=<?= $clienteAlvoId ?>" data-loading>
           <div class="flex items-center justify-between">
             <div class="font-semibold">Cronograma</div>
             <span class="badge"><span data-feather="calendar"></span></span>
@@ -84,7 +106,7 @@
           <div class="text-sm text-gray-600 mt-2">Cronogramas: <?= $cronCount ?></div>
           <div class="text-xs text-gray-500 mt-1">Clique para abrir cronogramas do cliente</div>
         </a>
-        <a class="bg-white shadow rounded p-4 block hover:shadow-md transition-shadow" href="index.php?route=planoacao/index&cliente=<?= (int)$item['id'] ?>" data-loading>
+        <a class="bg-white shadow rounded p-4 block hover:shadow-md transition-shadow" href="index.php?route=planoacao/index&cliente=<?= $clienteAlvoId ?>" data-loading>
           <div class="flex items-center justify-between">
             <div class="font-semibold">Planos de Ação</div>
             <span class="badge"><span data-feather="activity"></span></span>
@@ -149,6 +171,10 @@
             <form method="get" action="index.php" id="planoExportForm" class="inline">
               <input type="hidden" name="route" value="clientes/exportPlanos" />
               <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
+              <input type="hidden" name="filial_id" value="<?= $selectedFilialId ?>" />
+              <?php if ($planoSearch !== ''): ?>
+                <input type="hidden" name="plano_q" value="<?= htmlspecialchars($planoSearch) ?>" />
+              <?php endif; ?>
               <?php foreach (($planoStatusFilters ?? []) as $st): ?>
                 <input type="hidden" name="plano_status[]" value="<?= htmlspecialchars($st) ?>" />
               <?php endforeach; ?>
@@ -158,13 +184,17 @@
               </button>
             </form>
             <?php endif; ?>
-            <a class="px-3 py-1 rounded bg-brand-red text-white text-sm" href="index.php?route=planoacao/create&cliente=<?= (int)$item['id'] ?>">Novo Plano</a>
+            <a class="px-3 py-1 rounded bg-brand-red text-white text-sm" href="index.php?route=planoacao/create&cliente=<?= $clienteAlvoId ?>">Novo Plano</a>
           </div>
         </div>
         <div class="p-4">
           <form method="get" class="flex flex-wrap items-center gap-3 mb-3" id="planoFilterForm">
             <input type="hidden" name="route" value="clientes/show" />
             <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
+            <input type="hidden" name="filial_id" value="<?= $selectedFilialId ?>" />
+            <?php if ($planoSearch !== ''): ?>
+              <input type="hidden" name="plano_q" value="<?= htmlspecialchars($planoSearch) ?>" />
+            <?php endif; ?>
             <div class="flex flex-wrap items-center gap-3 text-xs">
               <?php
                 $allStatusOptions = ['Planejado','Em Andamento','Concluído','Pendente','Atrasado'];
@@ -183,12 +213,23 @@
               <?php endforeach; ?>
             </div>
             <select name="plano_per" class="text-xs border rounded px-2 py-1">
-              <?php foreach ([10,20,50,100] as $opt): ?>
-                <option value="<?= $opt ?>" <?= ((int)($planoPer ?? 20) === $opt) ? 'selected' : '' ?>><?= $opt ?> por página</option>
+              <?php foreach ([10,20,25,50,100] as $opt): ?>
+                <option value="<?= $opt ?>" <?= ((string)($planoPer ?? '20') === (string)$opt) ? 'selected' : '' ?>><?= $opt ?> por página</option>
               <?php endforeach; ?>
+              <option value="all" <?= (string)($planoPer ?? '20') === 'all' ? 'selected' : '' ?>>Todos os itens</option>
             </select>
             <button type="submit" class="px-2 py-1 rounded bg-gray-200 text-xs text-brand-brown">Aplicar</button>
           </form>
+          <div class="mb-3 text-xs text-gray-600">
+            Total disponível: <?= (int)($planoDatasetTotal ?? 0) ?>
+            · Filtrados: <?= (int)($planoFilteredTotal ?? 0) ?>
+            · Exibindo: <?= (int)($planoDisplayedCount ?? 0) ?>
+            <?php if ((string)($planoPer ?? '20') === 'all'): ?>
+              · Modo: Todos os itens
+            <?php else: ?>
+              · Página: <?= (int)($planoPage ?? 1) ?> de <?= (int)($planoTotalPages ?? 1) ?>
+            <?php endif; ?>
+          </div>
           <?php if (empty($planoTasks)): ?>
             <div class="text-sm text-gray-600 text-center py-4">Nenhum plano de ação registrado.</div>
           <?php else: ?>
@@ -257,17 +298,30 @@
             </div>
             <?php if (($planoTotalPages ?? 1) > 1): ?>
             <div class="mt-4 flex items-center justify-between text-xs text-gray-600">
-              <div>Total: <?= (int)($planoTotal ?? 0) ?> • Página <?= (int)($planoPage ?? 1) ?> de <?= (int)($planoTotalPages ?? 1) ?></div>
+              <div>Total filtrado: <?= (int)($planoFilteredTotal ?? 0) ?> • Página <?= (int)($planoPage ?? 1) ?> de <?= (int)($planoTotalPages ?? 1) ?></div>
               <div class="flex items-center gap-2">
                 <?php
-                  $base = 'index.php?route=clientes/show&id=' . (int)$item['id']
-                    . '&plano_per=' . (int)($planoPer ?? 20)
-                    . '&plano_page=';
+                  $paginationParams = [
+                    'route' => 'clientes/show',
+                    'id' => (int)$item['id'],
+                    'filial_id' => $selectedFilialId,
+                    'plano_per' => (string)($planoPer ?? '20'),
+                  ];
+                  if ($planoSearch !== '') {
+                    $paginationParams['plano_q'] = $planoSearch;
+                  }
+                  foreach (($planoStatusFilters ?? []) as $status) {
+                    $paginationParams['plano_status'][] = $status;
+                  }
                   $prev = max(1, (int)($planoPage ?? 1) - 1);
                   $next = min((int)($planoTotalPages ?? 1), (int)($planoPage ?? 1) + 1);
+                  $prevParams = $paginationParams;
+                  $nextParams = $paginationParams;
+                  $prevParams['plano_page'] = $prev;
+                  $nextParams['plano_page'] = $next;
                 ?>
-                <a href="<?= ($planoPage ?? 1) > 1 ? $base . $prev : '#' ?>" class="px-2 py-1 rounded bg-gray-200 text-brand-brown <?= ($planoPage ?? 1) <= 1 ? 'opacity-50 pointer-events-none' : '' ?>">Anterior</a>
-                <a href="<?= ($planoPage ?? 1) < ($planoTotalPages ?? 1) ? $base . $next : '#' ?>" class="px-2 py-1 rounded bg-gray-200 text-brand-brown <?= ($planoPage ?? 1) >= ($planoTotalPages ?? 1) ? 'opacity-50 pointer-events-none' : '' ?>">Próximo</a>
+                <a href="<?= ($planoPage ?? 1) > 1 ? 'index.php?' . htmlspecialchars(http_build_query($prevParams)) : '#' ?>" class="px-2 py-1 rounded bg-gray-200 text-brand-brown <?= ($planoPage ?? 1) <= 1 ? 'opacity-50 pointer-events-none' : '' ?>">Anterior</a>
+                <a href="<?= ($planoPage ?? 1) < ($planoTotalPages ?? 1) ? 'index.php?' . htmlspecialchars(http_build_query($nextParams)) : '#' ?>" class="px-2 py-1 rounded bg-gray-200 text-brand-brown <?= ($planoPage ?? 1) >= ($planoTotalPages ?? 1) ? 'opacity-50 pointer-events-none' : '' ?>">Próximo</a>
               </div>
             </div>
             <?php endif; ?>

@@ -201,43 +201,86 @@ class PlanoAcaoTaskModel extends BaseModel
 
     public function countByClienteMulti(int $idCliente, array $statuses = [], string $search = ''): int
     {
+        return $this->countByClientesMulti([(int)$idCliente], $statuses, $search);
+    }
+
+    public function countByClientesMulti(array $clienteIds, array $statuses = [], string $search = ''): int
+    {
         $this->ensure();
-        $sql = 'SELECT COUNT(*) AS total FROM pdca_tasks WHERE id_cliente = :id';
-        $params = ['id' => $idCliente];
-        $sql .= ' AND ' . $this->tenantInCondition('id_cliente', $params, 'ptcm');
-        $sql .= $this->buildMultiFilterClause($statuses, $search, $params, 'ptcmf');
+        [$sql, $params] = $this->buildFilteredClientesSql(
+            'COUNT(*) AS total',
+            $clienteIds,
+            $statuses,
+            $search,
+            'ptcm',
+            'id_cliente'
+        );
+        if ($sql === '') {
+            return 0;
+        }
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         return (int)$stmt->fetchColumn();
     }
 
-    public function paginateByClienteMulti(int $idCliente, int $page = 1, int $perPage = 20, array $statuses = [], string $search = ''): array
+    public function paginateByClienteMulti(int $idCliente, int $page = 1, ?int $perPage = 20, array $statuses = [], string $search = ''): array
+    {
+        return $this->paginateByClientesMulti([$idCliente], $page, $perPage, $statuses, $search);
+    }
+
+    public function paginateByClientesMulti(array $clienteIds, int $page = 1, ?int $perPage = 20, array $statuses = [], string $search = ''): array
     {
         $this->ensure();
+        [$sql, $params] = $this->buildFilteredClientesSql(
+            '*',
+            $clienteIds,
+            $statuses,
+            $search,
+            'ptpm',
+            'id_cliente'
+        );
+        if ($sql === '') {
+            return [];
+        }
+        $sql .= ' ORDER BY prazo IS NULL, prazo, created_at DESC';
         $page = max(1, $page);
-        $perPage = max(1, $perPage);
-        $offset = ($page - 1) * $perPage;
-        $sql = 'SELECT * FROM pdca_tasks WHERE id_cliente = :id';
-        $params = ['id' => $idCliente];
-        $sql .= ' AND ' . $this->tenantInCondition('id_cliente', $params, 'ptpm');
-        $sql .= $this->buildMultiFilterClause($statuses, $search, $params, 'ptpmf');
-
-        $sql .= ' ORDER BY prazo IS NULL, prazo, created_at DESC LIMIT :limit OFFSET :offset';
+        if ($perPage !== null) {
+            $perPage = max(1, $perPage);
+            $offset = ($page - 1) * $perPage;
+            $sql .= ' LIMIT :limit OFFSET :offset';
+        }
         $stmt = $this->db->prepare($sql);
         foreach ($params as $k => $v) {
             $name = (str_starts_with($k, ':')) ? $k : ':' . $k;
             $stmt->bindValue($name, $v);
         }
-        $stmt->bindValue(':limit', $perPage, \PDO::PARAM_INT);
-        $stmt->bindValue(':offset', $offset, \PDO::PARAM_INT);
+        if ($perPage !== null) {
+            $stmt->bindValue(':limit', $perPage, \PDO::PARAM_INT);
+            $stmt->bindValue(':offset', $offset, \PDO::PARAM_INT);
+        }
         $stmt->execute();
         return $stmt->fetchAll();
     }
 
+    public function filteredByClientesMulti(array $clienteIds, array $statuses = [], string $search = ''): array
+    {
+        return $this->paginateByClientesMulti($clienteIds, 1, null, $statuses, $search);
+    }
+
     public function filterForExport(int $idCliente, array $statuses = [], string $search = ''): array
+    {
+        return $this->filterForExportByClientes([$idCliente], $statuses, $search);
+    }
+
+    public function filterForExportByClientes(array $clienteIds, array $statuses = [], string $search = ''): array
     {
         // Return all rows that match filters (no pagination)
         $this->ensure();
+        $clienteIds = array_values(array_unique(array_filter(array_map('intval', $clienteIds))));
+        if (empty($clienteIds)) {
+            return [];
+        }
+        $params = [];
         $sql = "SELECT
                     t.*,
                     c.nome_empresa AS cliente_nome,
@@ -249,8 +292,7 @@ class PlanoAcaoTaskModel extends BaseModel
                     ), t.created_at) AS updated_at
                 FROM pdca_tasks t
                 JOIN clientes c ON c.id = t.id_cliente
-                WHERE t.id_cliente = :id";
-        $params = ['id' => $idCliente];
+                WHERE " . $this->buildClienteScopeClause('t.id_cliente', $clienteIds, $params, 'ptfec');
         $sql .= ' AND ' . $this->tenantInCondition('t.id_cliente', $params, 'ptfe');
         $sql .= $this->buildMultiFilterClause($statuses, $search, $params, 'ptfef');
         $sql .= ' ORDER BY t.prazo IS NULL, t.prazo, t.created_at DESC';
@@ -262,16 +304,29 @@ class PlanoAcaoTaskModel extends BaseModel
 
     public function summarizeByClienteMulti(int $idCliente, array $statuses = [], string $search = ''): array
     {
+        return $this->summarizeByClientesMulti([$idCliente], $statuses, $search);
+    }
+
+    public function summarizeByClientesMulti(array $clienteIds, array $statuses = [], string $search = ''): array
+    {
         $this->ensure();
-        $sql = "SELECT
-                    COUNT(*) AS total_planos,
+        [$sql, $params] = $this->buildFilteredClientesSql(
+            "COUNT(*) AS total_planos,
                     SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) AS total_concluidos,
-                    SUM(CASE WHEN status <> 'Concluído' THEN 1 ELSE 0 END) AS total_nao_concluidos
-                FROM pdca_tasks
-                WHERE id_cliente = :id";
-        $params = ['id' => $idCliente];
-        $sql .= ' AND ' . $this->tenantInCondition('id_cliente', $params, 'ptsum');
-        $sql .= $this->buildMultiFilterClause($statuses, $search, $params, 'ptsumf');
+                    SUM(CASE WHEN status <> 'Concluído' THEN 1 ELSE 0 END) AS total_nao_concluidos",
+            $clienteIds,
+            $statuses,
+            $search,
+            'ptsum',
+            'id_cliente'
+        );
+        if ($sql === '') {
+            return [
+                'total_planos' => 0,
+                'total_concluidos' => 0,
+                'total_nao_concluidos' => 0,
+            ];
+        }
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         $row = $stmt->fetch() ?: [];
@@ -280,6 +335,30 @@ class PlanoAcaoTaskModel extends BaseModel
             'total_concluidos' => (int)($row['total_concluidos'] ?? 0),
             'total_nao_concluidos' => (int)($row['total_nao_concluidos'] ?? 0),
         ];
+    }
+
+    private function buildClienteScopeClause(string $column, array $clienteIds, array &$params, string $prefix): string
+    {
+        $holders = [];
+        foreach (array_values($clienteIds) as $i => $clienteId) {
+            $key = $prefix . $i;
+            $holders[] = ':' . $key;
+            $params[$key] = (int)$clienteId;
+        }
+        return $column . ' IN (' . implode(',', $holders) . ')';
+    }
+
+    private function buildFilteredClientesSql(string $select, array $clienteIds, array $statuses, string $search, string $prefix, string $column): array
+    {
+        $clienteIds = array_values(array_unique(array_filter(array_map('intval', $clienteIds))));
+        if (empty($clienteIds)) {
+            return ['', []];
+        }
+        $params = [];
+        $sql = 'SELECT ' . $select . ' FROM pdca_tasks WHERE ' . $this->buildClienteScopeClause($column, $clienteIds, $params, $prefix . '_scope');
+        $sql .= ' AND ' . $this->tenantInCondition($column, $params, $prefix . '_tenant');
+        $sql .= $this->buildMultiFilterClause($statuses, $search, $params, $prefix . '_filter');
+        return [$sql, $params];
     }
 
     private function buildMultiFilterClause(array $statuses, string $search, array &$params, string $prefix = 'ptmf'): string
@@ -312,8 +391,9 @@ class PlanoAcaoTaskModel extends BaseModel
             $sql .= ' AND (' . implode(' OR ', $conditions) . ')';
         }
         if ($search !== '') {
-            $params[$prefix . '_q'] = '%' . $search . '%';
-            $sql .= ' AND (titulo LIKE :' . $prefix . '_q OR responsavel LIKE :' . $prefix . '_q)';
+            $params[$prefix . '_q_titulo'] = '%' . $search . '%';
+            $params[$prefix . '_q_responsavel'] = '%' . $search . '%';
+            $sql .= ' AND (titulo LIKE :' . $prefix . '_q_titulo OR responsavel LIKE :' . $prefix . '_q_responsavel)';
         }
         return $sql;
     }

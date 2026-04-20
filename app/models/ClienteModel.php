@@ -185,9 +185,9 @@ class ClienteModel extends BaseModel
         }
         $this->ensureColumns();
         try {
-            $params = ['mid' => $matrizId];
+            $params = ['mid' => $matrizId, 'self_id' => $matrizId];
             $scope = $this->tenantInCondition('id', $params, 'cf');
-            $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato FROM clientes WHERE is_matriz = 0 AND matriz_id = :mid AND $scope ORDER BY nome_empresa");
+            $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato FROM clientes WHERE matriz_id = :mid AND id <> :self_id AND $scope ORDER BY nome_empresa");
             $stmt->execute($params);
             return $stmt->fetchAll();
         } catch (\PDOException $e) {
@@ -256,8 +256,8 @@ class ClienteModel extends BaseModel
         }
         $ids = [$empresaId];
         try {
-            $stmt = $this->db->prepare('SELECT id FROM clientes WHERE is_matriz = 0 AND matriz_id = :mid ORDER BY id');
-            $stmt->execute(['mid' => $empresaId]);
+            $stmt = $this->db->prepare('SELECT id FROM clientes WHERE matriz_id = :mid AND id <> :self_id ORDER BY id');
+            $stmt->execute(['mid' => $empresaId, 'self_id' => $empresaId]);
             foreach ($stmt->fetchAll() as $row) {
                 $ids[] = (int)$row['id'];
             }

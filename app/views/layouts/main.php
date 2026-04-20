@@ -28,16 +28,20 @@ $config = require $cfg;
 <body class="bg-brand-gray-50 text-brand-black">
     <?php $user = $_SESSION['user'] ?? null; ?>
     <?php $isReader = ($user['tipo_acesso'] ?? null) === 'reader'; ?>
-    <div class="flex min-h-screen">
+    <div class="app-shell flex min-h-screen" data-app-shell data-sidebar-collapsed="false" data-sidebar-open="true" data-sidebar-viewport="desktop">
         <?php if ($user): ?>
-            <!-- Sidebar fixa (apenas quando logado) -->
-            <aside class="w-72 shrink-0 bg-brand-brown text-white fixed h-screen desktop:relative desktop:block flex flex-col">
-                <div class="px-6 py-3 border-b border-brand-brown">
-                    <div class="flex flex-col items-start gap-2">
-                        <img src="<?= $assetsUrl ?>/img/logobco.png" alt="Logo" class="h-8 md:h-10 w-auto" />
-                        <div class="leading-tight">
-                            <div class="font-bold text-sm">SisDoná</div>
-                            <div class="text-[11px] opacity-80">Viva+</div>
+            <button type="button"
+                    class="app-sidebar-overlay"
+                    data-sidebar-overlay
+                    aria-label="Fechar menu lateral"></button>
+            <aside id="appSidebar" class="app-sidebar shrink-0 bg-brand-brown text-white fixed h-screen desktop:relative desktop:block flex flex-col" aria-label="Menu lateral principal">
+                <div class="px-4 py-3 border-b border-brand-brown">
+                    <?php // Cabeçalho da marca sem toggle duplicado: mantém logo + nome empilhados para preservar leitura e alinhamento. ?>
+                    <div class="sidebar-brand">
+                        <img src="<?= $assetsUrl ?>/img/logobco.png" alt="Logo" class="sidebar-brand-logo shrink-0" />
+                        <div class="leading-tight min-w-0">
+                            <div class="font-bold text-sm sidebar-label">SisDoná</div>
+                            <div class="text-[11px] opacity-80 sidebar-label">Viva+</div>
                         </div>
                     </div>
                 </div>
@@ -47,23 +51,24 @@ $config = require $cfg;
                     $isProcessosActive = strpos($r, 'planoacao/') === 0 || strpos($r, 'indicadores/') === 0 || strpos($r, 'auditorias/') === 0 || strpos($r, 'treinamentos/') === 0;
                 ?>
                 <nav class="px-4 py-4 space-y-1">
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'dashboard/')===0?'is-active':'' ?>" href="index.php?route=dashboard/index"><span data-feather="home" class="inline-block mr-2"></span>Dashboard</a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'dashboard/')===0?'is-active':'' ?>" href="index.php?route=dashboard/index" title="Dashboard"><span data-feather="home" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Dashboard</span></a>
                     <div class="submenu-group">
                         <button type="button"
                                 class="w-full px-3 py-2 rounded nav-link submenu-trigger <?= $isCadastrosActive ? 'is-active' : '' ?>"
                                 data-submenu-trigger="cadastros"
                                 data-default-open="<?= $isCadastrosActive ? 'true' : 'false' ?>"
-                                aria-expanded="<?= $isCadastrosActive ? 'true' : 'false' ?>">
+                                aria-expanded="<?= $isCadastrosActive ? 'true' : 'false' ?>"
+                                title="Cadastros">
                             <span class="flex items-center">
-                                <span data-feather="folder" class="inline-block mr-2"></span>
-                                <span class="flex-1 text-left">Cadastros</span>
+                                <span data-feather="folder" class="inline-block mr-2 shrink-0"></span>
+                                <span class="flex-1 text-left sidebar-label">Cadastros</span>
                                 <span data-feather="chevron-down" class="submenu-chevron"></span>
                             </span>
                         </button>
                         <div class="submenu-panel <?= $isCadastrosActive ? '' : 'hidden' ?>" data-submenu-panel="cadastros">
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'clientes/')===0?'is-active':'' ?>" href="index.php?route=clientes/index"><span data-feather="briefcase" class="inline-block mr-2"></span>Cliente</a>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'usuarios/')===0?'is-active':'' ?>" href="index.php?route=usuarios/index"><span data-feather="user" class="inline-block mr-2"></span>Usuários</a>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'consultores/')===0?'is-active':'' ?>" href="index.php?route=consultores/index"><span data-feather="users" class="inline-block mr-2"></span>Consultores</a>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'clientes/')===0?'is-active':'' ?>" href="index.php?route=clientes/index" title="Cliente"><span data-feather="briefcase" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Cliente</span></a>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'usuarios/')===0?'is-active':'' ?>" href="index.php?route=usuarios/index" title="Usuários"><span data-feather="user" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Usuários</span></a>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'consultores/')===0?'is-active':'' ?>" href="index.php?route=consultores/index" title="Consultores"><span data-feather="users" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Consultores</span></a>
                         </div>
                     </div>
                     <div class="submenu-group">
@@ -71,44 +76,64 @@ $config = require $cfg;
                                 class="w-full px-3 py-2 rounded nav-link submenu-trigger <?= $isProcessosActive ? 'is-active' : '' ?>"
                                 data-submenu-trigger="processos"
                                 data-default-open="<?= $isProcessosActive ? 'true' : 'false' ?>"
-                                aria-expanded="<?= $isProcessosActive ? 'true' : 'false' ?>">
+                                aria-expanded="<?= $isProcessosActive ? 'true' : 'false' ?>"
+                                title="Processos">
                             <span class="flex items-center">
-                                <span data-feather="layers" class="inline-block mr-2"></span>
-                                <span class="flex-1 text-left">Processos</span>
+                                <span data-feather="layers" class="inline-block mr-2 shrink-0"></span>
+                                <span class="flex-1 text-left sidebar-label">Processos</span>
                                 <span data-feather="chevron-down" class="submenu-chevron"></span>
                             </span>
                         </button>
                         <div class="submenu-panel <?= $isProcessosActive ? '' : 'hidden' ?>" data-submenu-panel="processos">
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'planoacao/')===0?'is-active':'' ?>" href="index.php?route=planoacao/index"><span data-feather="activity" class="inline-block mr-2"></span>Planos de Ação</a>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'indicadores/')===0?'is-active':'' ?>" href="index.php?route=indicadores/index"><span data-feather="bar-chart-2" class="inline-block mr-2"></span>Indicadores</a>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'auditorias/')===0?'is-active':'' ?>" href="index.php?route=auditorias/index"><span data-feather="clipboard" class="inline-block mr-2"></span>Auditorias</a>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'treinamentos/')===0?'is-active':'' ?>" href="index.php?route=treinamentos/index"><span data-feather="award" class="inline-block mr-2"></span>Treinamentos</a>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'planoacao/')===0?'is-active':'' ?>" href="index.php?route=planoacao/index" title="Planos de Ação"><span data-feather="activity" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Planos de Ação</span></a>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'indicadores/')===0?'is-active':'' ?>" href="index.php?route=indicadores/index" title="Indicadores"><span data-feather="bar-chart-2" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Indicadores</span></a>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'auditorias/')===0?'is-active':'' ?>" href="index.php?route=auditorias/index" title="Auditorias"><span data-feather="clipboard" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Auditorias</span></a>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'treinamentos/')===0?'is-active':'' ?>" href="index.php?route=treinamentos/index" title="Treinamentos"><span data-feather="award" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Treinamentos</span></a>
                         </div>
                     </div>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'agenda/')===0?'is-active':'' ?>" href="index.php?route=agenda/index"><span data-feather="calendar" class="inline-block mr-2"></span>Agenda</a>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'cronograma/')===0?'is-active':'' ?>" href="index.php?route=cronograma/index"><span data-feather="calendar" class="inline-block mr-2"></span>Cronograma</a>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'avaliacoes/')===0?'is-active':'' ?>" href="index.php?route=avaliacoes/index"><span data-feather="check-square" class="inline-block mr-2"></span>Avaliações</a>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'manuais/')===0?'is-active':'' ?>" href="index.php?route=manuais/index"><span data-feather="book-open" class="inline-block mr-2"></span>Manuais</a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'agenda/')===0?'is-active':'' ?>" href="index.php?route=agenda/index" title="Agenda"><span data-feather="calendar" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Agenda</span></a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'cronograma/')===0?'is-active':'' ?>" href="index.php?route=cronograma/index" title="Cronograma"><span data-feather="calendar" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Cronograma</span></a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'avaliacoes/')===0?'is-active':'' ?>" href="index.php?route=avaliacoes/index" title="Avaliações"><span data-feather="check-square" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Avaliações</span></a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'manuais/')===0?'is-active':'' ?>" href="index.php?route=manuais/index" title="Manuais"><span data-feather="book-open" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Manuais</span></a>
                     <?php if (($user['email'] ?? '') === 'admin@agencialester.com.br'): ?>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'logs/')===0?'is-active':'' ?>" href="index.php?route=logs/index"><span data-feather="file-text" class="inline-block mr-2"></span>Logs</a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'logs/')===0?'is-active':'' ?>" href="index.php?route=logs/index" title="Logs"><span data-feather="file-text" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Logs</span></a>
                     <?php endif; ?>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'about/')===0?'is-active':'' ?>" href="index.php?route=about/index"><span data-feather="book" class="inline-block mr-2"></span>Sobre & Manual</a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'about/')===0?'is-active':'' ?>" href="index.php?route=about/index" title="Sobre & Manual"><span data-feather="book" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Sobre & Manual</span></a>
                 </nav>
                 <div class="mt-auto px-4 py-3 border-t border-brand-brown flex items-center justify-between">
                     <button id="themeToggle" class="text-sm flex items-center gap-2">
                         <span data-feather="moon"></span>
-                        <span>Modo escuro</span>
+                        <span class="sidebar-label">Modo escuro</span>
                     </button>
                     <a href="index.php?route=auth/logout" class="text-sm flex items-center gap-2">
                         <span data-feather="log-out"></span>
-                        <span>Sair</span>
+                        <span class="sidebar-label">Sair</span>
                     </a>
                 </div>
             </aside>
         <?php endif; ?>
 
         <!-- Container principal -->
-        <main class="flex-1 <?php echo $user ? 'ml-72' : ''; ?> flex flex-col min-h-screen">
+        <main class="app-main flex-1 flex flex-col min-h-screen">
+            <?php if ($user): ?>
+            <div class="app-topbar px-4 md:px-6 py-3 flex items-center gap-3">
+                <?php // Toggle único do layout: controla colapso em desktop e menu off-canvas em mobile sem disputar atenção com o título da tela. ?>
+                <button type="button"
+                        class="sidebar-toggle text-brand-brown"
+                        data-sidebar-toggle
+                        aria-controls="appSidebar"
+                        aria-expanded="true"
+                        aria-label="Recolher menu lateral"
+                        title="Alternar menu lateral">
+                    <span class="hamburger-box" aria-hidden="true">
+                        <span class="hamburger-line"></span>
+                        <span class="hamburger-line"></span>
+                        <span class="hamburger-line"></span>
+                    </span>
+                    <span class="sr-only">Alternar menu lateral</span>
+                </button>
+            </div>
+            <?php endif; ?>
             <div class="flex-1 <?php echo $user ? 'p-6' : 'p-0'; ?>">
                 <?php if (!empty($_SESSION['flash_success'])): ?>
                     <div class="mb-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative" role="alert">

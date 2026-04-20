@@ -29,10 +29,25 @@ class CronogramaModel extends BaseModel
 
     public function byCliente(int $idCliente): array
     {
+        return $this->byClientes([$idCliente]);
+    }
+
+    public function byClientes(array $clienteIds): array
+    {
         $this->ensureTable();
-        $params = ['id' => $idCliente];
+        $clienteIds = array_values(array_unique(array_filter(array_map('intval', $clienteIds))));
+        if (empty($clienteIds)) {
+            return [];
+        }
+        $params = [];
+        $holders = [];
+        foreach ($clienteIds as $i => $clienteId) {
+            $key = 'id' . $i;
+            $holders[] = ':' . $key;
+            $params[$key] = $clienteId;
+        }
         $scope = $this->tenantInCondition('c.id_cliente', $params, 'crb');
-        $stmt = $this->db->prepare("SELECT c.id, c.nome, c.ano, cli.nome_empresa AS cliente, c.id_cliente FROM cronogramas c JOIN clientes cli ON cli.id = c.id_cliente WHERE c.id_cliente = :id AND $scope ORDER BY c.ano DESC");
+        $stmt = $this->db->prepare("SELECT c.id, c.nome, c.ano, cli.nome_empresa AS cliente, c.id_cliente FROM cronogramas c JOIN clientes cli ON cli.id = c.id_cliente WHERE c.id_cliente IN (" . implode(',', $holders) . ") AND $scope ORDER BY c.ano DESC");
         $stmt->execute($params);
         return $stmt->fetchAll();
     }

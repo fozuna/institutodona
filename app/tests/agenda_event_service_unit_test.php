@@ -21,6 +21,9 @@ if (AgendaEventService::normalizeTypeFilter('auditoria') !== 'auditoria') {
 if (AgendaEventService::normalizeTypeFilter('treinamento') !== 'treinamento') {
     failFast('Filtro treinamento deveria ser mantido');
 }
+if (AgendaEventService::normalizeTypeFilter('cronograma') !== 'cronograma') {
+    failFast('Filtro cronograma deveria ser mantido');
+}
 if (AgendaEventService::normalizeTypeFilter('invalido') !== 'all') {
     failFast('Filtro inválido deveria cair para all');
 }

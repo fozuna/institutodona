@@ -53,6 +53,21 @@ $events = [
         'client' => 'Cliente Render',
         'link' => 'index.php?route=treinamentos/presenca&agenda_id=1',
     ],
+    [
+        'id' => 'cronograma-evento-1',
+        'source_id' => 1,
+        'type' => 'cronograma',
+        'subtype' => 'evento',
+        'type_label' => 'Evento de Cronograma',
+        'date' => '2026-04-19',
+        'time' => 'Dia todo',
+        'time_sort' => '07:30',
+        'title' => 'Cronograma Render',
+        'status' => 'Planejado',
+        'description' => 'Descricao do cronograma',
+        'client' => 'Cliente Render',
+        'link' => 'index.php?route=cronograma/show&id=1',
+    ],
 ];
 $eventType = 'all';
 
@@ -68,6 +83,7 @@ foreach ([
     'Planos de Acao',
     'Auditorias',
     'Treinamentos',
+    'Cronograma',
 ] as $needle) {
     if (!str_contains($html, $needle)) {
         failFast('View da agenda deveria conter: ' . $needle);

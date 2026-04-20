@@ -12,29 +12,55 @@
     <form method="post" action="index.php?route=cronograma/addEvento" class="space-y-3">
       <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
       <input type="hidden" name="id_cronograma" value="<?= (int)$crono['id'] ?>" />
-      <label class="block text-sm">Data</label>
-      <input type="date" name="data" required />
-      <label class="block text-sm">Tópico</label>
-      <input type="text" name="topico" required />
-      <label class="block text-sm">Unidade</label>
-      <input type="text" name="unidade" />
-      <label class="block text-sm">Atividade</label>
-      <input type="text" name="atividade" required />
-      <label class="block text-sm">Responsável</label>
-      <input type="text" name="responsavel" />
-      <label class="block text-sm">Modelo</label>
-      <select name="modelo">
-        <option value="">—</option>
-        <option value="Online">On-line</option>
-        <option value="Presencial">Presencial</option>
-      </select>
-      <label class="block text-sm">Status</label>
-      <select name="status">
-        <option value="Planejado">Planejado</option>
-        <option value="Realizado">Realizado</option>
-        <option value="Não Realizado">Não Realizado</option>
-      </select>
-      <button class="icon-btn icon-btn--primary" type="submit" title="Salvar" aria-label="Salvar"><span data-feather="check"></span></button>
+      <input type="hidden" name="status_filter" value="todos" />
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm">Data base</label>
+          <input class="border rounded p-2 w-full" type="date" name="data" required />
+        </div>
+        <div>
+          <label class="block text-sm">Periodicidade</label>
+          <select class="border rounded p-2 w-full" name="periodicidade" required>
+            <?php foreach (($periodicidades ?? []) as $value => $label): ?>
+              <option value="<?= htmlspecialchars($value) ?>"><?= htmlspecialchars($label) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Pilar</label>
+          <input class="border rounded p-2 w-full" type="text" name="topico" required />
+        </div>
+        <div>
+          <label class="block text-sm">Departamento</label>
+          <input class="border rounded p-2 w-full" type="text" name="unidade" />
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm">Atividade</label>
+          <input class="border rounded p-2 w-full" type="text" name="atividade" required />
+        </div>
+        <div>
+          <label class="block text-sm">Responsável</label>
+          <input class="border rounded p-2 w-full" type="text" name="responsavel" />
+        </div>
+        <div>
+          <label class="block text-sm">Modelo</label>
+          <select class="border rounded p-2 w-full" name="modelo">
+            <option value="">—</option>
+            <option value="Online">On-line</option>
+            <option value="Presencial">Presencial</option>
+          </select>
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm">Status</label>
+          <select class="border rounded p-2 w-full" name="status">
+            <option value="Planejado">Planejado</option>
+            <option value="Realizado">Realizado</option>
+            <option value="Não Realizado">Não Realizado</option>
+          </select>
+        </div>
+      </div>
+      <p class="text-xs text-gray-500">A recorrência é gerada no momento do cadastro, apenas dentro do ano deste cronograma.</p>
+      <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">Salvar evento</button>
     </form>
   </div>
 </div>

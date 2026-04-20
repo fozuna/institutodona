@@ -15,7 +15,7 @@ $filter = $eventType ?? 'all';
   <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
     <div>
       <h1 class="text-2xl font-bold text-brand-black">Agenda Integrada</h1>
-      <p class="text-sm text-gray-600">Calendário visual com eventos sincronizados de Planos de Ação, Auditorias e Treinamentos.</p>
+      <p class="text-sm text-gray-600">Calendário visual com eventos sincronizados de Planos de Ação, Auditorias, Treinamentos e Cronograma.</p>
     </div>
     <div class="flex flex-wrap items-center gap-2">
       <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?route=agenda/index&year=<?= (int)$prev['year'] ?>&month=<?= (int)$prev['month'] ?>&type=<?= urlencode($filter) ?>">◀ <?= htmlspecialchars((string)$prev['label']) ?></a>
@@ -27,7 +27,7 @@ $filter = $eventType ?? 'all';
   <div class="bg-white shadow rounded p-4 mb-4">
     <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
       <div class="flex flex-wrap gap-2" id="agendaFilters">
-        <?php foreach (['all' => 'Todos', 'planoacao' => 'Planos de Acao', 'auditoria' => 'Auditorias', 'treinamento' => 'Treinamentos'] as $key => $label): ?>
+        <?php foreach (['all' => 'Todos', 'planoacao' => 'Planos de Acao', 'auditoria' => 'Auditorias', 'treinamento' => 'Treinamentos', 'cronograma' => 'Cronograma'] as $key => $label): ?>
           <button type="button"
                   class="agenda-filter px-3 py-2 rounded border text-sm <?= $filter === $key ? 'bg-brand-pink text-white border-brand-pink' : 'bg-white text-brand-brown border-gray-300' ?>"
                   data-filter="<?= htmlspecialchars($key) ?>">
@@ -39,6 +39,7 @@ $filter = $eventType ?? 'all';
         <span class="inline-flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-blue-600 inline-block"></span> Planos de Acao</span>
         <span class="inline-flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span> Auditorias</span>
         <span class="inline-flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-violet-600 inline-block"></span> Treinamentos</span>
+        <span class="inline-flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-teal-700 inline-block"></span> Cronograma</span>
         <span id="agendaRefreshStatus" class="text-xs text-gray-500">Atualizado agora</span>
       </div>
     </div>
@@ -59,6 +60,7 @@ $filter = $eventType ?? 'all';
       .agenda-chip.planoacao { background: #dbeafe; border-color: #bfdbfe; }
       .agenda-chip.auditoria { background: #fef3c7; border-color: #fde68a; }
       .agenda-chip.treinamento { background: #ede9fe; border-color: #ddd6fe; }
+      .agenda-chip.cronograma { background: #ccfbf1; border-color: #99f6e4; }
       .agenda-empty { color: #9ca3af; font-size: 12px; }
       .agenda-more { font-size: 11px; color: #6b7280; }
       .agenda-modal-backdrop { position: fixed; inset: 0; background: rgba(17,24,39,.55); display: none; align-items: center; justify-content: center; z-index: 60; }
@@ -68,10 +70,12 @@ $filter = $eventType ?? 'all';
       .agenda-event-card.planoacao { border-left-color: #2563eb; }
       .agenda-event-card.auditoria { border-left-color: #d97706; }
       .agenda-event-card.treinamento { border-left-color: #7c3aed; }
+      .agenda-event-card.cronograma { border-left-color: #0f766e; }
       .agenda-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; margin-right: 6px; }
       .agenda-badge.planoacao { background: #dbeafe; color: #1d4ed8; }
       .agenda-badge.auditoria { background: #fef3c7; color: #b45309; }
       .agenda-badge.treinamento { background: #ede9fe; color: #6d28d9; }
+      .agenda-badge.cronograma { background: #ccfbf1; color: #0f766e; }
       @media (max-width: 768px) {
         .agenda-grid { grid-template-columns: repeat(1, minmax(0, 1fr)); }
         .agenda-head { display: none; }
@@ -149,6 +153,7 @@ $filter = $eventType ?? 'all';
       if (type === 'planoacao') return 'Planos de Acao';
       if (type === 'auditoria') return 'Auditorias';
       if (type === 'treinamento') return 'Treinamentos';
+      if (type === 'cronograma') return 'Cronograma';
       return 'Todos';
     };
 
