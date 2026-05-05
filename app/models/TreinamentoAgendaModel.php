@@ -55,6 +55,12 @@ class TreinamentoAgendaModel extends BaseModel
                     FROM treinamento_participantes tp
                     WHERE tp.agenda_id = ta.id AND tp.presenca = 1
                 ) AS total_presentes
+                ,
+                (
+                    SELECT COUNT(*)
+                    FROM treinamento_participantes tp
+                    WHERE tp.agenda_id = ta.id AND tp.certificado_emitido = 1
+                ) AS total_certificados
             FROM treinamentos_agenda ta
             JOIN clientes c ON c.id = ta.unidade_id
             LEFT JOIN usuarios u ON u.id = ta.responsavel_id
@@ -118,6 +124,9 @@ class TreinamentoAgendaModel extends BaseModel
                 tp.*,
                 col.nome AS colaborador_nome,
                 col.email AS colaborador_email,
+                col.matricula,
+                col.cpf,
+                col.status_atual,
                 f.nome AS funcao_nome,
                 s.nome AS setor_nome
             FROM treinamento_participantes tp
@@ -128,6 +137,16 @@ class TreinamentoAgendaModel extends BaseModel
             ORDER BY col.nome");
         $stmt->execute(['agenda_id' => $agendaId]);
         return $stmt->fetchAll() ?: [];
+    }
+
+    public function findParticipant(int $agendaId, int $colaboradorId): ?array
+    {
+        foreach ($this->participants($agendaId) as $participant) {
+            if ((int)$participant['colaborador_id'] === $colaboradorId) {
+                return $participant;
+            }
+        }
+        return null;
     }
 
     public function pendingParticipantsForTreinamento(int $treinamentoId, ?int $agendaId = null): array
@@ -166,7 +185,7 @@ class TreinamentoAgendaModel extends BaseModel
         return $stmt->fetchAll() ?: [];
     }
 
-    public function savePresence(int $agendaId, array $presencas, array $certificados): void
+    public function savePresence(int $agendaId, array $presencas, array $horasEntrada = [], array $horasSaida = [], array $observacoes = []): void
     {
         $this->ensureSchema();
         $agenda = $this->find($agendaId);
@@ -174,7 +193,11 @@ class TreinamentoAgendaModel extends BaseModel
             return;
         }
         $update = $this->db->prepare("UPDATE treinamento_participantes
-            SET presenca = :presenca, certificado_emitido = :certificado_emitido
+            SET presenca = :presenca,
+                presenca_confirmada_em = :presenca_confirmada_em,
+                hora_entrada = :hora_entrada,
+                hora_saida = :hora_saida,
+                observacao = :observacao
             WHERE agenda_id = :agenda_id AND colaborador_id = :colaborador_id");
         $statusUpdate = $this->db->prepare("UPDATE treinamento_colaboradores
             SET status = :status
@@ -183,47 +206,76 @@ class TreinamentoAgendaModel extends BaseModel
         foreach ($this->participants($agendaId) as $participant) {
             $colaboradorId = (int)$participant['colaborador_id'];
             $presenca = !empty($presencas[$colaboradorId]) ? 1 : 0;
-            $certificado = $presenca && !empty($certificados[$colaboradorId]) ? 1 : 0;
+            $entrada = $this->normalizeTimeValue($horasEntrada[$colaboradorId] ?? null);
+            $saida = $this->normalizeTimeValue($horasSaida[$colaboradorId] ?? null);
+            $observacao = trim((string)($observacoes[$colaboradorId] ?? ''));
+            $presencaConfirmadaEm = $presenca ? date('Y-m-d H:i:s') : null;
             $update->execute([
                 'presenca' => $presenca,
-                'certificado_emitido' => $certificado,
+                'presenca_confirmada_em' => $presencaConfirmadaEm,
+                'hora_entrada' => $presenca ? $entrada : null,
+                'hora_saida' => $presenca ? $saida : null,
+                'observacao' => $observacao !== '' ? $observacao : null,
                 'agenda_id' => $agendaId,
                 'colaborador_id' => $colaboradorId,
             ]);
             $statusUpdate->execute([
-                'status' => $certificado ? 'concluido' : 'pendente',
+                'status' => ($presenca || !empty($participant['certificado_emitido'])) ? 'concluido' : 'pendente',
                 'treinamento_id' => (int)$agenda['treinamento_id'],
                 'colaborador_id' => $colaboradorId,
+            ]);
+            $this->audit('presenca_atualizada', [
+                'treinamento_id' => (int)$agenda['treinamento_id'],
+                'agenda_id' => $agendaId,
+                'colaborador_id' => $colaboradorId,
+                'presenca' => $presenca,
+                'hora_entrada' => $presenca ? $entrada : null,
+                'hora_saida' => $presenca ? $saida : null,
             ]);
         }
 
         (new TreinamentoModel())->refreshStatuses((int)$agenda['treinamento_id']);
     }
 
-    public function issueCertificate(int $agendaId, int $colaboradorId): bool
+    public function issueCertificate(int $agendaId, int $colaboradorId, ?string $arquivo = null): ?array
     {
         $this->ensureSchema();
         $agenda = $this->find($agendaId);
         if (!$agenda) {
-            return false;
+            return null;
         }
-        $check = $this->db->prepare("SELECT presenca FROM treinamento_participantes
-            WHERE agenda_id = :agenda_id AND colaborador_id = :colaborador_id");
-        $check->execute([
-            'agenda_id' => $agendaId,
-            'colaborador_id' => $colaboradorId,
-        ]);
-        $participant = $check->fetch();
-        if (!$participant || (int)($participant['presenca'] ?? 0) !== 1) {
-            return false;
+        $participant = $this->findParticipant($agendaId, $colaboradorId);
+        if (!$participant) {
+            return null;
         }
+
+        $numero = trim((string)($participant['certificado_numero'] ?? ''));
+        $codigo = trim((string)($participant['certificado_codigo'] ?? ''));
+        if ($numero === '') {
+            $numero = sprintf('CERT-%d-%d-%d', $agendaId, $colaboradorId, time());
+        }
+        if ($codigo === '') {
+            $codigo = strtoupper(substr(hash('sha256', $agendaId . '|' . $colaboradorId . '|' . $numero), 0, 20));
+        }
+
         $updateParticipant = $this->db->prepare("UPDATE treinamento_participantes
-            SET certificado_emitido = 1
+            SET certificado_emitido = 1,
+                certificado_numero = :numero,
+                certificado_codigo = :codigo,
+                certificado_emitido_em = :emitido_em,
+                certificado_arquivo = :arquivo
             WHERE agenda_id = :agenda_id AND colaborador_id = :colaborador_id");
         $ok = $updateParticipant->execute([
+            'numero' => $numero,
+            'codigo' => $codigo,
+            'emitido_em' => date('Y-m-d H:i:s'),
+            'arquivo' => $arquivo,
             'agenda_id' => $agendaId,
             'colaborador_id' => $colaboradorId,
         ]);
+        if (!$ok) {
+            return null;
+        }
         $this->db->prepare("UPDATE treinamento_colaboradores
             SET status = 'concluido'
             WHERE treinamento_id = :treinamento_id AND colaborador_id = :colaborador_id")
@@ -231,7 +283,73 @@ class TreinamentoAgendaModel extends BaseModel
                 'treinamento_id' => (int)$agenda['treinamento_id'],
                 'colaborador_id' => $colaboradorId,
             ]);
+        $participantId = (int)($participant['id'] ?? 0);
+        $this->audit('certificado_emitido', [
+            'treinamento_id' => (int)$agenda['treinamento_id'],
+            'agenda_id' => $agendaId,
+            'participante_id' => $participantId,
+            'colaborador_id' => $colaboradorId,
+            'certificado_numero' => $numero,
+            'certificado_codigo' => $codigo,
+            'certificado_arquivo' => $arquivo,
+        ]);
         (new TreinamentoModel())->refreshStatuses((int)$agenda['treinamento_id']);
-        return $ok;
+        return $this->findParticipant($agendaId, $colaboradorId);
+    }
+
+    public function issueCertificateBatch(int $agendaId, array $colaboradorIds, callable $fileResolver): array
+    {
+        $issued = [];
+        foreach (array_values(array_unique(array_filter(array_map('intval', $colaboradorIds)))) as $colaboradorId) {
+            $arquivo = (string)$fileResolver($agendaId, $colaboradorId);
+            $participant = $this->issueCertificate($agendaId, $colaboradorId, $arquivo);
+            if ($participant) {
+                $issued[] = $participant;
+            }
+        }
+        return $issued;
+    }
+
+    public function updateCertificateFile(int $agendaId, int $colaboradorId, string $arquivo): void
+    {
+        $stmt = $this->db->prepare("UPDATE treinamento_participantes
+            SET certificado_arquivo = :arquivo
+            WHERE agenda_id = :agenda_id AND colaborador_id = :colaborador_id");
+        $stmt->execute([
+            'arquivo' => $arquivo,
+            'agenda_id' => $agendaId,
+            'colaborador_id' => $colaboradorId,
+        ]);
+    }
+
+    private function normalizeTimeValue($value): ?string
+    {
+        $raw = trim((string)$value);
+        if ($raw === '') {
+            return null;
+        }
+        if (preg_match('/^\d{2}:\d{2}$/', $raw) === 1) {
+            return $raw . ':00';
+        }
+        if (preg_match('/^\d{2}:\d{2}:\d{2}$/', $raw) === 1) {
+            return $raw;
+        }
+        return null;
+    }
+
+    private function audit(string $acao, array $payload): void
+    {
+        $stmt = $this->db->prepare("INSERT INTO treinamento_auditoria_logs
+            (treinamento_id, agenda_id, participante_id, colaborador_id, acao, detalhes_json, created_by)
+            VALUES (:treinamento_id, :agenda_id, :participante_id, :colaborador_id, :acao, :detalhes_json, :created_by)");
+        $stmt->execute([
+            'treinamento_id' => $payload['treinamento_id'] ?? null,
+            'agenda_id' => $payload['agenda_id'] ?? null,
+            'participante_id' => $payload['participante_id'] ?? null,
+            'colaborador_id' => $payload['colaborador_id'] ?? null,
+            'acao' => $acao,
+            'detalhes_json' => json_encode($payload, JSON_UNESCAPED_UNICODE),
+            'created_by' => (int)($_SESSION['user']['id'] ?? 0) ?: null,
+        ]);
     }
 }

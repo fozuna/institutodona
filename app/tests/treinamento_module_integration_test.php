@@ -70,6 +70,9 @@ try {
         'departamento_id' => $departamentoId,
         'periodicidade' => 'anual',
         'fornecedor' => 'Fornecedor Teste',
+        'tipo_treinamento' => 'Integracao',
+        'template_certificado' => 'Template de teste',
+        'assinatura_responsavel' => 'Gestor de Teste',
         'setor_ids' => [$setorId],
         'funcao_ids' => [$funcaoId],
     ]);
@@ -114,16 +117,28 @@ try {
     }
     ok('Agendamento e seleção de participantes');
 
-    $agendaModel->savePresence($agendaId, [$colaboradorId => 1], [$colaboradorId => 1]);
+    $issued = $agendaModel->issueCertificate($agendaId, $colaboradorId);
+    if (!$issued || empty($issued['certificado_emitido'])) {
+        failFast('Certificado deveria poder ser emitido sem confirmação prévia de presença');
+    }
+    ok('Certificado antecipado independente da presença');
+
+    $agendaModel->savePresence($agendaId, [$colaboradorId => 1], [$colaboradorId => '08:00'], [$colaboradorId => '12:00'], [$colaboradorId => 'Presença registrada em teste']);
     $linkedAfterPresence = $treinamentoModel->linkedColaboradores($treinamentoId, 'concluido');
     if (count($linkedAfterPresence) !== 1) {
-        failFast('Presença com certificado deveria concluir o vínculo');
+        failFast('Presença e certificado independentes ainda deveriam concluir o vínculo');
     }
-    ok('Presença e conclusão com certificado');
+    ok('Presença e conclusão desacopladas');
+
+    $eligible = $treinamentoModel->eligibleColaboradoresForTraining($treinamentoId, ['status_elegibilidade' => 'Elegivel']);
+    if (count($eligible) !== 1) {
+        failFast('Lista de elegíveis deveria retornar o colaborador criado');
+    }
+    ok('Consulta de elegíveis com filtros');
 
     $dashboard = $treinamentoModel->dashboard();
-    if (empty($dashboard['concluidos'])) {
-        failFast('Dashboard deveria listar concluídos após emissão do certificado');
+    if (empty($dashboard['concluidos']) || empty($dashboard['participacao_treinamento']) || empty($dashboard['setores'])) {
+        failFast('Dashboard avançado deveria retornar concluídos, participação e totalizadores por setor');
     }
     ok('Dashboard de acompanhamento');
 

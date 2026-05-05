@@ -42,6 +42,20 @@
     <input name="fornecedor" class="border rounded p-2 w-full" value="<?= htmlspecialchars((string)($values['fornecedor'] ?? '')) ?>" />
   </div>
   <div>
+    <label class="block text-sm">Tipo de Treinamento</label>
+    <input name="tipo_treinamento" class="border rounded p-2 w-full" value="<?= htmlspecialchars((string)($values['tipo_treinamento'] ?? '')) ?>" placeholder="Ex.: Integracao, NR, Lideranca" />
+  </div>
+  <div>
+    <label class="block text-sm">Responsável pela Assinatura</label>
+    <input name="assinatura_responsavel" class="border rounded p-2 w-full" value="<?= htmlspecialchars((string)($values['assinatura_responsavel'] ?? '')) ?>" placeholder="Nome que aparecerá no certificado" />
+    <?php if (!empty($errors['assinatura_responsavel'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['assinatura_responsavel']) ?></p><?php endif; ?>
+  </div>
+  <div class="md:col-span-2">
+    <label class="block text-sm">Template do Certificado</label>
+    <textarea name="template_certificado" class="border rounded p-2 w-full" rows="3" placeholder="Texto complementar exibido no certificado"><?= htmlspecialchars((string)($values['template_certificado'] ?? '')) ?></textarea>
+    <p class="text-xs text-gray-500 mt-1">Permite personalizar a mensagem principal exibida no certificado emitido em lote ou individualmente.</p>
+  </div>
+  <div>
     <label class="block text-sm">Setores Aplicáveis</label>
     <select name="setor_ids[]" multiple size="6" class="border rounded p-2 w-full">
       <?php foreach ($setores as $setor): ?>

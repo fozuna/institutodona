@@ -72,6 +72,59 @@ class ClienteModel extends BaseModel
         return $row ?: null;
     }
 
+    public function findActive(int $id): ?array
+    {
+        if (!$this->canAccessClienteId($id)) {
+            return null;
+        }
+        $this->ensureColumns();
+        $hasAtivo = \App\Database\Database::columnExists('clientes', 'ativo');
+        $whereAtivo = $hasAtivo ? ' AND ativo = 1' : '';
+        try {
+            $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path, dominio_publico, is_matriz, matriz_id' . ($hasAtivo ? ', ativo' : '') . ' FROM clientes WHERE id = :id' . $whereAtivo . ' LIMIT 1');
+        } catch (\PDOException $e) {
+            try {
+                $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path, dominio_publico' . ($hasAtivo ? ', ativo' : '') . ' FROM clientes WHERE id = :id' . $whereAtivo . ' LIMIT 1');
+            } catch (\PDOException $e2) {
+                try {
+                    $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path' . ($hasAtivo ? ', ativo' : '') . ' FROM clientes WHERE id = :id' . $whereAtivo . ' LIMIT 1');
+                } catch (\PDOException $e3) {
+                    $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato' . ($hasAtivo ? ', ativo' : '') . ' FROM clientes WHERE id = :id' . $whereAtivo . ' LIMIT 1');
+                }
+            }
+        }
+        $stmt->execute(['id' => $id]);
+        $row = $stmt->fetch();
+        return $row ?: null;
+    }
+
+    public function searchActiveByName(string $term, int $limit = 10): array
+    {
+        $this->ensureColumns();
+        $term = trim($term);
+        if ($term === '') {
+            return [];
+        }
+        $params = ['q' => '%' . $term . '%'];
+        $scope = $this->tenantInCondition('id', $params, 'cli_active');
+        $where = [$scope, 'nome_empresa LIKE :q'];
+        if (\App\Database\Database::columnExists('clientes', 'ativo')) {
+            $where[] = 'ativo = 1';
+        }
+        $sql = 'SELECT id, nome_empresa, CNPJ, contato
+                FROM clientes
+                WHERE ' . implode(' AND ', $where) . '
+                ORDER BY nome_empresa
+                LIMIT :lim';
+        $stmt = $this->db->prepare($sql);
+        foreach ($params as $key => $value) {
+            $stmt->bindValue(':' . $key, $value, $key === 'q' ? \PDO::PARAM_STR : \PDO::PARAM_INT);
+        }
+        $stmt->bindValue(':lim', max(1, min(30, $limit)), \PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
     public function create(array $data): int
     {
         $this->ensureColumns();

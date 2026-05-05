@@ -1,0 +1,298 @@
+<?php
+namespace App\Services;
+
+use App\Core\DateHelper;
+use App\Core\ReportBranding;
+use App\Core\XlsxExport;
+use Dompdf\Dompdf;
+use Dompdf\Options;
+
+class TreinamentoDocumentService
+{
+    public function exportEligibleXlsx(array $treinamento, array $rows): string
+    {
+        return XlsxExport::exportRows($rows, [
+            'nome' => 'Nome Completo',
+            'matricula' => 'Matricula',
+            'setor' => 'Setor',
+            'cargo' => 'Cargo',
+            'cpf' => 'CPF',
+            'email_corporativo' => 'E-mail Corporativo',
+            'status_atual' => 'Status Atual',
+            'status_elegibilidade' => 'Elegibilidade',
+            'data_admissao' => 'Data de Admissao',
+            'pre_cadastrado' => 'Pre-Cadastrado',
+        ], 'treinamento-elegiveis-' . (int)$treinamento['id'] . '.xlsx', [
+            'report_title' => 'Elegiveis - ' . (string)$treinamento['nome'],
+            'header_title' => 'Lista de Colaboradores Elegiveis',
+            'header_subtitle' => (string)$treinamento['nome'],
+            'sheet_name' => 'Elegiveis',
+        ]);
+    }
+
+    public function renderEligiblePdf(array $treinamento, array $rows, array $filters): string
+    {
+        $html = $this->wrapHtml(
+            'Lista de Colaboradores Elegiveis',
+            $this->filtersHtml($filters) . $this->tableHtml([
+                'Nome Completo', 'Matricula', 'Setor', 'Cargo', 'CPF', 'E-mail', 'Status', 'Elegibilidade'
+            ], array_map(static function (array $row): array {
+                return [
+                    $row['nome'] ?? '',
+                    $row['matricula'] ?? '',
+                    $row['setor'] ?? '',
+                    $row['cargo'] ?? '',
+                    $row['cpf'] ?? '',
+                    $row['email_corporativo'] ?? '',
+                    $row['status_atual'] ?? '',
+                    $row['status_elegibilidade'] ?? '',
+                ];
+            }, $rows), 'Documento preparado para download e impressão.')
+        , [
+            'header_subtitle' => (string)$treinamento['nome'],
+            'orientation' => 'landscape',
+        ]);
+        return $this->renderPdf($html, 'A4', 'landscape');
+    }
+
+    public function renderPresencePdf(array $agenda, array $participants): string
+    {
+        $rows = array_map(static function (array $participant): array {
+            return [
+                $participant['colaborador_nome'] ?? '',
+                $participant['matricula'] ?? '',
+                $participant['funcao_nome'] ?? '',
+                $participant['hora_entrada'] ? substr((string)$participant['hora_entrada'], 0, 5) : '',
+                $participant['hora_saida'] ? substr((string)$participant['hora_saida'], 0, 5) : '',
+                '',
+            ];
+        }, $participants);
+
+        $body = '<div class="print-card">'
+            . '<div class="meta-grid">'
+            . '<div><strong>Treinamento:</strong> ' . $this->e($agenda['treinamento_nome'] ?? '') . '</div>'
+            . '<div><strong>Data Prevista:</strong> ' . $this->e(DateHelper::formatDateTime((string)($agenda['data'] ?? ''))) . '</div>'
+            . '<div><strong>Instrutor:</strong> ' . $this->e((string)($agenda['instrutor'] ?: ($agenda['responsavel_nome'] ?? ''))) . '</div>'
+            . '<div><strong>Local:</strong> ' . $this->e((string)($agenda['local'] ?? '')) . '</div>'
+            . '</div>'
+            . $this->tableHtml(['Nome do Participante', 'Matricula', 'Cargo', 'Entrada', 'Saida', 'Assinatura'], $rows, '')
+            . '<div class="signature-zone">'
+            . '<p><strong>Termo de responsabilidade:</strong> Declaro que as informacoes acima representam fielmente a participacao no treinamento programado.</p>'
+            . '<div class="signature-line">Assinatura do Instrutor</div>'
+            . '</div>'
+            . '</div>';
+
+        return $this->renderPdf($this->wrapHtml('Lista de Presenca', $body, [
+            'header_subtitle' => (string)($agenda['treinamento_nome'] ?? ''),
+            'orientation' => 'landscape',
+            'margins' => ['top' => 14, 'right' => 14, 'bottom' => 16, 'left' => 18],
+        ]), 'A4', 'landscape');
+    }
+
+    public function renderDashboardPdf(array $dashboard, array $filters): string
+    {
+        $summary = $dashboard['resumo'] ?? [];
+        $cards = '<div class="summary-grid">'
+            . $this->summaryCard('Treinamentos', (string)($summary['treinamentos_monitorados'] ?? 0))
+            . $this->summaryCard('Inscritos', (string)($summary['total_inscritos'] ?? 0))
+            . $this->summaryCard('Presentes', (string)($summary['total_presentes'] ?? 0))
+            . $this->summaryCard('Certificados', (string)($summary['total_certificados'] ?? 0))
+            . '</div>';
+
+        $participacaoTable = $this->tableHtml(['Treinamento', 'Tipo', 'Instrutor', 'Inscritos', 'Presentes', 'Percentual'], array_map(static function (array $row): array {
+            return [
+                $row['treinamento_nome'] ?? '',
+                $row['tipo_treinamento'] ?? '',
+                $row['instrutor'] ?? '',
+                (string)($row['total_inscritos'] ?? 0),
+                (string)($row['total_presentes'] ?? 0),
+                number_format((float)($row['percentual_participacao'] ?? 0), 2, ',', '.') . '%',
+            ];
+        }, $dashboard['participacao_treinamento'] ?? []), '');
+
+        $setoresTable = $this->tableHtml(['Setor', 'Total Colaboradores', 'Treinados', 'Horas', 'Media', 'Percentual'], array_map(static function (array $row): array {
+            return [
+                $row['setor_nome'] ?? '',
+                (string)($row['total_colaboradores_setor'] ?? 0),
+                (string)($row['total_treinados'] ?? 0),
+                number_format((float)($row['total_horas_treinamento'] ?? 0), 2, ',', '.'),
+                number_format((float)($row['media_horas_por_colaborador'] ?? 0), 2, ',', '.'),
+                number_format((float)($row['percentual_participacao'] ?? 0), 2, ',', '.') . '%',
+            ];
+        }, $dashboard['setores'] ?? []), '');
+
+        $alerts = '';
+        foreach (($dashboard['alertas_setor'] ?? []) as $row) {
+            $alerts .= '<li>' . $this->e((string)($row['setor_nome'] ?? '')) . ': '
+                . number_format((float)($row['percentual_participacao'] ?? 0), 2, ',', '.') . '% de participacao</li>';
+        }
+        if ($alerts === '') {
+            $alerts = '<li>Nenhum alerta automatico no periodo selecionado.</li>';
+        }
+
+        $body = $this->filtersHtml($filters)
+            . $cards
+            . '<h3>Participacao por treinamento</h3>'
+            . $participacaoTable
+            . '<h3>Totalizadores por setor</h3>'
+            . $setoresTable
+            . '<h3>Alertas automaticos</h3><ul>' . $alerts . '</ul>';
+
+        return $this->renderPdf($this->wrapHtml('Dashboard de Treinamentos', $body, [
+            'header_subtitle' => 'Relatorio de acompanhamento percentual',
+            'orientation' => 'landscape',
+        ]), 'A4', 'landscape');
+    }
+
+    public function generateCertificateFile(array $treinamento, array $agenda, array $participant): string
+    {
+        $dir = dirname(__DIR__, 2) . '/storage/pdfs/treinamentos/certificados';
+        $backupDir = $dir . '/backup';
+        if (!is_dir($dir)) {
+            mkdir($dir, 0775, true);
+        }
+        if (!is_dir($backupDir)) {
+            mkdir($backupDir, 0775, true);
+        }
+
+        $fileName = sprintf(
+            'certificado-agenda-%d-colaborador-%d.pdf',
+            (int)$agenda['id'],
+            (int)$participant['colaborador_id']
+        );
+        $path = $dir . '/' . $fileName;
+        $backupPath = $backupDir . '/' . date('Ymd_His_') . $fileName;
+        $pdf = $this->renderCertificatePdf($treinamento, $agenda, $participant);
+        file_put_contents($path, $pdf);
+        file_put_contents($backupPath, $pdf);
+        return $path;
+    }
+
+    public function renderCertificatePdf(array $treinamento, array $agenda, array $participant): string
+    {
+        $numero = (string)($participant['certificado_numero'] ?? '');
+        $codigo = (string)($participant['certificado_codigo'] ?? '');
+        $html = $this->wrapHtml('Certificado de Participacao', '
+            <div class="certificate">
+                <div class="certificate-title">Certificado</div>
+                <div class="certificate-subtitle">Certificamos que</div>
+                <div class="certificate-name">' . $this->e((string)($participant['colaborador_nome'] ?? '')) . '</div>
+                <div class="certificate-body">
+                    participou do treinamento <strong>' . $this->e((string)($agenda['treinamento_nome'] ?? '')) . '</strong>,
+                    com carga horaria de <strong>' . $this->e((string)($agenda['carga_horaria'] ?? '0')) . ' hora(s)</strong>,
+                    previsto para <strong>' . $this->e(DateHelper::formatDateTime((string)($agenda['data'] ?? ''))) . '</strong>.
+                </div>
+                <div class="certificate-meta">
+                    <div><strong>Instrutor/Responsavel:</strong> ' . $this->e((string)($agenda['instrutor'] ?: ($treinamento['assinatura_responsavel'] ?? $agenda['responsavel_nome'] ?? ''))) . '</div>
+                    <div><strong>Numero:</strong> ' . $this->e($numero) . '</div>
+                    <div><strong>Codigo de Autenticacao:</strong> ' . $this->e($codigo) . '</div>
+                </div>
+                <div class="signature-line">' . $this->e((string)($treinamento['assinatura_responsavel'] ?? $agenda['responsavel_nome'] ?? 'Responsavel')) . '</div>
+            </div>
+        ', [
+            'header_subtitle' => (string)($treinamento['template_certificado'] ?: 'Template padrao de certificado'),
+            'orientation' => 'landscape',
+        ]);
+
+        return $this->renderPdf($html, 'A4', 'landscape');
+    }
+
+    private function summaryCard(string $label, string $value): string
+    {
+        return '<div class="summary-card"><div class="summary-label">' . $this->e($label) . '</div><div class="summary-value">' . $this->e($value) . '</div></div>';
+    }
+
+    private function filtersHtml(array $filters): string
+    {
+        $items = [];
+        foreach ($filters as $key => $value) {
+            $value = trim((string)$value);
+            if ($value !== '') {
+                $items[] = '<span><strong>' . $this->e(str_replace('_', ' ', ucfirst($key))) . ':</strong> ' . $this->e($value) . '</span>';
+            }
+        }
+        if (empty($items)) {
+            return '<p class="muted">Sem filtros adicionais aplicados.</p>';
+        }
+        return '<div class="filters-box">' . implode(' ', $items) . '</div>';
+    }
+
+    private function tableHtml(array $headers, array $rows, string $footer): string
+    {
+        $thead = '';
+        foreach ($headers as $header) {
+            $thead .= '<th>' . $this->e($header) . '</th>';
+        }
+        $tbody = '';
+        foreach ($rows as $row) {
+            $tbody .= '<tr>';
+            foreach ($row as $cell) {
+                $tbody .= '<td>' . $this->e((string)$cell) . '</td>';
+            }
+            $tbody .= '</tr>';
+        }
+        if ($tbody === '') {
+            $tbody = '<tr><td colspan="' . count($headers) . '">Nenhum registro encontrado.</td></tr>';
+        }
+        return '<table><thead><tr>' . $thead . '</tr></thead><tbody>' . $tbody . '</tbody></table>'
+            . ($footer !== '' ? '<p class="muted">' . $this->e($footer) . '</p>' : '');
+    }
+
+    private function wrapHtml(string $title, string $body, array $options = []): string
+    {
+        $branding = ReportBranding::aplicarBrandingRelatorio('pdf', array_merge([
+            'report_title' => $title,
+            'header_title' => $title,
+            'header_subtitle' => '',
+            'generated_at' => DateHelper::now(),
+            'margins' => ['top' => 14, 'right' => 12, 'bottom' => 14, 'left' => 12],
+        ], $options));
+
+        $logo = $branding['logo_uri'] !== '' ? '<img src="' . $this->e($branding['logo_uri']) . '" class="logo" alt="Logo" />' : '';
+        return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>'
+            . '@page { margin: ' . (int)$branding['margins']['top'] . 'mm ' . (int)$branding['margins']['right'] . 'mm ' . (int)$branding['margins']['bottom'] . 'mm ' . (int)$branding['margins']['left'] . 'mm; }'
+            . 'body{font-family:DejaVu Sans, Arial, sans-serif;color:#1f2937;font-size:12px;}'
+            . 'h1{font-size:24px;margin:0 0 4px;}h2,h3{margin:16px 0 8px;font-size:16px;color:#7f1d1d;}'
+            . 'p{margin:6px 0;}table{width:100%;border-collapse:collapse;margin-top:10px;}th,td{border:1px solid #d1d5db;padding:8px;vertical-align:top;}'
+            . 'th{background:#fee2e2;color:#7f1d1d;font-size:11px;text-transform:uppercase;}'
+            . '.header{display:flex;align-items:center;gap:18px;margin-bottom:18px;border-bottom:2px solid #e5e7eb;padding-bottom:12px;}'
+            . '.logo{height:54px;max-width:140px;object-fit:contain;}.muted{color:#6b7280;font-size:11px;}'
+            . '.filters-box{background:#f9fafb;border:1px solid #e5e7eb;padding:10px;border-radius:8px;margin:10px 0 14px;}'
+            . '.filters-box span{display:inline-block;margin-right:12px;margin-bottom:6px;}'
+            . '.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 20px;}'
+            . '.summary-card{border:1px solid #e5e7eb;border-radius:10px;padding:12px;background:#fff7ed;}'
+            . '.summary-label{font-size:11px;color:#6b7280;text-transform:uppercase;}.summary-value{font-size:24px;font-weight:bold;color:#7f1d1d;}'
+            . '.signature-zone{margin-top:22px;}.signature-line{margin-top:34px;padding-top:8px;border-top:1px solid #111827;width:260px;text-align:center;}'
+            . '.certificate{border:6px solid #7f1d1d;border-radius:20px;padding:34px;min-height:420px;text-align:center;background:#fff;}'
+            . '.certificate-title{font-size:38px;font-weight:bold;color:#7f1d1d;margin-top:6px;}'
+            . '.certificate-subtitle{font-size:18px;margin-top:28px;}.certificate-name{font-size:30px;font-weight:bold;margin:28px 0;color:#111827;}'
+            . '.certificate-body{font-size:18px;line-height:1.7;margin:24px 30px;}.certificate-meta{margin-top:26px;font-size:13px;line-height:1.8;}'
+            . '.meta-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px;}.print-card{padding-left:4mm;}'
+            . '</style></head><body>'
+            . '<div class="header">' . $logo . '<div><h1>' . $this->e($branding['header_title']) . '</h1><p class="muted">'
+            . $this->e((string)$branding['header_subtitle']) . ' • Gerado em ' . $this->e((string)$branding['generated_at']) . '</p></div></div>'
+            . $body
+            . '</body></html>';
+    }
+
+    private function renderPdf(string $html, string $paper = 'A4', string $orientation = 'portrait'): string
+    {
+        $options = new Options();
+        $options->set('isRemoteEnabled', false);
+        $options->set('isHtml5ParserEnabled', true);
+        $options->set('isPhpEnabled', false);
+        $options->set('defaultFont', 'DejaVu Sans');
+        $options->setChroot(dirname(__DIR__, 2));
+
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml($html, 'UTF-8');
+        $dompdf->setPaper($paper, $orientation);
+        $dompdf->render();
+        return $dompdf->output();
+    }
+
+    private function e(string $value): string
+    {
+        return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+    }
+}

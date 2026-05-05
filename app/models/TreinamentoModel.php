@@ -2,6 +2,7 @@
 namespace App\Models;
 
 use App\Core\Auth;
+use App\Database\Database;
 
 class TreinamentoModel extends BaseModel
 {
@@ -86,8 +87,8 @@ class TreinamentoModel extends BaseModel
     {
         $this->ensureSchema();
         $stmt = $this->db->prepare("INSERT INTO treinamentos
-            (nome, objetivo, publico, carga_horaria, departamento_id, periodicidade, fornecedor)
-            VALUES (:nome,:objetivo,:publico,:carga,:departamento,:periodicidade,:fornecedor)");
+            (nome, objetivo, publico, carga_horaria, departamento_id, periodicidade, fornecedor, tipo_treinamento, template_certificado, assinatura_responsavel)
+            VALUES (:nome,:objetivo,:publico,:carga,:departamento,:periodicidade,:fornecedor,:tipo_treinamento,:template_certificado,:assinatura_responsavel)");
         $stmt->execute([
             'nome' => trim((string)$data['nome']),
             'objetivo' => trim((string)($data['objetivo'] ?? '')),
@@ -96,6 +97,9 @@ class TreinamentoModel extends BaseModel
             'departamento' => (int)$data['departamento_id'],
             'periodicidade' => trim((string)($data['periodicidade'] ?? 'avulso')),
             'fornecedor' => trim((string)($data['fornecedor'] ?? '')),
+            'tipo_treinamento' => trim((string)($data['tipo_treinamento'] ?? '')),
+            'template_certificado' => trim((string)($data['template_certificado'] ?? '')),
+            'assinatura_responsavel' => trim((string)($data['assinatura_responsavel'] ?? '')),
         ]);
         $id = (int)$this->db->lastInsertId();
         $this->syncSetores($id, $data['setor_ids'] ?? []);
@@ -116,7 +120,10 @@ class TreinamentoModel extends BaseModel
                 carga_horaria = :carga,
                 departamento_id = :departamento,
                 periodicidade = :periodicidade,
-                fornecedor = :fornecedor
+                fornecedor = :fornecedor,
+                tipo_treinamento = :tipo_treinamento,
+                template_certificado = :template_certificado,
+                assinatura_responsavel = :assinatura_responsavel
             WHERE id = :id");
         $ok = $stmt->execute([
             'id' => $id,
@@ -127,6 +134,9 @@ class TreinamentoModel extends BaseModel
             'departamento' => (int)$data['departamento_id'],
             'periodicidade' => trim((string)($data['periodicidade'] ?? 'avulso')),
             'fornecedor' => trim((string)($data['fornecedor'] ?? '')),
+            'tipo_treinamento' => trim((string)($data['tipo_treinamento'] ?? '')),
+            'template_certificado' => trim((string)($data['template_certificado'] ?? '')),
+            'assinatura_responsavel' => trim((string)($data['assinatura_responsavel'] ?? '')),
         ]);
         $this->syncSetores($id, $data['setor_ids'] ?? []);
         $this->syncFuncoes($id, $data['funcao_ids'] ?? []);
@@ -196,6 +206,35 @@ class TreinamentoModel extends BaseModel
         return $added;
     }
 
+    public function syncSelectedColaboradores(int $treinamentoId, array $colaboradorIds): int
+    {
+        $this->ensureSchema();
+        if (!$this->find($treinamentoId)) {
+            return 0;
+        }
+
+        $selectedIds = array_values(array_unique(array_filter(array_map('intval', $colaboradorIds))));
+        $added = $this->syncColaboradores($treinamentoId, $selectedIds);
+
+        $params = ['treinamento_id' => $treinamentoId];
+        $sql = "DELETE FROM treinamento_colaboradores
+                WHERE treinamento_id = :treinamento_id
+                  AND status = 'pendente'";
+        if (!empty($selectedIds)) {
+            $holders = [];
+            foreach ($selectedIds as $index => $colaboradorId) {
+                $key = 'colaborador_' . $index;
+                $holders[] = ':' . $key;
+                $params[$key] = $colaboradorId;
+            }
+            $sql .= " AND colaborador_id NOT IN (" . implode(',', $holders) . ")";
+        }
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+
+        return $added;
+    }
+
     public function unlinkColaborador(int $treinamentoId, int $colaboradorId): bool
     {
         $this->ensureSchema();
@@ -233,8 +272,7 @@ class TreinamentoModel extends BaseModel
                         JOIN treinamentos_agenda ta ON ta.id = tp.agenda_id
                         WHERE tp.colaborador_id = tc.colaborador_id
                           AND ta.treinamento_id = tc.treinamento_id
-                          AND tp.presenca = 1
-                          AND tp.certificado_emitido = 1
+                          AND (tp.presenca = 1 OR tp.certificado_emitido = 1)
                     ) AS ultima_conclusao
                 FROM treinamento_colaboradores tc
                 JOIN colaboradores col ON col.id = tc.colaborador_id
@@ -254,21 +292,15 @@ class TreinamentoModel extends BaseModel
 
     public function availableColaboradores(int $treinamentoId): array
     {
-        $this->ensureSchema();
-        $training = $this->find($treinamentoId);
-        if (!$training) {
-            return [];
-        }
-        $params = ['cliente_id' => (int)$training['cliente_id']];
-        $sql = "SELECT col.id, col.nome, col.email, f.nome AS funcao_nome, s.nome AS setor_nome
-                FROM colaboradores col
-                LEFT JOIN funcoes f ON f.id = col.funcao_id
-                LEFT JOIN setores s ON s.id = f.setor_id
-                WHERE col.cliente_id = :cliente_id
-                ORDER BY col.nome";
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetchAll() ?: [];
+        return array_map(static function (array $row): array {
+            return [
+                'id' => (int)$row['id'],
+                'nome' => $row['nome'],
+                'email' => $row['email_corporativo'],
+                'funcao_nome' => $row['cargo'],
+                'setor_nome' => $row['setor'],
+            ];
+        }, $this->eligibleColaboradoresForTraining($treinamentoId));
     }
 
     public function pendingAlerts(?int $treinamentoId = null): array
@@ -289,8 +321,7 @@ class TreinamentoModel extends BaseModel
                         JOIN treinamentos_agenda ta ON ta.id = tp.agenda_id
                         WHERE tp.colaborador_id = tc.colaborador_id
                           AND ta.treinamento_id = tc.treinamento_id
-                          AND tp.presenca = 1
-                          AND tp.certificado_emitido = 1
+                          AND (tp.presenca = 1 OR tp.certificado_emitido = 1)
                     ) AS ultima_conclusao
                 FROM treinamento_colaboradores tc
                 JOIN treinamentos t ON t.id = tc.treinamento_id
@@ -334,10 +365,14 @@ class TreinamentoModel extends BaseModel
         return $alerts;
     }
 
-    public function dashboard(): array
+    public function dashboard(array $filters = []): array
     {
         $this->ensureSchema();
         $this->refreshStatuses();
+        $participacao = $this->participationByTraining($filters);
+        $setores = $this->sectorTotals($filters);
+        $acumulados = $this->periodAccumulators($filters);
+        $alertasSetor = array_values(array_filter($setores, static fn(array $row): bool => (float)($row['percentual_participacao'] ?? 0) < 50.0));
         return [
             'por_treinamento' => $this->dashboardBy('t.id', 't.nome'),
             'por_funcao' => $this->dashboardBy('f.id', 'f.nome'),
@@ -345,6 +380,18 @@ class TreinamentoModel extends BaseModel
             'pendentes' => $this->dashboardListByStatus('pendente'),
             'concluidos' => $this->dashboardListByStatus('concluido'),
             'alertas' => $this->pendingAlerts(),
+            'participacao_treinamento' => $participacao,
+            'setores' => $setores,
+            'acumulados' => $acumulados,
+            'alertas_setor' => $alertasSetor,
+            'resumo' => [
+                'treinamentos_monitorados' => count($participacao),
+                'setores_monitorados' => count($setores),
+                'total_inscritos' => array_sum(array_map(static fn(array $row): int => (int)($row['total_inscritos'] ?? 0), $participacao)),
+                'total_presentes' => array_sum(array_map(static fn(array $row): int => (int)($row['total_presentes'] ?? 0), $participacao)),
+                'total_certificados' => array_sum(array_map(static fn(array $row): int => (int)($row['total_certificados'] ?? 0), $participacao)),
+            ],
+            'filters' => $filters,
         ];
     }
 
@@ -359,8 +406,7 @@ class TreinamentoModel extends BaseModel
                            JOIN treinamentos_agenda ta ON ta.id = tp.agenda_id
                            WHERE tp.colaborador_id = tc.colaborador_id
                              AND ta.treinamento_id = tc.treinamento_id
-                             AND tp.presenca = 1
-                             AND tp.certificado_emitido = 1
+                             AND (tp.presenca = 1 OR tp.certificado_emitido = 1)
                        ) AS ultima_conclusao
                 FROM treinamento_colaboradores tc
                 JOIN treinamentos t ON t.id = tc.treinamento_id
@@ -478,5 +524,261 @@ class TreinamentoModel extends BaseModel
         $stmt = $this->db->prepare("SELECT f.* FROM treinamento_funcoes tf JOIN funcoes f ON f.id = tf.funcao_id WHERE tf.treinamento_id = :id ORDER BY f.nome");
         $stmt->execute(['id' => $treinamentoId]);
         return $stmt->fetchAll() ?: [];
+    }
+
+    public function eligibleColaboradoresForTraining(int $treinamentoId, array $filters = []): array
+    {
+        $this->ensureSchema();
+        $treinamento = $this->find($treinamentoId);
+        if (!$treinamento) {
+            return [];
+        }
+
+        $cacheKey = 'treinamento_elegiveis_' . md5(json_encode([$treinamentoId, $filters], JSON_UNESCAPED_UNICODE));
+        $cached = $this->cacheGet($cacheKey);
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $params = [
+            'treinamento_id' => $treinamentoId,
+            'cliente_id' => (int)$treinamento['cliente_id'],
+        ];
+        $statusExpr = "CASE
+            WHEN COALESCE(NULLIF(TRIM(col.status_atual), ''), 'ativo') = 'ativo' THEN 'Elegivel'
+            ELSE 'Inelegivel'
+        END";
+        $sql = "SELECT
+                    col.id,
+                    col.nome,
+                    col.matricula,
+                    s.nome AS setor,
+                    f.nome AS cargo,
+                    col.cpf,
+                    col.email AS email_corporativo,
+                    COALESCE(NULLIF(TRIM(col.status_atual), ''), 'ativo') AS status_atual,
+                    col.data_admissao,
+                    {$statusExpr} AS status_elegibilidade,
+                    CASE WHEN tc.colaborador_id IS NULL THEN 0 ELSE 1 END AS pre_cadastrado
+                FROM colaboradores col
+                LEFT JOIN funcoes f ON f.id = col.funcao_id
+                LEFT JOIN setores s ON s.id = f.setor_id
+                LEFT JOIN treinamento_colaboradores tc
+                    ON tc.treinamento_id = :treinamento_id
+                   AND tc.colaborador_id = col.id
+                WHERE col.cliente_id = :cliente_id";
+        if (!empty($filters['setor_id'])) {
+            $sql .= " AND s.id = :setor_id";
+            $params['setor_id'] = (int)$filters['setor_id'];
+        }
+        if (!empty($filters['funcao_id'])) {
+            $sql .= " AND f.id = :funcao_id";
+            $params['funcao_id'] = (int)$filters['funcao_id'];
+        }
+        if (!empty($filters['data_admissao_inicio'])) {
+            $sql .= " AND col.data_admissao >= :data_admissao_inicio";
+            $params['data_admissao_inicio'] = $filters['data_admissao_inicio'];
+        }
+        if (!empty($filters['data_admissao_fim'])) {
+            $sql .= " AND col.data_admissao <= :data_admissao_fim";
+            $params['data_admissao_fim'] = $filters['data_admissao_fim'];
+        }
+        if (!empty($filters['status_atual'])) {
+            $sql .= " AND COALESCE(NULLIF(TRIM(col.status_atual), ''), 'ativo') = :status_atual";
+            $params['status_atual'] = trim((string)$filters['status_atual']);
+        }
+        if (!empty($filters['status_elegibilidade'])) {
+            $sql .= " AND {$statusExpr} = :status_elegibilidade";
+            $params['status_elegibilidade'] = trim((string)$filters['status_elegibilidade']);
+        }
+        if (Database::columnExists('colaboradores', 'ativo')) {
+            $sql .= " AND col.ativo = 1";
+        }
+        $sql .= " ORDER BY col.nome";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll() ?: [];
+        $this->cachePut($cacheKey, $rows, 300);
+        return $rows;
+    }
+
+    private function participationByTraining(array $filters): array
+    {
+        $params = [];
+        $sql = "SELECT
+                    t.id AS treinamento_id,
+                    t.nome AS treinamento_nome,
+                    COALESCE(NULLIF(TRIM(t.tipo_treinamento), ''), 'Nao informado') AS tipo_treinamento,
+                    COALESCE(NULLIF(TRIM(ta.instrutor), ''), 'Nao informado') AS instrutor,
+                    COUNT(tp.id) AS total_inscritos,
+                    SUM(CASE WHEN tp.presenca = 1 THEN 1 ELSE 0 END) AS total_presentes,
+                    SUM(CASE WHEN tp.certificado_emitido = 1 THEN 1 ELSE 0 END) AS total_certificados
+                FROM treinamentos t
+                JOIN treinamentos_agenda ta ON ta.treinamento_id = t.id
+                LEFT JOIN treinamento_participantes tp ON tp.agenda_id = ta.id
+                JOIN departamentos d ON d.id = t.departamento_id
+                LEFT JOIN colaboradores col ON col.id = tp.colaborador_id
+                LEFT JOIN funcoes f ON f.id = col.funcao_id
+                LEFT JOIN setores s ON s.id = f.setor_id
+                WHERE 1=1";
+        $sql .= $this->applyDashboardFilters($filters, $params, true);
+        $scope = $this->tenantInCondition('d.cliente_id', $params, 'trpart');
+        if ($scope !== '1=1') {
+            $sql .= " AND {$scope}";
+        }
+        $sql .= " GROUP BY t.id, t.nome, tipo_treinamento, instrutor ORDER BY t.nome";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll() ?: [];
+        foreach ($rows as &$row) {
+            $inscritos = (int)($row['total_inscritos'] ?? 0);
+            $presentes = (int)($row['total_presentes'] ?? 0);
+            $row['percentual_participacao'] = $inscritos > 0 ? round(($presentes / $inscritos) * 100, 2) : 0.0;
+        }
+        return $rows;
+    }
+
+    private function sectorTotals(array $filters): array
+    {
+        $params = [];
+        $sql = "SELECT
+                    s.id AS setor_id,
+                    s.nome AS setor_nome,
+                    COUNT(DISTINCT col_all.id) AS total_colaboradores_setor,
+                    COUNT(DISTINCT CASE WHEN tp.presenca = 1 OR tp.certificado_emitido = 1 THEN tp.colaborador_id END) AS total_treinados,
+                    COALESCE(SUM(CASE WHEN tp.presenca = 1 OR tp.certificado_emitido = 1 THEN t.carga_horaria ELSE 0 END), 0) AS total_horas_treinamento
+                FROM setores s
+                JOIN funcoes f_all ON f_all.setor_id = s.id
+                JOIN colaboradores col_all ON col_all.funcao_id = f_all.id
+                LEFT JOIN treinamento_participantes tp ON tp.colaborador_id = col_all.id
+                LEFT JOIN treinamentos_agenda ta ON ta.id = tp.agenda_id
+                LEFT JOIN treinamentos t ON t.id = ta.treinamento_id
+                LEFT JOIN departamentos d ON d.id = s.departamento_id
+                WHERE 1=1";
+        if (!empty($filters['setor_id'])) {
+            $sql .= " AND s.id = :setor_id";
+            $params['setor_id'] = (int)$filters['setor_id'];
+        }
+        if (!empty($filters['periodo_inicio'])) {
+            $sql .= " AND (ta.data IS NULL OR DATE(ta.data) >= :periodo_inicio)";
+            $params['periodo_inicio'] = $filters['periodo_inicio'];
+        }
+        if (!empty($filters['periodo_fim'])) {
+            $sql .= " AND (ta.data IS NULL OR DATE(ta.data) <= :periodo_fim)";
+            $params['periodo_fim'] = $filters['periodo_fim'];
+        }
+        if (!empty($filters['tipo_treinamento'])) {
+            $sql .= " AND (t.tipo_treinamento = :tipo_treinamento OR t.tipo_treinamento IS NULL)";
+            $params['tipo_treinamento'] = trim((string)$filters['tipo_treinamento']);
+        }
+        if (!empty($filters['instrutor'])) {
+            $sql .= " AND ta.instrutor LIKE :instrutor";
+            $params['instrutor'] = '%' . trim((string)$filters['instrutor']) . '%';
+        }
+        $scope = $this->tenantInCondition('d.cliente_id', $params, 'trset');
+        if ($scope !== '1=1') {
+            $sql .= " AND {$scope}";
+        }
+        if (Database::columnExists('colaboradores', 'ativo')) {
+            $sql .= " AND col_all.ativo = 1";
+        }
+        $sql .= " GROUP BY s.id, s.nome ORDER BY s.nome";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll() ?: [];
+        foreach ($rows as &$row) {
+            $totalColaboradores = (int)($row['total_colaboradores_setor'] ?? 0);
+            $totalTreinados = (int)($row['total_treinados'] ?? 0);
+            $horas = (float)($row['total_horas_treinamento'] ?? 0);
+            $row['media_horas_por_colaborador'] = $totalColaboradores > 0 ? round($horas / $totalColaboradores, 2) : 0.0;
+            $row['percentual_participacao'] = $totalColaboradores > 0 ? round(($totalTreinados / $totalColaboradores) * 100, 2) : 0.0;
+        }
+        return $rows;
+    }
+
+    private function periodAccumulators(array $filters): array
+    {
+        $params = [];
+        $sql = "SELECT
+                    DATE_FORMAT(ta.data, '%Y-%m') AS mensal,
+                    CONCAT(YEAR(ta.data), '-T', QUARTER(ta.data)) AS trimestral,
+                    YEAR(ta.data) AS anual,
+                    COUNT(tp.id) AS total_inscritos,
+                    SUM(CASE WHEN tp.presenca = 1 THEN 1 ELSE 0 END) AS total_presentes,
+                    COALESCE(SUM(CASE WHEN tp.presenca = 1 OR tp.certificado_emitido = 1 THEN t.carga_horaria ELSE 0 END), 0) AS total_horas
+                FROM treinamentos_agenda ta
+                JOIN treinamentos t ON t.id = ta.treinamento_id
+                LEFT JOIN treinamento_participantes tp ON tp.agenda_id = ta.id
+                JOIN departamentos d ON d.id = t.departamento_id
+                LEFT JOIN colaboradores col ON col.id = tp.colaborador_id
+                LEFT JOIN funcoes f ON f.id = col.funcao_id
+                LEFT JOIN setores s ON s.id = f.setor_id
+                WHERE 1=1";
+        $sql .= $this->applyDashboardFilters($filters, $params, true);
+        $scope = $this->tenantInCondition('d.cliente_id', $params, 'tracc');
+        if ($scope !== '1=1') {
+            $sql .= " AND {$scope}";
+        }
+        $sql .= " GROUP BY mensal, trimestral, anual ORDER BY mensal";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll() ?: [];
+    }
+
+    private function applyDashboardFilters(array $filters, array &$params, bool $allowSetorFilter): string
+    {
+        $sql = '';
+        if (!empty($filters['periodo_inicio'])) {
+            $sql .= " AND DATE(ta.data) >= :periodo_inicio";
+            $params['periodo_inicio'] = $filters['periodo_inicio'];
+        }
+        if (!empty($filters['periodo_fim'])) {
+            $sql .= " AND DATE(ta.data) <= :periodo_fim";
+            $params['periodo_fim'] = $filters['periodo_fim'];
+        }
+        if ($allowSetorFilter && !empty($filters['setor_id'])) {
+            $sql .= " AND s.id = :setor_id";
+            $params['setor_id'] = (int)$filters['setor_id'];
+        }
+        if (!empty($filters['tipo_treinamento'])) {
+            $sql .= " AND t.tipo_treinamento = :tipo_treinamento";
+            $params['tipo_treinamento'] = trim((string)$filters['tipo_treinamento']);
+        }
+        if (!empty($filters['instrutor'])) {
+            $sql .= " AND ta.instrutor LIKE :instrutor";
+            $params['instrutor'] = '%' . trim((string)$filters['instrutor']) . '%';
+        }
+        return $sql;
+    }
+
+    private function cacheGet(string $cacheKey): ?array
+    {
+        $stmt = $this->db->prepare("SELECT payload_json
+            FROM treinamento_export_cache
+            WHERE cache_key = :cache_key
+              AND expires_at >= :now
+            LIMIT 1");
+        $stmt->execute([
+            'cache_key' => $cacheKey,
+            'now' => date('Y-m-d H:i:s'),
+        ]);
+        $payload = $stmt->fetchColumn();
+        if ($payload === false) {
+            return null;
+        }
+        $decoded = json_decode((string)$payload, true);
+        return is_array($decoded) ? $decoded : null;
+    }
+
+    private function cachePut(string $cacheKey, array $payload, int $ttlSeconds): void
+    {
+        $stmt = $this->db->prepare("INSERT INTO treinamento_export_cache (cache_key, payload_json, expires_at)
+            VALUES (:cache_key, :payload_json, :expires_at)
+            ON DUPLICATE KEY UPDATE payload_json = VALUES(payload_json), expires_at = VALUES(expires_at)");
+        $stmt->execute([
+            'cache_key' => $cacheKey,
+            'payload_json' => json_encode($payload, JSON_UNESCAPED_UNICODE),
+            'expires_at' => date('Y-m-d H:i:s', time() + $ttlSeconds),
+        ]);
     }
 }

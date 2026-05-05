@@ -3,20 +3,24 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\BaseController;
+use App\Core\DateHelper;
 use App\Core\Security;
 use App\Database\Database;
 use App\Models\TreinamentoAgendaModel;
 use App\Models\TreinamentoModel;
+use App\Services\TreinamentoDocumentService;
 
 class TreinamentosController extends BaseController
 {
     private TreinamentoModel $model;
     private TreinamentoAgendaModel $agendaModel;
+    private TreinamentoDocumentService $documents;
 
     public function __construct()
     {
         $this->model = new TreinamentoModel();
         $this->agendaModel = new TreinamentoAgendaModel();
+        $this->documents = new TreinamentoDocumentService();
     }
 
     public function index(): void
@@ -37,15 +41,19 @@ class TreinamentosController extends BaseController
     public function dashboard(): void
     {
         $this->requireLogin();
+        $filters = $this->dashboardFilters();
         $this->render('treinamentos/dashboard', [
             'pageTitle' => 'Dashboard de Treinamentos',
-            'dashboard' => $this->model->dashboard(),
+            'dashboard' => $this->model->dashboard($filters),
+            'filters' => $filters,
+            'setores' => $this->setorOptions(),
+            'tipoTreinamentoOptions' => $this->tipoTreinamentoOptions(),
         ]);
     }
 
     public function create(): void
     {
-        $this->requireLogin();
+        $this->requireManagePermission();
         $this->renderForm('treinamentos/create', [
             'nome' => '',
             'objetivo' => '',
@@ -54,6 +62,9 @@ class TreinamentosController extends BaseController
             'departamento_id' => 0,
             'periodicidade' => 'avulso',
             'fornecedor' => '',
+            'tipo_treinamento' => '',
+            'template_certificado' => '',
+            'assinatura_responsavel' => '',
             'setor_ids' => [],
             'funcao_ids' => [],
         ]);
@@ -61,7 +72,7 @@ class TreinamentosController extends BaseController
 
     public function store(): void
     {
-        $this->requireLogin();
+        $this->requireManagePermission();
         if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
             http_response_code(400);
             echo 'CSRF inválido';
@@ -80,7 +91,7 @@ class TreinamentosController extends BaseController
 
     public function edit(): void
     {
-        $this->requireLogin();
+        $this->requireManagePermission();
         $item = $this->findOrRedirect((int)($_GET['id'] ?? 0));
         if (!$item) {
             return;
@@ -90,7 +101,7 @@ class TreinamentosController extends BaseController
 
     public function update(): void
     {
-        $this->requireLogin();
+        $this->requireManagePermission();
         if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
             http_response_code(400);
             echo 'CSRF inválido';
@@ -115,7 +126,7 @@ class TreinamentosController extends BaseController
 
     public function delete(): void
     {
-        $this->requireLogin();
+        $this->requireManagePermission();
         if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
             http_response_code(400);
             echo 'CSRF inválido';
@@ -136,22 +147,29 @@ class TreinamentosController extends BaseController
         if (!$item) {
             return;
         }
+        $eligibleFilters = $this->eligibleFilters();
+        $eligibleRows = $this->model->eligibleColaboradoresForTraining((int)$item['id'], $eligibleFilters);
         $this->render('treinamentos/show', [
             'pageTitle' => 'Treinamento',
             'item' => $item,
             'linked' => $this->model->linkedColaboradores((int)$item['id']),
             'availableColaboradores' => $this->model->availableColaboradores((int)$item['id']),
+            'eligibleRows' => $eligibleRows,
+            'eligibleFilters' => $eligibleFilters,
             'agendas' => $this->agendaModel->listByTreinamento((int)$item['id']),
             'pendingParticipants' => $this->agendaModel->pendingParticipantsForTreinamento((int)$item['id']),
             'alerts' => $this->model->pendingAlerts((int)$item['id']),
             'unidades' => $this->clienteOptions(),
             'usuarios' => $this->usuarioOptions(),
+            'setores' => $this->setorOptions(),
+            'funcoes' => $this->funcaoOptions(),
+            'statusAtualOptions' => $this->statusAtualOptions(),
         ]);
     }
 
     public function addColaboradores(): void
     {
-        $this->requireLogin();
+        $this->requireManagePermission();
         if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
             http_response_code(400);
             echo 'CSRF inválido';
@@ -159,14 +177,14 @@ class TreinamentosController extends BaseController
         }
         $treinamentoId = (int)($_POST['treinamento_id'] ?? 0);
         $ids = $_POST['colaborador_ids'] ?? [];
-        $this->model->syncColaboradores($treinamentoId, is_array($ids) ? $ids : [$ids]);
-        $_SESSION['flash_success'] = 'Colaboradores vinculados ao treinamento.';
+        $this->model->syncSelectedColaboradores($treinamentoId, is_array($ids) ? $ids : [$ids]);
+        $_SESSION['flash_success'] = 'Lista pré-cadastrada do treinamento atualizada.';
         $this->redirect('index.php?route=treinamentos/show&id=' . $treinamentoId);
     }
 
     public function removeColaborador(): void
     {
-        $this->requireLogin();
+        $this->requireManagePermission();
         if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
             http_response_code(400);
             echo 'CSRF inválido';
@@ -181,7 +199,7 @@ class TreinamentosController extends BaseController
 
     public function storeAgenda(): void
     {
-        $this->requireLogin();
+        $this->requireManagePermission();
         if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
             http_response_code(400);
             echo 'CSRF inválido';
@@ -222,7 +240,7 @@ class TreinamentosController extends BaseController
 
     public function addParticipantes(): void
     {
-        $this->requireLogin();
+        $this->requireManagePermission();
         if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
             http_response_code(400);
             echo 'CSRF inválido';
@@ -237,21 +255,27 @@ class TreinamentosController extends BaseController
 
     public function savePresence(): void
     {
-        $this->requireLogin();
+        $this->requireManagePermission();
         if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
             http_response_code(400);
             echo 'CSRF inválido';
             return;
         }
         $agendaId = (int)($_POST['agenda_id'] ?? 0);
-        $this->agendaModel->savePresence($agendaId, $_POST['presenca'] ?? [], $_POST['certificado_emitido'] ?? []);
+        $this->agendaModel->savePresence(
+            $agendaId,
+            $_POST['presenca'] ?? [],
+            $_POST['hora_entrada'] ?? [],
+            $_POST['hora_saida'] ?? [],
+            $_POST['observacao'] ?? []
+        );
         $_SESSION['flash_success'] = 'Lista de presença atualizada.';
         $this->redirect('index.php?route=treinamentos/presenca&agenda_id=' . $agendaId);
     }
 
     public function certificado(): void
     {
-        $this->requireLogin();
+        $this->requireManagePermission();
         $agendaId = (int)($_GET['agenda_id'] ?? 0);
         $colaboradorId = (int)($_GET['colaborador_id'] ?? 0);
         $agenda = $this->agendaModel->find($agendaId);
@@ -260,33 +284,124 @@ class TreinamentosController extends BaseController
             $this->redirect('index.php?route=treinamentos/index');
             return;
         }
-        $participant = null;
-        foreach ($this->agendaModel->participants($agendaId) as $row) {
-            if ((int)$row['colaborador_id'] === $colaboradorId) {
-                $participant = $row;
-                break;
-            }
-        }
+        $participant = $this->agendaModel->findParticipant($agendaId, $colaboradorId);
         if (!$participant) {
             $_SESSION['flash_error'] = 'Participante não encontrado.';
             $this->redirect('index.php?route=treinamentos/presenca&agenda_id=' . $agendaId);
             return;
         }
-        if (empty($participant['presenca']) && empty($participant['certificado_emitido'])) {
-            $_SESSION['flash_error'] = 'Marque a presença antes de emitir o certificado.';
-            $this->redirect('index.php?route=treinamentos/presenca&agenda_id=' . $agendaId);
+        $treinamento = $this->model->find((int)$agenda['treinamento_id']);
+        if (!$treinamento) {
+            $_SESSION['flash_error'] = 'Treinamento não encontrado.';
+            $this->redirect('index.php?route=treinamentos/index');
             return;
         }
-        if (!$this->agendaModel->issueCertificate($agendaId, $colaboradorId)) {
+
+        $issued = $this->agendaModel->issueCertificate($agendaId, $colaboradorId);
+        if (!$issued) {
             $_SESSION['flash_error'] = 'Não foi possível emitir o certificado para este participante.';
             $this->redirect('index.php?route=treinamentos/presenca&agenda_id=' . $agendaId);
             return;
         }
-        $participant['certificado_emitido'] = 1;
-        $this->render('treinamentos/certificado', [
-            'agenda' => $agenda,
-            'participant' => $participant,
-        ]);
+        $path = $this->documents->generateCertificateFile($treinamento, $agenda, $issued);
+        $this->agendaModel->updateCertificateFile($agendaId, $colaboradorId, $path);
+        $binary = is_file($path) ? (string)file_get_contents($path) : $this->documents->renderCertificatePdf($treinamento, $agenda, $issued);
+        $this->sendBinaryPdf(
+            'certificado-' . $agendaId . '-' . $colaboradorId . '.pdf',
+            $binary,
+            !empty($_GET['download'])
+        );
+    }
+
+    public function certificadoLote(): void
+    {
+        $this->requireManagePermission();
+        if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+        $agendaId = (int)($_POST['agenda_id'] ?? 0);
+        $agenda = $this->agendaModel->find($agendaId);
+        if (!$agenda) {
+            $_SESSION['flash_error'] = 'Agendamento não encontrado.';
+            $this->redirect('index.php?route=treinamentos/index');
+            return;
+        }
+        $treinamento = $this->model->find((int)$agenda['treinamento_id']);
+        if (!$treinamento) {
+            $_SESSION['flash_error'] = 'Treinamento não encontrado.';
+            $this->redirect('index.php?route=treinamentos/index');
+            return;
+        }
+        $participantIds = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['colaborador_ids'] ?? [])))));
+        if (empty($participantIds)) {
+            $participantIds = array_map(static fn(array $row): int => (int)$row['colaborador_id'], $this->agendaModel->participants($agendaId));
+        }
+
+        $emitidos = 0;
+        foreach ($participantIds as $colaboradorId) {
+            $issued = $this->agendaModel->issueCertificate($agendaId, $colaboradorId);
+            if (!$issued) {
+                continue;
+            }
+            $path = $this->documents->generateCertificateFile($treinamento, $agenda, $issued);
+            $this->agendaModel->updateCertificateFile($agendaId, $colaboradorId, $path);
+            $emitidos++;
+        }
+        $_SESSION['flash_success'] = $emitidos . ' certificado(s) emitido(s) em lote.';
+        $this->redirect('index.php?route=treinamentos/presenca&agenda_id=' . $agendaId);
+    }
+
+    public function exportElegiveis(): void
+    {
+        $this->requireLogin();
+        $treinamento = $this->findOrRedirect((int)($_GET['id'] ?? 0));
+        if (!$treinamento) {
+            return;
+        }
+        $filters = $this->eligibleFilters();
+        $rows = $this->model->eligibleColaboradoresForTraining((int)$treinamento['id'], $filters);
+        $format = strtolower(trim((string)($_GET['format'] ?? 'pdf')));
+        if ($format === 'xlsx') {
+            $path = $this->documents->exportEligibleXlsx($treinamento, $rows);
+            $this->sendFile($path, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'elegiveis-' . (int)$treinamento['id'] . '.xlsx');
+            return;
+        }
+        $this->sendBinaryPdf(
+            'elegiveis-' . (int)$treinamento['id'] . '.pdf',
+            $this->documents->renderEligiblePdf($treinamento, $rows, $filters),
+            true
+        );
+    }
+
+    public function presencaPdf(): void
+    {
+        $this->requireLogin();
+        $agenda = $this->agendaModel->find((int)($_GET['agenda_id'] ?? 0));
+        if (!$agenda) {
+            $_SESSION['flash_error'] = 'Agendamento não encontrado.';
+            $this->redirect('index.php?route=treinamentos/index');
+            return;
+        }
+        $participants = $this->agendaModel->participants((int)$agenda['id']);
+        $this->sendBinaryPdf(
+            'lista-presenca-' . (int)$agenda['id'] . '.pdf',
+            $this->documents->renderPresencePdf($agenda, $participants),
+            true
+        );
+    }
+
+    public function dashboardPdf(): void
+    {
+        $this->requireLogin();
+        $filters = $this->dashboardFilters();
+        $dashboard = $this->model->dashboard($filters);
+        $this->sendBinaryPdf(
+            'dashboard-treinamentos-' . date('Ymd-His') . '.pdf',
+            $this->documents->renderDashboardPdf($dashboard, $filters),
+            true
+        );
     }
 
     private function renderForm(string $view, array $values, array $errors = []): void
@@ -312,6 +427,9 @@ class TreinamentosController extends BaseController
             'departamento_id' => (int)($_POST['departamento_id'] ?? 0),
             'periodicidade' => trim((string)($_POST['periodicidade'] ?? 'avulso')),
             'fornecedor' => trim((string)($_POST['fornecedor'] ?? '')),
+            'tipo_treinamento' => trim((string)($_POST['tipo_treinamento'] ?? '')),
+            'template_certificado' => trim((string)($_POST['template_certificado'] ?? '')),
+            'assinatura_responsavel' => trim((string)($_POST['assinatura_responsavel'] ?? '')),
             'setor_ids' => array_values(array_unique(array_filter(array_map('intval', (array)($_POST['setor_ids'] ?? []))))),
             'funcao_ids' => array_values(array_unique(array_filter(array_map('intval', (array)($_POST['funcao_ids'] ?? []))))),
         ];
@@ -331,6 +449,9 @@ class TreinamentosController extends BaseController
         }
         if (!isset(TreinamentoModel::periodicidadeOptions()[$payload['periodicidade']])) {
             $errors['periodicidade'] = 'Periodicidade inválida.';
+        }
+        if ($payload['assinatura_responsavel'] === '') {
+            $errors['assinatura_responsavel'] = 'Informe o responsável pela assinatura digital.';
         }
         return $errors;
     }
@@ -462,6 +583,75 @@ class TreinamentosController extends BaseController
         $pdo = Database::getConnection();
         $stmt = $pdo->query("SELECT id, nome FROM usuarios ORDER BY nome");
         return $stmt->fetchAll() ?: [];
+    }
+
+    private function tipoTreinamentoOptions(): array
+    {
+        $pdo = Database::getConnection();
+        $stmt = $pdo->query("SELECT DISTINCT tipo_treinamento FROM treinamentos WHERE tipo_treinamento IS NOT NULL AND TRIM(tipo_treinamento) <> '' ORDER BY tipo_treinamento");
+        return array_values(array_filter(array_map(static fn(array $row): string => (string)$row['tipo_treinamento'], $stmt->fetchAll() ?: [])));
+    }
+
+    private function statusAtualOptions(): array
+    {
+        return ['ativo', 'inativo', 'afastado', 'desligado'];
+    }
+
+    private function eligibleFilters(): array
+    {
+        return [
+            'setor_id' => (int)($_GET['setor_id'] ?? 0),
+            'funcao_id' => (int)($_GET['funcao_id'] ?? 0),
+            'data_admissao_inicio' => trim((string)($_GET['data_admissao_inicio'] ?? '')),
+            'data_admissao_fim' => trim((string)($_GET['data_admissao_fim'] ?? '')),
+            'status_atual' => trim((string)($_GET['status_atual'] ?? '')),
+            'status_elegibilidade' => trim((string)($_GET['status_elegibilidade'] ?? '')),
+        ];
+    }
+
+    private function dashboardFilters(): array
+    {
+        return [
+            'periodo_inicio' => trim((string)($_GET['periodo_inicio'] ?? '')),
+            'periodo_fim' => trim((string)($_GET['periodo_fim'] ?? '')),
+            'setor_id' => (int)($_GET['setor_id'] ?? 0),
+            'tipo_treinamento' => trim((string)($_GET['tipo_treinamento'] ?? '')),
+            'instrutor' => trim((string)($_GET['instrutor'] ?? '')),
+        ];
+    }
+
+    private function requireManagePermission(): void
+    {
+        $this->requireRole('instituto');
+    }
+
+    private function sendBinaryPdf(string $filename, string $binary, bool $download): void
+    {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        header('Content-Type: application/pdf');
+        header('Content-Length: ' . strlen($binary));
+        header('Content-Disposition: ' . ($download ? 'attachment' : 'inline') . '; filename="' . $filename . '"');
+        echo $binary;
+        exit;
+    }
+
+    private function sendFile(string $path, string $mime, string $filename): void
+    {
+        if (!is_file($path)) {
+            http_response_code(404);
+            echo 'Arquivo não encontrado.';
+            exit;
+        }
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        header('Content-Type: ' . $mime);
+        header('Content-Length: ' . filesize($path));
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        readfile($path);
+        exit;
     }
 
     private function isPost(): bool

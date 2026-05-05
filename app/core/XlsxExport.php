@@ -33,6 +33,36 @@ class XlsxExport
         return $path;
     }
 
+    public static function exportRows(array $rows, array $columns, string $filename, array $branding = []): string
+    {
+        $branding = ReportBranding::aplicarBrandingRelatorio('excel', array_merge([
+            'report_title' => 'Relatório',
+            'header_title' => 'Relatório',
+            'header_subtitle' => 'Exportação padronizada do sistema',
+            'generated_at' => DateHelper::now(),
+            'sheet_name' => 'Relatorio',
+        ], $branding));
+        $tmpDir = sys_get_temp_dir();
+        $path = $tmpDir . DIRECTORY_SEPARATOR . $filename;
+
+        $zip = new \ZipArchive();
+        if ($zip->open($path, \ZipArchive::OVERWRITE | \ZipArchive::CREATE) !== true) {
+            throw new \RuntimeException('Não foi possível criar arquivo XLSX');
+        }
+
+        $zip->addFromString('[Content_Types].xml', self::contentTypes());
+        $zip->addFromString('_rels/.rels', self::rels());
+        $zip->addFromString('docProps/app.xml', self::appXml());
+        $zip->addFromString('docProps/core.xml', self::coreXml($branding));
+        $zip->addFromString('xl/_rels/workbook.xml.rels', self::workbookRels());
+        $zip->addFromString('xl/workbook.xml', self::workbook($branding));
+        $zip->addFromString('xl/styles.xml', self::styles());
+        $zip->addFromString('xl/worksheets/sheet1.xml', self::genericSheet($rows, $columns, $branding));
+
+        $zip->close();
+        return $path;
+    }
+
     private static function esc($s): string
     {
         return htmlspecialchars((string)$s, ENT_XML1 | ENT_COMPAT, 'UTF-8');
@@ -146,6 +176,22 @@ class XlsxExport
     private static function sheet1(array $rows, array $branding): string
     {
         [$columns, $keys, $colWidths] = self::buildPlanosColumns($rows);
+        return self::renderSheetXml($rows, $columns, $keys, $colWidths, $branding);
+    }
+
+    private static function genericSheet(array $rows, array $columns, array $branding): string
+    {
+        $keys = array_keys($columns);
+        $labels = array_values($columns);
+        $widths = [];
+        foreach ($keys as $key) {
+            $widths[] = self::guessWidth($key);
+        }
+        return self::renderSheetXml($rows, $labels, $keys, $widths, $branding);
+    }
+
+    private static function renderSheetXml(array $rows, array $columns, array $keys, array $colWidths, array $branding): string
+    {
         $title = (string)($branding['header_title'] ?? 'Relatório');
         $subtitle = trim((string)($branding['header_subtitle'] ?? ''));
         $meta = 'Gerado em ' . (string)($branding['generated_at'] ?? DateHelper::now());
@@ -186,7 +232,7 @@ class XlsxExport
             $xml .= '<row r="'.$rIdx.'">';
             $cells = [];
             foreach ($keys as $key) {
-                $cells[] = self::formatPlanoCell($key, $row[$key] ?? null);
+                $cells[] = self::formatCell($key, $row[$key] ?? null);
             }
             foreach ($cells as $j => $val) {
                 $xml .= '<c r="'.self::coord($j,$rIdx).'" t="inlineStr" s="4"><is><t>'.self::esc($val).'</t></is></c>';
@@ -286,7 +332,7 @@ class XlsxExport
         return [$columns, $keys, $colWidths];
     }
 
-    private static function formatPlanoCell(string $key, $value): string
+    private static function formatCell(string $key, $value): string
     {
         if ($value === null) {
             return '';

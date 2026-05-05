@@ -2,56 +2,82 @@
 namespace App\Controllers;
 
 use App\Core\BaseController;
+use App\Core\I18n;
 use App\Core\Security;
-use App\Models\IndicadorModel;
 use App\Models\ClienteModel;
+use App\Models\ColaboradorModel;
+use App\Models\DepartamentoModel;
+use App\Models\IndicadorEventoModel;
+use App\Models\IndicadorModel;
+use App\Models\SetorModel;
+use App\Models\UnidadeMedidaModel;
 
 class IndicadoresController extends BaseController
 {
     private IndicadorModel $model;
+    private ClienteModel $clientes;
+    private DepartamentoModel $departamentos;
+    private SetorModel $setores;
+    private ColaboradorModel $colaboradores;
+    private UnidadeMedidaModel $unidades;
+    private IndicadorEventoModel $eventos;
 
     public function __construct()
     {
         $this->model = new IndicadorModel();
+        $this->clientes = new ClienteModel();
+        $this->departamentos = new DepartamentoModel();
+        $this->setores = new SetorModel();
+        $this->colaboradores = new ColaboradorModel();
+        $this->unidades = new UnidadeMedidaModel();
+        $this->eventos = new IndicadorEventoModel();
     }
 
     public function index(): void
     {
         $this->requireLogin();
-        $clientes = (new ClienteModel())->all();
+        $clientes = $this->clientes->all();
         $cliente = (int)($this->resolveScopedClienteId(isset($_GET['cliente']) ? (int)$_GET['cliente'] : null) ?? 0);
-        $items = $cliente ? $this->model->byCliente($cliente) : [];
-        \App\Core\AuditLogger::log('indicadores_view', 'indicador', null, ['cliente_id' => $cliente]);
-        $this->render('indicadores/index', compact('clientes', 'cliente', 'items'));
+        $items = $cliente > 0 ? $this->model->byCliente($cliente) : $this->model->all();
+        $this->render('indicadores/index', [
+            'pageTitle' => I18n::t('indicadores.title.index'),
+            'clientes' => $clientes,
+            'cliente' => $cliente,
+            'items' => $items,
+            'i18n' => I18n::class,
+        ]);
     }
 
     public function create(): void
     {
         $this->requireRole('instituto');
-        $clientes = (new ClienteModel())->all();
-        $this->render('indicadores/create', compact('clientes'));
+        $cliente = (int)($this->resolveScopedClienteId(isset($_GET['cliente']) ? (int)$_GET['cliente'] : null) ?? 0);
+        $formData = $this->model->defaultPayload();
+        if ($cliente > 0) {
+            $formData['cliente_id'] = $cliente;
+            $formData['cliente_nome'] = (string)($this->clientes->find($cliente)['nome_empresa'] ?? '');
+        }
+        $this->renderForm('create', $formData, []);
     }
 
     public function store(): void
     {
         $this->requireRole('instituto');
         $csrf = $_POST['csrf'] ?? null;
-        if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
-        $data = [
-            'cliente_id' => (int)($this->resolveScopedClienteId((int)($_POST['cliente_id'] ?? 0)) ?? 0),
-            'nome' => trim($_POST['nome'] ?? ''),
-            'unidade' => 'R$',
-            'referencia' => $_POST['referencia'] ?? null,
-            'meta' => isset($_POST['meta']) ? (float)$_POST['meta'] : 0,
-            'realizado' => 0,
-        ];
-        if ($data['meta'] < 0) $data['meta'] = 0;
-        if ($data['cliente_id'] && $data['nome'] !== '') {
-            $id = $this->model->create($data);
-            header('Location: index.php?route=indicadores/edit&id=' . $id);
+        if (!Security::verifyCsrf($csrf)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
             return;
         }
-        header('Location: index.php?route=indicadores/index');
+        $formData = $this->model->sanitize($this->requestData());
+        $errors = $this->model->validate($formData);
+        if ($errors) {
+            $this->renderForm('create', $formData, $errors);
+            return;
+        }
+        $id = $this->model->create($formData, $this->currentUserId());
+        $_SESSION['flash_success'] = I18n::t('indicadores.flash.created');
+        $this->redirect('index.php?route=indicadores/edit&id=' . $id);
     }
 
     public function edit(): void
@@ -59,42 +85,54 @@ class IndicadoresController extends BaseController
         $this->requireRole('instituto');
         $id = (int)($_GET['id'] ?? 0);
         $item = $this->model->find($id);
-        $clientes = (new ClienteModel())->all();
-        $this->render('indicadores/edit', compact('item', 'clientes'));
+        if (!$item) {
+            $_SESSION['flash_error'] = I18n::t('indicadores.flash.not_found');
+            $this->redirect('index.php?route=indicadores/index');
+        }
+        $this->renderForm('edit', $item, [], $item);
     }
 
     public function charts(): void
     {
         $this->requireLogin();
         $cliente = (int)($this->resolveScopedClienteId(isset($_GET['cliente']) ? (int)$_GET['cliente'] : null) ?? 0);
-        $clientes = (new ClienteModel())->all();
-        $items = $cliente ? $this->model->byCliente($cliente) : [];
-        // Agrupa por nome de indicador
+        $clientes = $this->clientes->all();
+        $eventos = $cliente ? $this->eventos->byCliente($cliente) : [];
         $series = [];
-        foreach ($items as $it) {
-            $name = $it['nome'];
-            $ref = $it['referencia'] ?: '';
-            $month = $ref ? (int)substr($ref, 5, 2) : null;
-            if (!isset($series[$name])) $series[$name] = [];
-            $series[$name][] = [
-                'referencia' => $ref,
-                'month' => $month,
-                'meta' => (float)$it['meta'],
-                'realizado' => (float)$it['realizado'],
-                'unidade' => $it['unidade'] ?? '',
+        foreach ($eventos as $evento) {
+            $key = (string)($evento['indicador'] ?? '');
+            if ($key === '') {
+                continue;
+            }
+            if (!isset($series[$key])) {
+                $series[$key] = [
+                    'indicador_id' => (int)$evento['indicador_id'],
+                    'trend' => $this->eventos->indicatorHistorySummary((int)$evento['indicador_id']),
+                    'unit' => [
+                        'simbolo' => $evento['unidade_simbolo'] ?? '',
+                        'tipo' => $evento['unidade_tipo'] ?? '',
+                    ],
+                    'points' => [],
+                ];
+            }
+            $series[$key]['points'][] = [
+                'date' => (string)$evento['data_evento'],
+                'meta' => (float)$evento['valor_meta'],
+                'achieved' => $evento['valor_atingido'] !== null ? (float)$evento['valor_atingido'] : null,
+                'percentual' => $evento['percentual_cumprimento'] !== null ? (float)$evento['percentual_cumprimento'] : null,
+                'status' => (string)$evento['meta_status_key'],
             ];
         }
-        // Ordena por mês
-        foreach ($series as $k => $arr) {
-            usort($arr, function($a,$b){
-                return ($a['month'] ?? 0) <=> ($b['month'] ?? 0);
-            });
-            $series[$k] = $arr;
+        foreach ($series as &$serie) {
+            usort($serie['points'], static fn(array $a, array $b): int => strcmp((string)$a['date'], (string)$b['date']));
         }
+        unset($serie);
         $this->render('indicadores/charts', [
+            'pageTitle' => I18n::t('indicadores.title.charts'),
             'cliente' => $cliente,
             'clientes' => $clientes,
             'series' => $series,
+            'i18n' => I18n::class,
         ]);
     }
 
@@ -102,9 +140,15 @@ class IndicadoresController extends BaseController
     {
         $this->requireLogin();
         $cliente = (int)($this->resolveScopedClienteId(isset($_GET['cliente']) ? (int)$_GET['cliente'] : null) ?? 0);
-        $clientes = (new ClienteModel())->all();
-        $items = $cliente ? $this->model->byCliente($cliente) : [];
-        $this->render('indicadores/realizado', compact('clientes','cliente','items'));
+        $clientes = $this->clientes->all();
+        $items = $cliente ? $this->eventos->byCliente($cliente) : [];
+        $this->render('indicadores/realizado', [
+            'pageTitle' => I18n::t('indicadores.title.value'),
+            'clientes' => $clientes,
+            'cliente' => $cliente,
+            'items' => $items,
+            'i18n' => I18n::class,
+        ]);
     }
 
     public function painel(): void
@@ -112,83 +156,229 @@ class IndicadoresController extends BaseController
         $this->requireLogin();
         $cliente = (int)($this->resolveScopedClienteId(isset($_GET['cliente']) ? (int)$_GET['cliente'] : null) ?? 0);
         $ano = isset($_GET['ano']) ? (int)$_GET['ano'] : (int)date('Y');
-        $clientes = (new ClienteModel())->all();
-        $items = $cliente ? $this->model->byCliente($cliente) : [];
-        $months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-        $rows = [];
-        foreach ($items as $it) {
-            $ref = $it['referencia'] ?? '';
-            $y = $ref ? (int)substr($ref,0,4) : null;
-            if ($y !== null && $y !== $ano) continue;
-            $m = $ref ? (int)substr($ref,5,2) : null;
-            $name = $it['nome'];
-            if (!isset($rows[$name])) {
-                $rows[$name] = [
-                    'nome' => $name,
-                    'meses' => array_fill(1, 12, ['meta'=>0.0,'real'=>0.0]),
-                    'total_meta' => 0.0,
-                    'total_real' => 0.0,
-                ];
+        $clientes = $this->clientes->all();
+        $items = $cliente ? $this->eventos->byCliente($cliente, $ano) : [];
+        $stats = ['total' => count($items), 'atingida' => 0, 'parcial' => 0, 'nao_atingida' => 0, 'pendente' => 0];
+        foreach ($items as $item) {
+            $key = (string)($item['meta_status_key'] ?? 'pendente');
+            if (!isset($stats[$key])) {
+                $stats[$key] = 0;
             }
-            if ($m && $m>=1 && $m<=12) {
-                $rows[$name]['meses'][$m]['meta'] = (float)$it['meta'];
-                $rows[$name]['meses'][$m]['real'] = (float)$it['realizado'];
-                $rows[$name]['total_meta'] += (float)$it['meta'];
-                $rows[$name]['total_real'] += (float)$it['realizado'];
-            }
+            $stats[$key]++;
         }
         $this->render('indicadores/painel', [
+            'pageTitle' => I18n::t('indicadores.title.dashboard'),
             'cliente' => $cliente,
             'clientes' => $clientes,
             'ano' => $ano,
-            'months' => $months,
-            'rows' => $rows,
+            'items' => $items,
+            'stats' => $cliente ? $stats : ['total' => 0, 'atingida' => 0, 'parcial' => 0, 'nao_atingida' => 0, 'pendente' => 0],
+            'i18n' => I18n::class,
         ]);
     }
 
+    public function evento(): void
+    {
+        $this->requireLogin();
+        $id = (int)($_GET['id'] ?? 0);
+        $evento = $this->eventos->find($id);
+        if (!$evento) {
+            $_SESSION['flash_error'] = I18n::t('indicadores.flash.event_not_found');
+            $this->redirect('index.php?route=indicadores/index');
+        }
+        $history = $this->eventos->byIndicador((int)$evento['indicador_id']);
+        $summary = $this->eventos->indicatorHistorySummary((int)$evento['indicador_id']);
+        $this->render('indicadores/evento', [
+            'pageTitle' => I18n::t('indicadores.title.event'),
+            'evento' => $evento,
+            'history' => $history,
+            'summary' => $summary,
+            'i18n' => I18n::class,
+        ]);
+    }
+
+    public function historico(): void
+    {
+        $this->requireLogin();
+        $id = (int)($_GET['id'] ?? 0);
+        $item = $this->model->find($id);
+        if (!$item) {
+            $_SESSION['flash_error'] = I18n::t('indicadores.flash.not_found');
+            $this->redirect('index.php?route=indicadores/index');
+        }
+        $history = $this->eventos->byIndicador($id);
+        $summary = $this->eventos->indicatorHistorySummary($id);
+        $this->render('indicadores/historico', [
+            'pageTitle' => I18n::t('indicadores.title.history'),
+            'item' => $item,
+            'history' => $history,
+            'summary' => $summary,
+            'i18n' => I18n::class,
+        ]);
+    }
 
     public function update(): void
     {
         $this->requireRole('instituto');
         $csrf = $_POST['csrf'] ?? null;
-        if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
-        $id = (int)($_POST['id'] ?? 0);
-        $data = [
-            'cliente_id' => (int)($this->resolveScopedClienteId((int)($_POST['cliente_id'] ?? 0)) ?? 0),
-            'nome' => trim($_POST['nome'] ?? ''),
-            'unidade' => 'R$',
-            'referencia' => $_POST['referencia'] ?? null,
-            'meta' => isset($_POST['meta']) ? (float)$_POST['meta'] : 0,
-            'realizado' => null,
-        ];
-        if ($data['meta'] < 0) $data['meta'] = 0;
-        if ($id && $data['cliente_id'] && $data['nome'] !== '') {
-            // Mantém realizado atual (não editável aqui)
-            $curr = $this->model->find($id);
-            $data['realizado'] = (float)($curr['realizado'] ?? 0);
-            $this->model->update($id, $data);
+        if (!Security::verifyCsrf($csrf)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
         }
-        header('Location: index.php?route=indicadores/edit&id=' . $id);
+        $id = (int)($_POST['id'] ?? 0);
+        $current = $this->model->find($id);
+        if (!$current) {
+            $_SESSION['flash_error'] = I18n::t('indicadores.flash.not_found');
+            $this->redirect('index.php?route=indicadores/index');
+        }
+        $formData = $this->model->sanitize($this->requestData());
+        $errors = $this->model->validate($formData, $id);
+        if ($errors) {
+            $formData['id'] = $id;
+            $this->renderForm('edit', $formData, $errors, $current);
+            return;
+        }
+        $this->model->update($id, $formData, $this->currentUserId());
+        $_SESSION['flash_success'] = I18n::t('indicadores.flash.updated');
+        $this->redirect('index.php?route=indicadores/edit&id=' . $id);
     }
 
     public function updateRealizado(): void
     {
-        $this->requireLogin();
+        $this->requireRole('instituto');
         $csrf = $_POST['csrf'] ?? null;
-        if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
-        $id = (int)($_POST['id'] ?? 0);
-        $real = isset($_POST['realizado']) ? (float)$_POST['realizado'] : null;
-        if ($real !== null && $real < 0) $real = 0;
+        if (!Security::verifyCsrf($csrf)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+        $id = (int)($_POST['evento_id'] ?? ($_POST['id'] ?? 0));
         $cliente = (int)($this->resolveScopedClienteId((int)($_POST['cliente'] ?? 0)) ?? 0);
-        if ($id && $real !== null) { $this->model->updateRealizado($id, $real); }
-        header('Location: index.php?route=indicadores/index&cliente=' . $cliente);
+        if ($id <= 0 || !$this->eventos->updateAchievedValue($id, $_POST['valor'] ?? null, $this->currentUserId(), $_POST['observacao'] ?? null)) {
+            $_SESSION['flash_error'] = I18n::t('indicadores.validation.invalid_value_update');
+            $this->redirect('index.php?route=indicadores/realizado&cliente=' . $cliente);
+        }
+        $_SESSION['flash_success'] = I18n::t('indicadores.flash.value_updated');
+        if (!empty($_POST['redirect_evento'])) {
+            $this->redirect('index.php?route=indicadores/evento&id=' . $id);
+        }
+        $this->redirect('index.php?route=indicadores/realizado&cliente=' . $cliente);
     }
 
     public function delete(): void
     {
         $this->requireRole('instituto');
-        $id = (int)($_GET['id'] ?? 0);
-        if ($id) { $this->model->delete($id); }
-        header('Location: index.php?route=indicadores/index');
+        $csrf = $_POST['csrf'] ?? null;
+        if (!Security::verifyCsrf($csrf)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        $cliente = (int)($this->resolveScopedClienteId((int)($_POST['cliente'] ?? 0)) ?? 0);
+        if ($id <= 0 || !$this->model->softDelete($id, $this->currentUserId())) {
+            $_SESSION['flash_error'] = I18n::t('indicadores.validation.invalid_delete');
+            $this->redirect('index.php?route=indicadores/index' . ($cliente ? '&cliente=' . $cliente : ''));
+        }
+        $_SESSION['flash_success'] = I18n::t('indicadores.flash.deleted');
+        $this->redirect('index.php?route=indicadores/index' . ($cliente ? '&cliente=' . $cliente : ''));
+    }
+
+    public function apiClientes(): void
+    {
+        $this->requireLogin();
+        header('Content-Type: application/json; charset=utf-8');
+        $q = trim((string)($_GET['q'] ?? ''));
+        if (mb_strlen($q) < 2) {
+            echo json_encode(['success' => true, 'items' => []], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        echo json_encode(['success' => true, 'items' => $this->clientes->searchActiveByName($q, 12)], JSON_UNESCAPED_UNICODE);
+    }
+
+    public function apiDepartamentos(): void
+    {
+        $this->requireLogin();
+        header('Content-Type: application/json; charset=utf-8');
+        $cliente = (int)($this->resolveScopedClienteId((int)($_GET['cliente_id'] ?? 0)) ?? 0);
+        if ($cliente <= 0) {
+            echo json_encode(['success' => true, 'items' => []], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        echo json_encode(['success' => true, 'items' => $this->departamentos->activeByCliente($cliente)], JSON_UNESCAPED_UNICODE);
+    }
+
+    public function apiSetores(): void
+    {
+        $this->requireLogin();
+        header('Content-Type: application/json; charset=utf-8');
+        $departamento = (int)($_GET['departamento_id'] ?? 0);
+        if ($departamento <= 0) {
+            echo json_encode(['success' => true, 'items' => []], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        echo json_encode(['success' => true, 'items' => $this->setores->activeByDepartamento($departamento)], JSON_UNESCAPED_UNICODE);
+    }
+
+    public function apiResponsaveis(): void
+    {
+        $this->requireLogin();
+        header('Content-Type: application/json; charset=utf-8');
+        $cliente = (int)($this->resolveScopedClienteId((int)($_GET['cliente_id'] ?? 0)) ?? 0);
+        $q = trim((string)($_GET['q'] ?? ''));
+        if ($cliente <= 0) {
+            echo json_encode(['success' => true, 'items' => []], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        echo json_encode(['success' => true, 'items' => $this->colaboradores->searchActiveByCliente($cliente, $q, 15)], JSON_UNESCAPED_UNICODE);
+    }
+
+    private function renderForm(string $view, array $formData, array $errors, ?array $item = null): void
+    {
+        $formData = $this->model->sanitize($formData);
+        $clienteId = (int)($formData['cliente_id'] ?? 0);
+        $departamentoId = (int)($formData['departamento_id'] ?? 0);
+        $responsavelIds = (array)($formData['responsavel_ids'] ?? []);
+        if ($clienteId > 0 && ($formData['cliente_nome'] ?? '') === '') {
+            $formData['cliente_nome'] = (string)($this->clientes->find($clienteId)['nome_empresa'] ?? '');
+        }
+        $selectedResponsaveis = $clienteId > 0 ? $this->colaboradores->activeByIdsCliente($responsavelIds, $clienteId) : [];
+        $this->render('indicadores/' . $view, [
+            'pageTitle' => $view === 'create' ? I18n::t('indicadores.title.create') : I18n::t('indicadores.title.edit'),
+            'formData' => $formData,
+            'errors' => $errors,
+            'item' => $item,
+            'departamentos' => $clienteId > 0 ? $this->departamentos->activeByCliente($clienteId) : [],
+            'setores' => $departamentoId > 0 ? $this->setores->activeByDepartamento($departamentoId) : [],
+            'unidades' => $this->unidades->activeAll(),
+            'responsaveisSelecionados' => $selectedResponsaveis,
+            'periodicidades' => $this->model->periodicidades(),
+            'i18n' => I18n::class,
+        ]);
+    }
+
+    private function requestData(): array
+    {
+        return [
+            'cliente_id' => $_POST['cliente_id'] ?? 0,
+            'cliente_nome' => $_POST['cliente_nome'] ?? '',
+            'indicador' => $_POST['indicador'] ?? '',
+            'departamento_id' => $_POST['departamento_id'] ?? 0,
+            'setor_id' => $_POST['setor_id'] ?? 0,
+            'responsavel_ids' => $_POST['responsavel_ids'] ?? [],
+            'periodicidade_tipo' => $_POST['periodicidade_tipo'] ?? 'mensal',
+            'data_inicial' => $_POST['data_inicial'] ?? '',
+            'data_final' => $_POST['data_final'] ?? '',
+            'valor' => $_POST['valor'] ?? '',
+            'unidade_medida_id' => $_POST['unidade_medida_id'] ?? 0,
+            'valor_minimo' => $_POST['valor_minimo'] ?? '',
+            'valor_maximo' => $_POST['valor_maximo'] ?? '',
+        ];
+    }
+
+    private function currentUserId(): int
+    {
+        return (int)($_SESSION['user']['id'] ?? 0);
     }
 }

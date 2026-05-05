@@ -3,6 +3,7 @@ namespace App\Services;
 
 use App\Core\Auth;
 use App\Core\DateHelper;
+use App\Core\ValueFormatter;
 use App\Database\Database;
 use PDO;
 
@@ -18,7 +19,7 @@ final class AgendaEventService
     public static function normalizeTypeFilter(?string $type): string
     {
         $type = strtolower(trim((string)$type));
-        return in_array($type, ['all', 'planoacao', 'auditoria', 'treinamento', 'cronograma'], true) ? $type : 'all';
+        return in_array($type, ['all', 'planoacao', 'auditoria', 'treinamento', 'cronograma', 'indicador'], true) ? $type : 'all';
     }
 
     public static function buildMonthContext(int $year, int $month): array
@@ -96,6 +97,9 @@ final class AgendaEventService
         }
         if ($type === 'all' || $type === 'cronograma') {
             $events = array_merge($events, $this->fetchCronogramaEvents($startDate, $endDate));
+        }
+        if ($type === 'all' || $type === 'indicador') {
+            $events = array_merge($events, $this->fetchIndicadorEvents($startDate, $endDate));
         }
 
         usort($events, static function (array $a, array $b): int {
@@ -468,6 +472,87 @@ final class AgendaEventService
                     'cronograma_id' => (string)($row['id_cronograma'] ?? ''),
                     'serie_id' => (string)($row['evento_pai_id'] ?: $row['id']),
                     'ano' => (string)($row['ano'] ?? ''),
+                ],
+            ];
+        }, $stmt->fetchAll() ?: []);
+    }
+
+    private function fetchIndicadorEvents(string $startDate, string $endDate): array
+    {
+        if (!Database::tableExists('indicador_eventos') || !Database::tableExists('indicadores')) {
+            return [];
+        }
+
+        $params = ['start' => $startDate, 'end' => $endDate];
+        $where = ['ie.data_evento BETWEEN :start AND :end', 'ie.deleted_at IS NULL', 'i.deleted_at IS NULL'];
+        $scope = $this->tenantCondition('ie.cliente_id', $params, 'agind');
+        if ($scope !== null) {
+            $where[] = $scope;
+        }
+
+        $sql = "SELECT
+                    ie.id,
+                    ie.indicador_id,
+                    ie.data_evento,
+                    ie.periodo_inicio,
+                    ie.periodo_fim,
+                    ie.valor_meta,
+                    ie.valor_atingido,
+                    ie.percentual_cumprimento,
+                    ie.status_meta,
+                    i.indicador,
+                    i.periodicidade_tipo,
+                    um.simbolo AS unidade_simbolo,
+                    um.tipo AS unidade_tipo,
+                    c.nome_empresa AS cliente_nome
+                FROM indicador_eventos ie
+                JOIN indicadores i ON i.id = ie.indicador_id
+                JOIN clientes c ON c.id = ie.cliente_id
+                LEFT JOIN unidades_medida um ON um.id = i.unidade_medida_id
+                WHERE " . implode(' AND ', $where);
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+
+        return array_map(static function (array $row): array {
+            $metaFmt = ValueFormatter::byUnit((float)($row['valor_meta'] ?? 0), [
+                'simbolo' => $row['unidade_simbolo'] ?? '',
+                'tipo' => $row['unidade_tipo'] ?? '',
+            ]);
+            $atingidoFmt = $row['valor_atingido'] !== null ? ValueFormatter::byUnit((float)$row['valor_atingido'], [
+                'simbolo' => $row['unidade_simbolo'] ?? '',
+                'tipo' => $row['unidade_tipo'] ?? '',
+            ]) : '—';
+            $status = (string)($row['status_meta'] ?? 'pendente');
+            $badgeClass = 'bg-gray-100 text-gray-700 border-gray-200';
+            if ($status === 'atingida') {
+                $badgeClass = 'bg-green-100 text-green-700 border-green-200';
+            } elseif ($status === 'parcial') {
+                $badgeClass = 'bg-amber-100 text-amber-700 border-amber-200';
+            } elseif ($status === 'nao_atingida') {
+                $badgeClass = 'bg-red-100 text-red-700 border-red-200';
+            }
+
+            return [
+                'id' => 'indicador-evento-' . (int)$row['id'],
+                'source_id' => (int)$row['id'],
+                'type' => 'indicador',
+                'subtype' => 'meta',
+                'type_label' => 'Indicador',
+                'date' => (string)$row['data_evento'],
+                'time' => 'Dia todo',
+                'time_sort' => '10:30',
+                'title' => (string)($row['indicador'] ?? 'Indicador'),
+                'status' => ucfirst(str_replace('_', ' ', $status)),
+                'description' => 'Meta: ' . $metaFmt . ' | Atingido: ' . $atingidoFmt . ' | Período: ' . (string)$row['periodo_inicio'] . ' até ' . (string)$row['periodo_fim'],
+                'client' => (string)($row['cliente_nome'] ?? ''),
+                'link' => 'index.php?route=indicadores/evento&id=' . (int)$row['id'],
+                'color' => '#be123c',
+                'badge_class' => $badgeClass,
+                'meta' => [
+                    'indicador_id' => (string)($row['indicador_id'] ?? ''),
+                    'periodicidade' => (string)($row['periodicidade_tipo'] ?? ''),
+                    'cumprimento' => $row['percentual_cumprimento'] !== null ? ValueFormatter::percent((float)$row['percentual_cumprimento']) : '',
                 ],
             ];
         }, $stmt->fetchAll() ?: []);

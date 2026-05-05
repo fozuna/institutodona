@@ -20,6 +20,9 @@ class ColaboradorModel extends BaseModel
             if (!\App\Database\Database::columnExists('colaboradores', 'lider')) {
                 $this->db->exec('ALTER TABLE colaboradores ADD COLUMN lider ENUM(\'não\',\'sim\') NOT NULL DEFAULT \'não\' AFTER funcao_id');
             }
+            if (!\App\Database\Database::columnExists('colaboradores', 'ativo')) {
+                $this->db->exec('ALTER TABLE colaboradores ADD COLUMN ativo TINYINT(1) NOT NULL DEFAULT 1');
+            }
         } catch (\PDOException $e) {}
     }
 
@@ -207,8 +210,11 @@ class ColaboradorModel extends BaseModel
                 JOIN funcoes f ON f.id = col.funcao_id
                 JOIN setores s ON s.id = f.setor_id
                 WHERE col.cliente_id = :cid AND $scope";
+        if (\App\Database\Database::columnExists('colaboradores', 'ativo')) {
+            $sql .= ' AND col.ativo = 1';
+        }
         if ($q !== '') {
-            $sql .= ' AND col.nome LIKE :q';
+            $sql .= ' AND (col.nome LIKE :q OR col.email LIKE :q)';
             $params['q'] = '%' . $q . '%';
         }
         $sql .= ' ORDER BY col.nome LIMIT :lim';
@@ -218,6 +224,34 @@ class ColaboradorModel extends BaseModel
         }
         $stmt->bindValue(':lim', $limit, \PDO::PARAM_INT);
         $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function activeByIdsCliente(array $ids, int $clienteId): array
+    {
+        $this->ensureTable();
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if ($clienteId <= 0 || empty($ids)) {
+            return [];
+        }
+        $params = ['cid' => $clienteId];
+        $scope = $this->tenantInCondition('col.cliente_id', $params, 'caids');
+        $placeholders = [];
+        foreach ($ids as $i => $id) {
+            $key = 'id' . $i;
+            $params[$key] = $id;
+            $placeholders[] = ':' . $key;
+        }
+        $sql = "SELECT col.id, col.nome, col.email
+                FROM colaboradores col
+                WHERE col.cliente_id = :cid AND $scope";
+        if (\App\Database\Database::columnExists('colaboradores', 'ativo')) {
+            $sql .= ' AND col.ativo = 1';
+        }
+        $sql .= ' AND col.id IN (' . implode(',', $placeholders) . ')
+                  ORDER BY col.nome';
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 

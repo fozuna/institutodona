@@ -124,11 +124,29 @@ switch ($route) {
     case 'indicadores/index':
         (new \App\Controllers\IndicadoresController())->index();
         break;
+    case 'indicadores/apiClientes':
+        (new \App\Controllers\IndicadoresController())->apiClientes();
+        break;
+    case 'indicadores/apiDepartamentos':
+        (new \App\Controllers\IndicadoresController())->apiDepartamentos();
+        break;
+    case 'indicadores/apiSetores':
+        (new \App\Controllers\IndicadoresController())->apiSetores();
+        break;
+    case 'indicadores/apiResponsaveis':
+        (new \App\Controllers\IndicadoresController())->apiResponsaveis();
+        break;
     case 'indicadores/create':
         (new \App\Controllers\IndicadoresController())->create();
         break;
     case 'indicadores/store':
         (new \App\Controllers\IndicadoresController())->store();
+        break;
+    case 'indicadores/evento':
+        (new \App\Controllers\IndicadoresController())->evento();
+        break;
+    case 'indicadores/historico':
+        (new \App\Controllers\IndicadoresController())->historico();
         break;
     case 'indicadores/edit':
         (new \App\Controllers\IndicadoresController())->edit();
@@ -417,6 +435,18 @@ switch ($route) {
         break;
     case 'treinamentos/certificado':
         (new TreinamentosController())->certificado();
+        break;
+    case 'treinamentos/certificado_lote':
+        (new TreinamentosController())->certificadoLote();
+        break;
+    case 'treinamentos/export_elegiveis':
+        (new TreinamentosController())->exportElegiveis();
+        break;
+    case 'treinamentos/presenca_pdf':
+        (new TreinamentosController())->presencaPdf();
+        break;
+    case 'treinamentos/dashboard_pdf':
+        (new TreinamentosController())->dashboardPdf();
         break;
     case 'aplicacoes/delete_update':
         (new AplicacoesController())->delete_update();

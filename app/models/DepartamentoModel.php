@@ -12,6 +12,9 @@ class DepartamentoModel extends BaseModel
                 cliente_id INT NOT NULL,
                 UNIQUE KEY dep_unique (cliente_id, nome)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+            if (!\App\Database\Database::columnExists('departamentos', 'ativo')) {
+                $this->db->exec('ALTER TABLE departamentos ADD COLUMN ativo TINYINT(1) NOT NULL DEFAULT 1');
+            }
         } catch (\PDOException $e) {}
     }
 
@@ -35,12 +38,48 @@ class DepartamentoModel extends BaseModel
         return $stmt->fetchAll();
     }
 
+    public function activeByCliente(int $clienteId): array
+    {
+        $this->ensureTable();
+        $params = ['cid' => $clienteId];
+        $scope = $this->tenantInCondition('cliente_id', $params, 'dact');
+        $stmt = $this->db->prepare(
+            "SELECT id, nome, cliente_id, ativo
+             FROM departamentos
+             WHERE cliente_id = :cid AND ativo = 1 AND $scope
+             ORDER BY nome"
+        );
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
     public function find(int $id): ?array
     {
         $this->ensureTable();
         $params = ['id' => $id];
         $scope = $this->tenantInCondition('cliente_id', $params, 'df');
         $stmt = $this->db->prepare("SELECT id, nome, cliente_id FROM departamentos WHERE id = :id AND $scope");
+        $stmt->execute($params);
+        $row = $stmt->fetch();
+        return $row ?: null;
+    }
+
+    public function findActive(int $id, ?int $clienteId = null): ?array
+    {
+        $this->ensureTable();
+        $params = ['id' => $id];
+        $where = ['id = :id', 'ativo = 1'];
+        if ($clienteId !== null && $clienteId > 0) {
+            $params['cid'] = $clienteId;
+            $where[] = 'cliente_id = :cid';
+        }
+        $where[] = $this->tenantInCondition('cliente_id', $params, 'dfa');
+        $stmt = $this->db->prepare(
+            'SELECT id, nome, cliente_id, ativo
+             FROM departamentos
+             WHERE ' . implode(' AND ', $where) . '
+             LIMIT 1'
+        );
         $stmt->execute($params);
         $row = $stmt->fetch();
         return $row ?: null;

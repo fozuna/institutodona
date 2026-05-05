@@ -12,6 +12,9 @@ class SetorModel extends BaseModel
                 departamento_id INT NOT NULL,
                 UNIQUE KEY setor_unique (departamento_id, nome)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+            if (!\App\Database\Database::columnExists('setores', 'ativo')) {
+                $this->db->exec('ALTER TABLE setores ADD COLUMN ativo TINYINT(1) NOT NULL DEFAULT 1');
+            }
         } catch (\PDOException $e) {}
     }
 
@@ -45,6 +48,44 @@ class SetorModel extends BaseModel
         $params = ['id' => $id];
         $scope = $this->tenantInCondition('d.cliente_id', $params, 'sf');
         $stmt = $this->db->prepare("SELECT s.id, s.nome, s.departamento_id FROM setores s JOIN departamentos d ON d.id = s.departamento_id WHERE s.id = :id AND $scope");
+        $stmt->execute($params);
+        $row = $stmt->fetch();
+        return $row ?: null;
+    }
+
+    public function activeByDepartamento(int $departamentoId): array
+    {
+        $this->ensureTable();
+        $params = ['dep' => $departamentoId];
+        $scope = $this->tenantInCondition('d.cliente_id', $params, 'sda');
+        $stmt = $this->db->prepare(
+            "SELECT s.id, s.nome, s.departamento_id, s.ativo
+             FROM setores s
+             JOIN departamentos d ON d.id = s.departamento_id
+             WHERE s.departamento_id = :dep AND s.ativo = 1 AND $scope
+             ORDER BY s.nome"
+        );
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    public function findActive(int $id, ?int $departamentoId = null): ?array
+    {
+        $this->ensureTable();
+        $params = ['id' => $id];
+        $where = ['s.id = :id', 's.ativo = 1'];
+        if ($departamentoId !== null && $departamentoId > 0) {
+            $params['dep'] = $departamentoId;
+            $where[] = 's.departamento_id = :dep';
+        }
+        $where[] = $this->tenantInCondition('d.cliente_id', $params, 'sfa');
+        $stmt = $this->db->prepare(
+            'SELECT s.id, s.nome, s.departamento_id, s.ativo
+             FROM setores s
+             JOIN departamentos d ON d.id = s.departamento_id
+             WHERE ' . implode(' AND ', $where) . '
+             LIMIT 1'
+        );
         $stmt->execute($params);
         $row = $stmt->fetch();
         return $row ?: null;
