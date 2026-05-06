@@ -49,6 +49,13 @@ function Notify-Status {
     }
 }
 
+function Get-AppliedMigrations {
+    $json = php app/database/migrate_status.php 2>$null
+    if (-not $json) { return @() }
+    $obj = $json | ConvertFrom-Json
+    return @($obj.applied)
+}
+
 function Get-PendingMigrations {
     $json = php app/database/migrate_status.php 2>$null
     if (-not $json) { return @() }
@@ -130,8 +137,15 @@ function Join-OrDefault {
     return ($Items -join ', ')
 }
 
+function Has-WorkingTreeChanges {
+    $out = git status --porcelain
+    return -not [string]::IsNullOrWhiteSpace(($out | Out-String))
+}
+
 $rollbackCandidates = @()
+$rollbackVersions = @()
 $beforePending = @()
+$beforeApplied = @()
 
 try {
     Set-Location $root
@@ -146,7 +160,9 @@ try {
 
     Run-Step "Status inicial de migrations" {
         $script:beforePending = Get-PendingMigrations
+        $script:beforeApplied = Get-AppliedMigrations
         Write-Log ("Migrations pendentes antes: " + (Join-OrDefault -Items $beforePending -Default "nenhuma"))
+        Write-Log ("Migrations aplicadas antes: " + (Join-OrDefault -Items $beforeApplied -Default "nenhuma"))
     }
 
     Run-Step "Aplicacao de migrations em dev" {
@@ -154,14 +170,15 @@ try {
     }
 
     Run-Step "Identificacao de rollback candidates" {
-        $afterPending = Get-PendingMigrations
-        $appliedNow = @($beforePending | Where-Object { $afterPending -notcontains $_ })
+        $afterApplied = Get-AppliedMigrations
+        $appliedNow = @($afterApplied | Where-Object { $beforeApplied -notcontains $_ })
         foreach ($version in $appliedNow) {
             if ($version -match '^(.*)_apply\.sql$') {
                 $rollbackVersion = "$($matches[1])_rollback.sql"
                 $rollbackPath = Join-Path $root ("app\database\migrations\" + $rollbackVersion)
                 if (Test-Path $rollbackPath) {
                     $rollbackCandidates += $rollbackPath
+                    $rollbackVersions += $version
                 }
             }
         }
@@ -181,7 +198,11 @@ try {
     if (-not $NoCommit) {
         Run-Step "Commit automatizado" {
             git add -A
-            git commit -m $CommitMessage
+            if (Has-WorkingTreeChanges) {
+                git commit -m $CommitMessage
+            } else {
+                Write-Log "Nenhuma alteracao para commit; etapa finalizada sem novo commit." "WARN"
+            }
         }
     } else {
         Write-Log "NoCommit ativo: commit nao executado." "WARN"
@@ -194,10 +215,14 @@ try {
 catch {
     Write-Log ("Falha no pipeline: " + $_.Exception.Message) "ERROR"
     if ($rollbackCandidates.Count -gt 0) {
-        foreach ($rollback in $rollbackCandidates) {
+        for ($i = 0; $i -lt $rollbackCandidates.Count; $i++) {
+            $rollback = $rollbackCandidates[$i]
+            $version = $rollbackVersions[$i]
             try {
                 Write-Log "Executando rollback automatico: $rollback" "WARN"
                 php app/database/run_sql_file.php $rollback | Out-Host
+                Write-Log "Removendo migration do repositorio de versoes: $version" "WARN"
+                php app/database/unmark_migration.php $version | Out-Host
             } catch {
                 Write-Log ("Falha no rollback {0}: {1}" -f $rollback, $_.Exception.Message) "ERROR"
             }

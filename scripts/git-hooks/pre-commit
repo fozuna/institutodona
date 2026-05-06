@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+cd "$ROOT_DIR"
+
+echo "[pre-commit] Executando validacao automatizada de migrations e integridade..."
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts/auto_commit_with_migrations.ps1" -NoCommit
+echo "[pre-commit] Validacao concluida."
