@@ -2,6 +2,8 @@
 namespace App\Models;
 
 use App\Core\I18n;
+use App\Core\AuditLogger;
+use App\Database\Database;
 
 class IndicadorModel extends BaseModel
 {
@@ -21,6 +23,8 @@ class IndicadorModel extends BaseModel
     private ColaboradorModel $colaboradores;
     private UnidadeMedidaModel $unidades;
     private IndicadorEventoModel $eventos;
+    /** @var array<string,bool> */
+    private array $schema = [];
 
     public function __construct()
     {
@@ -31,6 +35,7 @@ class IndicadorModel extends BaseModel
         $this->colaboradores = new ColaboradorModel();
         $this->unidades = new UnidadeMedidaModel();
         $this->eventos = new IndicadorEventoModel();
+        $this->schema = $this->detectSchema();
     }
 
     public function periodicidades(): array
@@ -174,7 +179,10 @@ class IndicadorModel extends BaseModel
     public function search(array $filters): array
     {
         $params = [];
-        $where = ['i.deleted_at IS NULL'];
+        $where = [];
+        if ($this->schema['indicadores_deleted_at']) {
+            $where[] = 'i.deleted_at IS NULL';
+        }
         $scope = $this->tenantInCondition('i.cliente_id', $params, 'inds');
         $where[] = $scope;
 
@@ -184,13 +192,24 @@ class IndicadorModel extends BaseModel
             $where[] = 'i.cliente_id = :cid';
         }
 
+        $orderBy = $this->schema['indicadores_indicador']
+            ? 'i.indicador'
+            : 'COALESCE(i.nome, i.id)';
         $sql = $this->baseSelect() . '
             WHERE ' . implode(' AND ', $where) . '
             GROUP BY i.id
-            ORDER BY c.nome_empresa, i.indicador, i.data_inicial';
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute($params);
-        return array_map(fn(array $row): array => $this->hydrate($row), $stmt->fetchAll());
+            ORDER BY c.nome_empresa, ' . $orderBy . ', i.id';
+        try {
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
+            return array_map(fn(array $row): array => $this->hydrate($row), $stmt->fetchAll());
+        } catch (\PDOException $e) {
+            AuditLogger::log('indicadores_search_error', 'indicadores', null, [
+                'message' => $e->getMessage(),
+                'fallback' => true,
+            ]);
+            return $this->legacySearch($filters);
+        }
     }
 
     public function byCliente(int $clienteId): array
@@ -202,14 +221,26 @@ class IndicadorModel extends BaseModel
     {
         $params = ['id' => $id];
         $scope = $this->tenantInCondition('i.cliente_id', $params, 'indf');
+        $where = ['i.id = :id', $scope];
+        if ($this->schema['indicadores_deleted_at']) {
+            $where[] = 'i.deleted_at IS NULL';
+        }
         $sql = $this->baseSelect() . '
-            WHERE i.id = :id AND i.deleted_at IS NULL AND ' . $scope . '
+            WHERE ' . implode(' AND ', $where) . '
             GROUP BY i.id
             LIMIT 1';
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute($params);
-        $row = $stmt->fetch();
-        return $row ? $this->hydrate($row) : null;
+        try {
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
+            $row = $stmt->fetch();
+            return $row ? $this->hydrate($row) : null;
+        } catch (\PDOException $e) {
+            AuditLogger::log('indicadores_find_error', 'indicadores', $id, [
+                'message' => $e->getMessage(),
+                'fallback' => true,
+            ]);
+            return $this->legacyFind($id);
+        }
     }
 
     public function create(array $input, int $userId): int
@@ -370,23 +401,41 @@ class IndicadorModel extends BaseModel
 
     private function baseSelect(): string
     {
+        $departJoin = $this->schema['indicadores_departamento_id'] ? 'LEFT JOIN departamentos d ON d.id = i.departamento_id' : '';
+        $setorJoin = $this->schema['indicadores_setor_id'] ? 'LEFT JOIN setores s ON s.id = i.setor_id' : '';
+        $unidadeJoin = ($this->schema['indicadores_unidade_medida_id'] && $this->schema['unidades_medida_table'])
+            ? 'LEFT JOIN unidades_medida um ON um.id = i.unidade_medida_id'
+            : '';
+        $respJoin = $this->schema['indicador_responsavel_table']
+            ? 'LEFT JOIN indicador_responsavel ir ON ir.indicador_id = i.id LEFT JOIN colaboradores col ON col.id = ir.colaborador_id'
+            : '';
+        $departSelect = $this->schema['indicadores_departamento_id'] ? 'd.nome AS departamento_nome' : "'' AS departamento_nome";
+        $setorSelect = $this->schema['indicadores_setor_id'] ? 's.nome AS setor_nome' : "'' AS setor_nome";
+        $unidadeNome = ($this->schema['indicadores_unidade_medida_id'] && $this->schema['unidades_medida_table']) ? 'um.nome' : "''";
+        $unidadeSimbolo = ($this->schema['indicadores_unidade_medida_id'] && $this->schema['unidades_medida_table']) ? 'um.simbolo' : "''";
+        $unidadeTipo = ($this->schema['indicadores_unidade_medida_id'] && $this->schema['unidades_medida_table']) ? 'um.tipo' : "''";
+        $respConcat = $this->schema['indicador_responsavel_table']
+            ? "GROUP_CONCAT(DISTINCT CONCAT(col.nome, ' <', COALESCE(col.email, ''), '>') ORDER BY col.nome SEPARATOR '||')"
+            : "''";
+        $respIds = $this->schema['indicador_responsavel_table']
+            ? "GROUP_CONCAT(DISTINCT col.id ORDER BY col.nome SEPARATOR ',')"
+            : "''";
         return "SELECT
                 i.*,
                 c.nome_empresa AS cliente_nome,
-                d.nome AS departamento_nome,
-                s.nome AS setor_nome,
-                um.nome AS unidade_nome,
-                um.simbolo AS unidade_simbolo,
-                um.tipo AS unidade_tipo,
-                GROUP_CONCAT(DISTINCT CONCAT(col.nome, ' <', COALESCE(col.email, ''), '>') ORDER BY col.nome SEPARATOR '||') AS responsaveis_concat,
-                GROUP_CONCAT(DISTINCT col.id ORDER BY col.nome SEPARATOR ',') AS responsavel_ids_concat
+                {$departSelect},
+                {$setorSelect},
+                {$unidadeNome} AS unidade_nome,
+                {$unidadeSimbolo} AS unidade_simbolo,
+                {$unidadeTipo} AS unidade_tipo,
+                {$respConcat} AS responsaveis_concat,
+                {$respIds} AS responsavel_ids_concat
             FROM indicadores i
             JOIN clientes c ON c.id = i.cliente_id
-            LEFT JOIN departamentos d ON d.id = i.departamento_id
-            LEFT JOIN setores s ON s.id = i.setor_id
-            LEFT JOIN unidades_medida um ON um.id = i.unidade_medida_id
-            LEFT JOIN indicador_responsavel ir ON ir.indicador_id = i.id
-            LEFT JOIN colaboradores col ON col.id = ir.colaborador_id";
+            {$departJoin}
+            {$setorJoin}
+            {$unidadeJoin}
+            {$respJoin}";
     }
 
     private function hydrate(array $row): array
@@ -414,9 +463,9 @@ class IndicadorModel extends BaseModel
 
     private function controlStatus(array $row): array
     {
-        $valor = $row['valor'] !== null ? (float)$row['valor'] : null;
-        $min = $row['valor_minimo'] !== null ? (float)$row['valor_minimo'] : null;
-        $max = $row['valor_maximo'] !== null ? (float)$row['valor_maximo'] : null;
+        $valor = ($row['valor'] ?? null) !== null ? (float)$row['valor'] : null;
+        $min = ($row['valor_minimo'] ?? null) !== null ? (float)$row['valor_minimo'] : null;
+        $max = ($row['valor_maximo'] ?? null) !== null ? (float)$row['valor_maximo'] : null;
         if ($valor === null || $min === null || $max === null) {
             return ['key' => 'no_limits', 'label' => I18n::t('indicadores.control.no_limits'), 'class' => 'bg-gray-100 text-gray-700'];
         }
@@ -431,6 +480,7 @@ class IndicadorModel extends BaseModel
 
     private function existsDuplicate(int $clienteId, string $indicador, ?int $ignoreId = null): bool
     {
+        $nameColumn = $this->schema['indicadores_indicador'] ? 'indicador' : 'nome';
         $params = [
             'cid' => $clienteId,
             'nome' => mb_strtolower($indicador),
@@ -438,8 +488,10 @@ class IndicadorModel extends BaseModel
         $sql = 'SELECT id
                 FROM indicadores
                 WHERE cliente_id = :cid
-                  AND deleted_at IS NULL
-                  AND LOWER(indicador) = :nome';
+                  AND LOWER(' . $nameColumn . ') = :nome';
+        if ($this->schema['indicadores_deleted_at']) {
+            $sql .= ' AND deleted_at IS NULL';
+        }
         if ($ignoreId !== null && $ignoreId > 0) {
             $sql .= ' AND id <> :ignore_id';
             $params['ignore_id'] = $ignoreId;
@@ -486,5 +538,80 @@ class IndicadorModel extends BaseModel
             return null;
         }
         return round((float)$value, 4);
+    }
+
+    /** @return array<string,bool> */
+    private function detectSchema(): array
+    {
+        return [
+            'indicadores_table' => Database::tableExists('indicadores'),
+            'indicadores_deleted_at' => Database::columnExists('indicadores', 'deleted_at'),
+            'indicadores_indicador' => Database::columnExists('indicadores', 'indicador'),
+            'indicadores_departamento_id' => Database::columnExists('indicadores', 'departamento_id'),
+            'indicadores_setor_id' => Database::columnExists('indicadores', 'setor_id'),
+            'indicadores_unidade_medida_id' => Database::columnExists('indicadores', 'unidade_medida_id'),
+            'indicador_responsavel_table' => Database::tableExists('indicador_responsavel'),
+            'unidades_medida_table' => Database::tableExists('unidades_medida'),
+        ];
+    }
+
+    private function legacySearch(array $filters): array
+    {
+        if (!$this->schema['indicadores_table']) {
+            return [];
+        }
+        $params = [];
+        $where = [];
+        $scope = $this->tenantInCondition('i.cliente_id', $params, 'indsl');
+        $where[] = $scope;
+        $clienteId = (int)($filters['cliente_id'] ?? 0);
+        if ($clienteId > 0) {
+            $params['cid'] = $clienteId;
+            $where[] = 'i.cliente_id = :cid';
+        }
+        $sql = "SELECT
+                    i.*,
+                    c.nome_empresa AS cliente_nome,
+                    '' AS departamento_nome,
+                    '' AS setor_nome,
+                    '' AS unidade_nome,
+                    '' AS unidade_simbolo,
+                    '' AS unidade_tipo,
+                    '' AS responsaveis_concat,
+                    '' AS responsavel_ids_concat
+                FROM indicadores i
+                JOIN clientes c ON c.id = i.cliente_id
+                WHERE " . implode(' AND ', $where) . "
+                ORDER BY c.nome_empresa, i.id";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return array_map(fn(array $row): array => $this->hydrate($row), $stmt->fetchAll());
+    }
+
+    private function legacyFind(int $id): ?array
+    {
+        if (!$this->schema['indicadores_table']) {
+            return null;
+        }
+        $params = ['id' => $id];
+        $scope = $this->tenantInCondition('i.cliente_id', $params, 'indfl');
+        $sql = "SELECT
+                    i.*,
+                    c.nome_empresa AS cliente_nome,
+                    '' AS departamento_nome,
+                    '' AS setor_nome,
+                    '' AS unidade_nome,
+                    '' AS unidade_simbolo,
+                    '' AS unidade_tipo,
+                    '' AS responsaveis_concat,
+                    '' AS responsavel_ids_concat
+                FROM indicadores i
+                JOIN clientes c ON c.id = i.cliente_id
+                WHERE i.id = :id AND {$scope}
+                LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $row = $stmt->fetch();
+        return $row ? $this->hydrate($row) : null;
     }
 }
