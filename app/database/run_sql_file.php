@@ -2,7 +2,6 @@
 require_once __DIR__ . '/../autoload.php';
 
 use App\Database\Database;
-use PDO;
 
 if ($argc < 2) {
     fwrite(STDERR, "Uso: php app/database/run_sql_file.php <arquivo.sql>\n");
@@ -26,7 +25,10 @@ $delimiter = ';';
 $buffer = '';
 $lines = preg_split("/\r\n|\n|\r/", $sql) ?: [];
 
-foreach ($lines as $line) {
+foreach ($lines as $idx => $line) {
+    if ($idx === 0) {
+        $line = preg_replace('/^\xEF\xBB\xBF/', '', $line) ?? $line;
+    }
     $trimmed = trim($line);
     if ($trimmed === '' || str_starts_with($trimmed, '--')) {
         continue;
@@ -58,7 +60,7 @@ echo json_encode(['ok' => true, 'file' => $path], JSON_UNESCAPED_UNICODE) . PHP_
 function execStatement(PDO $pdo, string $statement): void
 {
     $prefix = strtoupper(strtok(ltrim($statement), " \t\r\n(") ?: '');
-    if (in_array($prefix, ['SELECT', 'SHOW', 'CALL', 'EXECUTE'], true)) {
+    if (in_array($prefix, ['SELECT', 'SHOW', 'CALL', 'EXECUTE', 'EXPLAIN', 'DESCRIBE'], true)) {
         $query = $pdo->query($statement);
         if ($query !== false) {
             $query->fetchAll();
