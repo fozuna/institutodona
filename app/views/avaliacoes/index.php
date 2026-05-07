@@ -33,6 +33,7 @@
   ];
 ?>
 <div class="p-6">
+  <div id="avaliacoes-ui-status" class="sr-only" role="status" aria-live="polite"></div>
   <div class="flex flex-col gap-3 mb-4 xl:flex-row xl:items-center xl:justify-between">
     <div>
       <h1 class="text-2xl font-bold">Avaliações</h1>
@@ -43,14 +44,24 @@
       <div class="flex items-center gap-2">
         <input id="top-public-link" class="border rounded p-2 w-full bg-white text-sm" value="<?= htmlspecialchars($publicBaseUrl) ?>" readonly />
         <button type="button"
-                class="px-3 py-2 rounded bg-gray-200 text-brand-brown btn-copy-link"
+                class="icon-btn icon-btn--lg icon-btn--muted btn-copy-link"
                 data-link="<?= htmlspecialchars($publicBaseUrl) ?>"
-                data-avaliacao-id="0">Copiar</button>
+                data-avaliacao-id="0"
+                title="Copiar link público"
+                aria-label="Copiar link público"><span data-feather="copy"></span><span class="sr-only">Copiar link público</span></button>
       </div>
     </div>
     <div class="flex items-center gap-3">
-      <a href="<?= htmlspecialchars($publicBaseUrl) ?>" target="_blank" rel="noopener" class="px-3 py-2 rounded bg-brand-red text-white">Abrir Formulário Público</a>
-      <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=avaliacoes/create">Nova Avaliação</a>
+      <a href="<?= htmlspecialchars($publicBaseUrl) ?>"
+         target="_blank"
+         rel="noopener"
+         class="icon-btn icon-btn--lg icon-btn--muted text-brand-red"
+         title="Abrir formulário público"
+         aria-label="Abrir formulário público"><span data-feather="external-link"></span><span class="sr-only">Abrir formulário público</span></a>
+      <a class="icon-btn icon-btn--lg icon-btn--primary"
+         href="index.php?route=avaliacoes/create"
+         title="Nova avaliação"
+         aria-label="Nova avaliação"><span data-feather="plus"></span><span class="sr-only">Nova avaliação</span></a>
     </div>
   </div>
   <?php if ($generatedUrl !== ''): ?>
@@ -58,7 +69,7 @@
       <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
         <div class="min-w-0">
           <div class="text-sm font-semibold text-green-800">Formulário público fixo pronto para compartilhamento</div>
-          <div id="generated-link-feedback" class="text-sm text-green-700 mt-1">Copiando automaticamente para a área de transferência...</div>
+          <div id="generated-link-feedback" class="text-sm text-green-700 mt-1" role="status" aria-live="polite">Copiando automaticamente para a área de transferência...</div>
           <div class="mt-2 text-xs text-gray-600">
             <?php if ($generatedEmpresa !== ''): ?>Empresa: <?= htmlspecialchars($generatedEmpresa) ?> · <?php endif; ?>
             Endpoint fixo sem token e sem expiração
@@ -68,12 +79,62 @@
           </div>
         </div>
         <div class="flex flex-wrap gap-2 xl:justify-end">
-          <button type="button" class="px-3 py-2 rounded bg-brand-red text-white btn-share-action" data-channel="copy" data-url="<?= htmlspecialchars($generatedUrl) ?>" data-avaliacao-id="<?= $generatedAvaliacaoId ?>" data-public-id="<?= $generatedPublicId ?>">Copiar link</button>
-          <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown share-link-anchor" href="<?= htmlspecialchars($mailtoHref) ?>" data-channel="email" data-url="<?= htmlspecialchars($generatedUrl) ?>" data-avaliacao-id="<?= $generatedAvaliacaoId ?>" data-public-id="<?= $generatedPublicId ?>">Enviar por e-mail</a>
-          <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown share-link-anchor" href="<?= htmlspecialchars($whatsHref) ?>" target="_blank" rel="noopener" data-channel="whatsapp" data-url="<?= htmlspecialchars($generatedUrl) ?>" data-avaliacao-id="<?= $generatedAvaliacaoId ?>" data-public-id="<?= $generatedPublicId ?>">WhatsApp</a>
-          <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown share-link-anchor" href="<?= htmlspecialchars($linkedinHref) ?>" target="_blank" rel="noopener" data-channel="linkedin" data-url="<?= htmlspecialchars($generatedUrl) ?>" data-avaliacao-id="<?= $generatedAvaliacaoId ?>" data-public-id="<?= $generatedPublicId ?>">LinkedIn</a>
-          <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown share-link-anchor" href="<?= htmlspecialchars($facebookHref) ?>" target="_blank" rel="noopener" data-channel="facebook" data-url="<?= htmlspecialchars($generatedUrl) ?>" data-avaliacao-id="<?= $generatedAvaliacaoId ?>" data-public-id="<?= $generatedPublicId ?>">Facebook</a>
-          <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown share-link-anchor" href="<?= htmlspecialchars($generatedUrl) ?>" target="_blank" rel="noopener" data-channel="open" data-url="<?= htmlspecialchars($generatedUrl) ?>" data-avaliacao-id="<?= $generatedAvaliacaoId ?>" data-public-id="<?= $generatedPublicId ?>">Abrir link</a>
+          <button type="button"
+                  class="icon-btn icon-btn--lg icon-btn--primary btn-share-action"
+                  data-channel="copy"
+                  data-url="<?= htmlspecialchars($generatedUrl) ?>"
+                  data-avaliacao-id="<?= $generatedAvaliacaoId ?>"
+                  data-public-id="<?= $generatedPublicId ?>"
+                  title="Copiar link"
+                  aria-label="Copiar link"><span data-feather="copy"></span><span class="sr-only">Copiar link</span></button>
+          <a class="icon-btn icon-btn--lg icon-btn--muted text-brand-brown share-link-anchor"
+             href="<?= htmlspecialchars($mailtoHref) ?>"
+             data-channel="email"
+             data-url="<?= htmlspecialchars($generatedUrl) ?>"
+             data-avaliacao-id="<?= $generatedAvaliacaoId ?>"
+             data-public-id="<?= $generatedPublicId ?>"
+             title="Enviar por e-mail"
+             aria-label="Enviar por e-mail"><span data-feather="mail"></span><span class="sr-only">Enviar por e-mail</span></a>
+          <a class="icon-btn icon-btn--lg icon-btn--muted text-brand-brown share-link-anchor"
+             href="<?= htmlspecialchars($whatsHref) ?>"
+             target="_blank"
+             rel="noopener"
+             data-channel="whatsapp"
+             data-url="<?= htmlspecialchars($generatedUrl) ?>"
+             data-avaliacao-id="<?= $generatedAvaliacaoId ?>"
+             data-public-id="<?= $generatedPublicId ?>"
+             title="Compartilhar no WhatsApp"
+             aria-label="Compartilhar no WhatsApp"><span data-feather="message-circle"></span><span class="sr-only">Compartilhar no WhatsApp</span></a>
+          <a class="icon-btn icon-btn--lg icon-btn--muted text-brand-brown share-link-anchor"
+             href="<?= htmlspecialchars($linkedinHref) ?>"
+             target="_blank"
+             rel="noopener"
+             data-channel="linkedin"
+             data-url="<?= htmlspecialchars($generatedUrl) ?>"
+             data-avaliacao-id="<?= $generatedAvaliacaoId ?>"
+             data-public-id="<?= $generatedPublicId ?>"
+             title="Compartilhar no LinkedIn"
+             aria-label="Compartilhar no LinkedIn"><span data-feather="linkedin"></span><span class="sr-only">Compartilhar no LinkedIn</span></a>
+          <a class="icon-btn icon-btn--lg icon-btn--muted text-brand-brown share-link-anchor"
+             href="<?= htmlspecialchars($facebookHref) ?>"
+             target="_blank"
+             rel="noopener"
+             data-channel="facebook"
+             data-url="<?= htmlspecialchars($generatedUrl) ?>"
+             data-avaliacao-id="<?= $generatedAvaliacaoId ?>"
+             data-public-id="<?= $generatedPublicId ?>"
+             title="Compartilhar no Facebook"
+             aria-label="Compartilhar no Facebook"><span data-feather="facebook"></span><span class="sr-only">Compartilhar no Facebook</span></a>
+          <a class="icon-btn icon-btn--lg icon-btn--muted text-brand-red share-link-anchor"
+             href="<?= htmlspecialchars($generatedUrl) ?>"
+             target="_blank"
+             rel="noopener"
+             data-channel="open"
+             data-url="<?= htmlspecialchars($generatedUrl) ?>"
+             data-avaliacao-id="<?= $generatedAvaliacaoId ?>"
+             data-public-id="<?= $generatedPublicId ?>"
+             title="Abrir link"
+             aria-label="Abrir link"><span data-feather="external-link"></span><span class="sr-only">Abrir link</span></a>
         </div>
       </div>
     </div>
@@ -117,8 +178,18 @@
             <td class="p-3">
               <?php if ($publicLink !== ''): ?>
                 <div class="flex items-center gap-2">
-                  <a class="text-brand-pink text-sm" href="<?= htmlspecialchars($publicLink) ?>" target="_blank" rel="noopener">Abrir</a>
-                  <button type="button" class="text-xs px-2 py-1 rounded bg-gray-200 text-brand-brown btn-copy-link" data-link="<?= htmlspecialchars($publicLink) ?>" data-avaliacao-id="<?= (int)$i['id'] ?>">Copiar</button>
+                  <a class="icon-btn icon-btn--muted text-brand-red"
+                     href="<?= htmlspecialchars($publicLink) ?>"
+                     target="_blank"
+                     rel="noopener"
+                     title="Abrir formulário público"
+                     aria-label="Abrir formulário público"><span data-feather="external-link"></span><span class="sr-only">Abrir formulário público</span></a>
+                  <button type="button"
+                          class="icon-btn icon-btn--muted btn-copy-link"
+                          data-link="<?= htmlspecialchars($publicLink) ?>"
+                          data-avaliacao-id="<?= (int)$i['id'] ?>"
+                          title="Copiar link público"
+                          aria-label="Copiar link público"><span data-feather="copy"></span><span class="sr-only">Copiar link público</span></button>
                 </div>
                 <div class="text-xs text-gray-500 mt-1">Endpoint fixo</div>
               <?php else: ?>
@@ -161,6 +232,18 @@
     const generatedLinkInput = document.getElementById('generated-public-link');
     const generatedPanel = document.getElementById('generated-link-panel');
     const generatedCopyBtn = generatedPanel ? generatedPanel.querySelector('[data-channel="copy"]') : null;
+    const uiStatus = document.getElementById('avaliacoes-ui-status');
+    function status(msg) { if (uiStatus) uiStatus.textContent = msg || ''; }
+    function setTemporaryTitle(el, title, ms) {
+      if (!el) return;
+      const prev = el.getAttribute('data-prev-title') || el.getAttribute('title') || '';
+      el.setAttribute('data-prev-title', prev);
+      el.setAttribute('title', title);
+      window.setTimeout(() => {
+        const restore = el.getAttribute('data-prev-title') || '';
+        el.setAttribute('title', restore);
+      }, ms || 1500);
+    }
     function fallbackCopyText(text) {
       const textarea = document.createElement('textarea');
       textarea.value = text;
@@ -195,11 +278,13 @@
         if (copied) {
           feedbackEl.textContent = 'Link copiado automaticamente com sucesso.';
           if (generatedCopyBtn) {
-            generatedCopyBtn.textContent = 'Copiado';
+            setTemporaryTitle(generatedCopyBtn, 'Copiado', 1600);
           }
+          status('Link copiado para a área de transferência.');
           logShare('auto_copy', generatedLinkInput.value, <?= (int)$generatedAvaliacaoId ?>, <?= (int)$generatedPublicId ?>, true);
         } else {
           feedbackEl.textContent = 'Não foi possível copiar automaticamente. Use as opções abaixo para compartilhar.';
+          status('Falha ao copiar link automaticamente.');
           logShare('auto_copy', generatedLinkInput.value, <?= (int)$generatedAvaliacaoId ?>, <?= (int)$generatedPublicId ?>, false);
         }
       });
@@ -231,10 +316,11 @@
           if (!copied) {
             throw new Error('clipboard_unavailable');
           }
-          btn.textContent = 'Copiado';
+          setTemporaryTitle(btn, 'Copiado', 1500);
+          status('Link copiado para a área de transferência.');
           logShare('copy_existing', link, avaliacaoId, publicId, true);
-          setTimeout(()=>{ btn.textContent = 'Copiar'; }, 1500);
         } catch (e) {
+          status('Não foi possível copiar o link.');
           logShare('copy_existing', link, avaliacaoId, publicId, false);
         }
       });
@@ -246,6 +332,7 @@
         const publicId = Number(btn.getAttribute('data-public-id') || '0');
         if (!link) {
           if (feedbackEl) feedbackEl.textContent = 'Nenhum link disponível para cópia.';
+          status('Nenhum link disponível para cópia.');
           return;
         }
         try {
@@ -253,12 +340,13 @@
           if (!copied) {
             throw new Error('clipboard_unavailable');
           }
-          btn.textContent = 'Copiado';
+          setTemporaryTitle(btn, 'Copiado', 1800);
           if (feedbackEl) feedbackEl.textContent = 'Link copiado para a área de transferência.';
+          status('Link copiado para a área de transferência.');
           logShare('copy', link, avaliacaoId, publicId, true);
-          setTimeout(() => { btn.textContent = 'Copiar link'; }, 1800);
         } catch (e) {
           if (feedbackEl) feedbackEl.textContent = 'Falha na cópia automática. Selecione e copie manualmente o campo do link.';
+          status('Falha na cópia automática.');
           logShare('copy', link, avaliacaoId, publicId, false);
         }
       });

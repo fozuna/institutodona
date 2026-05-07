@@ -183,9 +183,14 @@
 
 /* Botões/links de ação com ícones */
 .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; border-radius: 0.25rem; }
+.icon-btn--lg { width: 2.5rem; height: 2.5rem; border-radius: 0.5rem; }
 .icon-btn--primary { background-color: var(--brand-red); color: #fff; }
 .icon-btn--muted { background-color: #e5e7eb; color: #111827; }
 .icon-btn:hover { filter: brightness(0.95); }
+.icon-btn:focus-visible, .icon-action:focus-visible {
+  outline: 2px solid var(--brand-red);
+  outline-offset: 2px;
+}
 .icon-action { display: inline-flex; align-items: center; justify-content: center; padding: 0.125rem; border-radius: 0.25rem; }
 .icon-action:hover { background-color: rgba(0,0,0,0.06); }
 .icon-btn svg, .icon-action svg { width: 16px; height: 16px; }
