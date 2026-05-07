@@ -209,6 +209,15 @@ class AvaliacaoModel extends BaseModel
         $row = $stmt->fetch();
         return $row ?: null;
     }
+
+    public function findPublic(int $id): ?array
+    {
+        $this->ensureTable();
+        $stmt = $this->db->prepare('SELECT a.*, c.nome_empresa AS cliente_nome FROM avaliacoes a LEFT JOIN clientes c ON c.id = a.cliente_id WHERE a.id = :id LIMIT 1');
+        $stmt->execute(['id' => $id]);
+        $row = $stmt->fetch();
+        return $row ?: null;
+    }
  
     public function create(array $data): int
     {

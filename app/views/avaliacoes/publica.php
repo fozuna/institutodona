@@ -86,6 +86,8 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
                 Avaliação enviada com sucesso. Este link continua ativo e pode ser utilizado novamente.
                 <?php if ($pdfUrl !== ''): ?>
                   <a class="ml-2 inline-flex items-center rounded bg-brand-red px-3 py-1 text-white" href="<?= htmlspecialchars($pdfUrl) ?>">Baixar PDF</a>
+                <?php else: ?>
+                  <span class="ml-2 inline-flex items-center rounded bg-gray-200 px-3 py-1 text-gray-700">PDF em processamento</span>
                 <?php endif; ?>
               </div>
             <?php endif; ?>

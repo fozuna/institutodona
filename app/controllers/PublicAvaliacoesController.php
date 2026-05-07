@@ -95,7 +95,10 @@ class PublicAvaliacoesController
         $avaliacaoId = (int)($_GET['avaliacao_id'] ?? 0);
         $sig = (string)($_GET['sig'] ?? '');
         if ($submitted && $avaliacaoId > 0 && $this->isValidDownloadSignature($avaliacaoId, $sig)) {
-            $pdfUrl = $this->currentUrl() . '?download=pdf&avaliacao_id=' . $avaliacaoId . '&sig=' . rawurlencode($sig);
+            $pdfPath = (new AvaliacaoPdfService())->pdfPath($avaliacaoId);
+            if (is_file($pdfPath)) {
+                $pdfUrl = $this->currentUrl() . '?download=pdf&avaliacao_id=' . $avaliacaoId . '&sig=' . rawurlencode($sig);
+            }
         }
         $this->render($context, 1, $this->defaultValues($context), [], [], $submitted, '', $pdfUrl);
     }
@@ -159,7 +162,19 @@ class PublicAvaliacoesController
             $this->render($context, 2, $values, [], $selectedMap, false, 'Nao foi possivel salvar a avaliacao.', '');
             return;
         }
-        (new AvaliacaoPdfService())->generateToFile($avaliacaoId, true);
+        $pdfService = new AvaliacaoPdfService();
+        $pdfPath = $pdfService->generateToFile($avaliacaoId, true);
+        if (!$pdfPath || !is_file($pdfPath)) {
+            $errorId = $this->newErrorId();
+            AuditLogger::log('public_avaliacoes_pdf_generate_failed', 'avaliacao_publica_fixa', $avaliacaoId, [
+                'error_id' => $errorId,
+                'host' => $context['host'] ?? null,
+                'cliente_id' => $context['cliente_id'] ?? null,
+                'empresa_nome' => $context['empresa_nome'] ?? null,
+                'pdf_path' => $pdfService->pdfPath($avaliacaoId),
+                'last_error' => $pdfService->getLastError(),
+            ]);
+        }
         AuditLogger::log('public_avaliacoes_finish', 'avaliacao_publica_fixa', $avaliacaoId, [
             'host' => $context['host'] ?? null,
             'cliente_id' => $context['cliente_id'] ?? null,
@@ -177,10 +192,15 @@ class PublicAvaliacoesController
             echo 'Download nao autorizado.';
             return;
         }
-        $item = $this->avaliacoes->find($avaliacaoId);
+        $item = $this->avaliacoes->findPublic($avaliacaoId);
         if (!$item) {
             http_response_code(404);
-            echo 'Avaliacao nao encontrada.';
+            $errorId = $this->newErrorId();
+            AuditLogger::log('public_avaliacoes_pdf_not_found', 'avaliacao_publica_fixa', $avaliacaoId, [
+                'error_id' => $errorId,
+                'host' => $context['host'] ?? null,
+            ]);
+            echo 'Avaliacao nao encontrada. Codigo: ' . $errorId;
             return;
         }
         if (!empty($context['cliente_id']) && (int)($item['cliente_id'] ?? 0) !== (int)$context['cliente_id']) {
@@ -188,7 +208,21 @@ class PublicAvaliacoesController
             echo 'Download nao autorizado.';
             return;
         }
-        $ok = (new AvaliacaoPdfService())->outputToBrowser($avaliacaoId, true);
+        $pdfService = new AvaliacaoPdfService();
+        $pdfPath = $pdfService->generateToFile($avaliacaoId, false);
+        if (!$pdfPath || !is_file($pdfPath)) {
+            $errorId = $this->newErrorId();
+            AuditLogger::log('public_avaliacoes_pdf_unavailable', 'avaliacao_publica_fixa', $avaliacaoId, [
+                'error_id' => $errorId,
+                'host' => $context['host'] ?? null,
+                'pdf_path' => $pdfService->pdfPath($avaliacaoId),
+                'last_error' => $pdfService->getLastError(),
+            ]);
+            http_response_code(404);
+            echo 'PDF nao disponivel no momento. Tente novamente. Codigo: ' . $errorId;
+            return;
+        }
+        $ok = $pdfService->outputToBrowser($avaliacaoId, true);
         if (!$ok) {
             http_response_code(404);
             echo 'PDF nao disponivel.';

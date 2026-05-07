@@ -2,6 +2,7 @@
 namespace App\Services;
 
 use App\Core\AvaliacaoQuestionario;
+use App\Core\Auth;
 use App\Core\FaturamentoFaixas;
 use App\Core\ReportBranding;
 use App\Models\AvaliacaoModel;
@@ -27,7 +28,9 @@ class AvaliacaoPdfService
             if (!$force && is_file($path)) {
                 return $path;
             }
-            $item = $this->model->find($avaliacaoId);
+            $item = Auth::isLoggedIn()
+                ? $this->model->find($avaliacaoId)
+                : $this->model->findPublic($avaliacaoId);
             if (!$item) {
                 $this->lastError = 'Avaliacao nao encontrada.';
                 return null;
@@ -35,6 +38,16 @@ class AvaliacaoPdfService
             $dir = dirname($path);
             if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
                 throw new \RuntimeException('Nao foi possivel criar o diretorio do PDF.');
+            }
+            if (!is_writable($dir)) {
+                throw new \RuntimeException('Diretorio do PDF sem permissao de escrita.');
+            }
+            $free = @disk_free_space($dir);
+            if (is_int($free) && $free > 0 && $free < (20 * 1024 * 1024)) {
+                throw new \RuntimeException('Espaco em disco insuficiente para gerar o PDF.');
+            }
+            if (PHP_SAPI !== 'cli') {
+                @set_time_limit(25);
             }
             $binary = $this->renderPdfBinary($item);
             file_put_contents($path, $binary);
