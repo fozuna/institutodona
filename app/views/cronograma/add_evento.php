@@ -27,8 +27,13 @@
           </select>
         </div>
         <div>
-          <label class="block text-sm">Pilar</label>
-          <input class="border rounded p-2 w-full" type="text" name="topico" required />
+          <label class="block text-sm" for="topico">Pilar</label>
+          <input id="topico" class="border rounded p-2 w-full" type="text" name="topico" list="pilares_options" required />
+          <datalist id="pilares_options">
+            <?php foreach (($pilares ?? []) as $p): ?>
+              <option value="<?= htmlspecialchars((string)($p['nome'] ?? '')) ?>"></option>
+            <?php endforeach; ?>
+          </datalist>
         </div>
         <div>
           <label class="block text-sm">Departamento</label>
@@ -54,8 +59,10 @@
           <label class="block text-sm">Status</label>
           <select class="border rounded p-2 w-full" name="status">
             <option value="Planejado">Planejado</option>
-            <option value="Realizado">Realizado</option>
-            <option value="Não Realizado">Não Realizado</option>
+            <option value="Pendente">Pendente</option>
+            <option value="Andamento">Andamento</option>
+            <option value="Adiado">Adiado</option>
+            <option value="Finalizado">Finalizado</option>
           </select>
         </div>
       </div>

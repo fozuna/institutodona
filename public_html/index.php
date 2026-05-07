@@ -29,6 +29,10 @@ use App\Controllers\AuditoriasController;
 use App\Controllers\AvaliacaoPublicaController;
 use App\Controllers\ManuaisController;
 use App\Controllers\TreinamentosController;
+use App\Controllers\TarefasController;
+use App\Controllers\ReunioesController;
+use App\Controllers\CoachingController;
+use App\Controllers\ProcessosController;
 
 $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
 if ($requestPath !== '' && preg_match('#/manuais/download/(\d+)$#', $requestPath, $m)) {
@@ -585,6 +589,90 @@ switch ($route) {
         break;
     case 'colaboradores/search':
         (new ColaboradoresController())->search();
+        break;
+    case 'tarefas/index':
+        (new TarefasController())->index();
+        break;
+    case 'tarefas/create':
+        (new TarefasController())->create();
+        break;
+    case 'tarefas/store':
+        (new TarefasController())->store();
+        break;
+    case 'tarefas/edit':
+        (new TarefasController())->edit();
+        break;
+    case 'tarefas/update':
+        (new TarefasController())->update();
+        break;
+    case 'tarefas/finalizar':
+        (new TarefasController())->finalizar();
+        break;
+    case 'tarefas/delete':
+        (new TarefasController())->delete();
+        break;
+    case 'reunioes/index':
+        (new ReunioesController())->index();
+        break;
+    case 'reunioes/create':
+        (new ReunioesController())->create();
+        break;
+    case 'reunioes/store':
+        (new ReunioesController())->store();
+        break;
+    case 'reunioes/edit':
+        (new ReunioesController())->edit();
+        break;
+    case 'reunioes/update':
+        (new ReunioesController())->update();
+        break;
+    case 'reunioes/finalizar':
+        (new ReunioesController())->finalizar();
+        break;
+    case 'reunioes/delete':
+        (new ReunioesController())->delete();
+        break;
+    case 'coaching/index':
+        (new CoachingController())->index();
+        break;
+    case 'coaching/create':
+        (new CoachingController())->create();
+        break;
+    case 'coaching/store':
+        (new CoachingController())->store();
+        break;
+    case 'coaching/edit':
+        (new CoachingController())->edit();
+        break;
+    case 'coaching/update':
+        (new CoachingController())->update();
+        break;
+    case 'coaching/finalizar':
+        (new CoachingController())->finalizar();
+        break;
+    case 'coaching/delete':
+        (new CoachingController())->delete();
+        break;
+    case 'processos/index':
+        (new ProcessosController())->index();
+        break;
+    case 'processos/create':
+        (new ProcessosController())->create();
+        break;
+    case 'processos/store':
+        (new ProcessosController())->store();
+        break;
+    case 'processos/edit':
+        (new ProcessosController())->edit();
+        break;
+    case 'processos/update':
+        (new ProcessosController())->update();
+        break;
+    case 'processos/finalizar':
+        (new ProcessosController())->finalizar();
+        break;
+    case 'processos/delete':
+        (new ProcessosController())->delete();
         break;
     case 'setup/seedAdmin':
         $token = $_GET['t'] ?? '';

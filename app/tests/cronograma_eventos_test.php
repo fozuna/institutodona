@@ -104,11 +104,11 @@ $updatedSingle = $eventos->update((int)$firstChild['id'], [
   'atividade' => $firstChild['atividade'],
   'responsavel' => $firstChild['responsavel'],
   'modelo' => $firstChild['modelo'],
-  'status' => 'Realizado',
+  'status' => 'Finalizado',
 ], 'evento');
 assert_true($updatedSingle, 'Atualizou apenas uma ocorrencia da serie');
 $updatedSingleRow = $eventos->find((int)$firstChild['id']);
-assert_true(($updatedSingleRow['status'] ?? '') === 'Realizado', 'Edicao individual altera apenas o registro selecionado');
+assert_true(($updatedSingleRow['status'] ?? '') === 'Finalizado', 'Edicao individual altera apenas o registro selecionado');
 $toggledBack = $eventos->setStatus((int)$firstChild['id'], 'Planejado');
 assert_true($toggledBack, 'Toggle de status persiste no banco');
 assert_true(($eventos->find((int)$firstChild['id'])['status'] ?? '') === 'Planejado', 'Toggle de status atualiza o registro corretamente');

@@ -17,6 +17,19 @@ class CronogramaEventoModel extends BaseModel
         'anual' => 12,
     ];
 
+    private const STATUS_VALUES = [
+        'Planejado',
+        'Pendente',
+        'Andamento',
+        'Adiado',
+        'Finalizado',
+    ];
+
+    private const LEGACY_STATUS_MAP = [
+        'Realizado' => 'Finalizado',
+        'Não Realizado' => 'Pendente',
+    ];
+
     private function ensureTables(): void
     {
         try {
@@ -37,13 +50,19 @@ class CronogramaEventoModel extends BaseModel
               atividade VARCHAR(255) NOT NULL,
               responsavel VARCHAR(255) NULL,
               modelo ENUM('Online','Presencial') NULL,
-              status ENUM('Planejado','Realizado','Não Realizado') NOT NULL DEFAULT 'Planejado'
+              status VARCHAR(20) NOT NULL DEFAULT 'Planejado'
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             if (!Database::columnExists('cronograma_eventos', 'evento_pai_id')) {
                 $this->db->exec("ALTER TABLE cronograma_eventos ADD COLUMN evento_pai_id INT NULL AFTER id_cronograma");
             }
             if (!Database::columnExists('cronograma_eventos', 'periodicidade')) {
                 $this->db->exec("ALTER TABLE cronograma_eventos ADD COLUMN periodicidade VARCHAR(20) NOT NULL DEFAULT 'unico' AFTER data");
+            }
+            if (Database::columnExists('cronograma_eventos', 'status')) {
+                $type = Database::columnType('cronograma_eventos', 'status');
+                if (is_string($type) && stripos($type, 'enum(') === 0) {
+                    $this->db->exec("ALTER TABLE cronograma_eventos MODIFY COLUMN status VARCHAR(20) NOT NULL DEFAULT 'Planejado'");
+                }
             }
         } catch (\PDOException $e) {
             // ignore
@@ -161,7 +180,16 @@ class CronogramaEventoModel extends BaseModel
     public function setStatus(int $id, string $status): bool
     {
         $this->ensureTables();
-        if (!in_array($status, ['Planejado', 'Realizado', 'Não Realizado'], true)) {
+        $status = $this->normalizeStatus($status);
+        if (!in_array($status, self::STATUS_VALUES, true)) {
+            return false;
+        }
+        $event = $this->find($id);
+        if (!$event) {
+            return false;
+        }
+        $from = $this->normalizeStatus((string)($event['status'] ?? 'Planejado'));
+        if (!$this->canTransition($from, $status)) {
             return false;
         }
         $params = [
@@ -204,6 +232,7 @@ class CronogramaEventoModel extends BaseModel
 
     private function normalizePayload(array $data, int $ano): array
     {
+        $incomingStatus = $this->normalizeStatus((string)($data['status'] ?? 'Planejado'));
         $payload = [
             'data' => trim((string)($data['data'] ?? '')),
             'periodicidade' => $this->normalizePeriodicidade($data['periodicidade'] ?? 'unico'),
@@ -212,7 +241,7 @@ class CronogramaEventoModel extends BaseModel
             'atividade' => trim((string)($data['atividade'] ?? '')),
             'responsavel' => trim((string)($data['responsavel'] ?? '')),
             'modelo' => in_array(($data['modelo'] ?? ''), ['Online', 'Presencial'], true) ? $data['modelo'] : null,
-            'status' => in_array(($data['status'] ?? ''), ['Planejado', 'Realizado', 'Não Realizado'], true) ? $data['status'] : 'Planejado',
+            'status' => in_array($incomingStatus, self::STATUS_VALUES, true) ? $incomingStatus : 'Planejado',
         ];
         if ($payload['data'] === '' || $payload['topico'] === '' || $payload['atividade'] === '') {
             throw new RuntimeException('Preencha data, pilar e atividade para salvar o evento.');
@@ -222,6 +251,29 @@ class CronogramaEventoModel extends BaseModel
             throw new RuntimeException('A data base deve pertencer ao ano do cronograma.');
         }
         return $payload;
+    }
+
+    private function normalizeStatus(string $status): string
+    {
+        $status = trim($status);
+        return self::LEGACY_STATUS_MAP[$status] ?? $status;
+    }
+
+    private function canTransition(string $from, string $to): bool
+    {
+        $from = $this->normalizeStatus($from);
+        $to = $this->normalizeStatus($to);
+        if ($from === $to) {
+            return true;
+        }
+        $allowed = [
+            'Planejado' => ['Pendente', 'Andamento', 'Adiado', 'Finalizado'],
+            'Pendente' => ['Andamento', 'Adiado', 'Finalizado', 'Planejado'],
+            'Andamento' => ['Finalizado', 'Adiado', 'Pendente'],
+            'Adiado' => ['Planejado', 'Andamento', 'Finalizado', 'Pendente'],
+            'Finalizado' => ['Pendente', 'Planejado'],
+        ];
+        return in_array($to, $allowed[$from] ?? [], true);
     }
 
     private function normalizePeriodicidade($value): string

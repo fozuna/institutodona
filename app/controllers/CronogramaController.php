@@ -8,6 +8,7 @@ use App\Core\AuditLogger;
 use App\Models\CronogramaModel;
 use App\Models\CronogramaEventoModel;
 use App\Models\ClienteModel;
+use App\Models\PilarModel;
 use DateTimeImmutable;
 
 class CronogramaController extends BaseController
@@ -82,6 +83,7 @@ class CronogramaController extends BaseController
         $grid = $this->buildGrid($events);
         $events = $this->filterEventsByTraffic($events, $statusFilter);
         $grid = $this->filterGridByTraffic($grid, $statusFilter);
+        $pilares = (new PilarModel())->all();
 
         AuditLogger::log('cronograma_show', 'cronograma', $id, [
             'cronograma_found' => (bool)$crono,
@@ -95,6 +97,7 @@ class CronogramaController extends BaseController
             'grid' => $grid,
             'periodicidades' => self::PERIODICIDADES,
             'statusFilter' => $statusFilter,
+            'pilares' => $pilares,
             'flashSuccess' => $this->takeFlash('flash_success'),
             'flashError' => $this->takeFlash('flash_error'),
         ]);
@@ -158,9 +161,9 @@ class CronogramaController extends BaseController
 
         $id = (int)($_POST['id_evento'] ?? 0);
         $idCronograma = (int)($_POST['id_cronograma'] ?? 0);
-        $realizado = (int)($_POST['realizado'] ?? 0) === 1;
+        $finalizado = (int)($_POST['finalizado'] ?? $_POST['realizado'] ?? 0) === 1;
         $statusFilter = CronogramaTrafficLight::normalizeFilter($_POST['status_filter'] ?? 'todos');
-        $targetStatus = $realizado ? 'Realizado' : 'Planejado';
+        $targetStatus = $finalizado ? 'Finalizado' : 'Pendente';
 
         $ok = $id > 0 ? $this->eventos->setStatus($id, $targetStatus) : false;
         if (!$ok) {
@@ -200,9 +203,11 @@ class CronogramaController extends BaseController
         $this->requireRole('instituto');
         $id = (int)($_GET['id'] ?? 0);
         $crono = $this->cronogramas->find($id);
+        $pilares = (new PilarModel())->all();
         $this->render('cronograma/add_evento', [
             'crono' => $crono,
             'periodicidades' => self::PERIODICIDADES,
+            'pilares' => $pilares,
         ]);
     }
 

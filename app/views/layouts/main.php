@@ -51,7 +51,15 @@ $brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
                 <?php
                     $r = $_GET['route'] ?? '';
                     $isCadastrosActive = strpos($r, 'clientes/') === 0 || strpos($r, 'usuarios/') === 0 || strpos($r, 'consultores/') === 0;
-                    $isProcessosActive = strpos($r, 'planoacao/') === 0 || strpos($r, 'indicadores/') === 0 || strpos($r, 'auditorias/') === 0 || strpos($r, 'treinamentos/') === 0;
+                    $isProcessosActive = strpos($r, 'planoacao/') === 0
+                        || strpos($r, 'indicadores/') === 0
+                        || strpos($r, 'auditorias/') === 0
+                        || strpos($r, 'treinamentos/') === 0
+                        || strpos($r, 'pilares/') === 0
+                        || strpos($r, 'tarefas/') === 0
+                        || strpos($r, 'reunioes/') === 0
+                        || strpos($r, 'coaching/') === 0
+                        || strpos($r, 'processos/') === 0;
                 ?>
                 <nav class="px-4 py-4 space-y-1">
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'dashboard/')===0?'is-active':'' ?>" href="index.php?route=dashboard/index" title="Dashboard"><span data-feather="home" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Dashboard</span></a>
@@ -92,6 +100,11 @@ $brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
                             <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'indicadores/')===0?'is-active':'' ?>" href="index.php?route=indicadores/index" title="Indicadores"><span data-feather="bar-chart-2" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Indicadores</span></a>
                             <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'auditorias/')===0?'is-active':'' ?>" href="index.php?route=auditorias/index" title="Auditorias"><span data-feather="clipboard" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Auditorias</span></a>
                             <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'treinamentos/')===0?'is-active':'' ?>" href="index.php?route=treinamentos/index" title="Treinamentos"><span data-feather="award" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Treinamentos</span></a>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'pilares/')===0?'is-active':'' ?>" href="index.php?route=pilares/index" title="Pilares"><span data-feather="grid" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Pilares</span></a>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'tarefas/')===0?'is-active':'' ?>" href="index.php?route=tarefas/index" title="Tarefas"><span data-feather="check-square" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Tarefas</span></a>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'reunioes/')===0?'is-active':'' ?>" href="index.php?route=reunioes/index" title="Reuniões"><span data-feather="users" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Reuniões</span></a>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'coaching/')===0?'is-active':'' ?>" href="index.php?route=coaching/index" title="Coaching"><span data-feather="target" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Coaching</span></a>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'processos/')===0?'is-active':'' ?>" href="index.php?route=processos/index" title="Processos"><span data-feather="git-branch" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Processos</span></a>
                         </div>
                     </div>
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'agenda/')===0?'is-active':'' ?>" href="index.php?route=agenda/index" title="Agenda"><span data-feather="calendar" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Agenda</span></a>

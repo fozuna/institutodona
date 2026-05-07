@@ -9,13 +9,13 @@ function failFast(string $msg): void { echo "FAIL: $msg\n"; exit(1); }
 $today = new DateTimeImmutable('2026-04-15');
 
 $realizado = CronogramaTrafficLight::occurrence([
-    'status' => 'Realizado',
+    'status' => 'Finalizado',
     'data' => '2026-04-10',
 ], $today);
-if (($realizado['key'] ?? '') !== 'realizado') {
-    failFast('Evento realizado deveria ser verde');
+if (($realizado['key'] ?? '') !== 'finalizado') {
+    failFast('Evento finalizado deveria ser verde');
 }
-ok('Evento realizado mapeado para verde');
+ok('Evento finalizado mapeado para verde');
 
 $pendente = CronogramaTrafficLight::occurrence([
     'status' => 'Planejado',
@@ -49,7 +49,7 @@ if (($series['key'] ?? '') !== 'atrasado') {
 ok('Serie com ocorrencia vencida herda status vermelho');
 
 $month = CronogramaTrafficLight::monthCell([
-    ['status' => 'Realizado', 'data' => '2026-04-10'],
+    ['status' => 'Finalizado', 'data' => '2026-04-10'],
     ['status' => 'Planejado', 'data' => '2026-04-25'],
 ], $today);
 if (($month['key'] ?? '') !== 'pendente') {

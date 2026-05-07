@@ -18,6 +18,7 @@ $periodicidades = [
     'mensal' => 'Mensal',
 ];
 $statusFilter = 'todos';
+$pilares = [];
 $flashSuccess = null;
 $flashError = null;
 $grid = [
@@ -71,9 +72,9 @@ foreach ([
     'JAN',
     'DEZ',
     'Filtro do farol',
-    'Apenas realizados',
+    'Apenas finalizados',
     'Apenas pendentes',
-    'Alternar realizado',
+    'Alternar finalizado',
     'Salvar toda a série',
     'Excluir série',
     'Ocorrências materializadas',

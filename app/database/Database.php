@@ -56,4 +56,13 @@ class Database
         $stmt->execute(['t' => $table, 'c' => $column]);
         return (int)$stmt->fetchColumn() > 0;
     }
+
+    public static function columnType(string $table, string $column): ?string
+    {
+        $pdo = self::getConnection();
+        $stmt = $pdo->prepare('SELECT column_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = :t AND column_name = :c LIMIT 1');
+        $stmt->execute(['t' => $table, 'c' => $column]);
+        $value = $stmt->fetchColumn();
+        return is_string($value) && $value !== '' ? $value : null;
+    }
 }

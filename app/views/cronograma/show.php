@@ -56,8 +56,8 @@
   <div class="bg-white shadow rounded">
     <div class="p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
       <div class="flex flex-wrap items-center gap-3 text-xs">
-        <span class="inline-flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500 inline-block"></span> Realizado</span>
-        <span class="inline-flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-amber-400 inline-block"></span> Pendente / Próximo</span>
+        <span class="inline-flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500 inline-block"></span> Finalizado</span>
+        <span class="inline-flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-amber-400 inline-block"></span> Pendente / Planejado</span>
         <span class="inline-flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500 inline-block"></span> Atrasado</span>
       </div>
       <form method="get" action="index.php" class="flex flex-wrap items-center gap-2">
@@ -66,7 +66,7 @@
         <label class="text-sm text-gray-600" for="status_filter">Filtro do farol</label>
         <select id="status_filter" name="status_filter" class="border rounded p-2 text-sm" onchange="this.form.submit()">
           <option value="todos" <?= $statusFilter === 'todos' ? 'selected' : '' ?>>Todos</option>
-          <option value="realizado" <?= $statusFilter === 'realizado' ? 'selected' : '' ?>>Apenas realizados</option>
+          <option value="finalizado" <?= $statusFilter === 'finalizado' ? 'selected' : '' ?>>Apenas finalizados</option>
           <option value="pendente" <?= $statusFilter === 'pendente' ? 'selected' : '' ?>>Apenas pendentes</option>
         </select>
       </form>
@@ -173,8 +173,8 @@
                     data-event-id="<?= (int)$ev['id'] ?>"
                     data-serie-id="<?= (int)($ev['serie_id'] ?? $ev['id']) ?>"
                     data-checked="<?= !empty($ev['traffic']['toggle_checked']) ? '1' : '0' ?>"
-                    aria-label="Alternar realizado"
-                    title="Marcar ou desmarcar como realizado"
+                    aria-label="Alternar finalizado"
+                    title="Marcar ou desmarcar como finalizado"
                   ></button>
                 </form>
               </td>
@@ -186,7 +186,7 @@
                   <input type="hidden" name="status_filter" value="<?= htmlspecialchars($statusFilter) ?>" />
                   <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
                     <input class="border rounded p-2" type="date" name="data" value="<?= htmlspecialchars($ev['data']) ?>" />
-                    <input class="border rounded p-2" type="text" name="topico" value="<?= htmlspecialchars($ev['topico']) ?>" placeholder="Pilar" />
+                    <input class="border rounded p-2" type="text" name="topico" list="pilares_options" value="<?= htmlspecialchars($ev['topico']) ?>" placeholder="Pilar" />
                     <input class="border rounded p-2" type="text" name="unidade" value="<?= htmlspecialchars($ev['unidade'] ?? '') ?>" placeholder="Departamento" />
                     <input class="border rounded p-2" type="text" name="atividade" value="<?= htmlspecialchars($ev['atividade']) ?>" placeholder="Atividade" />
                     <input class="border rounded p-2" type="text" name="responsavel" value="<?= htmlspecialchars($ev['responsavel'] ?? '') ?>" placeholder="Responsável" />
@@ -201,7 +201,7 @@
                       <option value="Presencial" <?= ($ev['modelo'] ?? '') === 'Presencial' ? 'selected' : '' ?>>Presencial</option>
                     </select>
                     <select class="border rounded p-2" name="status">
-                      <?php foreach (['Planejado','Realizado','Não Realizado'] as $status): ?>
+                      <?php foreach (['Planejado','Pendente','Andamento','Adiado','Finalizado'] as $status): ?>
                         <option value="<?= $status ?>" <?= ($ev['status'] ?? '') === $status ? 'selected' : '' ?>><?= $status ?></option>
                       <?php endforeach; ?>
                     </select>
@@ -246,6 +246,18 @@
 </div>
 <script>
   (function () {
+    const pillars = <?= json_encode(array_values(array_filter(array_map(static fn($p) => (string)($p['nome'] ?? ''), $pilares ?? []))), JSON_UNESCAPED_UNICODE) ?>;
+    const datalist = document.getElementById('pilares_options');
+    if (!datalist && pillars.length) {
+      const dl = document.createElement('datalist');
+      dl.id = 'pilares_options';
+      pillars.forEach((name) => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        dl.appendChild(opt);
+      });
+      document.body.appendChild(dl);
+    }
     const activeFilter = <?= json_encode($statusFilter, JSON_UNESCAPED_UNICODE) ?>;
     const applyToggleVisualState = (button, checked, traffic) => {
       button.dataset.checked = checked ? '1' : '0';
