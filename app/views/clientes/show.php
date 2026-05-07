@@ -97,6 +97,8 @@
           $planoCount = (int)(($planoResumoBase['total_planos'] ?? null) ?? ($planoResumo['total_planos'] ?? 0));
           $planoDone = (int)(($planoResumoBase['total_concluidos'] ?? null) ?? ($planoResumo['total_concluidos'] ?? 0));
           $planoNotDone = (int)(($planoResumoBase['total_nao_concluidos'] ?? null) ?? ($planoResumo['total_nao_concluidos'] ?? 0));
+          $planoPendentesPrazo = (int)($planoDeadlines['total_pendentes_prazo'] ?? 0);
+          $planoVencidosPrazo = (int)($planoDeadlines['total_vencidos_prazo'] ?? 0);
         ?>
         <a class="bg-white shadow rounded p-4 block hover:shadow-md transition-shadow" href="index.php?route=cronograma/index&id_cliente=<?= $clienteAlvoId ?>" data-loading>
           <div class="flex items-center justify-between">
@@ -112,6 +114,16 @@
             <span class="badge"><span data-feather="activity"></span></span>
           </div>
           <div class="text-sm text-gray-600 mt-2">Total: <?= $planoCount ?> · Concluídos: <?= $planoDone ?> · Não concluídos: <?= $planoNotDone ?></div>
+          <div class="mt-2 flex flex-wrap gap-2">
+            <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
+              <span data-feather="clock" class="w-3 h-3"></span>
+              Pendentes: <?= $planoPendentesPrazo ?>
+            </span>
+            <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+              <span data-feather="alert-triangle" class="w-3 h-3"></span>
+              Vencidos: <?= $planoVencidosPrazo ?>
+            </span>
+          </div>
           <div class="text-xs text-gray-500 mt-1">Clique para abrir planos de ação do cliente</div>
         </a>
       </div>

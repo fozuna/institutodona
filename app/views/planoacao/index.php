@@ -9,68 +9,67 @@
   $statusFilters = $statusFilters ?? [];
 ?>
 <div class="p-6 space-y-6">
-  <!-- Header Section -->
-  <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
-    <div>
-      <h1 class="text-2xl font-bold">Plano de Ação</h1>
-      <p class="text-sm text-gray-600">Selecione o cliente para visualizar e criar planos de ação</p>
-    </div>
-    
-    <div class="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
-      <form method="get" class="flex items-center gap-2 w-full md:w-auto" id="searchForm">
-        <input type="hidden" name="route" value="planoacao/index" />
-        <div class="flex items-center gap-2 w-full md:w-auto">
-          <select name="cliente" id="clienteSelect" class="w-full md:w-64 border-gray-300 rounded-md shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
-            <option value="">-- Selecione o Cliente --</option>
-            <?php foreach ($clientes as $c): ?>
-              <option value="<?= (int)$c['id'] ?>" <?= $selectedCliente === (int)$c['id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['nome_empresa']) ?></option>
-            <?php endforeach; ?>
-          </select>
-          <button type="submit" class="p-2 h-10 w-10 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 flex items-center justify-center transition-colors" title="Buscar agora">
-            <span data-feather="search" class="w-4 h-4"></span>
-          </button>
-        </div>
-      </form>
-
-      <div class="flex items-center gap-2 w-full md:w-auto">
-          <?php if ($importEnabled && !$importAlreadyRun): ?>
-          <button id="importOpenBtn" type="button" class="px-4 py-2 bg-brand-brown text-white rounded hover:bg-gray-800 transition-colors whitespace-nowrap flex items-center gap-2 justify-center flex-1 md:flex-none">
-            <span data-feather="upload-cloud" class="w-4 h-4"></span>
-            <span>Importar planos</span>
-          </button>
-          <?php endif; ?>
-          <a id="createBtn" class="px-4 py-2 bg-brand-orange text-white rounded hover:bg-orange-700 transition-colors whitespace-nowrap text-center flex-1 md:flex-none" href="index.php?route=planoacao/create<?= $selectedCliente ? '&cliente=' . $selectedCliente : '' ?>">Novo Plano de Ação</a>
-          
-          <a id="backBtn" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors whitespace-nowrap text-center flex-1 md:flex-none <?= $selectedCliente ? '' : 'hidden' ?>" href="index.php?route=clientes/show&id=<?= (int)$selectedCliente ?>">Voltar ao perfil</a>
+  <div class="bg-white shadow rounded p-4 md:p-5 space-y-4">
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-bold">Plano de Ação</h1>
+        <p class="text-sm text-gray-600">Gerencie os planos por cliente com filtros e acesso rápido.</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <?php if ($importEnabled && !$importAlreadyRun): ?>
+        <button id="importOpenBtn" type="button" class="px-3 py-2 bg-brand-brown text-white rounded hover:bg-gray-800 transition-colors whitespace-nowrap flex items-center gap-2">
+          <span data-feather="upload-cloud" class="w-4 h-4"></span>
+          <span>Importar planos</span>
+        </button>
+        <?php endif; ?>
+        <a id="createBtn" class="px-3 py-2 bg-brand-orange text-white rounded hover:bg-orange-700 transition-colors whitespace-nowrap" href="index.php?route=planoacao/create<?= $selectedCliente ? '&cliente=' . $selectedCliente : '' ?>">Novo Plano de Ação</a>
+        <a id="backBtn" class="px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors whitespace-nowrap <?= $selectedCliente ? '' : 'hidden' ?>" href="index.php?route=clientes/show&id=<?= (int)$selectedCliente ?>">Voltar ao perfil</a>
       </div>
     </div>
 
-  <?php if ($selectedCliente): ?>
-  <form method="get" class="flex flex-wrap items-center gap-3" id="statusFilterForm">
-    <input type="hidden" name="route" value="planoacao/index" />
-    <input type="hidden" name="cliente" value="<?= (int)$selectedCliente ?>" />
-    <div class="flex flex-wrap items-center gap-3 text-xs">
-      <?php $allStatusOptions = ['Planejado','Em Andamento','Concluído','Pendente','Atrasado']; ?>
-      <label class="inline-flex items-center gap-1 cursor-pointer">
-        <input type="checkbox" id="idxStAll" class="form-checkbox">
-        <span>Selecionar Todos</span>
-      </label>
-      <?php foreach ($allStatusOptions as $opt): ?>
-        <label class="inline-flex items-center gap-1 cursor-pointer">
-          <input type="checkbox" name="status[]" value="<?= $opt ?>" class="form-checkbox idx-st-item"
-            <?= in_array($opt, $statusFilters ?? [], true) ? 'checked' : '' ?>>
-          <span><?= $opt ?></span>
+    <form method="get" class="flex flex-col md:flex-row md:items-center gap-2" id="searchForm">
+      <input type="hidden" name="route" value="planoacao/index" />
+      <label for="clienteSelect" class="text-sm text-gray-600 md:whitespace-nowrap">Cliente</label>
+      <select name="cliente" id="clienteSelect" class="w-full md:max-w-xl border-gray-300 rounded-md shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
+        <option value="">-- Selecione o Cliente --</option>
+        <?php foreach ($clientes as $c): ?>
+          <option value="<?= (int)$c['id'] ?>" <?= $selectedCliente === (int)$c['id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['nome_empresa']) ?></option>
+        <?php endforeach; ?>
+      </select>
+      <button type="submit" class="px-3 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 flex items-center justify-center gap-2 transition-colors md:w-auto w-full" title="Buscar agora">
+        <span data-feather="search" class="w-4 h-4"></span>
+        <span>Buscar</span>
+      </button>
+    </form>
+
+    <?php if ($selectedCliente): ?>
+    <form method="get" class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3 border-t pt-3" id="statusFilterForm">
+      <input type="hidden" name="route" value="planoacao/index" />
+      <input type="hidden" name="cliente" value="<?= (int)$selectedCliente ?>" />
+      <div class="flex flex-wrap items-center gap-2 text-xs">
+        <?php $allStatusOptions = ['Planejado','Em Andamento','Concluído','Pendente','Atrasado']; ?>
+        <label class="inline-flex items-center gap-1 cursor-pointer px-2 py-1 rounded bg-gray-100">
+          <input type="checkbox" id="idxStAll" class="form-checkbox">
+          <span>Selecionar Todos</span>
         </label>
-      <?php endforeach; ?>
-    </div>
-    <select name="per" class="text-xs border rounded px-2 py-1">
-      <?php foreach ([10,20,50,100] as $opt): ?>
-        <option value="<?= $opt ?>" <?= ((int)($per ?? 20) === $opt) ? 'selected' : '' ?>><?= $opt ?> por página</option>
-      <?php endforeach; ?>
-    </select>
-    <button type="submit" class="px-2 py-1 rounded bg-gray-200 text-xs text-brand-brown">Aplicar</button>
-  </form>
-  <?php endif; ?>
+        <?php foreach ($allStatusOptions as $opt): ?>
+          <label class="inline-flex items-center gap-1 cursor-pointer px-2 py-1 rounded border border-gray-200">
+            <input type="checkbox" name="status[]" value="<?= $opt ?>" class="form-checkbox idx-st-item"
+              <?= in_array($opt, $statusFilters ?? [], true) ? 'checked' : '' ?>>
+            <span><?= $opt ?></span>
+          </label>
+        <?php endforeach; ?>
+      </div>
+      <div class="flex items-center gap-2">
+        <select name="per" class="text-xs border rounded px-2 py-2 min-w-[120px]">
+          <?php foreach ([10,20,50,100] as $opt): ?>
+            <option value="<?= $opt ?>" <?= ((int)($per ?? 20) === $opt) ? 'selected' : '' ?>><?= $opt ?> por página</option>
+          <?php endforeach; ?>
+        </select>
+        <button type="submit" class="px-3 py-2 rounded bg-gray-200 text-xs text-brand-brown hover:bg-gray-300">Aplicar</button>
+      </div>
+    </form>
+    <?php endif; ?>
   </div>
 
   <!-- Results Section -->
@@ -88,12 +87,10 @@
           <a href="index.php?route=planoacao/create&cliente=<?= (int)$selectedCliente ?>" class="text-brand-orange hover:underline mt-2 inline-block">Criar o primeiro plano</a>
         </div>
       <?php else: ?>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           <?php foreach ($items as $t): ?>
-            <div class="card bg-white shadow rounded p-4 border border-gray-100 hover:shadow-md transition-shadow">
-              <div class="flex items-center justify-between">
-                <div class="font-semibold text-gray-900"><?= htmlspecialchars($t['titulo']) ?></div>
-              </div>
+            <div class="card bg-white shadow rounded-lg p-4 border border-gray-100 hover:shadow-md transition-shadow">
+              <div class="font-semibold text-gray-900 line-clamp-2 min-h-[2.75rem]"><?= htmlspecialchars($t['titulo']) ?></div>
               <div class="text-xs text-gray-500 mt-2 flex flex-wrap items-center gap-2">
                  <?php 
                     // Logic for traffic light
@@ -121,10 +118,19 @@
                 <span>Resp.: <?= htmlspecialchars($t['responsavel'] ?? '—') ?></span>
               </div>
               
-              <div class="mt-4 flex items-center justify-between">
-                  <div class="text-sm font-medium text-gray-700">
-                      Status: <span class="text-gray-900"><?= htmlspecialchars($t['status']) ?></span>
-                  </div>
+              <div class="mt-3 flex items-center justify-between gap-3 border-t pt-3">
+                  <?php
+                    $statusClass = match($t['status']) {
+                        'Concluído' => 'bg-green-100 text-green-800',
+                        'Em Andamento' => 'bg-blue-100 text-blue-800',
+                        'Pendente' => 'bg-yellow-100 text-yellow-800',
+                        'Atrasado' => 'bg-red-100 text-red-800',
+                        default => 'bg-gray-100 text-gray-700'
+                    };
+                  ?>
+                  <span class="px-2 py-1 rounded-full text-xs font-semibold <?= $statusClass ?>">
+                    <?= htmlspecialchars($t['status']) ?>
+                  </span>
                   <a class="text-brand-orange hover:text-orange-800 text-sm font-semibold flex items-center gap-1 transition-colors" href="index.php?route=planoacao/show&id=<?= (int)$t['id'] ?>">
                       Abrir <span data-feather="chevron-right" class="w-4 h-4"></span>
                   </a>
@@ -315,20 +321,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const prazoDisplay = (t.prazo && t.prazo !== '0000-00-00') ? new Date(t.prazo + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
 
             return `
-            <div class="card bg-white shadow rounded p-4 border border-gray-100 hover:shadow-md transition-shadow">
-              <div class="flex items-center justify-between">
-                <div class="font-semibold text-gray-900">${escapeHtml(t.titulo)}</div>
-              </div>
+            <div class="card bg-white shadow rounded-lg p-4 border border-gray-100 hover:shadow-md transition-shadow">
+              <div class="font-semibold text-gray-900 line-clamp-2 min-h-[2.75rem]">${escapeHtml(t.titulo)}</div>
               <div class="text-xs text-gray-500 mt-2 flex flex-wrap items-center gap-2">
                 <span class="w-3 h-3 rounded-full ${colorClass}" title="Status do Prazo"></span>
                 <span>Prazo: ${prazoDisplay}</span>
                 <span class="text-gray-300">|</span>
                 <span>Resp.: ${escapeHtml(t.responsavel || '—')}</span>
               </div>
-              <div class="mt-4 flex items-center justify-between">
-                  <div class="text-sm font-medium text-gray-700">
-                      Status: <span class="text-gray-900">${escapeHtml(t.status)}</span>
-                  </div>
+              <div class="mt-3 flex items-center justify-between gap-3 border-t pt-3">
+                  <span class="px-2 py-1 rounded-full text-xs font-semibold ${statusBadgeClass(t.status)}">${escapeHtml(t.status)}</span>
                   <a class="text-brand-orange hover:text-orange-800 text-sm font-semibold flex items-center gap-1 transition-colors" href="index.php?route=planoacao/show&id=${t.id}">
                       Abrir <span data-feather="chevron-right" class="w-4 h-4"></span>
                   </a>
@@ -337,7 +339,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
 
         container.innerHTML = `
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 ${cards}
             </div>`;
         
@@ -352,6 +354,16 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
         feather.replace();
+    }
+
+    function statusBadgeClass(status) {
+        switch (status) {
+            case 'Concluído': return 'bg-green-100 text-green-800';
+            case 'Em Andamento': return 'bg-blue-100 text-blue-800';
+            case 'Pendente': return 'bg-yellow-100 text-yellow-800';
+            case 'Atrasado': return 'bg-red-100 text-red-800';
+            default: return 'bg-gray-100 text-gray-700';
+        }
     }
 
     function updateUrl(clienteId) {

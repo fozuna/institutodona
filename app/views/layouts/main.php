@@ -4,13 +4,16 @@ if (!file_exists($cfg)) {
     $cfg = __DIR__ . '/../../../config/config.example.php';
 }
 $config = require $cfg;
+$brandName = \App\Core\AppBrand::displayName();
+$brandTagline = \App\Core\AppBrand::TAGLINE;
+$brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
 ?>
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SisDoná - Viva+</title>
+    <title><?= htmlspecialchars($brandName) ?></title>
     <?php
         $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
         $baseUrl = rtrim(dirname($scriptName), '/\\'); // e.g., /institutodona/public_html
@@ -40,8 +43,8 @@ $config = require $cfg;
                     <div class="sidebar-brand">
                         <img src="<?= $assetsUrl ?>/img/logobco.png" alt="Logo" class="sidebar-brand-logo shrink-0" />
                         <div class="leading-tight min-w-0">
-                            <div class="font-bold text-sm sidebar-label">SisDoná</div>
-                            <div class="text-[11px] opacity-80 sidebar-label">Viva+</div>
+                            <div class="font-bold text-sm sidebar-label"><?= htmlspecialchars($brandName) ?></div>
+                            <div class="text-[11px] opacity-80 sidebar-label"><?= htmlspecialchars($brandTagline) ?></div>
                         </div>
                     </div>
                 </div>
@@ -194,7 +197,7 @@ $config = require $cfg;
 
                     <!-- Copy centralizada -->
                     <div class="w-1/3 text-center">
-                        &copy; <?php echo date('Y'); ?> MENTORIA VIVA+. Todos os direitos reservados.
+                        &copy; <?php echo date('Y'); ?> <?= htmlspecialchars($brandFooter) ?>. Todos os direitos reservados.
                     </div>
 
                     <!-- Versão alinhada à direita -->

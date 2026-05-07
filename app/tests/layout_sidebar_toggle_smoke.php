@@ -25,7 +25,7 @@ foreach ([
     'aria-label="Recolher menu lateral"',
     'app-topbar',
     'sidebar-brand',
-    'SisDoná',
+    'SIS+',
 ] as $needle) {
     if (!str_contains($html, $needle)) {
         failFast('Layout deveria conter: ' . $needle);
@@ -52,3 +52,4 @@ foreach ([
 ok('Script persiste e sincroniza o estado do menu lateral');
 
 echo "Layout sidebar toggle smoke passed.\n";
+

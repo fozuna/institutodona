@@ -18,7 +18,7 @@ class SimplePdfReport
     public static function fromLines(array $lines): string
     {
         $data = [
-            'report_title' => 'Relatório de Auditoria',
+            'report_title' => 'RelatÃ³rio de Auditoria',
             'generated_at' => DateHelper::now(),
             'version' => 'v1.0',
             'header' => [],
@@ -157,7 +157,7 @@ class SimplePdfReport
                 $logoW = $targetW + 12.0;
             }
         }
-        $title = (string)($data['report_title'] ?? 'Relatório de Auditoria');
+        $title = (string)($data['report_title'] ?? 'RelatÃ³rio de Auditoria');
         $textX = ($data['logo_position'] ?? 'left') === 'right' ? $this->marginX : ($this->marginX + $logoW);
         $this->writeText($textX, $this->cursorY, $title, 16, true);
         if (!empty($data['header_subtitle'])) {
@@ -187,8 +187,8 @@ class SimplePdfReport
         $this->drawBlockTitle('Respostas da Auditoria');
         $qn = 1;
         foreach ($questions as $q) {
-            $title = (string)($q['title'] ?? ('Questão ' . $qn));
-            $this->drawBlockTitle('Questão ' . $qn);
+            $title = (string)($q['title'] ?? ('QuestÃ£o ' . $qn));
+            $this->drawBlockTitle('QuestÃ£o ' . $qn);
             $lines = $this->wrapText($title, 11, $this->pageWidth - ($this->marginX * 2));
             foreach ($lines as $line) {
                 $this->ensureSpace(16);
@@ -292,8 +292,8 @@ class SimplePdfReport
         $objects[1] = "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj";
         $kids = implode(' ', array_map(fn($id)=>$id . ' 0 R', $pageObjIds));
         $objects[2] = "2 0 obj << /Type /Pages /Kids [{$kids}] /Count " . count($pageObjIds) . " >> endobj";
-        $title = self::escapePdfText((string)($data['report_title'] ?? 'Relatório'));
-        $producer = self::escapePdfText('SisDoná PDF UTF-8');
+        $title = self::escapePdfText((string)($data['report_title'] ?? 'RelatÃ³rio'));
+        $producer = self::escapePdfText('SIS+ PDF UTF-8');
         $objects[3] = "3 0 obj << /Title ({$title}) /Producer ({$producer}) >> endobj";
         $objects[$fontRegularId] = "{$fontRegularId} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> endobj";
         $objects[$fontBoldId] = "{$fontBoldId} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >> endobj";
@@ -355,3 +355,4 @@ class SimplePdfReport
         return mb_convert_encoding($value, 'UTF-8', 'UTF-8');
     }
 }
+

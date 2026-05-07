@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: API Auditorias - Instituto Dona
+  title: API Auditorias - SIS+
   version: 1.0.0
 paths:
   /auditorias/api_setores:

@@ -157,6 +157,7 @@ class ClientesController extends BaseController
         $taskModel = new \App\Models\PlanoAcaoTaskModel();
         $planoResumoBase = $taskModel->summarizeByClientesMulti($scopeClienteIds, [], '');
         $planoResumo = $taskModel->summarizeByClientesMulti($scopeClienteIds, $planoStatusFilters, $planoSearch);
+        $planoDeadlines = $taskModel->summarizeDeadlineCountersByClientes($scopeClienteIds, [], '');
         $planoDatasetTotal = $taskModel->countByClientesMulti($scopeClienteIds, [], '');
         $planoFilteredTotal = $taskModel->countByClientesMulti($scopeClienteIds, $planoStatusFilters, $planoSearch);
         $planoTasks = $planoPerValue === null
@@ -181,6 +182,7 @@ class ClientesController extends BaseController
             'planoTasks' => $planoTasks,
             'planoResumoBase' => $planoResumoBase,
             'planoResumo' => $planoResumo,
+            'planoDeadlines' => $planoDeadlines,
             'planoDatasetTotal' => $planoDatasetTotal,
             'planoFilteredTotal' => $planoFilteredTotal,
             'planoDisplayedCount' => $planoDisplayedCount,

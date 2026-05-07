@@ -337,6 +337,33 @@ class PlanoAcaoTaskModel extends BaseModel
         ];
     }
 
+    public function summarizeDeadlineCountersByClientes(array $clienteIds, array $statuses = [], string $search = ''): array
+    {
+        $this->ensure();
+        [$sql, $params] = $this->buildFilteredClientesSql(
+            "SUM(CASE WHEN status <> 'Concluído' AND prazo IS NOT NULL AND prazo > CURRENT_DATE THEN 1 ELSE 0 END) AS total_pendentes_prazo,
+                    SUM(CASE WHEN status <> 'Concluído' AND prazo IS NOT NULL AND prazo < CURRENT_DATE THEN 1 ELSE 0 END) AS total_vencidos_prazo",
+            $clienteIds,
+            $statuses,
+            $search,
+            'ptdead',
+            'id_cliente'
+        );
+        if ($sql === '') {
+            return [
+                'total_pendentes_prazo' => 0,
+                'total_vencidos_prazo' => 0,
+            ];
+        }
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $row = $stmt->fetch() ?: [];
+        return [
+            'total_pendentes_prazo' => (int)($row['total_pendentes_prazo'] ?? 0),
+            'total_vencidos_prazo' => (int)($row['total_vencidos_prazo'] ?? 0),
+        ];
+    }
+
     private function buildClienteScopeClause(string $column, array $clienteIds, array &$params, string $prefix): string
     {
         $holders = [];

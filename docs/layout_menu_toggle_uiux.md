@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Eliminar a redundancia do toggle hamburguer e corrigir o cabecalho lateral para que a marca `SisDona` volte a aparecer abaixo da logo, com alinhamento consistente.
+Eliminar a redundancia do toggle hamburguer e corrigir o cabecalho lateral para que a marca `SIS+` volte a aparecer abaixo da logo, com alinhamento consistente.
 
 ## Decisao de Design
 
@@ -55,7 +55,7 @@ Eliminar a redundancia do toggle hamburguer e corrigir o cabecalho lateral para 
 
 - referencia: imagem enviada pelo usuario mostrando:
   - toggle duplicado
-  - quebra visual do texto `SisDona`
+  - quebra visual do texto `SIS+`
 
 ### Depois
 

@@ -6,9 +6,9 @@ class XlsxExport
     public static function exportPlanos(array $rows, string $filename): string
     {
         $branding = ReportBranding::aplicarBrandingRelatorio('excel', [
-            'report_title' => 'Planos de Ação',
-            'header_title' => 'Planos de Ação',
-            'header_subtitle' => 'Exportação padronizada do sistema',
+            'report_title' => 'Planos de AÃ§Ã£o',
+            'header_title' => 'Planos de AÃ§Ã£o',
+            'header_subtitle' => 'ExportaÃ§Ã£o padronizada do sistema',
             'generated_at' => DateHelper::now(),
             'sheet_name' => 'Planos',
         ]);
@@ -17,7 +17,7 @@ class XlsxExport
 
         $zip = new \ZipArchive();
         if ($zip->open($path, \ZipArchive::OVERWRITE | \ZipArchive::CREATE) !== true) {
-            throw new \RuntimeException('Não foi possível criar arquivo XLSX');
+            throw new \RuntimeException('NÃ£o foi possÃ­vel criar arquivo XLSX');
         }
 
         $zip->addFromString('[Content_Types].xml', self::contentTypes());
@@ -36,9 +36,9 @@ class XlsxExport
     public static function exportRows(array $rows, array $columns, string $filename, array $branding = []): string
     {
         $branding = ReportBranding::aplicarBrandingRelatorio('excel', array_merge([
-            'report_title' => 'Relatório',
-            'header_title' => 'Relatório',
-            'header_subtitle' => 'Exportação padronizada do sistema',
+            'report_title' => 'RelatÃ³rio',
+            'header_title' => 'RelatÃ³rio',
+            'header_subtitle' => 'ExportaÃ§Ã£o padronizada do sistema',
             'generated_at' => DateHelper::now(),
             'sheet_name' => 'Relatorio',
         ], $branding));
@@ -47,7 +47,7 @@ class XlsxExport
 
         $zip = new \ZipArchive();
         if ($zip->open($path, \ZipArchive::OVERWRITE | \ZipArchive::CREATE) !== true) {
-            throw new \RuntimeException('Não foi possível criar arquivo XLSX');
+            throw new \RuntimeException('NÃ£o foi possÃ­vel criar arquivo XLSX');
         }
 
         $zip->addFromString('[Content_Types].xml', self::contentTypes());
@@ -94,9 +94,10 @@ class XlsxExport
 
     private static function appXml(): string
     {
+        $appName = self::esc(AppBrand::EXPORT_APP);
         return '<?xml version="1.0" encoding="UTF-8"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-  <Application>Instituto Dona Export</Application>
+  <Application>' . $appName . '</Application>
   <DocSecurity>0</DocSecurity>
   <ScaleCrop>false</ScaleCrop>
   <Company></Company>
@@ -110,11 +111,12 @@ class XlsxExport
     private static function coreXml(array $branding): string
     {
         $now = gmdate('Y-m-d\TH:i:s\Z');
+        $creator = self::esc(AppBrand::displayName());
         return '<?xml version="1.0" encoding="UTF-8"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <dc:title>' . self::esc($branding['report_title'] ?? 'Relatório') . '</dc:title>
-  <dc:creator>Instituto Dona</dc:creator>
-  <cp:lastModifiedBy>Instituto Dona</cp:lastModifiedBy>
+  <dc:title>' . self::esc($branding['report_title'] ?? 'RelatÃ³rio') . '</dc:title>
+  <dc:creator>' . $creator . '</dc:creator>
+  <cp:lastModifiedBy>' . $creator . '</cp:lastModifiedBy>
   <dcterms:created xsi:type="dcterms:W3CDTF">'.$now.'</dcterms:created>
   <dcterms:modified xsi:type="dcterms:W3CDTF">'.$now.'</dcterms:modified>
 </cp:coreProperties>';
@@ -192,7 +194,7 @@ class XlsxExport
 
     private static function renderSheetXml(array $rows, array $columns, array $keys, array $colWidths, array $branding): string
     {
-        $title = (string)($branding['header_title'] ?? 'Relatório');
+        $title = (string)($branding['header_title'] ?? 'RelatÃ³rio');
         $subtitle = trim((string)($branding['header_subtitle'] ?? ''));
         $meta = 'Gerado em ' . (string)($branding['generated_at'] ?? DateHelper::now());
 
@@ -217,7 +219,7 @@ class XlsxExport
         $xml .= '<c r="A1" t="inlineStr" s="1"><is><t>' . self::esc($title) . '</t></is></c>';
         $xml .= '</row>';
         $xml .= '<row r="2" ht="18" customHeight="1">';
-        $xml .= '<c r="A2" t="inlineStr" s="2"><is><t>' . self::esc(trim($subtitle !== '' ? ($subtitle . ' • ' . $meta) : $meta)) . '</t></is></c>';
+        $xml .= '<c r="A2" t="inlineStr" s="2"><is><t>' . self::esc(trim($subtitle !== '' ? ($subtitle . ' â€¢ ' . $meta) : $meta)) . '</t></is></c>';
         $xml .= '</row>';
         $xml .= '<row r="3"></row>';
         // Header row (s=3)
@@ -271,17 +273,17 @@ class XlsxExport
             'id' => 'ID',
             'id_cliente' => 'ID Cliente',
             'cliente_nome' => 'Cliente',
-            'titulo' => 'Título',
-            'descricao' => 'Descrição',
+            'titulo' => 'TÃ­tulo',
+            'descricao' => 'DescriÃ§Ã£o',
             'meta_valor' => 'Meta / Objetivo',
             'meta_unidade' => 'Origem',
-            'responsavel' => 'Responsável',
+            'responsavel' => 'ResponsÃ¡vel',
             'fase' => 'Fase',
             'status' => 'Status',
             'progresso' => 'Progresso (%)',
             'prazo' => 'Prazo',
-            'created_at' => 'Data de Criação',
-            'updated_at' => 'Data de Atualização',
+            'created_at' => 'Data de CriaÃ§Ã£o',
+            'updated_at' => 'Data de AtualizaÃ§Ã£o',
         ];
 
         $widths = [
@@ -387,4 +389,5 @@ class XlsxExport
         return $colName;
     }
 }
+
 
