@@ -52,11 +52,40 @@ class PublicAvaliacoesController
         if ($method === 'POST') {
             $action = (string)($_POST['action'] ?? '');
             if ($action === 'start') {
-                $this->start($context);
+                try {
+                    $this->start($context);
+                } catch (\Throwable $e) {
+                    $errorId = $this->newErrorId();
+                    AuditLogger::log('public_avaliacoes_error', 'avaliacao_publica_fixa', null, [
+                        'error_id' => $errorId,
+                        'phase' => 'start',
+                        'message' => $e->getMessage(),
+                        'code' => $e->getCode(),
+                    ]);
+                    http_response_code(500);
+                    $this->render($context, 1, $this->valuesFromPost($context), [], [], false, 'Ocorreu um erro ao iniciar a avaliacao. Tente novamente. Codigo: ' . $errorId, '');
+                }
                 return;
             }
             if ($action === 'finish') {
-                $this->finish($context);
+                try {
+                    $this->finish($context);
+                } catch (\Throwable $e) {
+                    $errorId = $this->newErrorId();
+                    AuditLogger::log('public_avaliacoes_error', 'avaliacao_publica_fixa', null, [
+                        'error_id' => $errorId,
+                        'phase' => 'finish',
+                        'message' => $e->getMessage(),
+                        'code' => $e->getCode(),
+                    ]);
+                    http_response_code(500);
+                    $values = $this->valuesFromPost($context);
+                    $selectedMap = [];
+                    foreach (self::PILLAR_SLOT_MAP as $pillar => $slot) {
+                        $selectedMap[$pillar] = array_map('intval', (array)($_POST[$pillar] ?? $_POST[$slot] ?? []));
+                    }
+                    $this->render($context, 2, $values, [], $selectedMap, false, 'Nao foi possivel enviar sua avaliacao agora. Tente novamente em alguns minutos. Codigo: ' . $errorId, '');
+                }
                 return;
             }
         }
@@ -254,11 +283,31 @@ class PublicAvaliacoesController
     private function applyHeaders(): void
     {
         header('X-Frame-Options: DENY');
-        header("Content-Security-Policy: default-src 'self' 'unsafe-inline' data:; img-src 'self' data:;");
+        $csp = implode('; ', [
+            "default-src 'self'",
+            "base-uri 'self'",
+            "form-action 'self'",
+            "frame-ancestors 'none'",
+            "img-src 'self' data:",
+            "font-src 'self' data:",
+            "style-src 'self' 'unsafe-inline'",
+            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com",
+            "connect-src 'self'",
+        ]) . ';';
+        header('Content-Security-Policy: ' . $csp);
         header('Referrer-Policy: no-referrer');
         header('X-Content-Type-Options: nosniff');
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
+    }
+
+    private function newErrorId(): string
+    {
+        try {
+            return bin2hex(random_bytes(5));
+        } catch (\Throwable $e) {
+            return (string)time();
+        }
     }
 
     private function allowRequest(): bool

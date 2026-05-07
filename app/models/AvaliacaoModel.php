@@ -5,6 +5,23 @@ use App\Core\Auth;
 
 class AvaliacaoModel extends BaseModel
 {
+    private function tableColumns(string $table): array
+    {
+        try {
+            $stmt = $this->db->query('SHOW COLUMNS FROM ' . $table);
+            $cols = [];
+            foreach ($stmt->fetchAll() as $row) {
+                $name = (string)($row['Field'] ?? '');
+                if ($name !== '') {
+                    $cols[$name] = true;
+                }
+            }
+            return $cols;
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
     private function ensureTable(): void
     {
         try {
@@ -196,6 +213,7 @@ class AvaliacaoModel extends BaseModel
     public function create(array $data): int
     {
         $this->ensureTable();
+        $existingColumns = $this->tableColumns('avaliacoes');
         $clienteId = isset($data['cliente_id']) && (int)$data['cliente_id'] > 0 ? (int)$data['cliente_id'] : null;
         if ($clienteId !== null) {
             $clienteId = $this->normalizeScopedClienteId($clienteId);
@@ -251,6 +269,15 @@ class AvaliacaoModel extends BaseModel
             }
             $insert[$column] = $this->fallbackValueForColumn((string)$meta['Type']);
         }
+
+        if (!empty($existingColumns)) {
+            $insert = array_filter(
+                $insert,
+                static fn($_value, string $key): bool => isset($existingColumns[$key]),
+                ARRAY_FILTER_USE_BOTH
+            );
+        }
+
         $columns = array_keys($insert);
         $placeholders = array_map(static fn(string $column): string => ':' . $column, $columns);
         $stmt = $this->db->prepare('INSERT INTO avaliacoes (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $placeholders) . ')');

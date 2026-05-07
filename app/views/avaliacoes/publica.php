@@ -247,8 +247,10 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
           form.addEventListener('submit', () => {
             const submitButton = form.querySelector('.public-action-button');
             if (!submitButton) return;
-            submitButton.disabled = false;
+            submitButton.disabled = true;
             submitButton.setAttribute('data-busy', '1');
+            submitButton.setAttribute('aria-disabled', 'true');
+            submitButton.classList.add('opacity-60', 'cursor-not-allowed');
             setTimeout(() => {
               resetPublicActionButtons();
             }, 4000);
