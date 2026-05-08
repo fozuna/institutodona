@@ -192,6 +192,24 @@ class IndicadorModel extends BaseModel
             $where[] = 'i.cliente_id = :cid';
         }
 
+        $q = trim((string)($filters['q'] ?? ''));
+        if ($q !== '') {
+            $nameColumn = $this->schema['indicadores_indicador'] ? 'i.indicador' : 'i.nome';
+            $params['q'] = '%' . mb_strtolower($q) . '%';
+            $where[] = 'LOWER(' . $nameColumn . ') LIKE :q';
+        }
+
+        $dateStart = trim((string)($filters['date_start'] ?? ''));
+        $dateEnd = trim((string)($filters['date_end'] ?? ''));
+        if ($dateStart !== '') {
+            $params['date_start'] = $dateStart;
+            $where[] = 'i.data_final >= :date_start';
+        }
+        if ($dateEnd !== '') {
+            $params['date_end'] = $dateEnd;
+            $where[] = 'i.data_inicial <= :date_end';
+        }
+
         $orderBy = $this->schema['indicadores_indicador']
             ? 'i.indicador'
             : 'COALESCE(i.nome, i.id)';
@@ -215,6 +233,37 @@ class IndicadorModel extends BaseModel
     public function byCliente(int $clienteId): array
     {
         return $this->search(['cliente_id' => $clienteId]);
+    }
+
+    public function autocomplete(int $clienteId, string $q, int $limit = 10): array
+    {
+        $clienteId = (int)$this->normalizeScopedClienteId($clienteId);
+        if ($clienteId <= 0 || !$this->canAccessClienteId($clienteId)) {
+            return [];
+        }
+        $q = trim($q);
+        if ($q === '') {
+            return [];
+        }
+        $nameColumn = $this->schema['indicadores_indicador'] ? 'indicador' : 'nome';
+        $params = [
+            'cid' => $clienteId,
+            'q' => mb_strtolower($q) . '%',
+        ];
+        $scope = $this->tenantInCondition('cliente_id', $params, 'inda');
+        $where = ['cliente_id = :cid', $scope];
+        if ($this->schema['indicadores_deleted_at']) {
+            $where[] = 'deleted_at IS NULL';
+        }
+        $sql = 'SELECT DISTINCT ' . $nameColumn . ' AS nome
+                FROM indicadores
+                WHERE ' . implode(' AND ', $where) . '
+                  AND LOWER(' . $nameColumn . ') LIKE :q
+                ORDER BY ' . $nameColumn . '
+                LIMIT ' . max(1, min(50, (int)$limit));
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return array_values(array_filter(array_map(static fn($v): string => (string)$v, $stmt->fetchAll(\PDO::FETCH_COLUMN))));
     }
 
     public function find(int $id): ?array
@@ -568,6 +617,22 @@ class IndicadorModel extends BaseModel
         if ($clienteId > 0) {
             $params['cid'] = $clienteId;
             $where[] = 'i.cliente_id = :cid';
+        }
+        $q = trim((string)($filters['q'] ?? ''));
+        if ($q !== '') {
+            $nameColumn = $this->schema['indicadores_indicador'] ? 'i.indicador' : 'i.nome';
+            $params['q'] = '%' . mb_strtolower($q) . '%';
+            $where[] = 'LOWER(' . $nameColumn . ') LIKE :q';
+        }
+        $dateStart = trim((string)($filters['date_start'] ?? ''));
+        $dateEnd = trim((string)($filters['date_end'] ?? ''));
+        if ($dateStart !== '') {
+            $params['date_start'] = $dateStart;
+            $where[] = 'i.data_final >= :date_start';
+        }
+        if ($dateEnd !== '') {
+            $params['date_end'] = $dateEnd;
+            $where[] = 'i.data_inicial <= :date_end';
         }
         $sql = "SELECT
                     i.*,

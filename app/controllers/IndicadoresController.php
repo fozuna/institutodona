@@ -38,14 +38,71 @@ class IndicadoresController extends BaseController
         $this->requireLogin();
         $clientes = $this->clientes->all();
         $cliente = (int)($this->resolveScopedClienteId(isset($_GET['cliente']) ? (int)$_GET['cliente'] : null) ?? 0);
-        $items = $cliente > 0 ? $this->model->byCliente($cliente) : $this->model->all();
+        $q = trim((string)($_GET['q'] ?? ''));
+        $dateStart = trim((string)($_GET['date_start'] ?? ''));
+        $dateEnd = trim((string)($_GET['date_end'] ?? ''));
+
+        if ($dateStart !== '' && $dateEnd !== '' && $dateEnd < $dateStart) {
+            if ($this->isAjaxRequest()) {
+                http_response_code(422);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => 'A data final não pode ser anterior à data inicial.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $_SESSION['flash_error'] = 'A data final não pode ser anterior à data inicial.';
+            $dateStart = '';
+            $dateEnd = '';
+        }
+
+        $items = $this->model->search([
+            'cliente_id' => $cliente > 0 ? $cliente : 0,
+            'q' => $q,
+            'date_start' => $dateStart,
+            'date_end' => $dateEnd,
+        ]);
+
+        if ($this->isAjaxRequest()) {
+            header('Content-Type: text/html; charset=utf-8');
+            $t = static fn(string $key, array $replace = []): string => I18n::t($key, $replace);
+            $formatValue = static function ($value, array $item): string {
+                return \App\Core\ValueFormatter::byUnit($value, [
+                    'simbolo' => $item['unidade_simbolo'] ?? '',
+                    'tipo' => $item['unidade_tipo'] ?? '',
+                ]);
+            };
+            require __DIR__ . '/../views/indicadores/_cards.php';
+            return;
+        }
+
         $this->render('indicadores/index', [
             'pageTitle' => I18n::t('indicadores.title.index'),
             'clientes' => $clientes,
             'cliente' => $cliente,
             'items' => $items,
+            'q' => $q,
+            'dateStart' => $dateStart,
+            'dateEnd' => $dateEnd,
             'i18n' => I18n::class,
         ]);
+    }
+
+    public function autocomplete(): void
+    {
+        $this->requireLogin();
+        $cliente = (int)($this->resolveScopedClienteId(isset($_GET['cliente']) ? (int)$_GET['cliente'] : null) ?? 0);
+        $q = trim((string)($_GET['q'] ?? ''));
+        header('Content-Type: application/json; charset=utf-8');
+        if ($cliente <= 0 || $q === '') {
+            echo json_encode(['ok' => true, 'items' => []], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        try {
+            $items = $this->model->autocomplete($cliente, $q, 12);
+            echo json_encode(['ok' => true, 'items' => $items], JSON_UNESCAPED_UNICODE);
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'message' => 'Não foi possível carregar sugestões agora.'], JSON_UNESCAPED_UNICODE);
+        }
     }
 
     public function create(): void
@@ -77,7 +134,8 @@ class IndicadoresController extends BaseController
         }
         $id = $this->model->create($formData, $this->currentUserId());
         $_SESSION['flash_success'] = I18n::t('indicadores.flash.created');
-        $this->redirect('index.php?route=indicadores/edit&id=' . $id);
+        $clienteId = (int)($formData['cliente_id'] ?? 0);
+        $this->redirect('index.php?route=indicadores/index' . ($clienteId > 0 ? '&cliente=' . $clienteId : ''));
     }
 
     public function edit(): void
@@ -380,5 +438,13 @@ class IndicadoresController extends BaseController
     private function currentUserId(): int
     {
         return (int)($_SESSION['user']['id'] ?? 0);
+    }
+
+    private function isAjaxRequest(): bool
+    {
+        if ((string)($_GET['ajax'] ?? '') === '1') {
+            return true;
+        }
+        return strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
     }
 }
