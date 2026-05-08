@@ -61,6 +61,10 @@ class PublicAvaliacoesController
                         'phase' => 'start',
                         'message' => $e->getMessage(),
                         'code' => $e->getCode(),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine(),
+                        'trace' => substr($e->getTraceAsString(), 0, 4000),
+                        'meta' => $this->requestMeta(),
                     ]);
                     http_response_code(500);
                     $this->render($context, 1, $this->valuesFromPost($context), [], [], false, 'Ocorreu um erro ao iniciar a avaliacao. Tente novamente. Codigo: ' . $errorId, '');
@@ -77,7 +81,12 @@ class PublicAvaliacoesController
                         'phase' => 'finish',
                         'message' => $e->getMessage(),
                         'code' => $e->getCode(),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine(),
+                        'trace' => substr($e->getTraceAsString(), 0, 4000),
+                        'meta' => $this->requestMeta(),
                     ]);
+                    @error_log('[public_avaliacoes_error] id=' . $errorId . ' phase=finish message=' . $e->getMessage() . ' file=' . $e->getFile() . ':' . $e->getLine());
                     http_response_code(500);
                     $values = $this->valuesFromPost($context);
                     $selectedMap = [];
@@ -162,18 +171,33 @@ class PublicAvaliacoesController
             $this->render($context, 2, $values, [], $selectedMap, false, 'Nao foi possivel salvar a avaliacao.', '');
             return;
         }
-        $pdfService = new AvaliacaoPdfService();
-        $pdfPath = $pdfService->generateToFile($avaliacaoId, true);
-        if (!$pdfPath || !is_file($pdfPath)) {
+        try {
+            $pdfService = new AvaliacaoPdfService();
+            $pdfPath = $pdfService->generateToFile($avaliacaoId, true);
+            if (!$pdfPath || !is_file($pdfPath)) {
+                $errorId = $this->newErrorId();
+                AuditLogger::log('public_avaliacoes_pdf_generate_failed', 'avaliacao_publica_fixa', $avaliacaoId, [
+                    'error_id' => $errorId,
+                    'host' => $context['host'] ?? null,
+                    'cliente_id' => $context['cliente_id'] ?? null,
+                    'empresa_nome' => $context['empresa_nome'] ?? null,
+                    'pdf_path' => $pdfService->pdfPath($avaliacaoId),
+                    'last_error' => $pdfService->getLastError(),
+                ]);
+            }
+        } catch (\Throwable $e) {
             $errorId = $this->newErrorId();
-            AuditLogger::log('public_avaliacoes_pdf_generate_failed', 'avaliacao_publica_fixa', $avaliacaoId, [
+            AuditLogger::log('public_avaliacoes_pdf_exception', 'avaliacao_publica_fixa', $avaliacaoId, [
                 'error_id' => $errorId,
                 'host' => $context['host'] ?? null,
                 'cliente_id' => $context['cliente_id'] ?? null,
                 'empresa_nome' => $context['empresa_nome'] ?? null,
-                'pdf_path' => $pdfService->pdfPath($avaliacaoId),
-                'last_error' => $pdfService->getLastError(),
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
             ]);
+            @error_log('[public_avaliacoes_pdf_exception] id=' . $errorId . ' avaliacao_id=' . $avaliacaoId . ' message=' . $e->getMessage());
         }
         AuditLogger::log('public_avaliacoes_finish', 'avaliacao_publica_fixa', $avaliacaoId, [
             'host' => $context['host'] ?? null,
@@ -353,6 +377,26 @@ class PublicAvaliacoesController
         $key = 'public_avaliacoes_fixa|' . $ip . '|' . md5($agent) . '|' . $method . '|' . $action;
         $limit = $method === 'POST' ? 60 : 300;
         return $this->rateLimiter->allow($key, $limit, 300);
+    }
+
+    private function requestMeta(): array
+    {
+        $meta = [
+            'host' => (string)($_SERVER['HTTP_HOST'] ?? ''),
+            'method' => (string)($_SERVER['REQUEST_METHOD'] ?? ''),
+            'content_length' => (int)($_SERVER['CONTENT_LENGTH'] ?? 0),
+            'post_keys' => is_array($_POST ?? null) ? count($_POST) : 0,
+            'files_keys' => is_array($_FILES ?? null) ? count($_FILES) : 0,
+            'php' => PHP_VERSION,
+            'memory_limit' => (string)ini_get('memory_limit'),
+            'post_max_size' => (string)ini_get('post_max_size'),
+            'max_input_vars' => (string)ini_get('max_input_vars'),
+            'max_execution_time' => (string)ini_get('max_execution_time'),
+        ];
+        if (!empty($_SERVER['HTTP_USER_AGENT'])) {
+            $meta['ua'] = substr((string)$_SERVER['HTTP_USER_AGENT'], 0, 180);
+        }
+        return $meta;
     }
 
     protected function redirect(string $url): void

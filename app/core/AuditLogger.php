@@ -5,7 +5,12 @@ class AuditLogger
 {
     private static function sanitize(array $data): array
     {
-        $redact = ['senha', 'senha_hash', 'password', 'pass', 'csrf'];
+        $redact = [
+            'senha', 'senha_hash', 'password', 'pass', 'csrf',
+            'email', 'public_email', 'whatsapp', 'public_whatsapp',
+            'nome', 'public_nome', 'empresa', 'public_empresa',
+            'contato', 'telefone', 'celular',
+        ];
         foreach ($data as $k => $v) {
             if (in_array($k, $redact, true)) {
                 $data[$k] = '[redacted]';

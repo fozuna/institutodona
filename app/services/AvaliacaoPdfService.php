@@ -16,7 +16,6 @@ class AvaliacaoPdfService
 
     public function __construct()
     {
-        $this->ensureDompdfAvailable();
         $this->model = new AvaliacaoModel();
     }
 
@@ -114,6 +113,7 @@ class AvaliacaoPdfService
 
     private function renderPdfBinary(array $item): string
     {
+        $this->ensureDompdfAvailable();
         $options = new Options();
         $options->set('isRemoteEnabled', false);
         $options->set('isHtml5ParserEnabled', true);
