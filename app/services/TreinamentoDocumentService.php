@@ -57,36 +57,121 @@ class TreinamentoDocumentService
 
     public function renderPresencePdf(array $agenda, array $participants): string
     {
-        $rows = array_map(static function (array $participant): array {
-            return [
-                $participant['colaborador_nome'] ?? '',
-                $participant['matricula'] ?? '',
-                $participant['funcao_nome'] ?? '',
-                $participant['hora_entrada'] ? substr((string)$participant['hora_entrada'], 0, 5) : '',
-                $participant['hora_saida'] ? substr((string)$participant['hora_saida'], 0, 5) : '',
-                '',
-            ];
-        }, $participants);
+        $sort = 'nome';
+        if (!empty($_GET['sort']) && in_array((string)$_GET['sort'], ['nome', 'departamento'], true)) {
+            $sort = (string)$_GET['sort'];
+        }
+        usort($participants, static function (array $a, array $b) use ($sort): int {
+            $ka = $sort === 'departamento' ? (string)($a['departamento_nome'] ?? '') : (string)($a['colaborador_nome'] ?? '');
+            $kb = $sort === 'departamento' ? (string)($b['departamento_nome'] ?? '') : (string)($b['colaborador_nome'] ?? '');
+            $cmp = strcasecmp($ka, $kb);
+            if ($cmp !== 0) {
+                return $cmp;
+            }
+            return strcasecmp((string)($a['colaborador_nome'] ?? ''), (string)($b['colaborador_nome'] ?? ''));
+        });
 
-        $body = '<div class="print-card">'
-            . '<div class="meta-grid">'
-            . '<div><strong>Treinamento:</strong> ' . $this->e($agenda['treinamento_nome'] ?? '') . '</div>'
-            . '<div><strong>Data Prevista:</strong> ' . $this->e(DateHelper::formatDateTime((string)($agenda['data'] ?? ''))) . '</div>'
-            . '<div><strong>Instrutor:</strong> ' . $this->e((string)($agenda['instrutor'] ?: ($agenda['responsavel_nome'] ?? ''))) . '</div>'
-            . '<div><strong>Local:</strong> ' . $this->e((string)($agenda['local'] ?? '')) . '</div>'
-            . '</div>'
-            . $this->tableHtml(['Nome do Participante', 'Matricula', 'Cargo', 'Entrada', 'Saida', 'Assinatura'], $rows, '')
-            . '<div class="signature-zone">'
-            . '<p><strong>Termo de responsabilidade:</strong> Declaro que as informacoes acima representam fielmente a participacao no treinamento programado.</p>'
-            . '<div class="signature-line">Assinatura do Instrutor</div>'
+        $startDateTime = (string)($agenda['data'] ?? '');
+        $startDate = $startDateTime !== '' ? substr($startDateTime, 0, 10) : '';
+        $startTime = $startDateTime !== '' ? substr($startDateTime, 11, 5) : '';
+        $endTime = '';
+        $carga = trim((string)($agenda['carga_horaria'] ?? ''));
+        if ($startDateTime !== '' && $carga !== '' && is_numeric($carga)) {
+            try {
+                $dt = new \DateTimeImmutable($startDateTime);
+                $minutes = (int)round(((float)$carga) * 60);
+                $endTime = $dt->modify('+' . max(0, $minutes) . ' minutes')->format('H:i');
+            } catch (\Throwable $e) {
+                $endTime = '';
+            }
+        }
+        $dataExecucao = $startDateTime !== '' ? DateHelper::formatDateTime($startDateTime) : '';
+        $instrutor = (string)($agenda['instrutor'] ?: ($agenda['responsavel_nome'] ?? ''));
+        $local = (string)($agenda['local'] ?? '');
+
+        $branding = ReportBranding::aplicarBrandingRelatorio('pdf', [
+            'report_title' => 'Lista de Presença',
+            'header_title' => 'Lista de Presença',
+            'header_subtitle' => (string)($agenda['treinamento_nome'] ?? ''),
+            'generated_at' => DateHelper::now(),
+        ]);
+        $logoUri = (string)($branding['logo_uri'] ?? '');
+        $logo = $logoUri !== '' ? '<img src="' . $this->e($logoUri) . '" class="logo" alt="Logo" />' : '';
+
+        $thead = '<tr>'
+            . '<th>Nome do participante</th>'
+            . '<th>Departamento</th>'
+            . '<th>Função/Cargo</th>'
+            . '<th>Data do treinamento</th>'
+            . '</tr>';
+        $tbody = '';
+        foreach ($participants as $p) {
+            $nome = (string)($p['colaborador_nome'] ?? '');
+            $dep = (string)($p['departamento_nome'] ?? '');
+            $cargo = (string)($p['funcao_nome'] ?? '');
+            $tbody .= '<tr>'
+                . '<td><span class="name-text">' . $this->e($nome) . '</span><span class="sign-line"></span></td>'
+                . '<td>' . $this->e($dep) . '</td>'
+                . '<td>' . $this->e($cargo) . '</td>'
+                . '<td>' . $this->e($startDate !== '' ? DateHelper::formatDate($startDate) : '') . '</td>'
+                . '</tr>';
+        }
+        if ($tbody === '') {
+            $tbody = '<tr><td colspan="4">Nenhum participante pré-cadastrado para este agendamento.</td></tr>';
+        }
+
+        $header = '<div class="doc-header">'
+            . '<div class="doc-header-top">' . $logo
+            . '<div class="doc-title-block">'
+            . '<div class="doc-title">Lista de Presença</div>'
+            . '<div class="doc-subtitle">' . $this->e((string)($agenda['treinamento_nome'] ?? '')) . '</div>'
+            . '</div></div>'
+            . '<div class="doc-meta">'
+            . '<div><strong>Título do treinamento:</strong> ' . $this->e((string)($agenda['treinamento_nome'] ?? '')) . '</div>'
+            . '<div><strong>Instrutor:</strong> ' . $this->e($instrutor) . '</div>'
+            . '<div><strong>Carga horária:</strong> ' . $this->e($carga !== '' ? $carga . 'h' : '—') . '</div>'
+            . '<div><strong>Local:</strong> ' . $this->e($local !== '' ? $local : '—') . '</div>'
+            . '<div><strong>Horário:</strong> ' . $this->e(($startTime !== '' ? $startTime : '—') . ($endTime !== '' ? (' às ' . $endTime) : '')) . '</div>'
+            . '<div><strong>Data(s) de execução:</strong> ' . $this->e($dataExecucao !== '' ? $dataExecucao : '—') . '</div>'
             . '</div>'
             . '</div>';
 
-        return $this->renderPdf($this->wrapHtml('Lista de Presenca', $body, [
-            'header_subtitle' => (string)($agenda['treinamento_nome'] ?? ''),
-            'orientation' => 'landscape',
-            'margins' => ['top' => 14, 'right' => 14, 'bottom' => 16, 'left' => 18],
-        ]), 'A4', 'landscape');
+        $html = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>'
+            . '@page { margin: 20mm; }'
+            . 'body{font-family:DejaVu Sans, Arial, sans-serif;color:#000;font-size:10pt;}'
+            . '.doc-header{border-bottom:1px solid #000;padding-bottom:8mm;margin-bottom:6mm;}'
+            . '.doc-header-top{display:flex;align-items:flex-start;gap:10mm;}'
+            . '.logo{width:25mm;height:auto;object-fit:contain;}'
+            . '.doc-title{font-size:16pt;font-weight:bold;line-height:1.1;}'
+            . '.doc-subtitle{font-size:11pt;margin-top:2mm;}'
+            . '.doc-meta{margin-top:6mm;display:grid;grid-template-columns:repeat(2,1fr);gap:3mm 8mm;font-size:10pt;}'
+            . 'table{width:100%;border-collapse:collapse;}'
+            . 'th,td{border:1px solid #000;padding:6px;vertical-align:middle;}'
+            . 'th{font-size:10pt;font-weight:bold;background:#fff;text-transform:none;}'
+            . 'thead{display:table-header-group;}'
+            . 'tr{page-break-inside:avoid;}'
+            . 'td{height:14mm;}'
+            . '.name-text{display:inline-block;width:44%;vertical-align:bottom;}'
+            . '.sign-line{display:inline-block;width:54%;border-bottom:1px solid #000;height:10mm;vertical-align:bottom;margin-left:2%;}'
+            . '.footnote{margin-top:6mm;font-size:9pt;}'
+            . '</style></head><body>'
+            . $header
+            . '<table><thead>' . $thead . '</thead><tbody>' . $tbody . '</tbody></table>'
+            . '<div class="footnote"><strong>Assinatura:</strong> assine no campo ao lado do nome para autenticar a presença.</div>'
+            . '<script type="text/php">'
+            . 'if (isset($pdf) && isset($fontMetrics)) {'
+            . '$text = "Página {PAGE_NUM} de {PAGE_COUNT}";'
+            . '$font = $fontMetrics->get_font("DejaVu Sans", "normal");'
+            . '$size = 9;'
+            . '$w = $fontMetrics->get_text_width($text, $font, $size);'
+            . '$x = ($pdf->get_width() - $w) / 2;'
+            . '$y = $pdf->get_height() - 28;'
+            . '$pdf->page_text($x, $y, $text, $font, $size, [0,0,0]);'
+            . '}'
+            . '</script>'
+            . '</body></html>';
+
+        return $this->renderPdf($html, 'A4', 'portrait', true);
     }
 
     public function renderDashboardPdf(array $dashboard, array $filters): string
@@ -275,12 +360,12 @@ class TreinamentoDocumentService
             . '</body></html>';
     }
 
-    private function renderPdf(string $html, string $paper = 'A4', string $orientation = 'portrait'): string
+    private function renderPdf(string $html, string $paper = 'A4', string $orientation = 'portrait', bool $phpEnabled = false): string
     {
         $options = new Options();
         $options->set('isRemoteEnabled', false);
         $options->set('isHtml5ParserEnabled', true);
-        $options->set('isPhpEnabled', false);
+        $options->set('isPhpEnabled', $phpEnabled);
         $options->set('defaultFont', 'DejaVu Sans');
         $options->setChroot(dirname(__DIR__, 2));
 

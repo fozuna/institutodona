@@ -128,11 +128,13 @@ class TreinamentoAgendaModel extends BaseModel
                 col.cpf,
                 col.status_atual,
                 f.nome AS funcao_nome,
-                s.nome AS setor_nome
+                s.nome AS setor_nome,
+                d.nome AS departamento_nome
             FROM treinamento_participantes tp
             JOIN colaboradores col ON col.id = tp.colaborador_id
             LEFT JOIN funcoes f ON f.id = col.funcao_id
             LEFT JOIN setores s ON s.id = f.setor_id
+            LEFT JOIN departamentos d ON d.id = s.departamento_id
             WHERE tp.agenda_id = :agenda_id
             ORDER BY col.nome");
         $stmt->execute(['agenda_id' => $agendaId]);
