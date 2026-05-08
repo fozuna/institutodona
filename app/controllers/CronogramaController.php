@@ -35,8 +35,13 @@ class CronogramaController extends BaseController
     {
         $this->requireRole('instituto');
         $cid = (int)($_GET['id_cliente'] ?? 0);
-        $items = $cid ? $this->cronogramas->byCliente($cid) : $this->cronogramas->all();
-        $this->render('cronograma/index', ['items' => $items]);
+        $order = $this->buildCronogramaOrder();
+        $items = $cid ? $this->cronogramas->byCliente($cid, $order) : $this->cronogramas->all($order);
+        $this->render('cronograma/index', [
+            'items' => $items,
+            'order' => $order,
+            'isClientOrderable' => true,
+        ]);
     }
 
     public function create(): void
@@ -78,17 +83,25 @@ class CronogramaController extends BaseController
         $id = (int)($_GET['id'] ?? 0);
         $crono = $this->cronogramas->find($id);
         $statusFilter = CronogramaTrafficLight::normalizeFilter($_GET['status_filter'] ?? 'todos');
+        $filters = $this->buildOcorrenciasFilters();
+        $order = $this->buildOcorrenciasOrder();
         $allEvents = $this->eventos->byCronograma($id);
-        $events = $this->annotateEvents($allEvents);
-        $grid = $this->buildGrid($events);
-        $events = $this->filterEventsByTraffic($events, $statusFilter);
+        $annotatedEvents = $this->annotateEvents($allEvents);
+        $grid = $this->buildGrid($annotatedEvents);
+        $events = $this->filterEventsByTraffic($annotatedEvents, $statusFilter);
         $grid = $this->filterGridByTraffic($grid, $statusFilter);
+        $events = $this->filterEventsByCriteria($events, $filters);
+        $events = $this->sortEvents($events, $order);
+        $grid = $this->sortGridRows($grid, $order);
         $pilares = (new PilarModel())->all();
+        $occOptions = $this->buildOcorrenciasOptions($annotatedEvents);
 
         AuditLogger::log('cronograma_show', 'cronograma', $id, [
             'cronograma_found' => (bool)$crono,
             'events_count' => count($allEvents),
             'status_filter' => $statusFilter,
+            'filters' => $filters,
+            'order' => $order,
         ]);
 
         $this->render('cronograma/show', [
@@ -98,6 +111,11 @@ class CronogramaController extends BaseController
             'periodicidades' => self::PERIODICIDADES,
             'statusFilter' => $statusFilter,
             'pilares' => $pilares,
+            'occFilters' => $filters,
+            'occOrder' => $order,
+            'occOptions' => $occOptions,
+            'totalEvents' => count($allEvents),
+            'occFilterError' => $filters['error'] ?? null,
             'flashSuccess' => $this->takeFlash('flash_success'),
             'flashError' => $this->takeFlash('flash_error'),
         ]);
@@ -146,7 +164,8 @@ class CronogramaController extends BaseController
                 'id_cronograma' => $idCronograma,
             ]);
         }
-        header('Location: index.php?route=cronograma/show&id=' . $idCronograma . '&status_filter=' . urlencode($statusFilter));
+        $url = $this->buildOccRedirectUrl($idCronograma, $statusFilter, $_POST);
+        header('Location: ' . $url);
     }
 
     public function toggleStatus(): void
@@ -168,14 +187,14 @@ class CronogramaController extends BaseController
         $ok = $id > 0 ? $this->eventos->setStatus($id, $targetStatus) : false;
         if (!$ok) {
             http_response_code(400);
-            $this->respondToggleStatus(['ok' => false, 'message' => 'Nao foi possivel atualizar o status do evento.'], $idCronograma, $statusFilter);
+            $this->respondToggleStatus(['ok' => false, 'message' => 'Nao foi possivel atualizar o status do evento.'], $idCronograma, $statusFilter, $_POST);
             return;
         }
 
         $event = $this->annotateEvent($this->eventos->find($id));
         if (!$event) {
             http_response_code(404);
-            $this->respondToggleStatus(['ok' => false, 'message' => 'Evento nao encontrado apos a atualizacao.'], $idCronograma, $statusFilter);
+            $this->respondToggleStatus(['ok' => false, 'message' => 'Evento nao encontrado apos a atualizacao.'], $idCronograma, $statusFilter, $_POST);
             return;
         }
         $series = $this->annotateEvents($this->eventos->seriesMembers((int)$event['serie_id']));
@@ -195,7 +214,7 @@ class CronogramaController extends BaseController
                 'months' => $row['meses'] ?? [],
             ],
         ];
-        $this->respondToggleStatus($payload, $idCronograma, $statusFilter);
+        $this->respondToggleStatus($payload, $idCronograma, $statusFilter, $_POST);
     }
 
     public function addEventoForm(): void
@@ -240,7 +259,8 @@ class CronogramaController extends BaseController
                 $_SESSION['flash_error'] = $e->getMessage();
             }
         }
-        header('Location: index.php?route=cronograma/show&id=' . $idCronograma . '&status_filter=' . urlencode($statusFilter));
+        $url = $this->buildOccRedirectUrl($idCronograma, $statusFilter, $_POST);
+        header('Location: ' . $url);
     }
 
     public function deleteEvento(): void
@@ -265,7 +285,8 @@ class CronogramaController extends BaseController
                 $_SESSION['flash_error'] = $e->getMessage();
             }
         }
-        header('Location: index.php?route=cronograma/show&id=' . $idCronograma . '&status_filter=' . urlencode($statusFilter));
+        $url = $this->buildOccRedirectUrl($idCronograma, $statusFilter, $src);
+        header('Location: ' . $url);
     }
 
     private function buildGrid(array $events): array
@@ -341,7 +362,7 @@ class CronogramaController extends BaseController
         }));
     }
 
-    private function respondToggleStatus(array $payload, int $idCronograma, string $statusFilter): void
+    private function respondToggleStatus(array $payload, int $idCronograma, string $statusFilter, array $occParams = []): void
     {
         $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
         if ($isAjax) {
@@ -350,7 +371,8 @@ class CronogramaController extends BaseController
             return;
         }
         $_SESSION[$payload['ok'] ? 'flash_success' : 'flash_error'] = $payload['message'] ?? ($payload['ok'] ? 'Status atualizado.' : 'Falha ao atualizar status.');
-        header('Location: index.php?route=cronograma/show&id=' . $idCronograma . '&status_filter=' . urlencode($statusFilter));
+        $url = $this->buildOccRedirectUrl($idCronograma, $statusFilter, $occParams);
+        header('Location: ' . $url);
     }
 
     private function takeFlash(string $key): ?string
@@ -358,5 +380,200 @@ class CronogramaController extends BaseController
         $value = $_SESSION[$key] ?? null;
         unset($_SESSION[$key]);
         return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    private function buildCronogramaOrder(): array
+    {
+        $allowed = ['cliente', 'nome', 'ano'];
+        $column = strtolower((string)($_GET['sort'] ?? ''));
+        $direction = strtolower((string)($_GET['dir'] ?? ''));
+        if (!in_array($column, $allowed, true)) {
+            return ['column' => 'cliente', 'direction' => 'asc'];
+        }
+        return [
+            'column' => $column,
+            'direction' => $direction === 'desc' ? 'desc' : 'asc',
+        ];
+    }
+
+    private function buildOcorrenciasFilters(): array
+    {
+        $filters = [
+            'error' => null,
+            'date_start' => trim((string)($_GET['occ_date_start'] ?? '')),
+            'date_end' => trim((string)($_GET['occ_date_end'] ?? '')),
+            'tipo' => array_values(array_unique(array_filter(array_map('trim', (array)($_GET['occ_tipo'] ?? []))))),
+            'status' => array_values(array_unique(array_filter(array_map('trim', (array)($_GET['occ_status'] ?? []))))),
+            'responsavel' => trim((string)($_GET['occ_responsavel'] ?? '')),
+            'local' => trim((string)($_GET['occ_local'] ?? '')),
+        ];
+        if ($filters['date_start'] !== '' && $filters['date_end'] !== '' && $filters['date_start'] > $filters['date_end']) {
+            $filters['error'] = 'O período inicial não pode ser maior que o período final.';
+            $filters['date_start'] = '';
+            $filters['date_end'] = '';
+        }
+        return $filters;
+    }
+
+    private function buildOcorrenciasOrder(): array
+    {
+        $allowed = ['data', 'topico', 'atividade', 'responsavel', 'periodicidade', 'status', 'unidade'];
+        $column = strtolower((string)($_GET['occ_sort'] ?? ''));
+        $direction = strtolower((string)($_GET['occ_dir'] ?? ''));
+        if (!in_array($column, $allowed, true)) {
+            return ['column' => 'data', 'direction' => 'asc'];
+        }
+        return [
+            'column' => $column,
+            'direction' => $direction === 'desc' ? 'desc' : 'asc',
+        ];
+    }
+
+    private function filterEventsByCriteria(array $events, array $filters): array
+    {
+        $start = $filters['date_start'] ?: null;
+        $end = $filters['date_end'] ?: null;
+        $tipos = $filters['tipo'] ?? [];
+        $status = $filters['status'] ?? [];
+        $responsavel = $filters['responsavel'] ?? '';
+        $local = $filters['local'] ?? '';
+        return array_values(array_filter($events, static function (array $event) use ($start, $end, $tipos, $status, $responsavel, $local): bool {
+            $data = (string)($event['data'] ?? '');
+            if ($start && $data < $start) {
+                return false;
+            }
+            if ($end && $data > $end) {
+                return false;
+            }
+            if (!empty($tipos) && !in_array((string)($event['topico'] ?? ''), $tipos, true)) {
+                return false;
+            }
+            if (!empty($status)) {
+                $label = (string)($event['traffic']['label'] ?? $event['status'] ?? '');
+                if (!in_array($label, $status, true)) {
+                    return false;
+                }
+            }
+            if ($responsavel !== '' && stripos((string)($event['responsavel'] ?? ''), $responsavel) === false) {
+                return false;
+            }
+            if ($local !== '' && stripos((string)($event['unidade'] ?? ''), $local) === false) {
+                return false;
+            }
+            return true;
+        }));
+    }
+
+    private function sortEvents(array $events, array $order): array
+    {
+        $column = $order['column'] ?? 'data';
+        $direction = ($order['direction'] ?? 'asc') === 'desc' ? -1 : 1;
+        $collator = class_exists('Collator') ? new \Collator('pt_BR') : null;
+        usort($events, static function (array $a, array $b) use ($column, $direction, $collator): int {
+            $left = $a[$column] ?? '';
+            $right = $b[$column] ?? '';
+            if ($column === 'data') {
+                $result = strcmp((string)$left, (string)$right);
+            } elseif ($collator) {
+                $result = $collator->compare((string)$left, (string)$right);
+            } else {
+                $result = strcasecmp((string)$left, (string)$right);
+            }
+            if ($result === 0) {
+                $result = strcmp((string)($a['data'] ?? ''), (string)($b['data'] ?? ''));
+            }
+            return $result * $direction;
+        });
+        return $events;
+    }
+
+    private function sortGridRows(array $grid, array $order): array
+    {
+        $column = $order['column'] ?? 'topico';
+        $allowed = ['topico', 'unidade', 'atividade', 'responsavel', 'status'];
+        if (!in_array($column, $allowed, true)) {
+            $column = 'topico';
+        }
+        $direction = ($order['direction'] ?? 'asc') === 'desc' ? -1 : 1;
+        $collator = class_exists('Collator') ? new \Collator('pt_BR') : null;
+        usort($grid, static function (array $a, array $b) use ($column, $direction, $collator): int {
+            $left = $a[$column] ?? '';
+            $right = $b[$column] ?? '';
+            $result = $collator ? $collator->compare((string)$left, (string)$right) : strcasecmp((string)$left, (string)$right);
+            return $result * $direction;
+        });
+        return $grid;
+    }
+
+    private function buildOcorrenciasOptions(array $events): array
+    {
+        $tipos = [];
+        $responsaveis = [];
+        $locais = [];
+        $status = [];
+        foreach ($events as $event) {
+            $tipos[] = (string)($event['topico'] ?? '');
+            $responsaveis[] = (string)($event['responsavel'] ?? '');
+            $locais[] = (string)($event['unidade'] ?? '');
+            $statusLabel = (string)($event['traffic']['label'] ?? $event['status'] ?? '');
+            $status[] = $statusLabel;
+        }
+        $tipos = array_values(array_filter(array_unique($tipos)));
+        $responsaveis = array_values(array_filter(array_unique($responsaveis)));
+        $locais = array_values(array_filter(array_unique($locais)));
+        $status = array_values(array_filter(array_unique($status)));
+        $this->sortOptions($tipos);
+        $this->sortOptions($responsaveis);
+        $this->sortOptions($locais);
+        $this->sortOptions($status);
+        return [
+            'tipos' => $tipos,
+            'responsaveis' => $responsaveis,
+            'locais' => $locais,
+            'status' => $status,
+        ];
+    }
+
+    private function sortOptions(array &$items): void
+    {
+        if (class_exists('Collator')) {
+            $collator = new \Collator('pt_BR');
+            usort($items, static fn(string $a, string $b): int => $collator->compare($a, $b));
+            return;
+        }
+        natcasesort($items);
+        $items = array_values($items);
+    }
+
+    private function buildOccRedirectUrl(int $idCronograma, string $statusFilter, array $source): string
+    {
+        $params = $this->buildOccQueryParams($source);
+        $base = 'index.php?route=cronograma/show&id=' . $idCronograma . '&status_filter=' . urlencode($statusFilter);
+        if (!empty($params)) {
+            $base .= '&' . http_build_query($params);
+        }
+        return $base;
+    }
+
+    private function buildOccQueryParams(array $source): array
+    {
+        $params = [];
+        $dateStart = trim((string)($source['occ_date_start'] ?? ''));
+        $dateEnd = trim((string)($source['occ_date_end'] ?? ''));
+        $tipos = array_values(array_unique(array_filter(array_map('trim', (array)($source['occ_tipo'] ?? [])))));
+        $status = array_values(array_unique(array_filter(array_map('trim', (array)($source['occ_status'] ?? [])))));
+        $responsavel = trim((string)($source['occ_responsavel'] ?? ''));
+        $local = trim((string)($source['occ_local'] ?? ''));
+        $sort = trim((string)($source['occ_sort'] ?? ''));
+        $dir = trim((string)($source['occ_dir'] ?? ''));
+        if ($dateStart !== '') $params['occ_date_start'] = $dateStart;
+        if ($dateEnd !== '') $params['occ_date_end'] = $dateEnd;
+        if (!empty($tipos)) $params['occ_tipo'] = $tipos;
+        if (!empty($status)) $params['occ_status'] = $status;
+        if ($responsavel !== '') $params['occ_responsavel'] = $responsavel;
+        if ($local !== '') $params['occ_local'] = $local;
+        if ($sort !== '') $params['occ_sort'] = $sort;
+        if ($dir !== '') $params['occ_dir'] = $dir;
+        return $params;
     }
 }

@@ -17,22 +17,23 @@ class CronogramaModel extends BaseModel
         }
     }
 
-    public function all(): array
+    public function all(?array $order = null): array
     {
         $this->ensureTable();
         $params = [];
         $scope = $this->tenantInCondition('c.id_cliente', $params, 'cra');
-        $stmt = $this->db->prepare("SELECT c.id, c.nome, c.ano, cli.nome_empresa AS cliente, c.id_cliente FROM cronogramas c JOIN clientes cli ON cli.id = c.id_cliente WHERE $scope ORDER BY cli.nome_empresa, c.ano DESC");
+        $orderBy = $this->buildOrderBy($order, 'cli.nome_empresa ASC, c.ano DESC');
+        $stmt = $this->db->prepare("SELECT c.id, c.nome, c.ano, cli.nome_empresa AS cliente, c.id_cliente FROM cronogramas c JOIN clientes cli ON cli.id = c.id_cliente WHERE $scope ORDER BY $orderBy");
         $stmt->execute($params);
         return $stmt->fetchAll();
     }
 
-    public function byCliente(int $idCliente): array
+    public function byCliente(int $idCliente, ?array $order = null): array
     {
-        return $this->byClientes([$idCliente]);
+        return $this->byClientes([$idCliente], $order);
     }
 
-    public function byClientes(array $clienteIds): array
+    public function byClientes(array $clienteIds, ?array $order = null): array
     {
         $this->ensureTable();
         $clienteIds = array_values(array_unique(array_filter(array_map('intval', $clienteIds))));
@@ -47,7 +48,8 @@ class CronogramaModel extends BaseModel
             $params[$key] = $clienteId;
         }
         $scope = $this->tenantInCondition('c.id_cliente', $params, 'crb');
-        $stmt = $this->db->prepare("SELECT c.id, c.nome, c.ano, cli.nome_empresa AS cliente, c.id_cliente FROM cronogramas c JOIN clientes cli ON cli.id = c.id_cliente WHERE c.id_cliente IN (" . implode(',', $holders) . ") AND $scope ORDER BY c.ano DESC");
+        $orderBy = $this->buildOrderBy($order, 'c.ano DESC');
+        $stmt = $this->db->prepare("SELECT c.id, c.nome, c.ano, cli.nome_empresa AS cliente, c.id_cliente FROM cronogramas c JOIN clientes cli ON cli.id = c.id_cliente WHERE c.id_cliente IN (" . implode(',', $holders) . ") AND $scope ORDER BY $orderBy");
         $stmt->execute($params);
         return $stmt->fetchAll();
     }
@@ -77,5 +79,23 @@ class CronogramaModel extends BaseModel
             'ano' => $data['ano'],
         ]);
         return (int)$this->db->lastInsertId();
+    }
+
+    private function buildOrderBy(?array $order, string $fallback): string
+    {
+        if (!$order) {
+            return $fallback;
+        }
+        $column = strtolower(trim((string)($order['column'] ?? '')));
+        $direction = strtolower(trim((string)($order['direction'] ?? 'asc'))) === 'desc' ? 'DESC' : 'ASC';
+        $columns = [
+            'cliente' => 'cli.nome_empresa COLLATE utf8mb4_unicode_ci',
+            'nome' => 'c.nome COLLATE utf8mb4_unicode_ci',
+            'ano' => 'c.ano',
+        ];
+        if (!isset($columns[$column])) {
+            return $fallback;
+        }
+        return $columns[$column] . ' ' . $direction;
     }
 }

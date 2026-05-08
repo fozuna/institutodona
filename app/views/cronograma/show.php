@@ -32,6 +32,9 @@
   .cronograma-toggle[data-checked="1"]::after {
     transform: translateX(1.2rem);
   }
+  .cronograma-sort-icon {
+    transition: color .2s ease, transform .2s ease;
+  }
 </style>
 <div class="p-6 space-y-6">
   <div class="flex justify-between items-center">
@@ -125,29 +128,191 @@
     </div>
   </div>
 
+  <?php
+    $occFilters = $occFilters ?? ['date_start' => '', 'date_end' => '', 'tipo' => [], 'status' => [], 'responsavel' => '', 'local' => '', 'error' => null];
+    $occOrder = $occOrder ?? ['column' => 'data', 'direction' => 'asc'];
+    $occOptions = $occOptions ?? ['tipos' => [], 'responsaveis' => [], 'locais' => [], 'status' => []];
+    $totalEvents = $totalEvents ?? count($events ?? []);
+    $isSmallDataset = $totalEvents < 1000;
+    $occFilterError = $occFilterError ?? $occFilters['error'] ?? null;
+  ?>
   <div class="bg-white shadow rounded">
     <div class="px-4 py-3 border-b font-semibold">Ocorrências materializadas</div>
+    <div class="px-4 py-3 border-b bg-gray-50">
+      <div id="occClientError" class="hidden px-3 py-2 mb-2 text-xs text-red-700 bg-red-100 rounded"></div>
+      <?php if (!empty($occFilterError)): ?>
+        <div class="px-3 py-2 mb-2 text-xs text-red-700 bg-red-100 rounded"><?= htmlspecialchars($occFilterError) ?></div>
+      <?php endif; ?>
+      <form method="get" action="index.php" class="space-y-3" id="occFiltersForm">
+        <input type="hidden" name="route" value="cronograma/show" />
+        <input type="hidden" name="id" value="<?= (int)$crono['id'] ?>" />
+        <input type="hidden" name="status_filter" value="<?= htmlspecialchars($statusFilter) ?>" />
+        <input type="hidden" name="occ_sort" value="<?= htmlspecialchars($occOrder['column'] ?? 'data') ?>" />
+        <input type="hidden" name="occ_dir" value="<?= htmlspecialchars($occOrder['direction'] ?? 'asc') ?>" />
+        <input type="hidden" name="occ_dataset" value="<?= $isSmallDataset ? 'client' : 'server' ?>" />
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+          <div>
+            <label class="text-xs text-gray-600 block mb-1">Período (início)</label>
+            <input type="date" name="occ_date_start" value="<?= htmlspecialchars($occFilters['date_start'] ?? '') ?>" class="w-full border rounded p-2 text-sm" />
+          </div>
+          <div>
+            <label class="text-xs text-gray-600 block mb-1">Período (fim)</label>
+            <input type="date" name="occ_date_end" value="<?= htmlspecialchars($occFilters['date_end'] ?? '') ?>" class="w-full border rounded p-2 text-sm" />
+          </div>
+          <div>
+            <label class="text-xs text-gray-600 block mb-1">Tipo de evento</label>
+            <select name="occ_tipo[]" class="w-full border rounded p-2 text-sm" multiple>
+              <?php foreach (($occOptions['tipos'] ?? []) as $tipo): ?>
+                <option value="<?= htmlspecialchars($tipo) ?>" <?= in_array($tipo, $occFilters['tipo'] ?? [], true) ? 'selected' : '' ?>><?= htmlspecialchars($tipo) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs text-gray-600 block mb-1">Status</label>
+            <div class="space-y-1 max-h-24 overflow-auto border rounded p-2 bg-white">
+              <?php foreach (($occOptions['status'] ?? []) as $statusOpt): ?>
+                <label class="flex items-center gap-2 text-xs">
+                  <input type="checkbox" name="occ_status[]" value="<?= htmlspecialchars($statusOpt) ?>" <?= in_array($statusOpt, $occFilters['status'] ?? [], true) ? 'checked' : '' ?> />
+                  <span><?= htmlspecialchars($statusOpt) ?></span>
+                </label>
+              <?php endforeach; ?>
+            </div>
+          </div>
+          <div>
+            <label class="text-xs text-gray-600 block mb-1">Responsável</label>
+            <input type="text" name="occ_responsavel" value="<?= htmlspecialchars($occFilters['responsavel'] ?? '') ?>" class="w-full border rounded p-2 text-sm" list="occ_responsaveis" />
+            <datalist id="occ_responsaveis">
+              <?php foreach (($occOptions['responsaveis'] ?? []) as $resp): ?>
+                <option value="<?= htmlspecialchars($resp) ?>"></option>
+              <?php endforeach; ?>
+            </datalist>
+          </div>
+          <div>
+            <label class="text-xs text-gray-600 block mb-1">Local</label>
+            <input type="text" name="occ_local" value="<?= htmlspecialchars($occFilters['local'] ?? '') ?>" class="w-full border rounded p-2 text-sm" list="occ_locais" />
+            <datalist id="occ_locais">
+              <?php foreach (($occOptions['locais'] ?? []) as $local): ?>
+                <option value="<?= htmlspecialchars($local) ?>"></option>
+              <?php endforeach; ?>
+            </datalist>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="submit" class="px-3 py-2 rounded bg-brand-red text-white text-xs">Aplicar filtros</button>
+          <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown text-xs" href="index.php?route=cronograma/show&id=<?= (int)$crono['id'] ?>&status_filter=<?= urlencode($statusFilter) ?>">Limpar filtros</a>
+          <span class="text-xs text-gray-500">Modo de ordenação: <?= $isSmallDataset ? 'client-side' : 'server-side' ?></span>
+        </div>
+      </form>
+    </div>
     <div class="p-4 overflow-x-auto">
-      <table class="min-w-full text-sm">
+      <table class="min-w-full text-sm" id="occTable">
         <thead>
           <tr class="text-left border-b bg-gray-50">
-            <th class="p-3">Data</th>
-            <th class="p-3">Pilar / Departamento</th>
-            <th class="p-3">Atividade</th>
-            <th class="p-3">Responsável</th>
-            <th class="p-3">Periodicidade</th>
-            <th class="p-3">Status</th>
+            <?php
+              $occOrderColumn = $occOrder['column'] ?? 'data';
+              $occOrderDirection = $occOrder['direction'] ?? 'asc';
+              $occBase = $_GET;
+              $occBase['route'] = 'cronograma/show';
+              $occBase['id'] = (int)$crono['id'];
+            ?>
+            <th class="p-3">
+              <?php
+                $nextDir = ($occOrderColumn === 'data' && $occOrderDirection === 'asc') ? 'desc' : 'asc';
+                $params = array_merge($occBase, ['occ_sort' => 'data', 'occ_dir' => $nextDir]);
+                $active = $occOrderColumn === 'data';
+              ?>
+              <a class="inline-flex items-center gap-1 hover:underline" data-occ-sort="data" href="index.php?<?= htmlspecialchars(http_build_query($params)) ?>">
+                Data
+                <span class="text-xs cronograma-sort-icon <?= $active ? 'text-brand-red' : 'text-gray-400' ?>" data-sort-icon="data" aria-hidden="true">
+                  <?= $active && $occOrderDirection === 'asc' ? '▲' : ($active ? '▼' : '↕') ?>
+                </span>
+              </a>
+            </th>
+            <th class="p-3">
+              <?php
+                $nextDir = ($occOrderColumn === 'topico' && $occOrderDirection === 'asc') ? 'desc' : 'asc';
+                $params = array_merge($occBase, ['occ_sort' => 'topico', 'occ_dir' => $nextDir]);
+                $active = $occOrderColumn === 'topico';
+              ?>
+              <a class="inline-flex items-center gap-1 hover:underline" data-occ-sort="topico" href="index.php?<?= htmlspecialchars(http_build_query($params)) ?>">
+                Pilar / Departamento
+                <span class="text-xs cronograma-sort-icon <?= $active ? 'text-brand-red' : 'text-gray-400' ?>" data-sort-icon="topico" aria-hidden="true">
+                  <?= $active && $occOrderDirection === 'asc' ? '▲' : ($active ? '▼' : '↕') ?>
+                </span>
+              </a>
+            </th>
+            <th class="p-3">
+              <?php
+                $nextDir = ($occOrderColumn === 'atividade' && $occOrderDirection === 'asc') ? 'desc' : 'asc';
+                $params = array_merge($occBase, ['occ_sort' => 'atividade', 'occ_dir' => $nextDir]);
+                $active = $occOrderColumn === 'atividade';
+              ?>
+              <a class="inline-flex items-center gap-1 hover:underline" data-occ-sort="atividade" href="index.php?<?= htmlspecialchars(http_build_query($params)) ?>">
+                Atividade
+                <span class="text-xs cronograma-sort-icon <?= $active ? 'text-brand-red' : 'text-gray-400' ?>" data-sort-icon="atividade" aria-hidden="true">
+                  <?= $active && $occOrderDirection === 'asc' ? '▲' : ($active ? '▼' : '↕') ?>
+                </span>
+              </a>
+            </th>
+            <th class="p-3">
+              <?php
+                $nextDir = ($occOrderColumn === 'responsavel' && $occOrderDirection === 'asc') ? 'desc' : 'asc';
+                $params = array_merge($occBase, ['occ_sort' => 'responsavel', 'occ_dir' => $nextDir]);
+                $active = $occOrderColumn === 'responsavel';
+              ?>
+              <a class="inline-flex items-center gap-1 hover:underline" data-occ-sort="responsavel" href="index.php?<?= htmlspecialchars(http_build_query($params)) ?>">
+                Responsável
+                <span class="text-xs cronograma-sort-icon <?= $active ? 'text-brand-red' : 'text-gray-400' ?>" data-sort-icon="responsavel" aria-hidden="true">
+                  <?= $active && $occOrderDirection === 'asc' ? '▲' : ($active ? '▼' : '↕') ?>
+                </span>
+              </a>
+            </th>
+            <th class="p-3">
+              <?php
+                $nextDir = ($occOrderColumn === 'periodicidade' && $occOrderDirection === 'asc') ? 'desc' : 'asc';
+                $params = array_merge($occBase, ['occ_sort' => 'periodicidade', 'occ_dir' => $nextDir]);
+                $active = $occOrderColumn === 'periodicidade';
+              ?>
+              <a class="inline-flex items-center gap-1 hover:underline" data-occ-sort="periodicidade" href="index.php?<?= htmlspecialchars(http_build_query($params)) ?>">
+                Periodicidade
+                <span class="text-xs cronograma-sort-icon <?= $active ? 'text-brand-red' : 'text-gray-400' ?>" data-sort-icon="periodicidade" aria-hidden="true">
+                  <?= $active && $occOrderDirection === 'asc' ? '▲' : ($active ? '▼' : '↕') ?>
+                </span>
+              </a>
+            </th>
+            <th class="p-3">
+              <?php
+                $nextDir = ($occOrderColumn === 'status' && $occOrderDirection === 'asc') ? 'desc' : 'asc';
+                $params = array_merge($occBase, ['occ_sort' => 'status', 'occ_dir' => $nextDir]);
+                $active = $occOrderColumn === 'status';
+              ?>
+              <a class="inline-flex items-center gap-1 hover:underline" data-occ-sort="status" href="index.php?<?= htmlspecialchars(http_build_query($params)) ?>">
+                Status
+                <span class="text-xs cronograma-sort-icon <?= $active ? 'text-brand-red' : 'text-gray-400' ?>" data-sort-icon="status" aria-hidden="true">
+                  <?= $active && $occOrderDirection === 'asc' ? '▲' : ($active ? '▼' : '↕') ?>
+                </span>
+              </a>
+            </th>
             <th class="p-3">Farol</th>
             <th class="p-3">Ações</th>
           </tr>
         </thead>
         <tbody>
           <?php if (empty($events)): ?>
-            <tr><td class="p-4 text-center text-gray-500" colspan="8">Nenhuma ocorrência cadastrada.</td></tr>
+            <tr data-empty-row><td class="p-4 text-center text-gray-500" colspan="8">Nenhuma ocorrência encontrada com os filtros aplicados.</td></tr>
           <?php endif; ?>
           <?php foreach ($events as $ev): ?>
             <?php $isSeries = ($ev['periodicidade'] ?? 'unico') !== 'unico' || !empty($ev['evento_pai_id']); ?>
-            <tr class="border-b align-top cronograma-traffic-row <?= htmlspecialchars($ev['traffic']['row_class'] ?? '') ?>" data-event-row="<?= (int)$ev['id'] ?>">
+            <tr class="border-b align-top cronograma-traffic-row <?= htmlspecialchars($ev['traffic']['row_class'] ?? '') ?>"
+                data-event-row="<?= (int)$ev['id'] ?>"
+                data-ev-date="<?= htmlspecialchars($ev['data']) ?>"
+                data-ev-topico="<?= htmlspecialchars($ev['topico']) ?>"
+                data-ev-atividade="<?= htmlspecialchars($ev['atividade']) ?>"
+                data-ev-responsavel="<?= htmlspecialchars($ev['responsavel'] ?? '') ?>"
+                data-ev-periodicidade="<?= htmlspecialchars($ev['periodicidade'] ?? 'unico') ?>"
+                data-ev-status="<?= htmlspecialchars($ev['traffic']['label'] ?? $ev['status'] ?? '') ?>"
+                data-ev-local="<?= htmlspecialchars($ev['unidade'] ?? '') ?>"
+            >
               <td class="p-3"><?= htmlspecialchars($ev['data']) ?></td>
               <td class="p-3">
                 <div class="font-medium"><?= htmlspecialchars($ev['topico']) ?></div>
@@ -165,6 +330,18 @@
                   <input type="hidden" name="id_evento" value="<?= (int)$ev['id'] ?>" />
                   <input type="hidden" name="id_cronograma" value="<?= (int)$crono['id'] ?>" />
                   <input type="hidden" name="status_filter" value="<?= htmlspecialchars($statusFilter) ?>" />
+                  <input type="hidden" name="occ_date_start" value="<?= htmlspecialchars($occFilters['date_start'] ?? '') ?>" />
+                  <input type="hidden" name="occ_date_end" value="<?= htmlspecialchars($occFilters['date_end'] ?? '') ?>" />
+                  <?php foreach (($occFilters['tipo'] ?? []) as $tipo): ?>
+                    <input type="hidden" name="occ_tipo[]" value="<?= htmlspecialchars($tipo) ?>" />
+                  <?php endforeach; ?>
+                  <?php foreach (($occFilters['status'] ?? []) as $statusOpt): ?>
+                    <input type="hidden" name="occ_status[]" value="<?= htmlspecialchars($statusOpt) ?>" />
+                  <?php endforeach; ?>
+                  <input type="hidden" name="occ_responsavel" value="<?= htmlspecialchars($occFilters['responsavel'] ?? '') ?>" />
+                  <input type="hidden" name="occ_local" value="<?= htmlspecialchars($occFilters['local'] ?? '') ?>" />
+                  <input type="hidden" name="occ_sort" value="<?= htmlspecialchars($occOrder['column'] ?? 'data') ?>" />
+                  <input type="hidden" name="occ_dir" value="<?= htmlspecialchars($occOrder['direction'] ?? 'asc') ?>" />
                   <input type="hidden" name="realizado" value="<?= !empty($ev['traffic']['toggle_checked']) ? '1' : '0' ?>" data-realizado-input="<?= (int)$ev['id'] ?>" />
                   <button
                     type="button"
@@ -184,6 +361,18 @@
                   <input type="hidden" name="id_evento" value="<?= (int)$ev['id'] ?>" />
                   <input type="hidden" name="id_cronograma" value="<?= (int)$crono['id'] ?>" />
                   <input type="hidden" name="status_filter" value="<?= htmlspecialchars($statusFilter) ?>" />
+                  <input type="hidden" name="occ_date_start" value="<?= htmlspecialchars($occFilters['date_start'] ?? '') ?>" />
+                  <input type="hidden" name="occ_date_end" value="<?= htmlspecialchars($occFilters['date_end'] ?? '') ?>" />
+                  <?php foreach (($occFilters['tipo'] ?? []) as $tipo): ?>
+                    <input type="hidden" name="occ_tipo[]" value="<?= htmlspecialchars($tipo) ?>" />
+                  <?php endforeach; ?>
+                  <?php foreach (($occFilters['status'] ?? []) as $statusOpt): ?>
+                    <input type="hidden" name="occ_status[]" value="<?= htmlspecialchars($statusOpt) ?>" />
+                  <?php endforeach; ?>
+                  <input type="hidden" name="occ_responsavel" value="<?= htmlspecialchars($occFilters['responsavel'] ?? '') ?>" />
+                  <input type="hidden" name="occ_local" value="<?= htmlspecialchars($occFilters['local'] ?? '') ?>" />
+                  <input type="hidden" name="occ_sort" value="<?= htmlspecialchars($occOrder['column'] ?? 'data') ?>" />
+                  <input type="hidden" name="occ_dir" value="<?= htmlspecialchars($occOrder['direction'] ?? 'asc') ?>" />
                   <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
                     <input class="border rounded p-2" type="date" name="data" value="<?= htmlspecialchars($ev['data']) ?>" />
                     <input class="border rounded p-2" type="text" name="topico" list="pilares_options" value="<?= htmlspecialchars($ev['topico']) ?>" placeholder="Pilar" />
@@ -222,6 +411,18 @@
                     <input type="hidden" name="id" value="<?= (int)$ev['id'] ?>" />
                     <input type="hidden" name="id_cronograma" value="<?= (int)$crono['id'] ?>" />
                     <input type="hidden" name="status_filter" value="<?= htmlspecialchars($statusFilter) ?>" />
+                    <input type="hidden" name="occ_date_start" value="<?= htmlspecialchars($occFilters['date_start'] ?? '') ?>" />
+                    <input type="hidden" name="occ_date_end" value="<?= htmlspecialchars($occFilters['date_end'] ?? '') ?>" />
+                    <?php foreach (($occFilters['tipo'] ?? []) as $tipo): ?>
+                      <input type="hidden" name="occ_tipo[]" value="<?= htmlspecialchars($tipo) ?>" />
+                    <?php endforeach; ?>
+                    <?php foreach (($occFilters['status'] ?? []) as $statusOpt): ?>
+                      <input type="hidden" name="occ_status[]" value="<?= htmlspecialchars($statusOpt) ?>" />
+                    <?php endforeach; ?>
+                    <input type="hidden" name="occ_responsavel" value="<?= htmlspecialchars($occFilters['responsavel'] ?? '') ?>" />
+                    <input type="hidden" name="occ_local" value="<?= htmlspecialchars($occFilters['local'] ?? '') ?>" />
+                    <input type="hidden" name="occ_sort" value="<?= htmlspecialchars($occOrder['column'] ?? 'data') ?>" />
+                    <input type="hidden" name="occ_dir" value="<?= htmlspecialchars($occOrder['direction'] ?? 'asc') ?>" />
                     <input type="hidden" name="escopo" value="evento" />
                     <button class="px-3 py-2 rounded bg-gray-200 text-brand-brown text-xs" type="submit">Excluir este evento</button>
                   </form>
@@ -231,6 +432,18 @@
                       <input type="hidden" name="id" value="<?= (int)$ev['id'] ?>" />
                       <input type="hidden" name="id_cronograma" value="<?= (int)$crono['id'] ?>" />
                       <input type="hidden" name="status_filter" value="<?= htmlspecialchars($statusFilter) ?>" />
+                      <input type="hidden" name="occ_date_start" value="<?= htmlspecialchars($occFilters['date_start'] ?? '') ?>" />
+                      <input type="hidden" name="occ_date_end" value="<?= htmlspecialchars($occFilters['date_end'] ?? '') ?>" />
+                      <?php foreach (($occFilters['tipo'] ?? []) as $tipo): ?>
+                        <input type="hidden" name="occ_tipo[]" value="<?= htmlspecialchars($tipo) ?>" />
+                      <?php endforeach; ?>
+                      <?php foreach (($occFilters['status'] ?? []) as $statusOpt): ?>
+                        <input type="hidden" name="occ_status[]" value="<?= htmlspecialchars($statusOpt) ?>" />
+                      <?php endforeach; ?>
+                      <input type="hidden" name="occ_responsavel" value="<?= htmlspecialchars($occFilters['responsavel'] ?? '') ?>" />
+                      <input type="hidden" name="occ_local" value="<?= htmlspecialchars($occFilters['local'] ?? '') ?>" />
+                      <input type="hidden" name="occ_sort" value="<?= htmlspecialchars($occOrder['column'] ?? 'data') ?>" />
+                      <input type="hidden" name="occ_dir" value="<?= htmlspecialchars($occOrder['direction'] ?? 'asc') ?>" />
                       <input type="hidden" name="escopo" value="serie" />
                       <button class="px-3 py-2 rounded bg-red-100 text-red-700 text-xs" type="submit">Excluir série</button>
                     </form>
@@ -239,6 +452,9 @@
               </td>
             </tr>
           <?php endforeach; ?>
+          <?php if (!empty($events)): ?>
+            <tr data-empty-row class="hidden"><td class="p-4 text-center text-gray-500" colspan="8">Nenhuma ocorrência encontrada com os filtros aplicados.</td></tr>
+          <?php endif; ?>
         </tbody>
       </table>
     </div>
@@ -323,5 +539,219 @@
         }
       });
     });
+
+    const occForm = document.getElementById('occFiltersForm');
+    const occTable = document.getElementById('occTable');
+    const occError = document.getElementById('occClientError');
+    const occDataset = occForm ? occForm.querySelector('input[name="occ_dataset"]') : null;
+    const isClientMode = occDataset && occDataset.value === 'client';
+    const collator = typeof Intl !== 'undefined' ? new Intl.Collator('pt-BR', { sensitivity: 'base' }) : null;
+
+    /**
+     * Recupera o valor de um atributo data-* de uma linha da tabela.
+     * @param {HTMLTableRowElement} row
+     * @param {string} key
+     * @returns {string}
+     */
+    const getRowValue = (row, key) => {
+      return (row.dataset[key] || '').toString();
+    };
+
+    /**
+     * Atualiza os ícones de ordenação de cabeçalhos com base no estado atual.
+     * @param {string} activeColumn
+     * @param {string} activeDir
+     * @returns {void}
+     */
+    const updateSortIcons = (activeColumn, activeDir) => {
+      if (!occTable) return;
+      occTable.querySelectorAll('[data-sort-icon]').forEach((icon) => {
+        const column = icon.getAttribute('data-sort-icon');
+        if (column === activeColumn) {
+          icon.textContent = activeDir === 'asc' ? '▲' : '▼';
+          icon.classList.remove('text-gray-400');
+          icon.classList.add('text-brand-red');
+        } else {
+          icon.textContent = '↕';
+          icon.classList.add('text-gray-400');
+          icon.classList.remove('text-brand-red');
+        }
+      });
+    };
+
+    /**
+     * Ordena as linhas da tabela por coluna e direção.
+     * @param {HTMLTableRowElement[]} rows
+     * @param {string} column
+     * @param {string} direction
+     * @returns {HTMLTableRowElement[]}
+     */
+    const sortRows = (rows, column, direction) => {
+      const dir = direction === 'desc' ? -1 : 1;
+      return rows.sort((a, b) => {
+        const left = getRowValue(a, `ev${column === 'data' ? 'Date' : column.charAt(0).toUpperCase() + column.slice(1)}`);
+        const right = getRowValue(b, `ev${column === 'data' ? 'Date' : column.charAt(0).toUpperCase() + column.slice(1)}`);
+        let result = 0;
+        if (column === 'data') {
+          result = left.localeCompare(right);
+        } else if (collator) {
+          result = collator.compare(left, right);
+        } else {
+          result = left.toLowerCase().localeCompare(right.toLowerCase());
+        }
+        if (result === 0) {
+          result = getRowValue(a, 'evDate').localeCompare(getRowValue(b, 'evDate'));
+        }
+        return result * dir;
+      });
+    };
+
+    /**
+     * Aplica ordenação client-side no corpo da tabela.
+     * @param {string} column
+     * @param {string} direction
+     * @returns {void}
+     */
+    const applyClientSort = (column, direction) => {
+      if (!occTable) return;
+      const tbody = occTable.querySelector('tbody');
+      if (!tbody) return;
+      const rows = Array.from(tbody.querySelectorAll('tr[data-event-row]'));
+      const sorted = sortRows(rows, column, direction);
+      sorted.forEach((row) => tbody.appendChild(row));
+      updateSortIcons(column, direction);
+    };
+
+    /**
+     * Verifica se uma linha atende aos filtros selecionados.
+     * @param {HTMLTableRowElement} row
+     * @param {{start:string,end:string,tipos:string[],status:string[],responsavel:string,local:string}} filters
+     * @returns {boolean}
+     */
+    const matchesFilters = (row, filters) => {
+      const date = getRowValue(row, 'evDate');
+      if (filters.start && date < filters.start) return false;
+      if (filters.end && date > filters.end) return false;
+      if (filters.tipos.length && !filters.tipos.includes(getRowValue(row, 'evTopico'))) return false;
+      if (filters.status.length && !filters.status.includes(getRowValue(row, 'evStatus'))) return false;
+      if (filters.responsavel && !getRowValue(row, 'evResponsavel').toLowerCase().includes(filters.responsavel)) return false;
+      if (filters.local && !getRowValue(row, 'evLocal').toLowerCase().includes(filters.local)) return false;
+      return true;
+    };
+
+    /**
+     * Aplica filtros client-side exibindo ou ocultando linhas da tabela.
+     * @param {{start:string,end:string,tipos:string[],status:string[],responsavel:string,local:string}} filters
+     * @returns {void}
+     */
+    const applyClientFilters = (filters) => {
+      if (!occTable) return;
+      const tbody = occTable.querySelector('tbody');
+      if (!tbody) return;
+      let visibleCount = 0;
+      tbody.querySelectorAll('tr[data-event-row]').forEach((row) => {
+        const visible = matchesFilters(row, filters);
+        row.classList.toggle('hidden', !visible);
+        if (visible) visibleCount++;
+      });
+      const emptyRow = tbody.querySelector('tr[data-empty-row]');
+      if (emptyRow) {
+        emptyRow.classList.toggle('hidden', visibleCount > 0);
+      }
+    };
+
+    /**
+     * Exibe mensagem amigável de erro no painel de filtros.
+     * @param {string} message
+     * @returns {void}
+     */
+    const showOccError = (message) => {
+      if (!occError) return;
+      occError.textContent = message;
+      occError.classList.remove('hidden');
+    };
+
+    /**
+     * Limpa mensagens de erro do painel de filtros.
+     * @returns {void}
+     */
+    const clearOccError = () => {
+      if (!occError) return;
+      occError.textContent = '';
+      occError.classList.add('hidden');
+    };
+
+    /**
+     * Coleta filtros atuais do formulário de ocorrências.
+     * @returns {{start:string,end:string,tipos:string[],status:string[],responsavel:string,local:string}|null}
+     */
+    const getFilterValues = () => {
+      if (!occForm) return null;
+      const data = new FormData(occForm);
+      return {
+        start: (data.get('occ_date_start') || '').toString(),
+        end: (data.get('occ_date_end') || '').toString(),
+        tipos: data.getAll('occ_tipo[]').map((v) => v.toString()),
+        status: data.getAll('occ_status[]').map((v) => v.toString()),
+        responsavel: (data.get('occ_responsavel') || '').toString().trim().toLowerCase(),
+        local: (data.get('occ_local') || '').toString().trim().toLowerCase(),
+      };
+    };
+
+    /**
+     * Atualiza a URL com o estado atual de filtros e ordenação para preservar navegação.
+     * @returns {void}
+     */
+    const updateUrlState = () => {
+      if (!occForm) return;
+      const params = new URLSearchParams(new FormData(occForm));
+      const url = new URL(window.location.href);
+      url.search = params.toString();
+      window.history.replaceState({}, '', url.toString());
+    };
+
+    /**
+     * Registra comportamento client-side para filtros e ordenação.
+     * @returns {void}
+     */
+    const bindClientBehavior = () => {
+      if (!occForm || !occTable) return;
+      const currentSort = {
+        column: (occForm.querySelector('input[name="occ_sort"]') || {}).value || 'data',
+        direction: (occForm.querySelector('input[name="occ_dir"]') || {}).value || 'asc',
+      };
+      applyClientSort(currentSort.column, currentSort.direction);
+      applyClientFilters(getFilterValues());
+      occForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        clearOccError();
+        const filters = getFilterValues();
+        if (filters.start && filters.end && filters.start > filters.end) {
+          showOccError('O período inicial não pode ser maior que o período final.');
+          return;
+        }
+        applyClientFilters(filters);
+        updateUrlState();
+      });
+      occTable.querySelectorAll('[data-occ-sort]').forEach((link) => {
+        link.addEventListener('click', (event) => {
+          event.preventDefault();
+          const column = link.getAttribute('data-occ-sort');
+          if (!column) return;
+          const currentColumn = occForm.querySelector('input[name="occ_sort"]');
+          const currentDir = occForm.querySelector('input[name="occ_dir"]');
+          const isSame = currentColumn && currentColumn.value === column;
+          const nextDir = isSame && currentDir && currentDir.value === 'asc' ? 'desc' : 'asc';
+          if (currentColumn) currentColumn.value = column;
+          if (currentDir) currentDir.value = nextDir;
+          applyClientSort(column, nextDir);
+          updateUrlState();
+        });
+      });
+    };
+
+    if (isClientMode) {
+      bindClientBehavior();
+    }
   })();
 </script>

@@ -10,3 +10,4 @@ storage/
 .mariadb/
 .vercel/
 public/teste_conexao.php
+/institutodona.sql
