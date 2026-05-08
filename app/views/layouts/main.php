@@ -44,7 +44,9 @@ $brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
                         <img src="<?= $assetsUrl ?>/img/logobco.png" alt="Logo" class="sidebar-brand-logo shrink-0" />
                         <div class="leading-tight min-w-0">
                             <div class="font-bold text-sm sidebar-label"><?= htmlspecialchars($brandName) ?></div>
-                            <div class="text-[11px] opacity-80 sidebar-label"><?= htmlspecialchars($brandTagline) ?></div>
+                            <?php if (!empty($brandTagline) && $brandTagline !== $brandName): ?>
+                                <div class="text-[11px] opacity-80 sidebar-label"><?= htmlspecialchars($brandTagline) ?></div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>

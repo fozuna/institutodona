@@ -34,8 +34,19 @@ class FuncoesController extends BaseController
     {
         $this->requireLogin();
         $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
+        $selectedSetorId = isset($_GET['setor_id']) ? (int)$_GET['setor_id'] : 0;
         $setores = $cliente ? $this->setores->allByCliente($cliente) : $this->setores->all();
-        $this->render('funcoes/create', ['setores' => $setores, 'cliente' => $cliente]);
+        $departamentos = $cliente ? $this->deps->allByCliente($cliente) : $this->deps->all();
+        $mapDepartamentos = [];
+        foreach ($departamentos as $d) {
+            $mapDepartamentos[(int)($d['id'] ?? 0)] = (string)($d['nome'] ?? '');
+        }
+        $this->render('funcoes/create', [
+            'setores' => $setores,
+            'cliente' => $cliente,
+            'selectedSetorId' => $selectedSetorId,
+            'mapDepartamentos' => $mapDepartamentos,
+        ]);
     }
 
     public function store(): void
@@ -57,7 +68,17 @@ class FuncoesController extends BaseController
         $item = $this->funcoes->find($id);
         $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
         $setores = $cliente ? $this->setores->allByCliente($cliente) : $this->setores->all();
-        $this->render('funcoes/edit', ['item' => $item, 'setores' => $setores, 'cliente' => $cliente]);
+        $departamentos = $cliente ? $this->deps->allByCliente($cliente) : $this->deps->all();
+        $mapDepartamentos = [];
+        foreach ($departamentos as $d) {
+            $mapDepartamentos[(int)($d['id'] ?? 0)] = (string)($d['nome'] ?? '');
+        }
+        $this->render('funcoes/edit', [
+            'item' => $item,
+            'setores' => $setores,
+            'cliente' => $cliente,
+            'mapDepartamentos' => $mapDepartamentos,
+        ]);
     }
 
     public function update(): void

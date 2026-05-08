@@ -1,4 +1,5 @@
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<?php /** @var array $clientes */ ?>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4" data-treinamentos-form>
   <div class="md:col-span-2">
     <label class="block text-sm">Nome</label>
     <input name="nome" class="border rounded p-2 w-full" required value="<?= htmlspecialchars((string)($values['nome'] ?? '')) ?>" />
@@ -17,12 +18,26 @@
     <input name="carga_horaria" class="border rounded p-2 w-full" value="<?= htmlspecialchars((string)($values['carga_horaria'] ?? '')) ?>" />
     <?php if (!empty($errors['carga_horaria'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['carga_horaria']) ?></p><?php endif; ?>
   </div>
+  <div class="md:col-span-2">
+    <label class="block text-sm">Empresa</label>
+    <select name="cliente_id" class="border rounded p-2 w-full" required id="treinamentosClienteId">
+      <option value="0">Selecione</option>
+      <?php foreach (($clientes ?? []) as $c): ?>
+        <option value="<?= (int)$c['id'] ?>" <?= ((int)($values['cliente_id'] ?? 0) === (int)$c['id']) ? 'selected' : '' ?>>
+          <?= htmlspecialchars($c['nome_empresa']) ?>
+        </option>
+      <?php endforeach; ?>
+    </select>
+    <?php if (!empty($errors['cliente_id'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['cliente_id']) ?></p><?php endif; ?>
+  </div>
   <div>
     <label class="block text-sm">Departamento</label>
-    <select name="departamento_id" class="border rounded p-2 w-full" required>
+    <select name="departamento_id" class="border rounded p-2 w-full" required id="treinamentosDepartamentoId">
       <option value="0">Selecione</option>
       <?php foreach ($departamentos as $departamento): ?>
-        <option value="<?= (int)$departamento['id'] ?>" <?= ((int)($values['departamento_id'] ?? 0) === (int)$departamento['id']) ? 'selected' : '' ?>>
+        <option value="<?= (int)$departamento['id'] ?>"
+                data-cliente-id="<?= (int)($departamento['cliente_id'] ?? 0) ?>"
+                <?= ((int)($values['departamento_id'] ?? 0) === (int)$departamento['id']) ? 'selected' : '' ?>>
           <?= htmlspecialchars($departamento['nome_empresa'] . ' • ' . $departamento['nome']) ?>
         </option>
       <?php endforeach; ?>
@@ -57,24 +72,88 @@
   </div>
   <div>
     <label class="block text-sm">Setores Aplicáveis</label>
-    <select name="setor_ids[]" multiple size="6" class="border rounded p-2 w-full">
+    <select name="setor_ids[]" multiple size="6" class="border rounded p-2 w-full" id="treinamentosSetores">
       <?php foreach ($setores as $setor): ?>
-        <option value="<?= (int)$setor['id'] ?>" <?= in_array((int)$setor['id'], array_map('intval', $values['setor_ids'] ?? []), true) ? 'selected' : '' ?>>
+        <option value="<?= (int)$setor['id'] ?>"
+                data-cliente-id="<?= (int)($setor['cliente_id'] ?? 0) ?>"
+                <?= in_array((int)$setor['id'], array_map('intval', $values['setor_ids'] ?? []), true) ? 'selected' : '' ?>>
           <?= htmlspecialchars(($setor['departamento_nome'] ?? '') . ' • ' . $setor['nome']) ?>
         </option>
       <?php endforeach; ?>
     </select>
+    <?php if (!empty($errors['setor_ids'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['setor_ids']) ?></p><?php endif; ?>
     <p class="text-xs text-gray-500 mt-1">Você pode selecionar várias opções neste campo e também em Funções Aplicáveis para definir com clareza o público do treinamento.</p>
   </div>
   <div>
     <label class="block text-sm">Funções Aplicáveis</label>
-    <select name="funcao_ids[]" multiple size="6" class="border rounded p-2 w-full">
+    <select name="funcao_ids[]" multiple size="6" class="border rounded p-2 w-full" id="treinamentosFuncoes">
       <?php foreach ($funcoes as $funcao): ?>
-        <option value="<?= (int)$funcao['id'] ?>" <?= in_array((int)$funcao['id'], array_map('intval', $values['funcao_ids'] ?? []), true) ? 'selected' : '' ?>>
+        <option value="<?= (int)$funcao['id'] ?>"
+                data-cliente-id="<?= (int)($funcao['cliente_id'] ?? 0) ?>"
+                <?= in_array((int)$funcao['id'], array_map('intval', $values['funcao_ids'] ?? []), true) ? 'selected' : '' ?>>
           <?= htmlspecialchars(($funcao['setor_nome'] ?? '') . ' • ' . $funcao['nome']) ?>
         </option>
       <?php endforeach; ?>
     </select>
+    <?php if (!empty($errors['funcao_ids'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['funcao_ids']) ?></p><?php endif; ?>
     <p class="text-xs text-gray-500 mt-1">Selecione quantas funções forem necessárias para complementar a escolha feita em Setores Aplicáveis.</p>
   </div>
 </div>
+
+<script>
+  (function () {
+    const root = document.querySelector('[data-treinamentos-form]');
+    if (!root) return;
+    const cliente = document.getElementById('treinamentosClienteId');
+    const departamento = document.getElementById('treinamentosDepartamentoId');
+    const setores = document.getElementById('treinamentosSetores');
+    const funcoes = document.getElementById('treinamentosFuncoes');
+    if (!cliente || !departamento || !setores || !funcoes) return;
+
+    const normalizeClientId = () => {
+      const id = parseInt(cliente.value || '0', 10);
+      return Number.isFinite(id) ? id : 0;
+    };
+
+    const filterOptionsByClient = (select, clientId) => {
+      Array.from(select.options).forEach((opt) => {
+        const optClient = parseInt(opt.getAttribute('data-cliente-id') || '0', 10);
+        const isPlaceholder = opt.value === '0';
+        const visible = isPlaceholder || clientId === 0 || optClient === clientId;
+        opt.hidden = !visible;
+        opt.disabled = !visible;
+      });
+    };
+
+    const dropInvalidSelections = (select) => {
+      const selected = Array.from(select.selectedOptions);
+      selected.forEach((opt) => {
+        if (opt.disabled || opt.hidden) {
+          opt.selected = false;
+        }
+      });
+    };
+
+    const ensureDepartamentoValid = (clientId) => {
+      const opt = departamento.options[departamento.selectedIndex];
+      if (!opt || opt.value === '0') return;
+      const optClient = parseInt(opt.getAttribute('data-cliente-id') || '0', 10);
+      if (clientId !== 0 && optClient !== clientId) {
+        departamento.value = '0';
+      }
+    };
+
+    const apply = () => {
+      const clientId = normalizeClientId();
+      filterOptionsByClient(departamento, clientId);
+      filterOptionsByClient(setores, clientId);
+      filterOptionsByClient(funcoes, clientId);
+      ensureDepartamentoValid(clientId);
+      dropInvalidSelections(setores);
+      dropInvalidSelections(funcoes);
+    };
+
+    cliente.addEventListener('change', apply);
+    apply();
+  })();
+</script>

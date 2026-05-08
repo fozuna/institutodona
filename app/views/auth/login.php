@@ -1,13 +1,16 @@
 <?php /** @var string|null $error */ ?>
 <?php use App\Core\Security; ?>
 <?php $brandName = \App\Core\AppBrand::displayName(); ?>
+<?php $brandTagline = \App\Core\AppBrand::TAGLINE; ?>
 <div class="min-h-screen flex">
     <!-- Lado esquerdo: 70% com imagem de fundo -->
     <div class="relative basis-[70%] text-white flex items-center justify-center"
          style="background-image: url('assets/img/logobco.png'); background-size: cover; background-position: center; background-repeat: no-repeat; background-color: #102040; background-blend-mode: multiply;">
         <div class="p-10 max-w-2xl">
             <h1 class="text-4xl font-bold mb-4"><?= htmlspecialchars($brandName) ?></h1>
-            <p class="text-lg opacity-90"><?= htmlspecialchars(\App\Core\AppBrand::TAGLINE) ?></p>
+            <?php if (!empty($brandTagline) && $brandTagline !== $brandName): ?>
+                <p class="text-lg opacity-90"><?= htmlspecialchars($brandTagline) ?></p>
+            <?php endif; ?>
         </div>
     </div>
 

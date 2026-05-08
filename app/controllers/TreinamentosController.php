@@ -54,11 +54,14 @@ class TreinamentosController extends BaseController
     public function create(): void
     {
         $this->requireManagePermission();
+        $prefCliente = isset($_GET['cliente_id']) ? (int)$_GET['cliente_id'] : (isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0);
+        $prefCliente = (int)($this->resolveScopedClienteId($prefCliente > 0 ? $prefCliente : null) ?? 0);
         $this->renderForm('treinamentos/create', [
             'nome' => '',
             'objetivo' => '',
             'publico' => '',
             'carga_horaria' => '',
+            'cliente_id' => $prefCliente,
             'departamento_id' => 0,
             'periodicidade' => 'avulso',
             'fornecedor' => '',
@@ -410,6 +413,7 @@ class TreinamentosController extends BaseController
             'pageTitle' => str_contains($view, 'edit') ? 'Editar Treinamento' : 'Novo Treinamento',
             'values' => $values,
             'errors' => $errors,
+            'clientes' => $this->clienteOptions(),
             'departamentos' => $this->departamentoOptions(),
             'setores' => $this->setorOptions(),
             'funcoes' => $this->funcaoOptions(),
@@ -424,6 +428,7 @@ class TreinamentosController extends BaseController
             'objetivo' => trim((string)($_POST['objetivo'] ?? '')),
             'publico' => trim((string)($_POST['publico'] ?? '')),
             'carga_horaria' => trim((string)($_POST['carga_horaria'] ?? '')),
+            'cliente_id' => (int)($_POST['cliente_id'] ?? 0),
             'departamento_id' => (int)($_POST['departamento_id'] ?? 0),
             'periodicidade' => trim((string)($_POST['periodicidade'] ?? 'avulso')),
             'fornecedor' => trim((string)($_POST['fornecedor'] ?? '')),
@@ -441,6 +446,9 @@ class TreinamentosController extends BaseController
         if ($payload['nome'] === '') {
             $errors['nome'] = 'Informe o nome do treinamento.';
         }
+        if ((int)($payload['cliente_id'] ?? 0) <= 0) {
+            $errors['cliente_id'] = 'Selecione uma empresa.';
+        }
         if ((int)$payload['departamento_id'] <= 0) {
             $errors['departamento_id'] = 'Selecione um departamento.';
         }
@@ -452,6 +460,18 @@ class TreinamentosController extends BaseController
         }
         if ($payload['assinatura_responsavel'] === '') {
             $errors['assinatura_responsavel'] = 'Informe o responsável pela assinatura digital.';
+        }
+        if (empty($errors['cliente_id']) && empty($errors['departamento_id'])) {
+            $clienteId = (int)$payload['cliente_id'];
+            if (!$this->departamentoBelongsToCliente((int)$payload['departamento_id'], $clienteId)) {
+                $errors['departamento_id'] = 'Departamento inválido para a empresa selecionada.';
+            }
+            if (!empty($payload['setor_ids']) && !$this->setoresBelongToCliente($payload['setor_ids'], $clienteId)) {
+                $errors['setor_ids'] = 'Existem setores que não pertencem à empresa selecionada.';
+            }
+            if (!empty($payload['funcao_ids']) && !$this->funcoesBelongToCliente($payload['funcao_ids'], $clienteId)) {
+                $errors['funcao_ids'] = 'Existem funções que não pertencem à empresa selecionada.';
+            }
         }
         return $errors;
     }
@@ -500,7 +520,7 @@ class TreinamentosController extends BaseController
     {
         $pdo = Database::getConnection();
         $params = [];
-        $sql = "SELECT d.id, d.nome, c.nome_empresa
+        $sql = "SELECT d.id, d.nome, c.nome_empresa, d.cliente_id
                 FROM departamentos d
                 JOIN clientes c ON c.id = d.cliente_id
                 WHERE 1=1";
@@ -527,7 +547,7 @@ class TreinamentosController extends BaseController
     {
         $pdo = Database::getConnection();
         $params = [];
-        $sql = "SELECT s.id, s.nome, d.nome AS departamento_nome
+        $sql = "SELECT s.id, s.nome, d.nome AS departamento_nome, d.cliente_id
                 FROM setores s
                 JOIN departamentos d ON d.id = s.departamento_id
                 WHERE 1=1";
@@ -554,7 +574,7 @@ class TreinamentosController extends BaseController
     {
         $pdo = Database::getConnection();
         $params = [];
-        $sql = "SELECT f.id, f.nome, s.nome AS setor_nome
+        $sql = "SELECT f.id, f.nome, s.nome AS setor_nome, d.cliente_id
                 FROM funcoes f
                 JOIN setores s ON s.id = f.setor_id
                 JOIN departamentos d ON d.id = s.departamento_id
@@ -576,6 +596,74 @@ class TreinamentosController extends BaseController
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll() ?: [];
+    }
+
+    private function departamentoBelongsToCliente(int $departamentoId, int $clienteId): bool
+    {
+        if ($departamentoId <= 0 || $clienteId <= 0) {
+            return false;
+        }
+        if (!$this->canAccessCliente($clienteId)) {
+            return false;
+        }
+        $pdo = Database::getConnection();
+        $params = ['dep' => $departamentoId, 'cid' => $clienteId];
+        $stmt = $pdo->prepare("SELECT d.id FROM departamentos d WHERE d.id = :dep AND d.cliente_id = :cid LIMIT 1");
+        $stmt->execute($params);
+        return (bool)$stmt->fetch();
+    }
+
+    private function setoresBelongToCliente(array $setorIds, int $clienteId): bool
+    {
+        $setorIds = array_values(array_unique(array_filter(array_map('intval', $setorIds))));
+        if (empty($setorIds) || $clienteId <= 0) {
+            return true;
+        }
+        if (!$this->canAccessCliente($clienteId)) {
+            return false;
+        }
+        $pdo = Database::getConnection();
+        $params = ['cid' => $clienteId];
+        $holders = [];
+        foreach ($setorIds as $i => $id) {
+            $key = 's' . $i;
+            $holders[] = ':' . $key;
+            $params[$key] = $id;
+        }
+        $sql = "SELECT COUNT(*) FROM setores s
+                JOIN departamentos d ON d.id = s.departamento_id
+                WHERE s.id IN (" . implode(',', $holders) . ")
+                  AND d.cliente_id = :cid";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        return (int)$stmt->fetchColumn() === count($setorIds);
+    }
+
+    private function funcoesBelongToCliente(array $funcaoIds, int $clienteId): bool
+    {
+        $funcaoIds = array_values(array_unique(array_filter(array_map('intval', $funcaoIds))));
+        if (empty($funcaoIds) || $clienteId <= 0) {
+            return true;
+        }
+        if (!$this->canAccessCliente($clienteId)) {
+            return false;
+        }
+        $pdo = Database::getConnection();
+        $params = ['cid' => $clienteId];
+        $holders = [];
+        foreach ($funcaoIds as $i => $id) {
+            $key = 'f' . $i;
+            $holders[] = ':' . $key;
+            $params[$key] = $id;
+        }
+        $sql = "SELECT COUNT(*) FROM funcoes f
+                JOIN setores s ON s.id = f.setor_id
+                JOIN departamentos d ON d.id = s.departamento_id
+                WHERE f.id IN (" . implode(',', $holders) . ")
+                  AND d.cliente_id = :cid";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        return (int)$stmt->fetchColumn() === count($funcaoIds);
     }
 
     private function usuarioOptions(): array
