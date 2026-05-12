@@ -2,6 +2,7 @@
 namespace App\Services;
 
 use App\Core\DateHelper;
+use App\Core\PdfSupport;
 use App\Core\ReportBranding;
 use App\Core\XlsxExport;
 use Dompdf\Dompdf;
@@ -362,6 +363,9 @@ class TreinamentoDocumentService
 
     private function renderPdf(string $html, string $paper = 'A4', string $orientation = 'portrait', bool $phpEnabled = false): string
     {
+        if (!PdfSupport::isDompdfAvailable()) {
+            throw new \RuntimeException('Dependência Dompdf indisponível.');
+        }
         $options = new Options();
         $options->set('isRemoteEnabled', false);
         $options->set('isHtml5ParserEnabled', true);

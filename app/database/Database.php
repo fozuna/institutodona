@@ -33,7 +33,9 @@ class Database
             }
             $pdo = new PDO($dsn, $db['user'], $db['pass'], $options);
         } catch (PDOException $e) {
-            // Em produção, logue o erro e mostre mensagem genérica
+            if (PHP_SAPI === 'cli') {
+                throw new \RuntimeException('Erro ao conectar ao banco de dados.', 0, $e);
+            }
             die('Erro ao conectar ao banco de dados.');
         }
 

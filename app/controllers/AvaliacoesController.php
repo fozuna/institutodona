@@ -336,6 +336,23 @@ class AvaliacoesController extends BaseController
             echo 'Avaliação não encontrada.';
             return;
         }
+        if (!\App\Core\PdfSupport::isDompdfAvailable()) {
+            $errorId = (function (): string {
+                try {
+                    return bin2hex(random_bytes(5));
+                } catch (\Throwable $e) {
+                    return (string)time();
+                }
+            })();
+            \App\Core\AuditLogger::log('pdf_unavailable', 'avaliacao', $id, [
+                'error_id' => $errorId,
+                'service' => 'AvaliacaoPdfService',
+                'reason' => 'dompdf_missing',
+            ]);
+            http_response_code(503);
+            echo \App\Core\PdfSupport::missingDompdfMessage() . ' Código: ' . $errorId;
+            return;
+        }
         $service = new AvaliacaoPdfService();
         if (!empty($_GET['preview'])) {
             $html = $service->renderHtml($id);

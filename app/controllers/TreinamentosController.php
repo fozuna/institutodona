@@ -279,6 +279,11 @@ class TreinamentosController extends BaseController
     public function certificado(): void
     {
         $this->requireManagePermission();
+        if (!\App\Core\PdfSupport::isDompdfAvailable()) {
+            http_response_code(503);
+            echo \App\Core\PdfSupport::missingDompdfMessage();
+            return;
+        }
         $agendaId = (int)($_GET['agenda_id'] ?? 0);
         $colaboradorId = (int)($_GET['colaborador_id'] ?? 0);
         $agenda = $this->agendaModel->find($agendaId);
@@ -319,6 +324,11 @@ class TreinamentosController extends BaseController
     public function certificadoLote(): void
     {
         $this->requireManagePermission();
+        if (!\App\Core\PdfSupport::isDompdfAvailable()) {
+            http_response_code(503);
+            echo \App\Core\PdfSupport::missingDompdfMessage();
+            return;
+        }
         if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
             http_response_code(400);
             echo 'CSRF inválido';
@@ -359,6 +369,11 @@ class TreinamentosController extends BaseController
     public function exportElegiveis(): void
     {
         $this->requireLogin();
+        if (!\App\Core\PdfSupport::isDompdfAvailable() && strtolower(trim((string)($_GET['format'] ?? 'pdf'))) !== 'xlsx') {
+            http_response_code(503);
+            echo \App\Core\PdfSupport::missingDompdfMessage();
+            return;
+        }
         $treinamento = $this->findOrRedirect((int)($_GET['id'] ?? 0));
         if (!$treinamento) {
             return;
@@ -381,6 +396,11 @@ class TreinamentosController extends BaseController
     public function presencaPdf(): void
     {
         $this->requireLogin();
+        if (!\App\Core\PdfSupport::isDompdfAvailable()) {
+            http_response_code(503);
+            echo \App\Core\PdfSupport::missingDompdfMessage();
+            return;
+        }
         $agenda = $this->agendaModel->find((int)($_GET['agenda_id'] ?? 0));
         if (!$agenda) {
             $_SESSION['flash_error'] = 'Agendamento não encontrado.';
@@ -398,6 +418,11 @@ class TreinamentosController extends BaseController
     public function dashboardPdf(): void
     {
         $this->requireLogin();
+        if (!\App\Core\PdfSupport::isDompdfAvailable()) {
+            http_response_code(503);
+            echo \App\Core\PdfSupport::missingDompdfMessage();
+            return;
+        }
         $filters = $this->dashboardFilters();
         $dashboard = $this->model->dashboard($filters);
         $this->sendBinaryPdf(
