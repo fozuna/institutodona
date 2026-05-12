@@ -20,7 +20,10 @@
   $generatedExpiracao = '';
   $generatedPermanent = true;
   $defaultSelectedAvaliacaoId = !empty($items) ? (int)($items[0]['id'] ?? 0) : 0;
-  $csrfShareToken = \App\Core\Security::csrfToken();
+  $csrfToken = \App\Core\Security::csrfToken();
+  $csrfShareToken = $csrfToken;
+  $csrfDeleteToken = $csrfToken;
+  $isReader = (($_SESSION['user']['tipo_acesso'] ?? null) === 'reader');
   $shareText = $generatedEmpresa !== '' ? ('Olá! Segue o formulário público da empresa ' . $generatedEmpresa . ': ' . $generatedUrl) : ('Olá! Segue o formulário público de avaliação: ' . $generatedUrl);
   $mailtoHref = $generatedUrl !== '' ? ('mailto:?subject=' . rawurlencode('Link da avaliação pública') . '&body=' . rawurlencode($shareText)) : '';
   $whatsHref = $generatedUrl !== '' ? ('https://wa.me/?text=' . rawurlencode($shareText)) : '';
@@ -34,6 +37,7 @@
 ?>
 <div class="p-6">
   <div id="avaliacoes-ui-status" class="sr-only" role="status" aria-live="polite"></div>
+  <div id="avaliacoes-toast" class="hidden mb-4 px-4 py-3 rounded relative" role="alert" aria-live="polite"></div>
   <div class="flex flex-col gap-3 mb-4 xl:flex-row xl:items-center xl:justify-between">
     <div>
       <h1 class="text-2xl font-bold">Avaliações</h1>
@@ -199,16 +203,44 @@
             <td class="p-3">
               <a class="text-brand-pink icon-action" href="index.php?route=avaliacoes/show&id=<?= (int)$i['id'] ?>" title="Ver" aria-label="Ver"><span data-feather="bar-chart-2"></span></a>
               <a class="text-brand-pink icon-action ml-2" href="index.php?route=avaliacoes/relatorio_pdf&id=<?= (int)$i['id'] ?>&download=1" title="Baixar PDF" aria-label="Baixar PDF"><span data-feather="download"></span></a>
+              <?php if (!$isReader): ?>
+                <button type="button"
+                        class="text-brand-red icon-action ml-2 btn-delete-avaliacao"
+                        data-avaliacao-id="<?= (int)$i['id'] ?>"
+                        data-avaliacao-nome="<?= htmlspecialchars($nm) ?>"
+                        title="Excluir"
+                        aria-label="Excluir"><span data-feather="trash-2"></span><span class="sr-only">Excluir</span></button>
+              <?php endif; ?>
             </td>
           </tr>
         <?php endforeach; ?>
       </tbody>
     </table>
   </div>
+  <div id="avaliacaoDeleteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="avaliacaoDeleteTitle">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 overflow-hidden">
+      <div class="bg-gray-50 px-4 py-3 border-b flex justify-between items-center">
+        <h3 id="avaliacaoDeleteTitle" class="text-lg font-medium text-gray-900">Confirmar exclusão</h3>
+        <button type="button" class="text-gray-400 hover:text-gray-600" data-delete-close aria-label="Fechar">&times;</button>
+      </div>
+      <div class="p-6">
+        <div id="avaliacaoDeleteMessage" class="text-sm text-gray-700"></div>
+        <div class="flex justify-end pt-4 gap-2">
+          <button type="button" class="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors" data-delete-cancel>Cancelar</button>
+          <button type="button" class="px-4 py-2 bg-brand-red text-white rounded hover:bg-red-700 transition-colors flex items-center gap-2" data-delete-confirm>
+            <span data-delete-spinner class="hidden animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span>
+            <span data-delete-confirm-icon class="w-4 h-4 inline-flex items-center justify-center"><span data-feather="trash-2"></span></span>
+            <span data-delete-confirm-text>Excluir</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 <script>
   (function(){
     const csrfShareToken = <?= json_encode($csrfShareToken, JSON_UNESCAPED_UNICODE) ?>;
+    const csrfDeleteToken = <?= json_encode($csrfDeleteToken, JSON_UNESCAPED_UNICODE) ?>;
     async function logShare(channel, url, avaliacaoId, publicId, success) {
       if ((!avaliacaoId && !publicId) || !channel) return;
       const payload = new URLSearchParams();
@@ -233,7 +265,21 @@
     const generatedPanel = document.getElementById('generated-link-panel');
     const generatedCopyBtn = generatedPanel ? generatedPanel.querySelector('[data-channel="copy"]') : null;
     const uiStatus = document.getElementById('avaliacoes-ui-status');
+    const toastEl = document.getElementById('avaliacoes-toast');
     function status(msg) { if (uiStatus) uiStatus.textContent = msg || ''; }
+    function toast(kind, message) {
+      if (!toastEl) return;
+      const isOk = kind === 'success';
+      toastEl.className = 'mb-4 px-4 py-3 rounded relative ' + (isOk
+        ? 'bg-green-100 border border-green-400 text-green-700'
+        : 'bg-red-100 border border-red-400 text-red-700');
+      toastEl.textContent = message || (isOk ? 'Sucesso.' : 'Erro.');
+      toastEl.classList.remove('hidden');
+      window.clearTimeout(toastEl.__hideTimer || 0);
+      toastEl.__hideTimer = window.setTimeout(() => {
+        toastEl.classList.add('hidden');
+      }, isOk ? 2500 : 5000);
+    }
     function setTemporaryTitle(el, title, ms) {
       if (!el) return;
       const prev = el.getAttribute('data-prev-title') || el.getAttribute('title') || '';
@@ -360,6 +406,153 @@
         if (feedbackEl) feedbackEl.textContent = 'Opção de compartilhamento aberta com sucesso.';
         logShare(channel, url, avaliacaoId, publicId, true);
       });
+    });
+
+    const deleteModal = document.getElementById('avaliacaoDeleteModal');
+    const deleteMsg = document.getElementById('avaliacaoDeleteMessage');
+    const deleteCancel = deleteModal ? deleteModal.querySelector('[data-delete-cancel]') : null;
+    const deleteClose = deleteModal ? deleteModal.querySelector('[data-delete-close]') : null;
+    const deleteConfirm = deleteModal ? deleteModal.querySelector('[data-delete-confirm]') : null;
+    const deleteConfirmText = deleteModal ? deleteModal.querySelector('[data-delete-confirm-text]') : null;
+    const deleteConfirmIcon = deleteModal ? deleteModal.querySelector('[data-delete-confirm-icon]') : null;
+    const deleteSpinner = deleteModal ? deleteModal.querySelector('[data-delete-spinner]') : null;
+    let pendingDelete = null;
+
+    function openDeleteModal(ctx) {
+      pendingDelete = ctx;
+      if (deleteMsg) {
+        const empresa = ctx.empresa || '—';
+        const data = ctx.data || '';
+        deleteMsg.textContent = 'Tem certeza que deseja excluir a avaliação de ' + empresa + (data ? (' (' + data + ')') : '') + '? Esta ação não pode ser desfeita.';
+      }
+      if (deleteModal) {
+        deleteModal.classList.remove('hidden');
+      }
+      if (window.feather && typeof window.feather.replace === 'function') {
+        window.feather.replace();
+      }
+    }
+
+    function closeDeleteModal() {
+      if (!deleteModal) return;
+      if (deleteConfirm) deleteConfirm.disabled = false;
+      if (deleteCancel) deleteCancel.disabled = false;
+      if (deleteClose) deleteClose.disabled = false;
+      if (deleteConfirmText) deleteConfirmText.textContent = 'Excluir';
+      if (deleteSpinner) deleteSpinner.classList.add('hidden');
+      if (deleteConfirmIcon) deleteConfirmIcon.classList.remove('hidden');
+      deleteModal.classList.add('hidden');
+      pendingDelete = null;
+    }
+
+    function getRowDataFromButton(btn) {
+      const row = btn.closest('tr');
+      const empresa = btn.getAttribute('data-avaliacao-nome') || row?.getAttribute('data-empresa') || '';
+      const dataCell = row ? row.querySelectorAll('td')[2] : null;
+      const data = dataCell ? (dataCell.textContent || '').trim() : '';
+      return { row, empresa, data };
+    }
+
+    document.querySelectorAll('.btn-delete-avaliacao').forEach((btn) => {
+      btn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const id = Number(btn.getAttribute('data-avaliacao-id') || '0');
+        if (!id) return;
+        const info = getRowDataFromButton(btn);
+        openDeleteModal({ id, empresa: info.empresa, data: info.data, row: info.row, trigger: btn });
+      });
+    });
+
+    async function confirmDelete() {
+      if (!pendingDelete || !deleteConfirm) return;
+      const id = Number(pendingDelete.id || 0);
+      if (!id) return;
+
+      const trigger = pendingDelete.trigger || null;
+      if (trigger) {
+        trigger.disabled = true;
+        trigger.classList.add('opacity-60', 'cursor-not-allowed');
+      }
+      if (deleteConfirm) {
+        deleteConfirm.disabled = true;
+        deleteConfirm.classList.add('opacity-75', 'cursor-not-allowed');
+        deleteConfirm.setAttribute('aria-label', 'Excluindo');
+      }
+      if (deleteCancel) deleteCancel.disabled = true;
+      if (deleteClose) deleteClose.disabled = true;
+      if (deleteSpinner) deleteSpinner.classList.remove('hidden');
+      if (deleteConfirmIcon) deleteConfirmIcon.classList.add('hidden');
+
+      const payload = new URLSearchParams();
+      payload.set('csrf', csrfDeleteToken);
+      payload.set('id', String(id));
+
+      try {
+        const response = await fetch('index.php?route=avaliacoes/delete-ajax', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+          body: payload.toString(),
+          credentials: 'same-origin',
+        });
+        let data = null;
+        try { data = await response.json(); } catch (e) { data = null; }
+        if (!response.ok || !data || !data.ok) {
+          const message = (data && data.message) ? data.message : 'Não foi possível excluir a avaliação. Tente novamente.';
+          toast('error', message);
+          status(message);
+          return;
+        }
+
+        const row = pendingDelete.row || null;
+        const wasSelected = row && row.classList.contains('bg-red-50');
+        if (row && row.parentNode) {
+          row.parentNode.removeChild(row);
+        }
+        toast('success', 'Avaliação excluída com sucesso.');
+        status('Avaliação excluída com sucesso.');
+        closeDeleteModal();
+
+        if (wasSelected) {
+          const remaining = document.querySelectorAll('.row-avaliacao');
+          if (remaining.length > 0) {
+            remaining.forEach((item) => item.classList.remove('bg-red-50'));
+            remaining[0].classList.add('bg-red-50');
+          }
+        }
+      } catch (e) {
+        const message = 'Erro de conexão ao excluir a avaliação.';
+        toast('error', message);
+        status(message);
+      } finally {
+        if (deleteSpinner) deleteSpinner.classList.add('hidden');
+        if (deleteConfirmIcon) deleteConfirmIcon.classList.remove('hidden');
+        if (deleteConfirm) {
+          deleteConfirm.disabled = false;
+          deleteConfirm.classList.remove('opacity-75', 'cursor-not-allowed');
+          deleteConfirm.setAttribute('aria-label', 'Excluir');
+        }
+        if (deleteCancel) deleteCancel.disabled = false;
+        if (deleteClose) deleteClose.disabled = false;
+        if (trigger) {
+          trigger.disabled = false;
+          trigger.classList.remove('opacity-60', 'cursor-not-allowed');
+        }
+      }
+    }
+
+    if (deleteConfirm) deleteConfirm.addEventListener('click', confirmDelete);
+    if (deleteCancel) deleteCancel.addEventListener('click', closeDeleteModal);
+    if (deleteClose) deleteClose.addEventListener('click', closeDeleteModal);
+    if (deleteModal) {
+      deleteModal.addEventListener('click', function(e) {
+        if (e.target === deleteModal) closeDeleteModal();
+      });
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && deleteModal && !deleteModal.classList.contains('hidden')) {
+        closeDeleteModal();
+      }
     });
   })();
 </script>

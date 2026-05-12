@@ -5,7 +5,32 @@ use App\Core\Auth;
 
 class ManualModel extends BaseModel
 {
-    private const ALLOWED_TYPES = ['pdf', 'doc', 'docx'];
+    private const ALLOWED_TYPES = [
+        'pdf',
+        'doc', 'docx',
+        'txt', 'rtf',
+        'xls', 'xlsx',
+        'ppt', 'pptx',
+        'jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg',
+    ];
+
+    private const MIME_BY_EXT = [
+        'pdf' => ['application/pdf'],
+        'doc' => ['application/msword', 'application/octet-stream'],
+        'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/zip', 'application/octet-stream'],
+        'txt' => ['text/plain'],
+        'rtf' => ['application/rtf', 'text/rtf', 'application/octet-stream'],
+        'xls' => ['application/vnd.ms-excel', 'application/octet-stream'],
+        'xlsx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/zip', 'application/octet-stream'],
+        'ppt' => ['application/vnd.ms-powerpoint', 'application/octet-stream'],
+        'pptx' => ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/zip', 'application/octet-stream'],
+        'jpg' => ['image/jpeg'],
+        'jpeg' => ['image/jpeg'],
+        'png' => ['image/png'],
+        'gif' => ['image/gif'],
+        'bmp' => ['image/bmp', 'image/x-ms-bmp'],
+        'svg' => ['image/svg+xml', 'text/xml', 'application/xml', 'application/octet-stream'],
+    ];
 
     private function ensureTable(): void
     {
@@ -125,9 +150,57 @@ class ManualModel extends BaseModel
         return in_array($ext, self::ALLOWED_TYPES, true) ? $ext : null;
     }
 
-    public static function storageDirFor(int $empresaId, int $departamentoId): string
+    public static function categoryFromExtension(string $ext): string
     {
-        return dirname(__DIR__, 2) . '/storage/manuais/' . $empresaId . '/' . $departamentoId;
+        $ext = strtolower($ext);
+        if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg'], true)) {
+            return 'imagens';
+        }
+        if (in_array($ext, ['xls', 'xlsx'], true)) {
+            return 'planilhas';
+        }
+        if (in_array($ext, ['ppt', 'pptx'], true)) {
+            return 'apresentacoes';
+        }
+        if (in_array($ext, ['txt', 'rtf'], true)) {
+            return 'texto';
+        }
+        return 'documentos';
+    }
+
+    public static function validateUpload(string $clientFilename, int $sizeBytes, string $detectedMime, int $maxBytes = 52428800): array
+    {
+        $ext = self::extensionFromUpload($clientFilename);
+        if ($ext === null) {
+            return ['ok' => false, 'error' => 'ext_invalid', 'message' => 'Tipo de arquivo inválido.'];
+        }
+        if ($sizeBytes <= 0) {
+            return ['ok' => false, 'error' => 'size_invalid', 'message' => 'Arquivo inválido.'];
+        }
+        if ($sizeBytes > $maxBytes) {
+            return ['ok' => false, 'error' => 'size_exceeded', 'message' => 'Arquivo excede o limite de 50MB.'];
+        }
+        $mime = strtolower(trim($detectedMime));
+        $allowed = self::MIME_BY_EXT[$ext] ?? [];
+        if (!in_array($mime, $allowed, true)) {
+            return ['ok' => false, 'error' => 'mime_invalid', 'message' => 'Tipo MIME inválido para o arquivo selecionado.'];
+        }
+        return [
+            'ok' => true,
+            'ext' => $ext,
+            'mime' => $mime,
+            'category' => self::categoryFromExtension($ext),
+        ];
+    }
+
+    public static function storageDirFor(int $empresaId, int $departamentoId, ?string $category = null): string
+    {
+        $base = dirname(__DIR__, 2) . '/storage/manuais/' . $empresaId . '/' . $departamentoId;
+        if ($category !== null && $category !== '') {
+            $safe = preg_replace('/[^a-z0-9_-]+/i', '_', strtolower($category)) ?: 'documentos';
+            return $base . '/' . $safe;
+        }
+        return $base;
     }
 
     public function portalCount(array $empresaIds, array $filters = []): int

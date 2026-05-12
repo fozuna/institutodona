@@ -13,7 +13,7 @@ $formatValue = $formatValue ?? static function ($value, array $item): string {
 <?php else: ?>
   <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
     <?php foreach ($items as $item): ?>
-      <div class="bg-white shadow rounded-xl p-5 border border-gray-100">
+      <div class="bg-white shadow rounded-xl p-5 border border-gray-100" data-indicador-id="<?= (int)$item['id'] ?>" data-unidade-tipo="<?= htmlspecialchars((string)($item['unidade_tipo'] ?? '')) ?>">
         <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
             <h2 class="text-lg font-semibold text-brand-black"><?= htmlspecialchars($item['indicador']) ?></h2>
@@ -27,7 +27,10 @@ $formatValue = $formatValue ?? static function ($value, array $item): string {
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-sm">
           <div class="rounded-lg bg-gray-50 p-3">
             <div class="text-gray-500"><?= htmlspecialchars($t('indicadores.label.valor')) ?></div>
-            <div class="font-semibold text-base"><?= htmlspecialchars($formatValue($item['valor'], $item)) ?></div>
+            <div class="font-semibold text-base">
+              <span data-indicador-valor-view><?= htmlspecialchars($formatValue($item['valor'], $item)) ?></span>
+              <input data-indicador-valor-input class="hidden border border-gray-300 rounded-lg p-2 w-full mt-2" type="text" inputmode="decimal" value="<?= $item['valor'] !== null ? htmlspecialchars(\App\Core\ValueFormatter::decimal($item['valor'], 2)) : '' ?>" />
+            </div>
           </div>
           <div class="rounded-lg bg-gray-50 p-3">
             <div class="text-gray-500"><?= htmlspecialchars($t('indicadores.label.periodicidade')) ?></div>
@@ -66,21 +69,22 @@ $formatValue = $formatValue ?? static function ($value, array $item): string {
             <a class="text-brand-brown icon-action" href="index.php?route=indicadores/historico&id=<?= (int)$item['id'] ?>" title="<?= htmlspecialchars($t('indicadores.action.history')) ?>" aria-label="<?= htmlspecialchars($t('indicadores.action.history')) ?>">
               <span data-feather="bar-chart-2"></span>
             </a>
-            <a class="text-brand-pink icon-action" href="index.php?route=indicadores/edit&id=<?= (int)$item['id'] ?>" title="<?= htmlspecialchars($t('indicadores.action.edit')) ?>" aria-label="<?= htmlspecialchars($t('indicadores.action.edit')) ?>">
+            <button class="text-brand-pink icon-action" type="button" data-indicador-edit title="Editar valor" aria-label="Editar valor">
               <span data-feather="edit"></span>
+            </button>
+            <button class="text-brand-brown icon-action opacity-50" type="button" data-indicador-save title="<?= htmlspecialchars($t('indicadores.action.save')) ?>" aria-label="<?= htmlspecialchars($t('indicadores.action.save')) ?>" disabled>
+              <span data-feather="check"></span>
+            </button>
+            <button class="text-brand-brown icon-action" type="button" data-indicador-delete title="<?= htmlspecialchars($t('indicadores.action.delete')) ?>" aria-label="<?= htmlspecialchars($t('indicadores.action.delete')) ?>">
+              <span data-feather="trash-2"></span>
+            </button>
+            <a class="text-brand-brown icon-action" href="index.php?route=indicadores/edit&id=<?= (int)$item['id'] ?>" title="<?= htmlspecialchars($t('indicadores.action.edit')) ?>" aria-label="<?= htmlspecialchars($t('indicadores.action.edit')) ?>">
+              <span data-feather="sliders"></span>
             </a>
-            <form method="post" action="index.php?route=indicadores/delete" onsubmit="return confirm('<?= htmlspecialchars($t('indicadores.action.delete')) ?>?')">
-              <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
-              <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
-              <input type="hidden" name="cliente" value="<?= (int)$item['cliente_id'] ?>" />
-              <button class="text-brand-brown icon-action" type="submit" title="<?= htmlspecialchars($t('indicadores.action.delete')) ?>" aria-label="<?= htmlspecialchars($t('indicadores.action.delete')) ?>">
-                <span data-feather="trash-2"></span>
-              </button>
-            </form>
           </div>
         </div>
+        <div class="hidden mt-3 text-sm" data-indicador-msg></div>
       </div>
     <?php endforeach; ?>
   </div>
 <?php endif; ?>
-

@@ -42,11 +42,16 @@ class ClienteModel extends BaseModel
             $stmt->execute($params);
         } catch (\PDOException $e) {
             try {
+                $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato, is_matriz, matriz_id FROM clientes WHERE $scopeCond ORDER BY nome_empresa");
+                $stmt->execute($params);
+            } catch (\PDOException $eMid) {
+                try {
                 $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato, logo_path, dominio_publico FROM clientes WHERE $scopeCond ORDER BY nome_empresa");
                 $stmt->execute($params);
-            } catch (\PDOException $e2) {
-                $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato FROM clientes WHERE $scopeCond ORDER BY nome_empresa");
-                $stmt->execute($params);
+                } catch (\PDOException $e2) {
+                    $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato FROM clientes WHERE $scopeCond ORDER BY nome_empresa");
+                    $stmt->execute($params);
+                }
             }
         }
         return $stmt->fetchAll();
@@ -62,9 +67,13 @@ class ClienteModel extends BaseModel
             $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path, dominio_publico, is_matriz, matriz_id FROM clientes WHERE id = :id');
         } catch (\PDOException $e) {
             try {
+                $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, is_matriz, matriz_id FROM clientes WHERE id = :id');
+            } catch (\PDOException $eMid) {
+                try {
                 $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path, dominio_publico FROM clientes WHERE id = :id');
-            } catch (\PDOException $e2) {
-                $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato FROM clientes WHERE id = :id');
+                } catch (\PDOException $e2) {
+                    $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato FROM clientes WHERE id = :id');
+                }
             }
         }
         $stmt->execute(['id' => $id]);
@@ -274,24 +283,31 @@ class ClienteModel extends BaseModel
             return $row ?: null;
         } catch (\PDOException $e) {
             try {
+                $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, is_matriz, matriz_id FROM clientes WHERE id = :id');
+                $stmt->execute(['id' => $id]);
+                $row = $stmt->fetch();
+                return $row ?: null;
+            } catch (\PDOException $eMid) {
+                try {
                 $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path, dominio_publico FROM clientes WHERE id = :id');
                 $stmt->execute(['id' => $id]);
                 $row = $stmt->fetch();
                 return $row ?: null;
-            } catch (\PDOException $e2) {
-                try {
-                    $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path FROM clientes WHERE id = :id');
-                    $stmt->execute(['id' => $id]);
-                    $row = $stmt->fetch();
-                    return $row ?: null;
-                } catch (\PDOException $e3) {
+                } catch (\PDOException $e2) {
                     try {
-                        $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato FROM clientes WHERE id = :id');
+                        $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path FROM clientes WHERE id = :id');
                         $stmt->execute(['id' => $id]);
                         $row = $stmt->fetch();
                         return $row ?: null;
-                    } catch (\PDOException $e4) {
-                        return null;
+                    } catch (\PDOException $e3) {
+                        try {
+                            $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato FROM clientes WHERE id = :id');
+                            $stmt->execute(['id' => $id]);
+                            $row = $stmt->fetch();
+                            return $row ?: null;
+                        } catch (\PDOException $e4) {
+                            return null;
+                        }
                     }
                 }
             }

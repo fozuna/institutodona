@@ -5,10 +5,10 @@
 <?php $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/\\'); if ($basePath === '.' || $basePath === '/' || $basePath === '\\') { $basePath = ''; } ?>
 <div class="p-6">
   <div class="flex justify-between items-center mb-4">
-    <h1 class="text-2xl font-bold text-brand-black">Manuais</h1>
+    <h1 class="text-2xl font-bold text-brand-black">Biblioteca</h1>
     <div class="flex items-center gap-2">
       <?php if ($canManageManuais): ?>
-        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=manuais/create<?= $selectedEmpresa > 0 ? '&empresa_id=' . (int)$selectedEmpresa : '' ?>">Novo Manual</a>
+        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=manuais/create<?= $selectedEmpresa > 0 ? '&empresa_id=' . (int)$selectedEmpresa : '' ?>">Novo Item</a>
       <?php endif; ?>
       <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="javascript:history.back()">Voltar</a>
     </div>
@@ -18,8 +18,8 @@
     <div class="bg-white shadow rounded p-4 mb-4">
       <div class="flex items-center justify-between">
         <div>
-          <div class="font-semibold">Portal público de manuais</div>
-          <div class="text-sm text-gray-600">Gere um link seguro para o cliente acessar somente os manuais.</div>
+          <div class="font-semibold">Portal público da biblioteca</div>
+          <div class="text-sm text-gray-600">Gere um link seguro para o cliente acessar somente os itens autorizados.</div>
         </div>
         <form method="post" action="index.php?route=manuais/generatePortalLink">
           <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
@@ -90,7 +90,7 @@
       <tbody>
         <?php if (empty($items)): ?>
           <tr>
-            <td class="p-4 text-sm text-gray-600" colspan="6">Nenhum manual encontrado para os filtros selecionados.</td>
+            <td class="p-4 text-sm text-gray-600" colspan="6">Nenhum item encontrado para os filtros selecionados.</td>
           </tr>
         <?php else: ?>
           <?php foreach ($items as $manual): ?>
@@ -101,7 +101,7 @@
               <td class="p-3"><?= htmlspecialchars($manual['departamento_nome']) ?></td>
               <td class="p-3"><?= htmlspecialchars(date('d/m/Y H:i', strtotime((string)$manual['created_at']))) ?></td>
               <td class="p-3">
-                <a class="px-3 py-2 rounded bg-brand-red text-white inline-flex items-center gap-2" href="<?= $basePath ?>/manuais/download/<?= (int)$manual['id'] ?>">
+                <a class="px-3 py-2 rounded bg-brand-red text-white inline-flex items-center gap-2" href="<?= $basePath ?>/biblioteca/download/<?= (int)$manual['id'] ?>">
                   <span data-feather="download"></span>
                   <span>Baixar</span>
                 </a>

@@ -50,6 +50,14 @@ class AuthController extends BaseController
                 'cliente_id' => isset($user['id_cliente']) ? (int)$user['id_cliente'] : null,
                 'scope_clientes' => Auth::allowedClientIds(),
             ]);
+            $redirect = (string)($_SESSION['redirect_after_login'] ?? '');
+            unset($_SESSION['redirect_after_login']);
+            if ($redirect !== '' && strpos($redirect, '://') === false) {
+                if (strpos($redirect, '/index.php') === 0 || strpos($redirect, 'index.php') === 0) {
+                    header('Location: ' . $redirect);
+                    return;
+                }
+            }
             header('Location: index.php?route=dashboard/index');
         } else {
             AuditLogger::log('auth_login_fail', 'usuario', null, ['email' => $email]);

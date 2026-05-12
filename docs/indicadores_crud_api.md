@@ -93,10 +93,16 @@ Reestruturar o módulo de `Indicadores` para suportar:
 - `GET index.php?route=indicadores/edit&id={id}`
 - `POST index.php?route=indicadores/update`
 - `POST index.php?route=indicadores/delete`
+- `POST index.php?route=indicadores/updateValorAjax`
+  - atualiza o campo `indicadores.valor` (edição inline na listagem), com CSRF e validação por unidade (inteiro/percentual)
+- `POST index.php?route=indicadores/deleteAjax`
+  - soft delete do indicador via AJAX (remoção do card em tela sem reload)
 - `GET index.php?route=indicadores/realizado&cliente={cliente_id}`
 - `POST index.php?route=indicadores/updateRealizado`
 - `GET index.php?route=indicadores/painel&cliente={cliente_id}&ano={ano}`
 - `GET index.php?route=indicadores/charts&cliente={cliente_id}`
+- `POST index.php?route=indicadores/chartsPdf`
+  - exporta PDF dos gráficos exibidos/filtrados na tela de gráficos (captura client-side do canvas em PNG + render server-side em Dompdf)
 - `GET index.php?route=indicadores/evento&id={evento_id}`
 - `GET index.php?route=indicadores/historico&id={indicador_id}`
 
@@ -168,3 +174,10 @@ Reestruturar o módulo de `Indicadores` para suportar:
   - valida atualização de valor
   - valida geração automática de eventos recorrentes
   - valida cálculo de cumprimento e status da meta
+
+- `app/tests/indicadores_update_valor_ajax_integration_test.php`
+  - cria indicador temporário, atualiza valor via endpoint AJAX e valida persistência
+- `app/tests/indicadores_delete_ajax_integration_test.php`
+  - cria indicador temporário, exclui via endpoint AJAX e valida soft delete
+- `app/tests/indicadores_charts_pdf_force_missing_unit_test.php`
+  - força indisponibilidade do Dompdf e valida retorno 503 amigável

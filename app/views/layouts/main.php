@@ -52,6 +52,9 @@ $brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
                 </div>
                 <?php
                     $r = $_GET['route'] ?? '';
+                    // Itens do menu ocultos por padrão: Reuniões, Coaching e Processos só aparecem quando o nome do usuário contém "Ozuna".
+                    $showOzunaOnlyMenu = stripos((string)($user['nome'] ?? ''), 'Ozuna') !== false;
+                    $ozunaOnlyAttr = $showOzunaOnlyMenu ? '' : 'style="display:none" aria-hidden="true" tabindex="-1"';
                     $isCadastrosActive = strpos($r, 'clientes/') === 0 || strpos($r, 'usuarios/') === 0 || strpos($r, 'consultores/') === 0;
                     $isProcessosActive = strpos($r, 'planoacao/') === 0
                         || strpos($r, 'indicadores/') === 0
@@ -104,15 +107,15 @@ $brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
                             <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'treinamentos/')===0?'is-active':'' ?>" href="index.php?route=treinamentos/index" title="Treinamentos"><span data-feather="award" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Treinamentos</span></a>
                             <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'pilares/')===0?'is-active':'' ?>" href="index.php?route=pilares/index" title="Pilares"><span data-feather="grid" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Pilares</span></a>
                             <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'tarefas/')===0?'is-active':'' ?>" href="index.php?route=tarefas/index" title="Tarefas"><span data-feather="check-square" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Tarefas</span></a>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'reunioes/')===0?'is-active':'' ?>" href="index.php?route=reunioes/index" title="Reuniões"><span data-feather="users" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Reuniões</span></a>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'coaching/')===0?'is-active':'' ?>" href="index.php?route=coaching/index" title="Coaching"><span data-feather="target" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Coaching</span></a>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'processos/')===0?'is-active':'' ?>" href="index.php?route=processos/index" title="Processos"><span data-feather="git-branch" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Processos</span></a>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'reunioes/')===0?'is-active':'' ?>" href="index.php?route=reunioes/index" title="Reuniões" <?= $ozunaOnlyAttr ?>><span data-feather="users" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Reuniões</span></a>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'coaching/')===0?'is-active':'' ?>" href="index.php?route=coaching/index" title="Coaching" <?= $ozunaOnlyAttr ?>><span data-feather="target" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Coaching</span></a>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'processos/')===0?'is-active':'' ?>" href="index.php?route=processos/index" title="Processos" <?= $ozunaOnlyAttr ?>><span data-feather="git-branch" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Processos</span></a>
                         </div>
                     </div>
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'agenda/')===0?'is-active':'' ?>" href="index.php?route=agenda/index" title="Agenda"><span data-feather="calendar" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Agenda</span></a>
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'cronograma/')===0?'is-active':'' ?>" href="index.php?route=cronograma/index" title="Cronograma"><span data-feather="calendar" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Cronograma</span></a>
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'avaliacoes/')===0?'is-active':'' ?>" href="index.php?route=avaliacoes/index" title="Avaliações"><span data-feather="check-square" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Avaliações</span></a>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'manuais/')===0?'is-active':'' ?>" href="index.php?route=manuais/index" title="Manuais"><span data-feather="book-open" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Manuais</span></a>
+                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'manuais/')===0?'is-active':'' ?>" href="index.php?route=manuais/index" title="Biblioteca"><span data-feather="book-open" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Biblioteca</span></a>
                     <?php if (($user['email'] ?? '') === 'admin@agencialester.com.br'): ?>
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'logs/')===0?'is-active':'' ?>" href="index.php?route=logs/index" title="Logs"><span data-feather="file-text" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Logs</span></a>
                     <?php endif; ?>

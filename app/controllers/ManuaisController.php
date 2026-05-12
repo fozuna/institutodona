@@ -84,14 +84,25 @@ class ManuaisController extends BaseController
     public function store(): void
     {
         $this->requireLogin();
+        $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
         if (!ManualModel::canManage()) {
             http_response_code(403);
-            echo 'Sem permissão para enviar manuais.';
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => 'Sem permissão para enviar arquivos.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            echo 'Sem permissão para enviar arquivos.';
             return;
         }
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) {
             http_response_code(400);
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => 'CSRF inválido.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
             echo 'CSRF inválido';
             return;
         }
@@ -103,11 +114,21 @@ class ManuaisController extends BaseController
 
         if ($empresaId <= 0 || $departamentoId <= 0 || $nome === '') {
             http_response_code(400);
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => 'Campos obrigatórios faltando.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
             echo 'Campos obrigatórios faltando.';
             return;
         }
         if (mb_strlen($descricao) > 500) {
             http_response_code(400);
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => 'Descrição deve ter no máximo 500 caracteres.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
             echo 'Descrição deve ter no máximo 500 caracteres.';
             return;
         }
@@ -115,53 +136,105 @@ class ManuaisController extends BaseController
         $departamento = $this->departamentos->find($departamentoId);
         if (!$departamento || (int)($departamento['cliente_id'] ?? 0) !== $empresaId) {
             http_response_code(400);
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => 'Departamento inválido para a empresa selecionada.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
             echo 'Departamento inválido para a empresa selecionada.';
             return;
         }
-        if (empty($_FILES['arquivo']['name']) || !is_uploaded_file($_FILES['arquivo']['tmp_name'])) {
+        $file = $_FILES['arquivo'] ?? null;
+        if (!is_array($file) || empty($file['name'])) {
             http_response_code(400);
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => 'Arquivo obrigatório.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
             echo 'Arquivo obrigatório.';
             return;
         }
-        if ((int)($_FILES['arquivo']['size'] ?? 0) > 10 * 1024 * 1024) {
+        $err = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($err !== UPLOAD_ERR_OK) {
             http_response_code(400);
-            echo 'Arquivo excede o limite de 10MB.';
+            $msg = 'Falha no upload do arquivo.';
+            if ($err === UPLOAD_ERR_INI_SIZE || $err === UPLOAD_ERR_FORM_SIZE) {
+                $msg = 'Arquivo excede o limite permitido pelo servidor.';
+            } elseif ($err === UPLOAD_ERR_PARTIAL) {
+                $msg = 'Upload incompleto. Tente novamente.';
+            } elseif ($err === UPLOAD_ERR_NO_TMP_DIR) {
+                $msg = 'Servidor sem diretório temporário para upload.';
+            } elseif ($err === UPLOAD_ERR_CANT_WRITE) {
+                $msg = 'Servidor não conseguiu gravar o arquivo.';
+            } elseif ($err === UPLOAD_ERR_EXTENSION) {
+                $msg = 'Upload bloqueado por extensão no servidor.';
+            } elseif ($err === UPLOAD_ERR_NO_FILE) {
+                $msg = 'Arquivo obrigatório.';
+            }
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => $msg], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            echo $msg;
             return;
         }
-
-        $ext = ManualModel::extensionFromUpload((string)($_FILES['arquivo']['name'] ?? ''));
+        if (!is_uploaded_file((string)($file['tmp_name'] ?? ''))) {
+            http_response_code(400);
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => 'Arquivo inválido.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            echo 'Arquivo inválido.';
+            return;
+        }
+        $sizeBytes = (int)($file['size'] ?? 0);
         $finfo = function_exists('finfo_open') ? finfo_open(FILEINFO_MIME_TYPE) : false;
-        $mime = $finfo ? (string)finfo_file($finfo, $_FILES['arquivo']['tmp_name']) : (string)($_FILES['arquivo']['type'] ?? '');
-        if ($finfo) {
-            finfo_close($finfo);
-        }
-        $allowedMime = [
-            'pdf' => ['application/pdf'],
-            'doc' => ['application/msword', 'application/octet-stream'],
-            'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/zip', 'application/octet-stream'],
-        ];
-        if ($ext === null || !in_array($mime, $allowedMime[$ext] ?? [], true)) {
+        $mime = $finfo ? (string)finfo_file($finfo, (string)$file['tmp_name']) : (string)($file['type'] ?? '');
+        if ($finfo) { finfo_close($finfo); }
+        $validated = ManualModel::validateUpload((string)$file['name'], $sizeBytes, $mime, 50 * 1024 * 1024);
+        if (empty($validated['ok'])) {
             http_response_code(400);
-            echo 'Tipo de arquivo inválido. Permitidos: pdf, doc, docx.';
+            $message = (string)($validated['message'] ?? 'Arquivo inválido.');
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => $message, 'error' => $validated['error'] ?? null], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            echo $message;
             return;
         }
+        $ext = (string)$validated['ext'];
+        $category = (string)$validated['category'];
 
-        $dir = ManualModel::storageDirFor($empresaId, $departamentoId);
+        $dir = ManualModel::storageDirFor($empresaId, $departamentoId, $category);
         if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
             http_response_code(500);
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => 'Não foi possível criar diretório de armazenamento.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
             echo 'Não foi possível criar diretório de armazenamento.';
             return;
         }
 
         $storedName = bin2hex(random_bytes(16)) . '.' . $ext;
         $dest = $dir . '/' . $storedName;
-        if (!@move_uploaded_file($_FILES['arquivo']['tmp_name'], $dest)) {
+        if (!@move_uploaded_file((string)$file['tmp_name'], $dest)) {
             http_response_code(500);
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => 'Falha ao salvar arquivo.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
             echo 'Falha ao salvar arquivo.';
             return;
         }
 
-        $relativePath = 'storage/manuais/' . $empresaId . '/' . $departamentoId . '/' . $storedName;
+        $relativePath = 'storage/manuais/' . $empresaId . '/' . $departamentoId . '/' . rawurlencode($category) . '/' . $storedName;
         $manualId = $this->manuais->create([
             'empresa_id' => $empresaId,
             'departamento_id' => $departamentoId,
@@ -169,13 +242,18 @@ class ManuaisController extends BaseController
             'descricao' => $descricao !== '' ? $descricao : null,
             'arquivo' => $relativePath,
             'tipo_arquivo' => $ext,
-            'tamanho' => (int)($_FILES['arquivo']['size'] ?? 0),
+            'tamanho' => $sizeBytes,
             'usuario_id' => (int)($_SESSION['user']['id'] ?? 0),
         ]);
         if ($manualId <= 0) {
             @unlink($dest);
             http_response_code(500);
-            echo 'Falha ao registrar manual no banco.';
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => 'Falha ao registrar item no banco.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            echo 'Falha ao registrar item no banco.';
             return;
         }
 
@@ -184,11 +262,19 @@ class ManuaisController extends BaseController
             'departamento_id' => $departamentoId,
             'nome' => $nome,
             'tipo_arquivo' => $ext,
-            'tamanho' => (int)($_FILES['arquivo']['size'] ?? 0),
+            'tamanho' => $sizeBytes,
+            'mime' => $mime,
+            'category' => $category,
             'usuario_id' => (int)($_SESSION['user']['id'] ?? 0),
         ]);
-        $_SESSION['flash_success'] = 'Manual enviado com sucesso.';
-        header('Location: index.php?route=manuais/index&empresa_id=' . $empresaId);
+        $redirect = 'index.php?route=manuais/index&empresa_id=' . $empresaId;
+        if ($isAjax) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => true, 'redirect' => $redirect], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $_SESSION['flash_success'] = 'Arquivo enviado com sucesso.';
+        header('Location: ' . $redirect);
     }
 
     public function download(): void
@@ -306,7 +392,7 @@ class ManuaisController extends BaseController
         ]);
 
         $params = [
-            'pageTitle' => 'Portal de Manuais',
+            'pageTitle' => 'Portal da Biblioteca',
             'empresa' => $empresa,
             'items' => $items,
             'departamentos' => array_values($departamentos),
@@ -401,6 +487,6 @@ class ManuaisController extends BaseController
         }
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-        return $scheme . '://' . $host . $basePath . '/manuais/portal/' . rawurlencode($token);
+        return $scheme . '://' . $host . $basePath . '/biblioteca/portal/' . rawurlencode($token);
     }
 }

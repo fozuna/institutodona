@@ -7,6 +7,247 @@
             <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="javascript:history.back()">Voltar</a>
         </div>
     </div>
+    <?php if (\App\Core\Auth::isInstituto() || \App\Core\Auth::isClienteAdmin()): ?>
+      <div class="bg-white shadow rounded p-4 mb-4">
+        <div class="font-semibold mb-2">Importar colaboradores</div>
+        <form id="colabImportForm" method="post" action="index.php?route=colaboradores/import" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+          <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+          <input type="hidden" name="MAX_FILE_SIZE" value="<?= 50 * 1024 * 1024 ?>" />
+          <div class="md:col-span-6">
+            <label class="text-sm">Arquivo (CSV, XLS, XLSX)</label>
+            <input type="file" name="arquivo" id="colabImportFile" class="border rounded p-2 w-full" accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required />
+            <div class="text-xs text-gray-500 mt-1">Colunas obrigatórias: Nome, Documento, DN, Celular, Email, Unidade, Função, Setor, Departamento. Máximo: 50MB.</div>
+          </div>
+          <div class="md:col-span-3">
+            <label class="text-sm">Pré-visualização</label>
+            <div id="colabImportPreviewMeta" class="border rounded p-2 bg-gray-50 text-sm text-gray-700">Nenhum arquivo selecionado</div>
+          </div>
+          <div class="md:col-span-3 flex gap-2 md:justify-end">
+            <button type="button" id="colabImportClear" class="px-4 py-2 rounded bg-gray-200 text-brand-brown w-full md:w-auto" disabled>Remover</button>
+            <button type="submit" id="colabImportSubmit" class="px-4 py-2 rounded bg-brand-red text-white w-full md:w-auto" disabled>Importar</button>
+          </div>
+          <div class="md:col-span-12 hidden" id="colabImportProgressWrap">
+            <div class="text-xs text-gray-600 mb-1" id="colabImportProgressText"></div>
+            <div class="w-full bg-gray-200 rounded h-2 overflow-hidden">
+              <div id="colabImportProgressBar" class="bg-brand-red h-2" style="width: 0%"></div>
+            </div>
+          </div>
+          <div class="md:col-span-12 hidden" id="colabImportErrors"></div>
+          <div class="md:col-span-12 hidden" id="colabImportCsvPreviewWrap">
+            <div class="text-sm font-semibold text-gray-800 mb-2">Prévia do CSV (primeiras 5 linhas)</div>
+            <div class="overflow-auto border rounded">
+              <table class="min-w-full text-sm" id="colabImportCsvPreview"></table>
+            </div>
+          </div>
+        </form>
+      </div>
+      <script>
+        (function() {
+          const form = document.getElementById('colabImportForm');
+          const input = document.getElementById('colabImportFile');
+          const meta = document.getElementById('colabImportPreviewMeta');
+          const clearBtn = document.getElementById('colabImportClear');
+          const submitBtn = document.getElementById('colabImportSubmit');
+          const errorsBox = document.getElementById('colabImportErrors');
+          const progressWrap = document.getElementById('colabImportProgressWrap');
+          const progressBar = document.getElementById('colabImportProgressBar');
+          const progressText = document.getElementById('colabImportProgressText');
+          const csvPreviewWrap = document.getElementById('colabImportCsvPreviewWrap');
+          const csvPreviewTable = document.getElementById('colabImportCsvPreview');
+
+          function humanSize(bytes) {
+            const n = Number(bytes || 0);
+            if (!n) return '0 B';
+            const units = ['B','KB','MB','GB'];
+            let u = 0, v = n;
+            while (v >= 1024 && u < units.length - 1) { v /= 1024; u++; }
+            return (v >= 10 || u === 0 ? v.toFixed(0) : v.toFixed(1)) + ' ' + units[u];
+          }
+          function setErrorHtml(html) {
+            if (!errorsBox) return;
+            if (!html) {
+              errorsBox.classList.add('hidden');
+              errorsBox.innerHTML = '';
+              return;
+            }
+            errorsBox.className = 'md:col-span-12 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700';
+            errorsBox.innerHTML = html;
+            errorsBox.classList.remove('hidden');
+          }
+          function setProgress(active, pct) {
+            if (!progressWrap || !progressBar || !progressText) return;
+            if (!active) {
+              progressWrap.classList.add('hidden');
+              progressBar.style.width = '0%';
+              progressText.textContent = '';
+              return;
+            }
+            progressWrap.classList.remove('hidden');
+            const p = Math.max(0, Math.min(100, Number(pct || 0)));
+            progressBar.style.width = p + '%';
+            progressText.textContent = 'Enviando... ' + p.toFixed(0) + '%';
+          }
+          function setSubmitting(submitting) {
+            if (!submitBtn) return;
+            submitBtn.disabled = !!submitting;
+            submitBtn.classList.toggle('opacity-75', !!submitting);
+            submitBtn.classList.toggle('cursor-not-allowed', !!submitting);
+            if (clearBtn) clearBtn.disabled = !!submitting || !(input && input.files && input.files.length);
+            if (input) input.disabled = !!submitting;
+          }
+          function clearFile() {
+            if (input) input.value = '';
+            if (meta) meta.textContent = 'Nenhum arquivo selecionado';
+            if (clearBtn) clearBtn.disabled = true;
+            if (submitBtn) submitBtn.disabled = true;
+            setErrorHtml('');
+            if (csvPreviewWrap) csvPreviewWrap.classList.add('hidden');
+            if (csvPreviewTable) csvPreviewTable.innerHTML = '';
+          }
+          function parseCsvPreview(text) {
+            const lines = text.split(/\r\n|\n|\r/).filter(l => l.trim() !== '').slice(0, 6);
+            if (!lines.length) return [];
+            const headerLine = lines[0];
+            const semis = (headerLine.match(/;/g) || []).length;
+            const commas = (headerLine.match(/,/g) || []).length;
+            const delim = semis > commas ? ';' : ',';
+            return lines.map(line => {
+              const out = [];
+              let cur = '';
+              let inQ = false;
+              for (let i = 0; i < line.length; i++) {
+                const ch = line[i];
+                if (ch === '\"') {
+                  if (inQ && line[i + 1] === '\"') { cur += '\"'; i++; continue; }
+                  inQ = !inQ;
+                  continue;
+                }
+                if (!inQ && ch === delim) { out.push(cur); cur = ''; continue; }
+                cur += ch;
+              }
+              out.push(cur);
+              return out.map(v => v.trim());
+            });
+          }
+          function renderCsvPreview(rows) {
+            if (!csvPreviewWrap || !csvPreviewTable) return;
+            if (!rows.length) { csvPreviewWrap.classList.add('hidden'); csvPreviewTable.innerHTML = ''; return; }
+            const header = rows[0] || [];
+            const body = rows.slice(1);
+            let html = '<thead><tr class=\"border-b bg-gray-50\">';
+            for (const h of header) {
+              html += '<th class=\"p-2 text-left whitespace-nowrap\">' + String(h).replace(/</g,'&lt;') + '</th>';
+            }
+            html += '</tr></thead><tbody>';
+            for (const r of body) {
+              html += '<tr class=\"border-b\">';
+              for (let i = 0; i < header.length; i++) {
+                const v = r[i] || '';
+                html += '<td class=\"p-2 whitespace-nowrap\">' + String(v).replace(/</g,'&lt;') + '</td>';
+              }
+              html += '</tr>';
+            }
+            html += '</tbody>';
+            csvPreviewTable.innerHTML = html;
+            csvPreviewWrap.classList.remove('hidden');
+          }
+
+          if (input) {
+            input.addEventListener('change', function() {
+              setErrorHtml('');
+              const file = input.files && input.files[0];
+              if (!file) { clearFile(); return; }
+              if (file.size > (50 * 1024 * 1024)) {
+                clearFile();
+                setErrorHtml('Arquivo excede o limite de 50MB.');
+                return;
+              }
+              const ext = (file.name.split('.').pop() || '').toLowerCase();
+              if (!['csv','xls','xlsx'].includes(ext)) {
+                clearFile();
+                setErrorHtml('Formato inválido. Use CSV, XLS ou XLSX.');
+                return;
+              }
+              if (meta) meta.textContent = file.name + ' • ' + humanSize(file.size);
+              if (clearBtn) clearBtn.disabled = false;
+              if (submitBtn) submitBtn.disabled = false;
+              if (ext === 'csv') {
+                const reader = new FileReader();
+                reader.onload = function() {
+                  const rows = parseCsvPreview(String(reader.result || ''));
+                  renderCsvPreview(rows);
+                };
+                reader.onerror = function() {
+                  renderCsvPreview([]);
+                };
+                reader.readAsText(file);
+              } else {
+                renderCsvPreview([]);
+              }
+            });
+          }
+          if (clearBtn) {
+            clearBtn.addEventListener('click', function() {
+              clearFile();
+            });
+          }
+          if (form) {
+            form.addEventListener('submit', function(e) {
+              e.preventDefault();
+              setErrorHtml('');
+              const file = input && input.files && input.files[0];
+              if (!file) { setErrorHtml('Selecione um arquivo para importar.'); return; }
+              setSubmitting(true);
+              setProgress(true, 0);
+              const data = new FormData(form);
+              const xhr = new XMLHttpRequest();
+              xhr.open('POST', form.action, true);
+              xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+              xhr.upload.addEventListener('progress', function(ev) {
+                if (!ev.lengthComputable) return;
+                setProgress(true, (ev.loaded / ev.total) * 100);
+              });
+              xhr.addEventListener('load', function() {
+                setSubmitting(false);
+                setProgress(false, 0);
+                let payload = null;
+                try { payload = JSON.parse(xhr.responseText || '{}'); } catch (err) { payload = null; }
+                if (xhr.status >= 200 && xhr.status < 300 && payload && payload.ok) {
+                  window.location.reload();
+                  return;
+                }
+                const errs = payload && Array.isArray(payload.errors) ? payload.errors : [];
+                if (errs.length) {
+                  const max = 200;
+                  const show = errs.slice(0, max);
+                  let html = '<div class=\"font-semibold mb-1\">Erros encontrados (' + errs.length + ')</div><ul class=\"list-disc pl-5 space-y-1\">';
+                  for (const it of show) {
+                    const line = it.line || 0;
+                    const field = it.field || '';
+                    const msg = it.message || 'Erro';
+                    html += '<li><span class=\"font-semibold\">Linha ' + line + '</span> • ' + String(field) + ': ' + String(msg).replace(/</g,'&lt;') + '</li>';
+                  }
+                  html += '</ul>';
+                  if (errs.length > max) {
+                    html += '<div class=\"mt-2 text-xs text-gray-600\">Mostrando ' + max + ' de ' + errs.length + ' erros.</div>';
+                  }
+                  setErrorHtml(html);
+                } else {
+                  const msg = (payload && payload.message) ? payload.message : 'Falha na importação.';
+                  setErrorHtml(String(msg).replace(/</g,'&lt;'));
+                }
+              });
+              xhr.addEventListener('error', function() {
+                setSubmitting(false);
+                setProgress(false, 0);
+                setErrorHtml('Erro de rede ao enviar o arquivo.');
+              });
+              xhr.send(data);
+            });
+          }
+        })();
+      </script>
+    <?php endif; ?>
     <form method="get" action="index.php" class="mb-4 grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
         <input type="hidden" name="route" value="colaboradores/index" />
         <div class="md:col-span-4">
@@ -19,6 +260,12 @@
                 </option>
             <?php endforeach; ?>
           </select>
+          <?php if (!empty($can_all_funcionarios)): ?>
+            <label class="mt-2 flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" name="all_funcionarios" value="1" class="form-checkbox h-4 w-4 text-brand-red" <?= !empty($filter_all_funcionarios) ? 'checked' : '' ?> />
+              <span>Selecionar todos os funcionários (matriz + filiais)</span>
+            </label>
+          <?php endif; ?>
         </div>
         <div class="md:col-span-2">
           <label class="text-sm">Líder</label>
@@ -33,7 +280,8 @@
           <select name="departamento" class="border rounded p-2 w-full">
               <option value="0">Todos</option>
               <?php foreach ($departamentos as $d): ?>
-                  <option value="<?= (int)$d['id'] ?>" <?= ((int)($filter_departamento ?? 0) === (int)$d['id']) ? 'selected' : '' ?>><?= htmlspecialchars($d['nome']) ?></option>
+                  <?php $depLabel = isset($d['cliente']) ? ((string)$d['cliente'] . ' — ' . (string)$d['nome']) : (string)$d['nome']; ?>
+                  <option value="<?= (int)$d['id'] ?>" <?= ((int)($filter_departamento ?? 0) === (int)$d['id']) ? 'selected' : '' ?>><?= htmlspecialchars($depLabel) ?></option>
               <?php endforeach; ?>
           </select>
         </div>
@@ -42,7 +290,17 @@
           <select name="funcao" class="border rounded p-2 w-full">
               <option value="0">Todas</option>
               <?php foreach ($funcoes as $f): ?>
-                  <option value="<?= (int)$f['id'] ?>" <?= ((int)($filter_funcao ?? 0) === (int)$f['id']) ? 'selected' : '' ?>><?= htmlspecialchars($f['nome']) ?></option>
+                  <?php
+                    $funcLabel = (string)($f['nome'] ?? '');
+                    if (isset($f['departamento']) || isset($f['setor'])) {
+                        $parts = [];
+                        if (!empty($f['departamento'])) { $parts[] = (string)$f['departamento']; }
+                        if (!empty($f['setor'])) { $parts[] = (string)$f['setor']; }
+                        if ($funcLabel !== '') { $parts[] = $funcLabel; }
+                        $funcLabel = implode(' — ', $parts);
+                    }
+                  ?>
+                  <option value="<?= (int)$f['id'] ?>" <?= ((int)($filter_funcao ?? 0) === (int)$f['id']) ? 'selected' : '' ?>><?= htmlspecialchars($funcLabel) ?></option>
               <?php endforeach; ?>
           </select>
         </div>
@@ -89,14 +347,28 @@
             </tbody>
         </table>
     </div>
-    <?php if (($total_pages ?? 1) > 1): ?>
-        <div class="mt-4 flex items-center justify-between">
-            <div class="text-sm text-gray-600">Total: <?= (int)($total ?? 0) ?> • Página <?= (int)($page ?? 1) ?> de <?= (int)($total_pages ?? 1) ?></div>
+    <div class="mt-4 flex items-center justify-between">
+        <div class="text-sm text-gray-600">Total: <?= (int)($total ?? 0) ?> • Página <?= (int)($page ?? 1) ?> de <?= (int)($total_pages ?? 1) ?></div>
+        <?php if (($total_pages ?? 1) > 1): ?>
             <div class="flex items-center gap-2">
-                <?php $prev = max(1, (int)($page ?? 1) - 1); $next = min((int)($total_pages ?? 1), (int)($page ?? 1) + 1); ?>
-                <a class="px-3 py-1 rounded bg-gray-200 text-brand-brown" href="index.php?route=colaboradores/index&cliente=<?= (int)$cliente ?>&page=<?= $prev ?>&per=<?= (int)($per ?? 20) ?>">◀</a>
-                <a class="px-3 py-1 rounded bg-gray-200 text-brand-brown" href="index.php?route=colaboradores/index&cliente=<?= (int)$cliente ?>&page=<?= $next ?>&per=<?= (int)($per ?? 20) ?>">▶</a>
+                <?php
+                    $prev = max(1, (int)($page ?? 1) - 1);
+                    $next = min((int)($total_pages ?? 1), (int)($page ?? 1) + 1);
+                    $base = [
+                        'route' => 'colaboradores/index',
+                        'cliente' => (int)$cliente,
+                        'per' => (int)($per ?? 20),
+                        'lider' => ($filter_lider ?? '') !== '' ? (string)$filter_lider : null,
+                        'departamento' => (int)($filter_departamento ?? 0) ?: null,
+                        'funcao' => (int)($filter_funcao ?? 0) ?: null,
+                        'all_funcionarios' => !empty($filter_all_funcionarios) ? '1' : null,
+                    ];
+                    $prevQuery = http_build_query(array_merge($base, ['page' => $prev]));
+                    $nextQuery = http_build_query(array_merge($base, ['page' => $next]));
+                ?>
+                <a class="px-3 py-1 rounded bg-gray-200 text-brand-brown" href="index.php?<?= htmlspecialchars($prevQuery) ?>">◀</a>
+                <a class="px-3 py-1 rounded bg-gray-200 text-brand-brown" href="index.php?<?= htmlspecialchars($nextQuery) ?>">▶</a>
             </div>
-        </div>
-    <?php endif; ?>
+        <?php endif; ?>
+    </div>
 </div>

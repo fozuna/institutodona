@@ -41,6 +41,8 @@ class CronogramaController extends BaseController
             'items' => $items,
             'order' => $order,
             'isClientOrderable' => true,
+            'flashSuccess' => $this->takeFlash('flash_success'),
+            'flashError' => $this->takeFlash('flash_error'),
         ]);
     }
 
@@ -61,12 +63,182 @@ class CronogramaController extends BaseController
             'id_cliente' => (int)($_POST['id_cliente'] ?? 0),
             'nome' => trim($_POST['nome'] ?? ''),
             'ano' => (int)($_POST['ano'] ?? date('Y')),
+            'ativo' => (int)($_POST['ativo'] ?? 1) === 1 ? 1 : 0,
         ];
         if ($data['id_cliente'] && $data['ano']) {
             $id = $this->cronogramas->create($data);
             header('Location: index.php?route=cronograma/show&id=' . $id);
             return;
         }
+        header('Location: index.php?route=cronograma/index');
+    }
+
+    public function edit(): void
+    {
+        $this->requireRole('instituto');
+        $id = (int)($_GET['id'] ?? 0);
+        $crono = $this->cronogramas->find($id);
+        if (!$crono) {
+            $_SESSION['flash_error'] = 'Cronograma não encontrado.';
+            header('Location: index.php?route=cronograma/index');
+            return;
+        }
+        $clientes = (new ClienteModel())->all();
+        $this->render('cronograma/create', [
+            'clientes' => $clientes,
+            'pref' => (int)($crono['id_cliente'] ?? 0),
+            'crono' => $crono,
+        ]);
+    }
+
+    public function update(): void
+    {
+        $this->requireRole('instituto');
+        $csrf = $_POST['csrf'] ?? null;
+        if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
+        $id = (int)($_POST['id'] ?? 0);
+        $data = [
+            'id_cliente' => (int)($_POST['id_cliente'] ?? 0),
+            'nome' => trim($_POST['nome'] ?? ''),
+            'ano' => (int)($_POST['ano'] ?? date('Y')),
+            'ativo' => (int)($_POST['ativo'] ?? 1) === 1 ? 1 : 0,
+        ];
+        $ok = $this->cronogramas->update($id, $data);
+        $_SESSION[$ok ? 'flash_success' : 'flash_error'] = $ok ? 'Cronograma atualizado com sucesso.' : 'Não foi possível atualizar o cronograma.';
+        header('Location: index.php?route=cronograma/index');
+    }
+
+    public function delete(): void
+    {
+        $this->requireRole('instituto');
+        $csrf = $_POST['csrf'] ?? null;
+        if (!Security::verifyCsrf($csrf)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
+        $crono = $this->cronogramas->find($id);
+        if (!$crono) {
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => 'Cronograma não encontrado.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $_SESSION['flash_error'] = 'Cronograma não encontrado.';
+            header('Location: index.php?route=cronograma/index');
+            return;
+        }
+        try {
+            $deletedEvents = $this->eventos->deleteByCronograma($id);
+            $ok = $this->cronogramas->delete($id);
+            if (!$ok) {
+                throw new \RuntimeException('Não foi possível excluir o cronograma.');
+            }
+            AuditLogger::log('cronograma_delete', 'cronograma', $id, ['deleted_events' => $deletedEvents]);
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => true, 'message' => 'Cronograma excluído com sucesso.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $_SESSION['flash_success'] = 'Cronograma excluído com sucesso.';
+            header('Location: index.php?route=cronograma/index');
+        } catch (\Throwable $e) {
+            AuditLogger::log('cronograma_delete_failed', 'cronograma', $id, ['error' => $e->getMessage()]);
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $_SESSION['flash_error'] = $e->getMessage();
+            header('Location: index.php?route=cronograma/index');
+        }
+    }
+
+    public function duplicate(): void
+    {
+        $this->requireRole('instituto');
+        $csrf = $_POST['csrf'] ?? null;
+        if (!Security::verifyCsrf($csrf)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
+        $crono = $this->cronogramas->find($id);
+        if (!$crono) {
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => 'Cronograma não encontrado.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $_SESSION['flash_error'] = 'Cronograma não encontrado.';
+            header('Location: index.php?route=cronograma/index');
+            return;
+        }
+        try {
+            $newId = $this->cronogramas->duplicate($id);
+            if ($newId <= 0) {
+                throw new \RuntimeException('Não foi possível duplicar o cronograma.');
+            }
+            $dup = $this->eventos->duplicateForCronograma($id, $newId);
+            if (empty($dup['ok'])) {
+                throw new \RuntimeException((string)($dup['error'] ?? 'Falha ao duplicar eventos do cronograma.'));
+            }
+            AuditLogger::log('cronograma_duplicate', 'cronograma', $newId, ['source_id' => $id, 'events_created' => (int)($dup['created'] ?? 0)]);
+            $message = 'Cronograma duplicado com sucesso.';
+            $redirectUrl = 'index.php?route=cronograma/show&id=' . $newId;
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => true, 'message' => $message, 'redirect_url' => $redirectUrl], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $_SESSION['flash_success'] = $message;
+            header('Location: ' . $redirectUrl);
+        } catch (\Throwable $e) {
+            AuditLogger::log('cronograma_duplicate_failed', 'cronograma', $id, ['error' => $e->getMessage()]);
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $_SESSION['flash_error'] = $e->getMessage();
+            header('Location: index.php?route=cronograma/index');
+        }
+    }
+
+    public function toggleAtivo(): void
+    {
+        $this->requireRole('instituto');
+        $csrf = $_POST['csrf'] ?? null;
+        if (!Security::verifyCsrf($csrf)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
+        $next = $this->cronogramas->toggleAtivo($id);
+        if ($next === null) {
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => 'Não foi possível atualizar o status do cronograma.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $_SESSION['flash_error'] = 'Não foi possível atualizar o status do cronograma.';
+            header('Location: index.php?route=cronograma/index');
+            return;
+        }
+        $msg = $next === 1 ? 'Cronograma ativado.' : 'Cronograma desativado.';
+        AuditLogger::log('cronograma_toggle_ativo', 'cronograma', $id, ['ativo' => $next]);
+        if ($isAjax) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => true, 'message' => $msg, 'ativo' => $next], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $_SESSION['flash_success'] = $msg;
         header('Location: index.php?route=cronograma/index');
     }
 

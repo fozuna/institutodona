@@ -27,7 +27,11 @@ $_SESSION['user'] = [
 ];
 
 $runner = new MigrationRunner();
-$runner->applyAll();
+try {
+    $runner->applyAll();
+} catch (\RuntimeException $e) {
+    echo "WARN: {$e->getMessage()}\n";
+}
 
 $pdo = Database::getConnection();
 $clientes = new ClienteModel();

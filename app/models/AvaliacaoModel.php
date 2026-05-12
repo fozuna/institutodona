@@ -5,6 +5,19 @@ use App\Core\Auth;
 
 class AvaliacaoModel extends BaseModel
 {
+    private ?string $lastError = null;
+    private ?array $lastErrorContext = null;
+
+    public function getLastError(): ?string
+    {
+        return $this->lastError;
+    }
+
+    public function getLastErrorContext(): ?array
+    {
+        return $this->lastErrorContext;
+    }
+
     private function tableColumns(string $table): array
     {
         try {
@@ -313,6 +326,54 @@ class AvaliacaoModel extends BaseModel
             'cliente_id' => $clienteId,
             'id' => $avaliacaoId,
         ]);
+    }
+
+    public function delete(int $id): bool
+    {
+        $this->ensureTable();
+        $this->lastError = null;
+        $this->lastErrorContext = null;
+
+        $existing = $this->find($id);
+        if (!$existing) {
+            $this->lastError = 'not_found';
+            return false;
+        }
+
+        try {
+            $this->db->beginTransaction();
+            if (\App\Database\Database::tableExists('avaliacoes_publicas')) {
+                $stmt = $this->db->prepare('DELETE FROM avaliacoes_publicas WHERE avaliacao_id = :id');
+                $stmt->execute(['id' => $id]);
+            }
+            $stmt = $this->db->prepare('DELETE FROM avaliacoes WHERE id = :id');
+            $stmt->execute(['id' => $id]);
+            $deleted = $stmt->rowCount() > 0;
+            $this->db->commit();
+            if (!$deleted) {
+                $this->lastError = 'not_deleted';
+            }
+            return $deleted;
+        } catch (\PDOException $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            $this->lastError = ((string)$e->getCode() === '23000') ? 'constraint' : 'pdo_exception';
+            $this->lastErrorContext = [
+                'code' => $e->getCode(),
+                'message' => $e->getMessage(),
+            ];
+            return false;
+        } catch (\Throwable $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            $this->lastError = 'exception';
+            $this->lastErrorContext = [
+                'message' => $e->getMessage(),
+            ];
+            return false;
+        }
     }
 
     private function scopeClause(string $alias, array &$params, string $prefix): string

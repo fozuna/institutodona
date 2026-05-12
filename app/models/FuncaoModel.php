@@ -3,6 +3,17 @@ namespace App\Models;
 
 class FuncaoModel extends BaseModel
 {
+    private function buildClienteScopeClause(string $column, array $clienteIds, array &$params, string $prefix): string
+    {
+        $holders = [];
+        foreach (array_values($clienteIds) as $i => $clienteId) {
+            $key = $prefix . $i;
+            $holders[] = ':' . $key;
+            $params[$key] = (int)$clienteId;
+        }
+        return $column . ' IN (' . implode(',', $holders) . ')';
+    }
+
     private function ensureTable(): void
     {
         try {
@@ -36,6 +47,43 @@ class FuncaoModel extends BaseModel
             $scope = $this->tenantInCondition('d.cliente_id', $params, 'fbc');
             $sql = str_replace('WHERE d.cliente_id = :cid', 'WHERE d.cliente_id = :cid AND ' . $scope, $sql);
             $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
+            return $stmt->fetchAll();
+        } catch (\PDOException $e) {
+            return [];
+        }
+    }
+
+    public function allByClientes(array $clienteIds): array
+    {
+        $this->ensureTable();
+        $clienteIds = array_values(array_unique(array_filter(array_map('intval', $clienteIds))));
+        if (empty($clienteIds)) {
+            return [];
+        }
+        try {
+            if (!\App\Database\Database::tableExists('departamentos')) {
+                (new \App\Models\DepartamentoModel())->all();
+            }
+            if (!\App\Database\Database::tableExists('setores')) {
+                (new \App\Models\SetorModel())->all();
+            }
+        } catch (\PDOException $e) {
+        }
+        try {
+            $params = [];
+            $where = [
+                $this->buildClienteScopeClause('d.cliente_id', $clienteIds, $params, 'fabc_scope'),
+                $this->tenantInCondition('d.cliente_id', $params, 'fabc_tenant'),
+            ];
+            $stmt = $this->db->prepare(
+                "SELECT f.id, f.nome, f.setor_id, s.nome AS setor, d.nome AS departamento
+                 FROM funcoes f
+                 JOIN setores s ON s.id = f.setor_id
+                 JOIN departamentos d ON d.id = s.departamento_id
+                 WHERE " . implode(' AND ', $where) . "
+                 ORDER BY d.nome, s.nome, f.nome"
+            );
             $stmt->execute($params);
             return $stmt->fetchAll();
         } catch (\PDOException $e) {

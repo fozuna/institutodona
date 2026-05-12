@@ -5,9 +5,16 @@
       <h1 class="text-2xl font-bold text-brand-black"><?= htmlspecialchars($t('indicadores.title.charts')) ?></h1>
       <p class="text-sm text-gray-600"><?= htmlspecialchars($t('indicadores.chart.limits')) ?> · <?= htmlspecialchars($t('indicadores.chart.current')) ?></p>
     </div>
-    <a class="px-4 py-3 rounded-lg bg-gray-200 text-brand-brown text-center" href="index.php?route=indicadores/index<?= $cliente ? '&cliente=' . (int)$cliente : '' ?>">
-      <?= htmlspecialchars($t('indicadores.action.back')) ?>
-    </a>
+    <div class="flex flex-col sm:flex-row gap-2">
+      <?php if (!empty($series) && $cliente): ?>
+        <button type="button" id="indicadoresChartsPdfBtn" class="px-4 py-3 rounded-lg bg-brand-red text-white text-center">
+          Exportar PDF
+        </button>
+      <?php endif; ?>
+      <a class="px-4 py-3 rounded-lg bg-gray-200 text-brand-brown text-center" href="index.php?route=indicadores/index<?= $cliente ? '&cliente=' . (int)$cliente : '' ?>">
+        <?= htmlspecialchars($t('indicadores.action.back')) ?>
+      </a>
+    </div>
   </div>
 
   <div class="bg-white shadow rounded-xl p-4">
@@ -33,28 +40,60 @@
   <?php elseif (empty($series)): ?>
     <div class="bg-white shadow rounded-xl p-6 text-sm text-gray-600"><?= htmlspecialchars($t('indicadores.empty.charts')) ?></div>
   <?php else: ?>
+    <div class="bg-white shadow rounded-xl p-4">
+      <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+        <div class="text-sm font-semibold text-gray-800">Indicadores</div>
+        <div class="flex flex-col sm:flex-row gap-2">
+          <button type="button" id="indicadoresChartsSelectAll" class="px-3 py-2 rounded bg-gray-200 text-brand-brown">Selecionar todos</button>
+          <button type="button" id="indicadoresChartsClearAll" class="px-3 py-2 rounded bg-gray-200 text-brand-brown">Limpar seleção</button>
+        </div>
+      </div>
+      <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2" id="indicadoresChartsMultiSelect">
+        <?php foreach ($series as $name => $seriesItem): ?>
+          <label class="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" class="form-checkbox h-4 w-4 text-brand-red" data-indicador-checkbox value="<?= (int)$seriesItem['indicador_id'] ?>" checked />
+            <span class="truncate" title="<?= htmlspecialchars((string)$name) ?>"><?= htmlspecialchars((string)$name) ?></span>
+          </label>
+        <?php endforeach; ?>
+      </div>
+      <div class="mt-3 text-xs text-gray-500" id="indicadoresChartsCount"></div>
+      <input type="hidden" id="indicadoresChartsCsrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+      <div id="indicadoresChartsMsg" class="hidden mt-3 rounded border px-4 py-3 text-sm"></div>
+    </div>
+
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
       <?php foreach ($series as $name => $seriesItem): ?>
-        <?php $payload = $seriesItem['points']; ?>
-        <div class="bg-white shadow rounded-xl p-4">
+        <?php
+          $payload = $seriesItem['points'] ?? [];
+          $lastPoint = !empty($payload) ? $payload[count($payload) - 1] : null;
+          $metaAtual = $lastPoint ? \App\Core\ValueFormatter::byUnit($lastPoint['meta'], $seriesItem['unit']) : '—';
+          $atingidoAtual = ($lastPoint && $lastPoint['achieved'] !== null)
+              ? \App\Core\ValueFormatter::byUnit($lastPoint['achieved'], $seriesItem['unit'])
+              : '—';
+          $trendKey = $seriesItem['trend']['trend'] === 'alta'
+            ? 'indicadores.meta.trend.up'
+            : ($seriesItem['trend']['trend'] === 'queda' ? 'indicadores.meta.trend.down' : 'indicadores.meta.trend.stable');
+          $trendText = $t('indicadores.label.tendencia') . ': ' . $t($trendKey) . ' · ' . $t('indicadores.label.cumprimento') . ' médio: ' . \App\Core\ValueFormatter::percent($seriesItem['trend']['media_cumprimento']);
+        ?>
+        <div class="bg-white shadow rounded-xl p-4" data-indicador-card data-indicador-id="<?= (int)$seriesItem['indicador_id'] ?>" data-indicador-title="<?= htmlspecialchars((string)$name) ?>" data-indicador-meta="<?= htmlspecialchars($metaAtual) ?>" data-indicador-achieved="<?= htmlspecialchars($atingidoAtual) ?>" data-indicador-trend="<?= htmlspecialchars($trendText) ?>">
           <div class="flex items-start justify-between gap-3 mb-3">
             <div>
               <div class="font-semibold"><?= htmlspecialchars($name) ?></div>
-              <div class="text-xs text-gray-500">
-                <?= htmlspecialchars($t('indicadores.label.tendencia')) ?>:
-                <?php
-                  $trendKey = $seriesItem['trend']['trend'] === 'alta'
-                    ? 'indicadores.meta.trend.up'
-                    : ($seriesItem['trend']['trend'] === 'queda' ? 'indicadores.meta.trend.down' : 'indicadores.meta.trend.stable');
-                ?>
-                <?= htmlspecialchars($t($trendKey)) ?>
-                ·
-                <?= htmlspecialchars($t('indicadores.label.cumprimento')) ?> médio: <?= htmlspecialchars(\App\Core\ValueFormatter::percent($seriesItem['trend']['media_cumprimento'])) ?>
-              </div>
+              <div class="text-xs text-gray-500"><?= htmlspecialchars($trendText) ?></div>
             </div>
             <a class="text-brand-pink font-semibold text-sm" href="index.php?route=indicadores/historico&id=<?= (int)$seriesItem['indicador_id'] ?>">
               <?= htmlspecialchars($t('indicadores.action.history')) ?>
             </a>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-sm mb-3">
+            <div class="rounded-lg bg-gray-50 p-3">
+              <div class="text-gray-500">Meta</div>
+              <div class="font-semibold text-base"><?= htmlspecialchars($metaAtual) ?></div>
+            </div>
+            <div class="rounded-lg bg-gray-50 p-3">
+              <div class="text-gray-500">Atingido</div>
+              <div class="font-semibold text-base"><?= htmlspecialchars($atingidoAtual) ?></div>
+            </div>
           </div>
           <canvas width="600" height="240" data-indicador-chart='<?= htmlspecialchars(json_encode($payload, JSON_UNESCAPED_UNICODE)) ?>'></canvas>
         </div>
@@ -139,6 +178,143 @@
             // no-op
           }
         });
+
+        const wrap = document.getElementById('indicadoresChartsMultiSelect');
+        const count = document.getElementById('indicadoresChartsCount');
+        const selectAll = document.getElementById('indicadoresChartsSelectAll');
+        const clearAll = document.getElementById('indicadoresChartsClearAll');
+        const msg = document.getElementById('indicadoresChartsMsg');
+        const pdfBtn = document.getElementById('indicadoresChartsPdfBtn');
+        const csrf = document.getElementById('indicadoresChartsCsrf');
+
+        function setMsg(type, text) {
+          if (!msg) return;
+          if (!text) {
+            msg.classList.add('hidden');
+            msg.textContent = '';
+            return;
+          }
+          msg.classList.remove('hidden');
+          msg.textContent = text;
+          msg.classList.remove('border-red-200', 'bg-red-50', 'text-red-700', 'border-green-200', 'bg-green-50', 'text-green-700');
+          if (type === 'error') {
+            msg.classList.add('border-red-200', 'bg-red-50', 'text-red-700');
+          } else {
+            msg.classList.add('border-green-200', 'bg-green-50', 'text-green-700');
+          }
+        }
+
+        function selectedIds() {
+          if (!wrap) return [];
+          const ids = [];
+          wrap.querySelectorAll('input[data-indicador-checkbox]').forEach((el) => {
+            if (el.checked) ids.push(Number(el.value));
+          });
+          return ids.filter((n) => Number.isFinite(n));
+        }
+
+        function updateCards() {
+          const ids = new Set(selectedIds());
+          let visible = 0;
+          document.querySelectorAll('[data-indicador-card]').forEach((card) => {
+            const id = Number(card.getAttribute('data-indicador-id') || 0);
+            const show = ids.has(id);
+            card.style.display = show ? '' : 'none';
+            if (show) visible++;
+          });
+          if (count) {
+            count.textContent = 'Exibindo ' + visible + ' de ' + document.querySelectorAll('[data-indicador-card]').length + ' gráficos.';
+          }
+          if (pdfBtn) {
+            pdfBtn.disabled = visible === 0;
+            pdfBtn.classList.toggle('opacity-75', visible === 0);
+            pdfBtn.classList.toggle('cursor-not-allowed', visible === 0);
+          }
+        }
+
+        if (wrap) {
+          wrap.addEventListener('change', () => {
+            setMsg('', '');
+            updateCards();
+          });
+        }
+        if (selectAll && wrap) {
+          selectAll.addEventListener('click', () => {
+            wrap.querySelectorAll('input[data-indicador-checkbox]').forEach((el) => { el.checked = true; });
+            setMsg('', '');
+            updateCards();
+          });
+        }
+        if (clearAll && wrap) {
+          clearAll.addEventListener('click', () => {
+            wrap.querySelectorAll('input[data-indicador-checkbox]').forEach((el) => { el.checked = false; });
+            setMsg('', '');
+            updateCards();
+          });
+        }
+
+        async function exportPdf() {
+          setMsg('', '');
+          const cards = Array.from(document.querySelectorAll('[data-indicador-card]')).filter((c) => c.style.display !== 'none');
+          if (!cards.length) {
+            setMsg('error', 'Selecione ao menos um indicador.');
+            return;
+          }
+          if (!pdfBtn) return;
+          pdfBtn.disabled = true;
+          pdfBtn.classList.add('opacity-75', 'cursor-not-allowed');
+          try {
+            const charts = cards.map((card) => {
+              const canvas = card.querySelector('canvas');
+              const image = canvas ? canvas.toDataURL('image/png') : '';
+              return {
+                title: card.getAttribute('data-indicador-title') || '',
+                trend: card.getAttribute('data-indicador-trend') || '',
+                meta: card.getAttribute('data-indicador-meta') || '',
+                achieved: card.getAttribute('data-indicador-achieved') || '',
+                image,
+              };
+            });
+            const form = new FormData();
+            form.append('csrf', csrf ? (csrf.value || '') : '');
+            form.append('cliente_id', String(<?= (int)$cliente ?>));
+            const clienteName = document.querySelector('select[name="cliente"] option:checked')?.textContent?.trim() || '';
+            form.append('cliente_nome', clienteName);
+            form.append('charts', JSON.stringify(charts));
+            const res = await fetch('index.php?route=indicadores/chartsPdf', {
+              method: 'POST',
+              body: form,
+              headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const ct = (res.headers.get('content-type') || '').toLowerCase();
+            if (!res.ok) {
+              if (ct.includes('application/json')) {
+                const payload = await res.json();
+                throw new Error(payload.message || 'Falha ao exportar PDF.');
+              }
+              throw new Error('Falha ao exportar PDF.');
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'graficos_indicadores.pdf';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+          } catch (e) {
+            setMsg('error', e.message || 'Não foi possível exportar o PDF.');
+          } finally {
+            pdfBtn.disabled = false;
+            pdfBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+          }
+        }
+
+        if (pdfBtn) {
+          pdfBtn.addEventListener('click', exportPdf);
+        }
+        updateCards();
       })();
     </script>
   <?php endif; ?>

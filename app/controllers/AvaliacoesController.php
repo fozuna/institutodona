@@ -375,6 +375,68 @@ class AvaliacoesController extends BaseController
         }
     }
 
+    public function deleteAjax(): void
+    {
+        $this->requireLogin();
+        header('Content-Type: application/json; charset=UTF-8');
+
+        if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['ok' => false, 'message' => 'Método não permitido.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $csrf = $_POST['csrf'] ?? null;
+        if (!Security::verifyCsrf($csrf)) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'message' => 'CSRF inválido.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id <= 0) {
+            http_response_code(422);
+            echo json_encode(['ok' => false, 'message' => 'Avaliação inválida.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $item = $this->model->find($id);
+        if (!$item) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'message' => 'Avaliação não encontrada.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $ok = $this->model->delete($id);
+        if (!$ok) {
+            $err = $this->model->getLastError() ?: 'unknown';
+            $ctx = $this->model->getLastErrorContext();
+            AuditLogger::log('delete_failed', 'avaliacao', $id, [
+                'error' => $err,
+                'context' => $ctx,
+            ]);
+            if ($err === 'constraint') {
+                http_response_code(409);
+                echo json_encode(['ok' => false, 'message' => 'Não foi possível excluir a avaliação pois existem dados vinculados.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'message' => 'Não foi possível excluir a avaliação. Tente novamente.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $pdfPath = (new AvaliacaoPdfService())->pdfPath($id);
+        if ($pdfPath !== '' && is_file($pdfPath)) {
+            @unlink($pdfPath);
+        }
+
+        AuditLogger::log('delete', 'avaliacao', $id, [
+            'via' => 'ajax',
+            'cliente_id' => (int)($item['cliente_id'] ?? 0),
+        ]);
+        echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
+    }
+
     private function buildPublicLink(string $identifier = ''): string
     {
         $configured = trim((string)(getenv('PUBLIC_AVALIACOES_STATIC_URL') ?: getenv('PUBLIC_EVALUATION_BASE_URL') ?: ''));

@@ -548,6 +548,16 @@ class TreinamentoModel extends BaseModel
             WHEN COALESCE(NULLIF(TRIM(col.status_atual), ''), 'ativo') = 'ativo' THEN 'Elegivel'
             ELSE 'Inelegivel'
         END";
+        $histJoin = "LEFT JOIN (
+                    SELECT
+                        tp.colaborador_id,
+                        MAX(DATE(ta.data)) AS ultima_conclusao,
+                        COUNT(*) AS total_conclusoes
+                    FROM treinamento_participantes tp
+                    JOIN treinamentos_agenda ta ON ta.id = tp.agenda_id
+                    WHERE tp.presenca = 1 OR tp.certificado_emitido = 1
+                    GROUP BY tp.colaborador_id
+                ) th ON th.colaborador_id = col.id";
         $sql = "SELECT
                     col.id,
                     col.nome,
@@ -559,21 +569,75 @@ class TreinamentoModel extends BaseModel
                     COALESCE(NULLIF(TRIM(col.status_atual), ''), 'ativo') AS status_atual,
                     col.data_admissao,
                     {$statusExpr} AS status_elegibilidade,
-                    CASE WHEN tc.colaborador_id IS NULL THEN 0 ELSE 1 END AS pre_cadastrado
+                    CASE WHEN tc.colaborador_id IS NULL THEN 0 ELSE 1 END AS pre_cadastrado,
+                    th.ultima_conclusao,
+                    th.total_conclusoes
                 FROM colaboradores col
                 LEFT JOIN funcoes f ON f.id = col.funcao_id
                 LEFT JOIN setores s ON s.id = f.setor_id
+                LEFT JOIN departamentos d ON d.id = s.departamento_id
                 LEFT JOIN treinamento_colaboradores tc
                     ON tc.treinamento_id = :treinamento_id
                    AND tc.colaborador_id = col.id
+                {$histJoin}
                 WHERE col.cliente_id = :cliente_id";
-        if (!empty($filters['setor_id'])) {
-            $sql .= " AND s.id = :setor_id";
-            $params['setor_id'] = (int)$filters['setor_id'];
+        $allowedSetorIds = array_values(array_unique(array_filter(array_map('intval', (array)($treinamento['setor_ids'] ?? [])))));
+        $allowedFuncaoIds = array_values(array_unique(array_filter(array_map('intval', (array)($treinamento['funcao_ids'] ?? [])))));
+
+        $departamentoIds = array_values(array_unique(array_filter(array_map('intval', (array)($filters['departamento_ids'] ?? [])))));
+        $setorIds = array_values(array_unique(array_filter(array_map('intval', (array)($filters['setor_ids'] ?? [])))));
+        $funcaoIds = array_values(array_unique(array_filter(array_map('intval', (array)($filters['funcao_ids'] ?? [])))));
+
+        if (empty($setorIds) && !empty($filters['setor_id'])) {
+            $setorIds = [(int)$filters['setor_id']];
         }
-        if (!empty($filters['funcao_id'])) {
-            $sql .= " AND f.id = :funcao_id";
-            $params['funcao_id'] = (int)$filters['funcao_id'];
+        if (empty($funcaoIds) && !empty($filters['funcao_id'])) {
+            $funcaoIds = [(int)$filters['funcao_id']];
+        }
+
+        if (!empty($allowedSetorIds)) {
+            $setorIds = empty($setorIds) ? $allowedSetorIds : array_values(array_intersect($setorIds, $allowedSetorIds));
+        }
+        if (!empty($allowedFuncaoIds)) {
+            $funcaoIds = empty($funcaoIds) ? $allowedFuncaoIds : array_values(array_intersect($funcaoIds, $allowedFuncaoIds));
+        }
+
+        if (!empty($departamentoIds)) {
+            $holders = [];
+            foreach (array_values($departamentoIds) as $i => $id) {
+                $k = 'dep_' . $i;
+                $holders[] = ':' . $k;
+                $params[$k] = (int)$id;
+            }
+            $sql .= " AND d.id IN (" . implode(',', $holders) . ")";
+        }
+        if (!empty($setorIds)) {
+            $holders = [];
+            foreach (array_values($setorIds) as $i => $id) {
+                $k = 'set_' . $i;
+                $holders[] = ':' . $k;
+                $params[$k] = (int)$id;
+            }
+            $sql .= " AND s.id IN (" . implode(',', $holders) . ")";
+        }
+        if (!empty($funcaoIds)) {
+            $holders = [];
+            foreach (array_values($funcaoIds) as $i => $id) {
+                $k = 'fun_' . $i;
+                $holders[] = ':' . $k;
+                $params[$k] = (int)$id;
+            }
+            $sql .= " AND f.id IN (" . implode(',', $holders) . ")";
+        }
+        $colaboradorIds = array_values(array_unique(array_filter(array_map('intval', (array)($filters['colaborador_ids'] ?? [])))));
+        if (!empty($colaboradorIds)) {
+            $holders = [];
+            foreach (array_values($colaboradorIds) as $i => $id) {
+                $k = 'col_' . $i;
+                $holders[] = ':' . $k;
+                $params[$k] = (int)$id;
+            }
+            $sql .= " AND col.id IN (" . implode(',', $holders) . ")";
         }
         if (!empty($filters['data_admissao_inicio'])) {
             $sql .= " AND col.data_admissao >= :data_admissao_inicio";
@@ -583,6 +647,19 @@ class TreinamentoModel extends BaseModel
             $sql .= " AND col.data_admissao <= :data_admissao_fim";
             $params['data_admissao_fim'] = $filters['data_admissao_fim'];
         }
+        $tempoMin = (int)($filters['tempo_meses_min'] ?? 0);
+        $tempoMax = (int)($filters['tempo_meses_max'] ?? 0);
+        if (($tempoMin > 0 || $tempoMax > 0) && Database::columnExists('colaboradores', 'data_admissao')) {
+            $sql .= " AND col.data_admissao IS NOT NULL";
+            if ($tempoMin > 0) {
+                $sql .= " AND TIMESTAMPDIFF(MONTH, col.data_admissao, CURDATE()) >= :tempo_meses_min";
+                $params['tempo_meses_min'] = $tempoMin;
+            }
+            if ($tempoMax > 0) {
+                $sql .= " AND TIMESTAMPDIFF(MONTH, col.data_admissao, CURDATE()) <= :tempo_meses_max";
+                $params['tempo_meses_max'] = $tempoMax;
+            }
+        }
         if (!empty($filters['status_atual'])) {
             $sql .= " AND COALESCE(NULLIF(TRIM(col.status_atual), ''), 'ativo') = :status_atual";
             $params['status_atual'] = trim((string)$filters['status_atual']);
@@ -591,15 +668,70 @@ class TreinamentoModel extends BaseModel
             $sql .= " AND {$statusExpr} = :status_elegibilidade";
             $params['status_elegibilidade'] = trim((string)$filters['status_elegibilidade']);
         }
+        if (!empty($filters['lideranca']) && Database::columnExists('colaboradores', 'lider')) {
+            $v = strtolower(trim((string)$filters['lideranca']));
+            if ($v === 'sim' || $v === 'nao') {
+                $sql .= " AND col.lider = :lider";
+                $params['lider'] = $v === 'sim' ? 'sim' : 'não';
+            }
+        }
+        $q = trim((string)($filters['q'] ?? ''));
+        if ($q !== '') {
+            $sql .= " AND (col.nome LIKE :q_nome OR col.email LIKE :q_email OR col.matricula LIKE :q_matricula OR col.cpf LIKE :q_cpf)";
+            $like = '%' . $q . '%';
+            $params['q_nome'] = $like;
+            $params['q_email'] = $like;
+            $params['q_matricula'] = $like;
+            $params['q_cpf'] = $like;
+        }
+        $hist = strtolower(trim((string)($filters['historico'] ?? '')));
+        if ($hist === 'nunca') {
+            $sql .= " AND (th.total_conclusoes IS NULL OR th.total_conclusoes = 0)";
+        } elseif ($hist === 'ja') {
+            $sql .= " AND th.total_conclusoes > 0";
+        } elseif ($hist === 'dias') {
+            $dias = (int)($filters['historico_dias'] ?? 0);
+            if ($dias > 0) {
+                $sql .= " AND th.ultima_conclusao >= DATE_SUB(CURDATE(), INTERVAL :hist_dias DAY)";
+                $params['hist_dias'] = $dias;
+            }
+        }
         if (Database::columnExists('colaboradores', 'ativo')) {
             $sql .= " AND col.ativo = 1";
         }
         $sql .= " ORDER BY col.nome";
+        if (preg_match_all('/:([a-zA-Z0-9_]+)/', $sql, $m)) {
+            $used = array_fill_keys($m[1], true);
+            $params = array_intersect_key($params, $used);
+        }
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll() ?: [];
         $this->cachePut($cacheKey, $rows, 300);
         return $rows;
+    }
+
+    public function filterColaboradoresByCliente(int $clienteId, array $colaboradorIds): array
+    {
+        $this->ensureSchema();
+        $colaboradorIds = array_values(array_unique(array_filter(array_map('intval', $colaboradorIds))));
+        if ($clienteId <= 0 || empty($colaboradorIds)) {
+            return [];
+        }
+        $params = ['cid' => $clienteId];
+        $holders = [];
+        foreach ($colaboradorIds as $i => $id) {
+            $k = 'c' . $i;
+            $holders[] = ':' . $k;
+            $params[$k] = (int)$id;
+        }
+        $sql = "SELECT id FROM colaboradores WHERE cliente_id = :cid AND id IN (" . implode(',', $holders) . ")";
+        if (Database::columnExists('colaboradores', 'ativo')) {
+            $sql .= " AND ativo = 1";
+        }
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return array_values(array_map('intval', array_column($stmt->fetchAll() ?: [], 'id')));
     }
 
     private function participationByTraining(array $filters): array
@@ -728,6 +860,10 @@ class TreinamentoModel extends BaseModel
     private function applyDashboardFilters(array $filters, array &$params, bool $allowSetorFilter): string
     {
         $sql = '';
+        if (!empty($filters['cliente_id'])) {
+            $sql .= " AND d.cliente_id = :cliente_id";
+            $params['cliente_id'] = (int)$filters['cliente_id'];
+        }
         if (!empty($filters['periodo_inicio'])) {
             $sql .= " AND DATE(ta.data) >= :periodo_inicio";
             $params['periodo_inicio'] = $filters['periodo_inicio'];

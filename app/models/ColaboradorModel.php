@@ -3,6 +3,17 @@ namespace App\Models;
 
 class ColaboradorModel extends BaseModel
 {
+    private function buildClienteScopeClause(string $column, array $clienteIds, array &$params, string $prefix): string
+    {
+        $holders = [];
+        foreach (array_values($clienteIds) as $i => $clienteId) {
+            $key = $prefix . $i;
+            $holders[] = ':' . $key;
+            $params[$key] = (int)$clienteId;
+        }
+        return $column . ' IN (' . implode(',', $holders) . ')';
+    }
+
     private function ensureTable(): void
     {
         try {
@@ -10,9 +21,17 @@ class ColaboradorModel extends BaseModel
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 nome VARCHAR(180) NOT NULL,
                 email VARCHAR(180) NULL,
+                documento VARCHAR(20) NULL,
+                data_nascimento DATE NULL,
+                celular VARCHAR(15) NULL,
                 funcao_id INT NOT NULL,
                 lider ENUM(\'não\',\'sim\') NOT NULL DEFAULT \'não\',
-                cliente_id INT NULL
+                cliente_id INT NULL,
+                ativo TINYINT(1) NOT NULL DEFAULT 1,
+                INDEX idx_colaboradores_cliente (cliente_id),
+                INDEX idx_colaboradores_funcao (funcao_id),
+                UNIQUE KEY ux_colaboradores_documento (documento),
+                UNIQUE KEY ux_colaboradores_email (email)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
             if (!\App\Database\Database::columnExists('colaboradores', 'cliente_id')) {
                 $this->db->exec('ALTER TABLE colaboradores ADD COLUMN cliente_id INT NULL');
@@ -23,6 +42,19 @@ class ColaboradorModel extends BaseModel
             if (!\App\Database\Database::columnExists('colaboradores', 'ativo')) {
                 $this->db->exec('ALTER TABLE colaboradores ADD COLUMN ativo TINYINT(1) NOT NULL DEFAULT 1');
             }
+            if (!\App\Database\Database::columnExists('colaboradores', 'documento')) {
+                $this->db->exec('ALTER TABLE colaboradores ADD COLUMN documento VARCHAR(20) NULL AFTER nome');
+            }
+            if (!\App\Database\Database::columnExists('colaboradores', 'data_nascimento')) {
+                $this->db->exec('ALTER TABLE colaboradores ADD COLUMN data_nascimento DATE NULL');
+            }
+            if (!\App\Database\Database::columnExists('colaboradores', 'celular')) {
+                $this->db->exec('ALTER TABLE colaboradores ADD COLUMN celular VARCHAR(15) NULL');
+            }
+            try { $this->db->exec('ALTER TABLE colaboradores ADD UNIQUE INDEX ux_colaboradores_documento (documento)'); } catch (\PDOException $e) {}
+            try { $this->db->exec('ALTER TABLE colaboradores ADD UNIQUE INDEX ux_colaboradores_email (email)'); } catch (\PDOException $e) {}
+            try { $this->db->exec('ALTER TABLE colaboradores ADD INDEX idx_colaboradores_cliente (cliente_id)'); } catch (\PDOException $e) {}
+            try { $this->db->exec('ALTER TABLE colaboradores ADD INDEX idx_colaboradores_funcao (funcao_id)'); } catch (\PDOException $e) {}
         } catch (\PDOException $e) {}
     }
 
@@ -78,6 +110,30 @@ class ColaboradorModel extends BaseModel
         return (int)($row['total'] ?? 0);
     }
 
+    public function countByClientesWithFilters(array $clienteIds, array $filters): int
+    {
+        $this->ensureTable();
+        $clienteIds = array_values(array_unique(array_filter(array_map('intval', $clienteIds))));
+        if (empty($clienteIds)) {
+            return 0;
+        }
+        $params = [];
+        $conds = [$this->buildClienteScopeClause('col.cliente_id', $clienteIds, $params, 'ccmf_scope')];
+        $conds[] = $this->tenantInCondition('col.cliente_id', $params, 'ccmf_tenant');
+        if (!empty($filters['lider'])) { $conds[] = 'col.lider = :lider'; $params['lider'] = $filters['lider']; }
+        if (!empty($filters['departamento_id'])) { $conds[] = 'd.id = :dep'; $params['dep'] = (int)$filters['departamento_id']; }
+        if (!empty($filters['funcao_id'])) { $conds[] = 'f.id = :func'; $params['func'] = (int)$filters['funcao_id']; }
+        $sql = 'SELECT COUNT(DISTINCT col.id) AS total
+                FROM colaboradores col
+                JOIN funcoes f ON f.id = col.funcao_id
+                JOIN setores s ON s.id = f.setor_id
+                JOIN departamentos d ON d.id = s.departamento_id
+                WHERE ' . implode(' AND ', $conds);
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return (int)$stmt->fetchColumn();
+    }
+
     public function paginatedByCliente(int $clienteId, int $page, int $perPage): array
     {
         $this->ensureTable();
@@ -126,6 +182,39 @@ class ColaboradorModel extends BaseModel
         return $stmt->fetchAll();
     }
 
+    public function paginatedByClientesWithFilters(array $clienteIds, int $page, int $perPage, array $filters): array
+    {
+        $this->ensureTable();
+        $clienteIds = array_values(array_unique(array_filter(array_map('intval', $clienteIds))));
+        if (empty($clienteIds)) {
+            return [];
+        }
+        $page = max(1, (int)$page);
+        $perPage = max(1, min(200, (int)$perPage));
+        $offset = ($page - 1) * $perPage;
+
+        $params = [];
+        $conds = [$this->buildClienteScopeClause('col.cliente_id', $clienteIds, $params, 'cpmf_scope')];
+        $conds[] = $this->tenantInCondition('col.cliente_id', $params, 'cpmf_tenant');
+        if (!empty($filters['lider'])) { $conds[] = 'col.lider = :lider'; $params['lider'] = $filters['lider']; }
+        if (!empty($filters['departamento_id'])) { $conds[] = 'd.id = :dep'; $params['dep'] = (int)$filters['departamento_id']; }
+        if (!empty($filters['funcao_id'])) { $conds[] = 'f.id = :func'; $params['func'] = (int)$filters['funcao_id']; }
+
+        $sql = 'SELECT DISTINCT col.id, col.nome, col.email, col.funcao_id, col.cliente_id,
+                       cli.nome_empresa AS unidade, f.nome AS funcao, s.nome AS setor, d.nome AS departamento
+                FROM colaboradores col
+                JOIN funcoes f ON f.id = col.funcao_id
+                JOIN setores s ON s.id = f.setor_id
+                JOIN departamentos d ON d.id = s.departamento_id
+                LEFT JOIN clientes cli ON cli.id = col.cliente_id
+                WHERE ' . implode(' AND ', $conds) . '
+                ORDER BY d.nome, s.nome, f.nome, col.nome
+                LIMIT ' . (int)$perPage . ' OFFSET ' . (int)$offset;
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
     public function find(int $id): ?array
     {
         $this->ensureTable();
@@ -144,13 +233,17 @@ class ColaboradorModel extends BaseModel
         if (($data['cliente_id'] ?? 0) <= 0 || !$this->canAccessClienteId((int)$data['cliente_id'])) {
             return 0;
         }
-        $stmt = $this->db->prepare('INSERT INTO colaboradores (nome, email, funcao_id, lider, cliente_id) VALUES (:nome, :email, :funcao_id, :lider, :cliente_id)');
+        $stmt = $this->db->prepare('INSERT INTO colaboradores (nome, email, documento, data_nascimento, celular, funcao_id, lider, cliente_id, ativo) VALUES (:nome, :email, :documento, :data_nascimento, :celular, :funcao_id, :lider, :cliente_id, :ativo)');
         $stmt->execute([
             'nome' => $data['nome'],
             'email' => $data['email'] ?? null,
+            'documento' => $data['documento'] ?? null,
+            'data_nascimento' => $data['data_nascimento'] ?? null,
+            'celular' => $data['celular'] ?? null,
             'funcao_id' => (int)$data['funcao_id'],
             'lider' => ($data['lider'] ?? 'não') === 'sim' ? 'sim' : 'não',
-            'cliente_id' => $data['cliente_id'] ?? null
+            'cliente_id' => $data['cliente_id'] ?? null,
+            'ativo' => isset($data['ativo']) ? (int)(bool)$data['ativo'] : 1,
         ]);
         return (int)$this->db->lastInsertId();
     }
@@ -162,13 +255,17 @@ class ColaboradorModel extends BaseModel
         $params = [
             'nome' => $data['nome'],
             'email' => $data['email'] ?? null,
+            'documento' => $data['documento'] ?? null,
+            'data_nascimento' => $data['data_nascimento'] ?? null,
+            'celular' => $data['celular'] ?? null,
             'funcao_id' => (int)$data['funcao_id'],
             'lider' => ($data['lider'] ?? 'não') === 'sim' ? 'sim' : 'não',
             'cliente_id' => $data['cliente_id'] ?? null,
+            'ativo' => isset($data['ativo']) ? (int)(bool)$data['ativo'] : 1,
             'id' => $id
         ];
         $scope = $this->tenantInCondition('cliente_id', $params, 'cu');
-        $stmt = $this->db->prepare("UPDATE colaboradores SET nome = :nome, email = :email, funcao_id = :funcao_id, lider = :lider, cliente_id = :cliente_id WHERE id = :id AND $scope");
+        $stmt = $this->db->prepare("UPDATE colaboradores SET nome = :nome, email = :email, documento = :documento, data_nascimento = :data_nascimento, celular = :celular, funcao_id = :funcao_id, lider = :lider, cliente_id = :cliente_id, ativo = :ativo WHERE id = :id AND $scope");
         return $stmt->execute($params);
     }
 

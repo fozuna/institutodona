@@ -3,6 +3,7 @@ namespace App\Controllers;
 
 use App\Core\BaseController;
 use App\Core\Auth;
+use App\Core\AuditLogger;
 
 class LogsController extends BaseController
 {
@@ -31,5 +32,22 @@ class LogsController extends BaseController
             }
         }
         $this->render('logs/index', ['lines' => $lines]);
+    }
+
+    public function iconHealth(): void
+    {
+        $this->requireLogin();
+        $type = trim((string)($_GET['type'] ?? ''));
+        $msg = trim((string)($_GET['msg'] ?? ''));
+        if ($type === '') {
+            http_response_code(204);
+            return;
+        }
+        AuditLogger::log('ui_icon_health', 'ui', null, [
+            'type' => substr($type, 0, 80),
+            'msg' => substr($msg, 0, 240),
+            'ua' => substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 180),
+        ]);
+        http_response_code(204);
     }
 }

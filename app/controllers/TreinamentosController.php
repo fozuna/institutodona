@@ -2,6 +2,7 @@
 namespace App\Controllers;
 
 use App\Core\Auth;
+use App\Core\AuditLogger;
 use App\Core\BaseController;
 use App\Core\DateHelper;
 use App\Core\Security;
@@ -42,11 +43,18 @@ class TreinamentosController extends BaseController
     {
         $this->requireLogin();
         $filters = $this->dashboardFilters();
+        $clientes = $this->clienteOptions();
+        $setores = $this->setorOptions();
+        if (!empty($filters['cliente_id'])) {
+            $cid = (int)$filters['cliente_id'];
+            $setores = array_values(array_filter($setores, static fn(array $row): bool => (int)($row['cliente_id'] ?? 0) === $cid));
+        }
         $this->render('treinamentos/dashboard', [
             'pageTitle' => 'Dashboard de Treinamentos',
             'dashboard' => $this->model->dashboard($filters),
             'filters' => $filters,
-            'setores' => $this->setorOptions(),
+            'clientes' => $clientes,
+            'setores' => $setores,
             'tipoTreinamentoOptions' => $this->tipoTreinamentoOptions(),
         ]);
     }
@@ -150,8 +158,12 @@ class TreinamentosController extends BaseController
         if (!$item) {
             return;
         }
-        $eligibleFilters = $this->eligibleFilters();
+        $eligibleFilters = $this->normalizeEligibleFilters((int)($item['cliente_id'] ?? 0), $this->eligibleFilters());
         $eligibleRows = $this->model->eligibleColaboradoresForTraining((int)$item['id'], $eligibleFilters);
+        $clienteId = (int)($item['cliente_id'] ?? 0);
+        $departamentos = array_values(array_filter($this->departamentoOptions(), static fn(array $row): bool => (int)($row['cliente_id'] ?? 0) === $clienteId));
+        $setores = array_values(array_filter($this->setorOptions(), static fn(array $row): bool => (int)($row['cliente_id'] ?? 0) === $clienteId));
+        $funcoes = array_values(array_filter($this->funcaoOptions(), static fn(array $row): bool => (int)($row['cliente_id'] ?? 0) === $clienteId));
         $this->render('treinamentos/show', [
             'pageTitle' => 'Treinamento',
             'item' => $item,
@@ -164,10 +176,30 @@ class TreinamentosController extends BaseController
             'alerts' => $this->model->pendingAlerts((int)$item['id']),
             'unidades' => $this->clienteOptions(),
             'usuarios' => $this->usuarioOptions(),
-            'setores' => $this->setorOptions(),
-            'funcoes' => $this->funcaoOptions(),
+            'departamentos' => $departamentos,
+            'setores' => $setores,
+            'funcoes' => $funcoes,
             'statusAtualOptions' => $this->statusAtualOptions(),
         ]);
+    }
+
+    public function eligibleAjax(): void
+    {
+        $this->requireLogin();
+        header('Content-Type: application/json; charset=utf-8');
+        $item = $this->findOrRedirect((int)($_GET['id'] ?? 0));
+        if (!$item) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'message' => 'Treinamento não encontrado.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $filters = $this->normalizeEligibleFilters((int)($item['cliente_id'] ?? 0), $this->eligibleFilters());
+        $rows = $this->model->eligibleColaboradoresForTraining((int)$item['id'], $filters);
+        ob_start();
+        $eligibleRows = $rows;
+        require __DIR__ . '/../views/treinamentos/_eligible_rows.php';
+        $html = (string)ob_get_clean();
+        echo json_encode(['ok' => true, 'count' => count($rows), 'html' => $html], JSON_UNESCAPED_UNICODE);
     }
 
     public function addColaboradores(): void
@@ -179,9 +211,155 @@ class TreinamentosController extends BaseController
             return;
         }
         $treinamentoId = (int)($_POST['treinamento_id'] ?? 0);
+        $treinamento = $this->model->find($treinamentoId);
+        if (!$treinamento) {
+            $_SESSION['flash_error'] = 'Treinamento não encontrado.';
+            $this->redirect('index.php?route=treinamentos/index');
+            return;
+        }
         $ids = $_POST['colaborador_ids'] ?? [];
-        $this->model->syncSelectedColaboradores($treinamentoId, is_array($ids) ? $ids : [$ids]);
+        $ids = is_array($ids) ? $ids : [$ids];
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        $validIds = $this->model->filterColaboradoresByCliente((int)($treinamento['cliente_id'] ?? 0), $ids);
+        if (count($validIds) !== count($ids)) {
+            $_SESSION['flash_error'] = 'Existem colaboradores inválidos para a unidade do treinamento.';
+            $this->redirect('index.php?route=treinamentos/show&id=' . $treinamentoId);
+            return;
+        }
+        $this->model->syncSelectedColaboradores($treinamentoId, $validIds);
         $_SESSION['flash_success'] = 'Lista pré-cadastrada do treinamento atualizada.';
+        $this->redirect('index.php?route=treinamentos/show&id=' . $treinamentoId);
+    }
+
+    public function exportSelecionados(): void
+    {
+        $this->requireManagePermission();
+        if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+        $treinamentoId = (int)($_POST['treinamento_id'] ?? 0);
+        $treinamento = $this->model->find($treinamentoId);
+        if (!$treinamento) {
+            $_SESSION['flash_error'] = 'Treinamento não encontrado.';
+            $this->redirect('index.php?route=treinamentos/index');
+            return;
+        }
+        $ids = $_POST['colaborador_ids'] ?? [];
+        $ids = is_array($ids) ? $ids : [$ids];
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if (empty($ids)) {
+            $_SESSION['flash_error'] = 'Selecione ao menos um colaborador para exportar.';
+            $this->redirect('index.php?route=treinamentos/show&id=' . $treinamentoId);
+            return;
+        }
+        $validIds = $this->model->filterColaboradoresByCliente((int)($treinamento['cliente_id'] ?? 0), $ids);
+        if (empty($validIds)) {
+            $_SESSION['flash_error'] = 'Nenhum colaborador válido para exportar.';
+            $this->redirect('index.php?route=treinamentos/show&id=' . $treinamentoId);
+            return;
+        }
+        $rows = $this->model->eligibleColaboradoresForTraining((int)$treinamentoId, ['colaborador_ids' => $validIds]);
+
+        AuditLogger::log('treinamentos_export_selecionados', 'treinamento', $treinamentoId, [
+            'cliente_id' => (int)($treinamento['cliente_id'] ?? 0),
+            'total' => count($rows),
+        ]);
+
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        $filename = 'treinamento-' . $treinamentoId . '-selecionados.csv';
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        echo "\xEF\xBB\xBF";
+        $out = fopen('php://output', 'wb');
+        fputcsv($out, ['Nome', 'Matrícula', 'Setor', 'Cargo', 'CPF', 'E-mail', 'Status', 'Elegibilidade', 'Última conclusão'], ';');
+        foreach ($rows as $r) {
+            fputcsv($out, [
+                (string)($r['nome'] ?? ''),
+                (string)($r['matricula'] ?? ''),
+                (string)($r['setor'] ?? ''),
+                (string)($r['cargo'] ?? ''),
+                (string)($r['cpf'] ?? ''),
+                (string)($r['email_corporativo'] ?? ''),
+                (string)($r['status_atual'] ?? ''),
+                (string)($r['status_elegibilidade'] ?? ''),
+                (string)($r['ultima_conclusao'] ?? ''),
+            ], ';');
+        }
+        fclose($out);
+        exit;
+    }
+
+    public function rhSync(): void
+    {
+        $this->requireManagePermission();
+        if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+        $treinamentoId = (int)($_POST['treinamento_id'] ?? 0);
+        $treinamento = $this->model->find($treinamentoId);
+        if (!$treinamento) {
+            $_SESSION['flash_error'] = 'Treinamento não encontrado.';
+            $this->redirect('index.php?route=treinamentos/index');
+            return;
+        }
+
+        $url = trim((string)getenv('RH_WEBHOOK_URL'));
+        if ($url === '') {
+            $_SESSION['flash_error'] = 'Integração com RH não configurada (RH_WEBHOOK_URL).';
+            $this->redirect('index.php?route=treinamentos/show&id=' . $treinamentoId);
+            return;
+        }
+        $token = trim((string)getenv('RH_WEBHOOK_TOKEN'));
+
+        $linked = $this->model->linkedColaboradores($treinamentoId, null);
+        $payload = [
+            'event' => 'treinamento.sync',
+            'treinamento' => [
+                'id' => $treinamentoId,
+                'nome' => (string)($treinamento['nome'] ?? ''),
+                'cliente_id' => (int)($treinamento['cliente_id'] ?? 0),
+                'unidade_nome' => (string)($treinamento['unidade_nome'] ?? ''),
+                'tipo_treinamento' => (string)($treinamento['tipo_treinamento'] ?? ''),
+                'carga_horaria' => $treinamento['carga_horaria'] ?? null,
+            ],
+            'colaboradores' => array_map(static function (array $row): array {
+                return [
+                    'id' => (int)($row['colaborador_id'] ?? 0),
+                    'nome' => (string)($row['colaborador_nome'] ?? ''),
+                    'email' => (string)($row['colaborador_email'] ?? ''),
+                    'status' => (string)($row['status'] ?? ''),
+                    'ultima_conclusao' => $row['ultima_conclusao'] ?? null,
+                    'funcao' => $row['funcao_nome'] ?? null,
+                    'setor' => $row['setor_nome'] ?? null,
+                    'unidade' => $row['unidade_nome'] ?? null,
+                ];
+            }, $linked),
+        ];
+
+        $result = $this->postJson($url, $payload, $token);
+        if (!$result['ok']) {
+            AuditLogger::log('rh_sync_failed', 'treinamento', $treinamentoId, [
+                'url' => $url,
+                'error' => $result['error'] ?? null,
+                'http_code' => $result['http_code'] ?? null,
+            ]);
+            $_SESSION['flash_error'] = 'Falha ao sincronizar com RH: ' . (string)($result['error'] ?? 'Erro desconhecido');
+            $this->redirect('index.php?route=treinamentos/show&id=' . $treinamentoId);
+            return;
+        }
+
+        AuditLogger::log('rh_sync', 'treinamento', $treinamentoId, [
+            'url' => $url,
+            'http_code' => $result['http_code'] ?? null,
+            'total' => count($linked),
+        ]);
+        $_SESSION['flash_success'] = 'Sincronização com RH enviada com sucesso.';
         $this->redirect('index.php?route=treinamentos/show&id=' . $treinamentoId);
     }
 
@@ -378,7 +556,7 @@ class TreinamentosController extends BaseController
         if (!$treinamento) {
             return;
         }
-        $filters = $this->eligibleFilters();
+        $filters = $this->normalizeEligibleFilters((int)($treinamento['cliente_id'] ?? 0), $this->eligibleFilters());
         $rows = $this->model->eligibleColaboradoresForTraining((int)$treinamento['id'], $filters);
         $format = strtolower(trim((string)($_GET['format'] ?? 'pdf')));
         if ($format === 'xlsx') {
@@ -572,7 +750,7 @@ class TreinamentosController extends BaseController
     {
         $pdo = Database::getConnection();
         $params = [];
-        $sql = "SELECT s.id, s.nome, d.nome AS departamento_nome, d.cliente_id
+        $sql = "SELECT s.id, s.nome, s.departamento_id, d.nome AS departamento_nome, d.cliente_id
                 FROM setores s
                 JOIN departamentos d ON d.id = s.departamento_id
                 WHERE 1=1";
@@ -599,7 +777,7 @@ class TreinamentosController extends BaseController
     {
         $pdo = Database::getConnection();
         $params = [];
-        $sql = "SELECT f.id, f.nome, s.nome AS setor_nome, d.cliente_id
+        $sql = "SELECT f.id, f.nome, f.setor_id, s.departamento_id, s.nome AS setor_nome, d.cliente_id
                 FROM funcoes f
                 JOIN setores s ON s.id = f.setor_id
                 JOIN departamentos d ON d.id = s.departamento_id
@@ -712,19 +890,236 @@ class TreinamentosController extends BaseController
 
     private function eligibleFilters(): array
     {
+        $arr = static function ($v): array {
+            if (is_array($v)) {
+                return array_values(array_unique(array_filter(array_map('intval', $v))));
+            }
+            if ($v === null || $v === '') {
+                return [];
+            }
+            return array_values(array_unique(array_filter([intval($v)])));
+        };
+
+        $setorIds = $arr($_GET['setor_ids'] ?? []);
+        $funcaoIds = $arr($_GET['funcao_ids'] ?? []);
+        if (empty($setorIds) && !empty($_GET['setor_id'])) {
+            $setorIds = [(int)$_GET['setor_id']];
+        }
+        if (empty($funcaoIds) && !empty($_GET['funcao_id'])) {
+            $funcaoIds = [(int)$_GET['funcao_id']];
+        }
+
         return [
-            'setor_id' => (int)($_GET['setor_id'] ?? 0),
-            'funcao_id' => (int)($_GET['funcao_id'] ?? 0),
+            'q' => trim((string)($_GET['q'] ?? '')),
+            'departamento_ids' => $arr($_GET['departamento_ids'] ?? []),
+            'setor_ids' => $setorIds,
+            'funcao_ids' => $funcaoIds,
             'data_admissao_inicio' => trim((string)($_GET['data_admissao_inicio'] ?? '')),
             'data_admissao_fim' => trim((string)($_GET['data_admissao_fim'] ?? '')),
+            'tempo_meses_min' => (int)($_GET['tempo_meses_min'] ?? 0),
+            'tempo_meses_max' => (int)($_GET['tempo_meses_max'] ?? 0),
             'status_atual' => trim((string)($_GET['status_atual'] ?? '')),
             'status_elegibilidade' => trim((string)($_GET['status_elegibilidade'] ?? '')),
+            'lideranca' => trim((string)($_GET['lideranca'] ?? '')),
+            'historico' => trim((string)($_GET['historico'] ?? '')),
+            'historico_dias' => (int)($_GET['historico_dias'] ?? 0),
         ];
+    }
+
+    private function normalizeEligibleFilters(int $clienteId, array $filters): array
+    {
+        $clienteId = (int)$clienteId;
+        if ($clienteId <= 0) {
+            return $filters;
+        }
+
+        $filters['departamento_ids'] = array_values(array_unique(array_filter(array_map('intval', (array)($filters['departamento_ids'] ?? [])))));
+        $filters['setor_ids'] = array_values(array_unique(array_filter(array_map('intval', (array)($filters['setor_ids'] ?? [])))));
+        $filters['funcao_ids'] = array_values(array_unique(array_filter(array_map('intval', (array)($filters['funcao_ids'] ?? [])))));
+
+        $validDate = static function (string $s): string {
+            $s = trim($s);
+            if ($s === '') {
+                return '';
+            }
+            $dt = \DateTime::createFromFormat('Y-m-d', $s);
+            return $dt && $dt->format('Y-m-d') === $s ? $s : '';
+        };
+        $filters['data_admissao_inicio'] = $validDate((string)($filters['data_admissao_inicio'] ?? ''));
+        $filters['data_admissao_fim'] = $validDate((string)($filters['data_admissao_fim'] ?? ''));
+
+        $filters['tempo_meses_min'] = max(0, (int)($filters['tempo_meses_min'] ?? 0));
+        $filters['tempo_meses_max'] = max(0, (int)($filters['tempo_meses_max'] ?? 0));
+        if ($filters['tempo_meses_min'] > 0 && $filters['tempo_meses_max'] > 0 && $filters['tempo_meses_max'] < $filters['tempo_meses_min']) {
+            $filters['tempo_meses_max'] = 0;
+        }
+
+        $statusAtual = trim((string)($filters['status_atual'] ?? ''));
+        if ($statusAtual !== '' && !in_array($statusAtual, $this->statusAtualOptions(), true)) {
+            $filters['status_atual'] = '';
+        }
+        $statusEleg = trim((string)($filters['status_elegibilidade'] ?? ''));
+        if ($statusEleg !== '' && $statusEleg !== 'Elegivel' && $statusEleg !== 'Inelegivel') {
+            $filters['status_elegibilidade'] = '';
+        }
+        $lider = strtolower(trim((string)($filters['lideranca'] ?? '')));
+        if ($lider !== '' && $lider !== 'sim' && $lider !== 'nao') {
+            $filters['lideranca'] = '';
+        }
+        $hist = strtolower(trim((string)($filters['historico'] ?? '')));
+        if ($hist !== '' && $hist !== 'nunca' && $hist !== 'ja' && $hist !== 'dias') {
+            $filters['historico'] = '';
+        }
+        $filters['historico_dias'] = max(0, (int)($filters['historico_dias'] ?? 0));
+        if (($filters['historico'] ?? '') !== 'dias') {
+            $filters['historico_dias'] = 0;
+        }
+
+        $departamentos = array_values(array_filter($this->departamentoOptions(), static fn(array $row): bool => (int)($row['cliente_id'] ?? 0) === $clienteId));
+        $allowedDep = [];
+        foreach ($departamentos as $d) {
+            $allowedDep[(int)$d['id']] = true;
+        }
+        $filters['departamento_ids'] = array_values(array_filter($filters['departamento_ids'], static fn(int $id): bool => isset($allowedDep[$id])));
+        $selectedDep = [];
+        foreach ($filters['departamento_ids'] as $id) {
+            $selectedDep[(int)$id] = true;
+        }
+
+        $setores = array_values(array_filter($this->setorOptions(), static fn(array $row): bool => (int)($row['cliente_id'] ?? 0) === $clienteId));
+        $setorToDep = [];
+        foreach ($setores as $s) {
+            $setorToDep[(int)$s['id']] = (int)($s['departamento_id'] ?? 0);
+        }
+        $filters['setor_ids'] = array_values(array_filter($filters['setor_ids'], static function (int $id) use ($setorToDep, $selectedDep): bool {
+            if (!isset($setorToDep[$id])) {
+                return false;
+            }
+            if (empty($selectedDep)) {
+                return true;
+            }
+            return isset($selectedDep[(int)$setorToDep[$id]]);
+        }));
+        $selectedSet = [];
+        foreach ($filters['setor_ids'] as $id) {
+            $selectedSet[(int)$id] = true;
+        }
+
+        $funcoes = array_values(array_filter($this->funcaoOptions(), static fn(array $row): bool => (int)($row['cliente_id'] ?? 0) === $clienteId));
+        $funcaoMeta = [];
+        foreach ($funcoes as $f) {
+            $funcaoMeta[(int)$f['id']] = [
+                'setor_id' => (int)($f['setor_id'] ?? 0),
+                'departamento_id' => (int)($f['departamento_id'] ?? 0),
+            ];
+        }
+        $filters['funcao_ids'] = array_values(array_filter($filters['funcao_ids'], static function (int $id) use ($funcaoMeta, $selectedSet, $selectedDep): bool {
+            if (!isset($funcaoMeta[$id])) {
+                return false;
+            }
+            $meta = $funcaoMeta[$id];
+            if (!empty($selectedSet)) {
+                return isset($selectedSet[(int)$meta['setor_id']]);
+            }
+            if (!empty($selectedDep)) {
+                return isset($selectedDep[(int)$meta['departamento_id']]);
+            }
+            return true;
+        }));
+
+        return $filters;
+    }
+
+    private function postJson(string $url, array $payload, string $token = ''): array
+    {
+        $body = json_encode($payload, JSON_UNESCAPED_UNICODE);
+        if (!is_string($body)) {
+            return ['ok' => false, 'error' => 'Payload inválido.'];
+        }
+        $headers = [
+            'Content-Type: application/json',
+            'Accept: application/json',
+        ];
+        if ($token !== '') {
+            $headers[] = 'Authorization: Bearer ' . $token;
+        }
+
+        if (function_exists('curl_init')) {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+            $resp = curl_exec($ch);
+            $err = curl_error($ch);
+            $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            if ($resp === false) {
+                return ['ok' => false, 'error' => $err ?: 'Falha ao enviar requisição.', 'http_code' => $code];
+            }
+            if ($code < 200 || $code >= 300) {
+                return ['ok' => false, 'error' => 'HTTP ' . $code, 'http_code' => $code];
+            }
+            return ['ok' => true, 'http_code' => $code];
+        }
+
+        $headerStr = implode("\r\n", $headers);
+        $ctx = stream_context_create([
+            'http' => [
+                'method' => 'POST',
+                'header' => $headerStr,
+                'content' => $body,
+                'timeout' => 10,
+            ],
+        ]);
+        $resp = @file_get_contents($url, false, $ctx);
+        $code = 0;
+        if (isset($http_response_header) && is_array($http_response_header)) {
+            foreach ($http_response_header as $h) {
+                if (preg_match('#^HTTP/\S+\s+(\d{3})#', $h, $m)) {
+                    $code = (int)$m[1];
+                    break;
+                }
+            }
+        }
+        if ($resp === false) {
+            return ['ok' => false, 'error' => 'Falha ao enviar requisição.', 'http_code' => $code];
+        }
+        if ($code < 200 || $code >= 300) {
+            return ['ok' => false, 'error' => 'HTTP ' . $code, 'http_code' => $code];
+        }
+        return ['ok' => true, 'http_code' => $code];
     }
 
     private function dashboardFilters(): array
     {
+        if (!empty($_GET['reset'])) {
+            unset($_SESSION['treinamentos_dashboard_cliente_id']);
+            return [
+                'cliente_id' => 0,
+                'periodo_inicio' => '',
+                'periodo_fim' => '',
+                'setor_id' => 0,
+                'tipo_treinamento' => '',
+                'instrutor' => '',
+            ];
+        }
+
+        $clienteId = null;
+        if (array_key_exists('cliente_id', $_GET)) {
+            $clienteId = (int)($_GET['cliente_id'] ?? 0);
+            $_SESSION['treinamentos_dashboard_cliente_id'] = $clienteId;
+        } elseif (isset($_SESSION['treinamentos_dashboard_cliente_id'])) {
+            $clienteId = (int)($_SESSION['treinamentos_dashboard_cliente_id'] ?? 0);
+        }
+        $clienteId = (int)($clienteId ?? 0);
+        if ($clienteId > 0 && !$this->canAccessCliente($clienteId)) {
+            $clienteId = 0;
+        }
+
         return [
+            'cliente_id' => $clienteId,
             'periodo_inicio' => trim((string)($_GET['periodo_inicio'] ?? '')),
             'periodo_fim' => trim((string)($_GET['periodo_fim'] ?? '')),
             'setor_id' => (int)($_GET['setor_id'] ?? 0),

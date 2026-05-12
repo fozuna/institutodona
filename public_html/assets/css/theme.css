@@ -194,6 +194,8 @@
 .icon-action { display: inline-flex; align-items: center; justify-content: center; padding: 0.125rem; border-radius: 0.25rem; }
 .icon-action:hover { background-color: rgba(0,0,0,0.06); }
 .icon-btn svg, .icon-action svg { width: 16px; height: 16px; }
+.btn-with-icon { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; }
+.btn-with-icon svg { width: 18px; height: 18px; }
 
 /* Kanban: estilo dos cartões/colunas */
 .kanban-column { min-height: 360px; }

@@ -3,9 +3,12 @@ require_once __DIR__ . '/../autoload.php';
 
 use App\Core\Auth;
 use App\Database\Database;
+use App\Controllers\TreinamentosController;
 use App\Models\TreinamentoAgendaModel;
 use App\Models\TreinamentoModel;
 use App\Services\AgendaEventService;
+
+ob_start();
 
 function ok(string $msg): void { echo "OK: $msg\n"; }
 function failFast(string $msg): void { echo "FAIL: $msg\n"; exit(1); }
@@ -136,6 +139,45 @@ try {
     }
     ok('Consulta de elegíveis com filtros');
 
+    if (Database::columnExists('colaboradores', 'data_admissao')) {
+        $pdo->prepare('UPDATE colaboradores SET data_admissao = :d WHERE id = :id')
+            ->execute(['d' => date('Y-m-d', strtotime('-18 months')), 'id' => $colaboradorId]);
+        $eligibleTempo = $treinamentoModel->eligibleColaboradoresForTraining($treinamentoId, ['tempo_meses_min' => 12, 'tempo_meses_max' => 24]);
+        if (count($eligibleTempo) !== 1) {
+            failFast('Filtro por tempo de empresa (meses) deveria retornar o colaborador');
+        }
+        $eligibleTempo2 = $treinamentoModel->eligibleColaboradoresForTraining($treinamentoId, ['tempo_meses_min' => 24]);
+        if (count($eligibleTempo2) !== 0) {
+            failFast('Filtro por tempo de empresa (mínimo) deveria excluir o colaborador');
+        }
+        ok('Filtro por tempo de empresa (meses)');
+    }
+
+    try {
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_GET = [
+            'route' => 'treinamentos/eligible_ajax',
+            'id' => $treinamentoId,
+            'q' => 'Colaborador Treinamento',
+            'setor_ids' => [$setorId],
+            'funcao_ids' => [$funcaoId],
+        ];
+        $_SERVER['HTTP_X_REQUESTED_WITH'] = 'XMLHttpRequest';
+        ob_start();
+        (new TreinamentosController())->eligibleAjax();
+        $out = ob_get_clean();
+        $payload = json_decode((string)$out, true);
+        if (!is_array($payload) || empty($payload['ok']) || !isset($payload['count'])) {
+            failFast('eligibleAjax deveria retornar JSON ok. Saída: ' . $out);
+        }
+        if ((int)$payload['count'] !== 1) {
+            failFast('eligibleAjax deveria retornar count=1. Atual: ' . json_encode($payload['count']));
+        }
+        ok('eligibleAjax ok');
+    } catch (Throwable $e) {
+        failFast('eligibleAjax falhou: ' . $e->getMessage() . ' em ' . $e->getFile() . ':' . $e->getLine());
+    }
+
     $dashboard = $treinamentoModel->dashboard();
     if (empty($dashboard['concluidos']) || empty($dashboard['participacao_treinamento']) || empty($dashboard['setores'])) {
         failFast('Dashboard avançado deveria retornar concluídos, participação e totalizadores por setor');
@@ -181,3 +223,5 @@ try {
     }
     Auth::logout();
 }
+
+ob_end_flush();

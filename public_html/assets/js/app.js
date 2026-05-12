@@ -1,9 +1,185 @@
 // EspaÃ§o para scripts da UI; mantido mÃ­nimo nesta entrega
 console.log('SIS+ - UI carregada');
 document.addEventListener('DOMContentLoaded', function () {
-  if (window.feather && typeof window.feather.replace === 'function') {
-    window.feather.replace();
-  }
+  var normalize = function (s) {
+    return (s || '').replace(/\s+/g, ' ').trim();
+  };
+
+  var isFeatherAvailable = function () {
+    return !!(window.feather && typeof window.feather.replace === 'function');
+  };
+
+  var reportIconHealth = function (type, msg) {
+    try {
+      var t = encodeURIComponent(String(type || '').slice(0, 60));
+      var m = encodeURIComponent(String(msg || '').slice(0, 220));
+      var url = 'index.php?route=logs/icon_health&type=' + t + '&msg=' + m;
+      var img = new Image();
+      img.src = url;
+    } catch (e) {}
+  };
+
+  var elementLooksLikeButton = function (el) {
+    if (!el) { return false; }
+    if (el.tagName === 'BUTTON') { return true; }
+    if (el.tagName !== 'A') { return false; }
+    if ((el.getAttribute('role') || '').toLowerCase() === 'button') { return true; }
+    var cls = (el.getAttribute('class') || '');
+    if (cls.indexOf('icon-btn') !== -1 || cls.indexOf('icon-action') !== -1) { return true; }
+    if (cls.indexOf('rounded') !== -1 && (cls.indexOf('bg-') !== -1 || cls.indexOf('border') !== -1)) { return true; }
+    return false;
+  };
+
+  var hasIcon = function (el) {
+    return !!(el.querySelector('svg') || el.querySelector('[data-feather]') || el.querySelector('img'));
+  };
+
+  var getPreferredLabel = function (el) {
+    var aria = normalize(el.getAttribute('aria-label') || '');
+    if (aria) { return aria; }
+    var title = normalize(el.getAttribute('title') || '');
+    if (title) { return title; }
+    return normalize(el.textContent || '');
+  };
+
+  var ensureTextAlternative = function (el, label) {
+    if (!label) { return; }
+    el.setAttribute('aria-label', label);
+    el.setAttribute('alt', label);
+    if (!el.getAttribute('title')) { el.setAttribute('title', label); }
+    var imgs = el.querySelectorAll('img');
+    if (imgs && imgs.length) {
+      imgs.forEach(function (img) {
+        if (!img.getAttribute('alt')) { img.setAttribute('alt', label); }
+      });
+    }
+  };
+
+  var labelToIcon = function (label) {
+    var txt = normalize(label).toLowerCase();
+    if (!txt) { return ''; }
+    if (txt === 'voltar') { return 'arrow-left'; }
+    if (txt === 'filtrar') { return 'filter'; }
+    if (txt === 'limpar') { return 'x-circle'; }
+    if (txt === 'salvar') { return 'save'; }
+    if (txt === 'cancelar') { return 'x'; }
+    if (txt === 'gerar link') { return 'link'; }
+    if (txt === 'copiar') { return 'copy'; }
+    if (txt === 'baixar') { return 'download'; }
+    if (txt === 'abrir') { return 'external-link'; }
+    if (txt === 'novo' || txt === 'nova' || txt.indexOf('novo ') === 0 || txt.indexOf('nova ') === 0) { return 'plus'; }
+    if (txt === 'editar' || txt.indexOf('editar ') === 0) { return 'edit'; }
+    if (txt === 'excluir' || txt.indexOf('excluir ') === 0 || txt === 'remover') { return 'trash-2'; }
+    if (txt === 'ver' || txt.indexOf('ver ') === 0 || txt === 'detalhes' || txt.indexOf('detalhes') === 0) { return 'eye'; }
+    if (txt.indexOf('pdf') !== -1) { return 'file-text'; }
+    if (txt.indexOf('import') !== -1) { return 'upload'; }
+    if (txt.indexOf('export') !== -1) { return 'download'; }
+    if (txt.indexOf('enviar') !== -1) { return 'send'; }
+    if (txt.indexOf('buscar') !== -1 || txt.indexOf('pesquisar') !== -1) { return 'search'; }
+    if (txt.indexOf('atualizar') !== -1) { return 'refresh-cw'; }
+    if (txt.indexOf('ajuda') !== -1 || txt.indexOf('help') !== -1) { return 'help-circle'; }
+    return '';
+  };
+
+  var insertFeatherIcon = function (el, iconName) {
+    if (!iconName) { return; }
+    if (el.querySelector('[data-feather]')) { return; }
+    var icon = document.createElement('span');
+    icon.setAttribute('data-feather', iconName);
+    icon.className = 'w-4 h-4';
+    if (el.firstChild) {
+      el.insertBefore(icon, el.firstChild);
+    } else {
+      el.appendChild(icon);
+    }
+  };
+
+  var stripVisibleText = function (el) {
+    if (!el) { return; }
+    var children = Array.prototype.slice.call(el.childNodes || []);
+    children.forEach(function (n) {
+      if (!n) { return; }
+      if (n.nodeType === 3) {
+        if (normalize(n.textContent || '') !== '') {
+          el.removeChild(n);
+        }
+        return;
+      }
+      if (n.nodeType !== 1) { return; }
+      var tag = (n.tagName || '').toUpperCase();
+      if (tag === 'SVG' || tag === 'IMG') { return; }
+      if (n.hasAttribute && n.hasAttribute('data-feather')) { return; }
+      if (n.querySelector && (n.querySelector('svg') || n.querySelector('[data-feather]') || n.querySelector('img'))) { return; }
+      if (normalize(n.textContent || '') !== '') {
+        el.removeChild(n);
+      }
+    });
+  };
+
+  var ensureIconOnly = function (el) {
+    if (!elementLooksLikeButton(el)) { return; }
+    if (el.closest && el.closest('[data-disable-icon-only="1"]')) { return; }
+    if (el.getAttribute && el.getAttribute('data-icon-only-ignore') === '1') { return; }
+    if (el.hasAttribute('data-icon-only')) { return; }
+    if (el.tagName === 'BUTTON' && !hasIcon(el) && normalize(el.textContent || '') === '') { return; }
+    if (!isFeatherAvailable()) { return; }
+    if (el.tagName === 'BUTTON' && (el.getAttribute('type') || '').toLowerCase() === 'submit' && !hasIcon(el)) {
+      var label = getPreferredLabel(el);
+      ensureTextAlternative(el, label);
+      var iconName = labelToIcon(label);
+      if (!iconName) { return; }
+      insertFeatherIcon(el, iconName);
+    } else {
+      var label2 = getPreferredLabel(el);
+      ensureTextAlternative(el, label2);
+      if (!hasIcon(el)) {
+        var iconName2 = labelToIcon(label2);
+        if (!iconName2) { return; }
+        insertFeatherIcon(el, iconName2);
+      }
+    }
+    stripVisibleText(el);
+    var cls = (el.getAttribute('class') || '');
+    if (cls.indexOf('inline-flex') === -1) {
+      el.setAttribute('class', (cls ? (cls + ' ') : '') + 'inline-flex items-center justify-center');
+    } else if (cls.indexOf('justify-center') === -1) {
+      el.setAttribute('class', cls + ' justify-center');
+    }
+    el.setAttribute('data-icon-only', '1');
+  };
+
+  var applyIconOnly = function () {
+    if (!isFeatherAvailable()) {
+      reportIconHealth('feather_missing', 'window.feather não disponível');
+      return;
+    }
+    var nodes = document.querySelectorAll('button,a');
+    if (!nodes || !nodes.length) { return; }
+    nodes.forEach(function (el) { ensureIconOnly(el); });
+    if (window.feather && typeof window.feather.replace === 'function') {
+      try {
+        window.feather.replace();
+      } catch (e) {
+        reportIconHealth('feather_replace_failed', (e && e.message) ? e.message : 'Erro ao executar feather.replace()');
+      }
+    }
+  };
+
+  applyIconOnly();
+
+  try {
+    var pending = false;
+    var observer = new MutationObserver(function () {
+      if (pending) { return; }
+      pending = true;
+      window.setTimeout(function () {
+        pending = false;
+        applyIconOnly();
+      }, 30);
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+  } catch (e) {}
+
   var shell = document.querySelector('[data-app-shell]');
   var sidebar = document.getElementById('appSidebar');
   var sidebarToggles = document.querySelectorAll('[data-sidebar-toggle]');

@@ -6,7 +6,7 @@ Garantir que:
 
 - o código publicado em produção seja exatamente o mesmo commit homologado em desenvolvimento;
 - o banco de produção possua os mesmos objetos de schema exigidos pelo código;
-- o menu de `Manuais` e os fluxos correlatos funcionem sem divergência;
+- o menu de `Biblioteca` e os fluxos correlatos funcionem sem divergência;
 - exista roteiro de backup, execução, validação e rollback.
 
 ## Premissas
@@ -23,7 +23,7 @@ Produção só pode ser considerada idêntica a desenvolvimento quando:
 2. O comando `php app/database/migrate_status.php` retornar `pending: []`.
 3. O relatório `php app/tests/production_dump_parity_report.php` retornar `exit code 0` com novo dump de produção.
 4. Os testes focados de auditorias, manuais, clientes e relatórios passarem.
-5. O menu `Manuais`, o portal e os downloads funcionarem em produção.
+5. O menu `Biblioteca`, o portal e os downloads funcionarem em produção.
 
 ## Arquivos Que Precisam Estar Em Produção
 
@@ -164,12 +164,14 @@ php app/tests/cliente_planos_resumo_smoke.php
 Validar manualmente:
 
 - login funcionando
-- item `Manuais` no menu lateral
-- botão `Ver Manuais` na tela do cliente
+- item `Biblioteca` no menu lateral
+- botão `Ver Biblioteca` na tela do cliente
 - `index.php?route=manuais/index`
 - geração do link do portal
 - `/manuais/portal/{token}`
 - `/manuais/download/{id}`
+- `/biblioteca/portal/{token}`
+- `/biblioteca/download/{id}`
 - PDF e Excel com branding padronizado
 
 ## Rollback

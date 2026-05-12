@@ -1,18 +1,38 @@
-<?php /** @var array $dashboard */ /** @var array $filters */ /** @var array $setores */ /** @var array $tipoTreinamentoOptions */ ?>
+<?php /** @var array $dashboard */ /** @var array $filters */ /** @var array $clientes */ /** @var array $setores */ /** @var array $tipoTreinamentoOptions */ ?>
 <div class="p-6 space-y-6">
   <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
     <div>
       <h1 class="text-2xl font-bold"><?= htmlspecialchars($pageTitle ?? 'Dashboard de Treinamentos') ?></h1>
       <p class="text-sm text-gray-600">Percentuais de participação, totalizadores por setor, acumuladores e alertas automáticos.</p>
+      <?php
+        $clienteSelecionado = (int)($filters['cliente_id'] ?? 0);
+        $clienteNome = 'Todas as Empresas';
+        foreach (($clientes ?? []) as $cli) {
+          if ((int)($cli['id'] ?? 0) === $clienteSelecionado) {
+            $clienteNome = (string)($cli['nome_empresa'] ?? 'Empresa');
+            break;
+          }
+        }
+      ?>
+      <p class="text-xs text-gray-500 mt-1">Exibindo <?= (int)($dashboard['resumo']['treinamentos_monitorados'] ?? 0) ?> treinamento(s) • Empresa: <?= htmlspecialchars($clienteNome) ?></p>
     </div>
     <div class="flex flex-wrap gap-2">
       <a class="px-4 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?route=treinamentos/index">Voltar</a>
-      <a class="px-4 py-2 rounded bg-red-100 text-red-700" href="index.php?route=treinamentos/dashboard_pdf&periodo_inicio=<?= urlencode((string)($filters['periodo_inicio'] ?? '')) ?>&periodo_fim=<?= urlencode((string)($filters['periodo_fim'] ?? '')) ?>&setor_id=<?= (int)($filters['setor_id'] ?? 0) ?>&tipo_treinamento=<?= urlencode((string)($filters['tipo_treinamento'] ?? '')) ?>&instrutor=<?= urlencode((string)($filters['instrutor'] ?? '')) ?>">Exportar PDF</a>
+      <a class="px-4 py-2 rounded bg-red-100 text-red-700" href="index.php?route=treinamentos/dashboard_pdf&cliente_id=<?= (int)($filters['cliente_id'] ?? 0) ?>&periodo_inicio=<?= urlencode((string)($filters['periodo_inicio'] ?? '')) ?>&periodo_fim=<?= urlencode((string)($filters['periodo_fim'] ?? '')) ?>&setor_id=<?= (int)($filters['setor_id'] ?? 0) ?>&tipo_treinamento=<?= urlencode((string)($filters['tipo_treinamento'] ?? '')) ?>&instrutor=<?= urlencode((string)($filters['instrutor'] ?? '')) ?>">Exportar PDF</a>
     </div>
   </div>
 
-  <form method="get" action="index.php" class="bg-white shadow rounded p-4 grid grid-cols-1 md:grid-cols-5 gap-3">
+  <form method="get" action="index.php" class="bg-white shadow rounded p-4 grid grid-cols-1 md:grid-cols-6 gap-3" id="treinamentosDashboardFilters">
     <input type="hidden" name="route" value="treinamentos/dashboard" />
+    <div>
+      <label class="block text-sm">Empresa</label>
+      <select name="cliente_id" class="border rounded p-2 w-full" id="treinamentosDashboardCliente">
+        <option value="0">Todas as Empresas</option>
+        <?php foreach (($clientes ?? []) as $cli): ?>
+          <option value="<?= (int)$cli['id'] ?>" <?= ((int)($filters['cliente_id'] ?? 0) === (int)$cli['id']) ? 'selected' : '' ?>><?= htmlspecialchars((string)$cli['nome_empresa']) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </div>
     <div>
       <label class="block text-sm">Período Inicial</label>
       <input type="date" name="periodo_inicio" value="<?= htmlspecialchars((string)($filters['periodo_inicio'] ?? '')) ?>" class="border rounded p-2 w-full" />
@@ -43,9 +63,13 @@
       <label class="block text-sm">Instrutor</label>
       <input type="text" name="instrutor" value="<?= htmlspecialchars((string)($filters['instrutor'] ?? '')) ?>" class="border rounded p-2 w-full" placeholder="Buscar instrutor" />
     </div>
-    <div class="md:col-span-5 flex flex-wrap gap-2">
+    <div class="md:col-span-6 flex flex-wrap gap-2 items-center">
       <button type="submit" class="px-4 py-2 rounded bg-brand-red text-white">Aplicar Filtros</button>
-      <a class="px-4 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?route=treinamentos/dashboard">Limpar</a>
+      <a class="px-4 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?route=treinamentos/dashboard&reset=1">Limpar</a>
+      <div class="text-xs text-gray-500 flex items-center gap-2" id="treinamentosDashboardLoading" style="display:none;">
+        <span class="inline-block w-2 h-2 rounded-full bg-brand-red"></span>
+        <span>Atualizando…</span>
+      </div>
     </div>
   </form>
 
@@ -191,6 +215,15 @@
 </div>
 <script>
   (function () {
+    const form = document.getElementById('treinamentosDashboardFilters');
+    const cliente = document.getElementById('treinamentosDashboardCliente');
+    const loading = document.getElementById('treinamentosDashboardLoading');
+    if (cliente && form) {
+      cliente.addEventListener('change', () => {
+        if (loading) loading.style.display = 'flex';
+        form.submit();
+      });
+    }
     const pieCanvas = document.getElementById('treinamentosPizzaChart');
     const barCanvas = document.getElementById('treinamentosBarChart');
 

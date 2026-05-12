@@ -3,6 +3,7 @@ session_start();
 
 require __DIR__ . '/../app/autoload.php';
 
+use App\Database\MigrationRunner;
 use App\Controllers\MetodologiaController;
 use App\Controllers\DashboardController;
 use App\Controllers\AuthController;
@@ -34,11 +35,27 @@ use App\Controllers\ReunioesController;
 use App\Controllers\CoachingController;
 use App\Controllers\ProcessosController;
 
+$shouldAutoMigrate = empty($_SESSION['__auto_migrate_done']);
+if ($shouldAutoMigrate) {
+    try {
+        (new MigrationRunner())->applyAll();
+        $_SESSION['__auto_migrate_done'] = time();
+    } catch (\Throwable $e) {
+        error_log('[auto_migrate_failed] ' . $e->getMessage());
+    }
+}
+
 $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
 if ($requestPath !== '' && preg_match('#/manuais/download/(\d+)$#', $requestPath, $m)) {
     $_GET['route'] = 'manuais/download';
     $_GET['id'] = $m[1];
 } elseif ($requestPath !== '' && preg_match('#/manuais/portal/([A-Za-z0-9]+)$#', $requestPath, $m)) {
+    $_GET['route'] = 'manuais/portal';
+    $_GET['token'] = $m[1];
+} elseif ($requestPath !== '' && preg_match('#/biblioteca/download/(\d+)$#', $requestPath, $m)) {
+    $_GET['route'] = 'manuais/download';
+    $_GET['id'] = $m[1];
+} elseif ($requestPath !== '' && preg_match('#/biblioteca/portal/([A-Za-z0-9]+)$#', $requestPath, $m)) {
     $_GET['route'] = 'manuais/portal';
     $_GET['token'] = $m[1];
 }
@@ -164,6 +181,15 @@ switch ($route) {
     case 'indicadores/charts':
         (new \App\Controllers\IndicadoresController())->charts();
         break;
+    case 'indicadores/updateValorAjax':
+        (new \App\Controllers\IndicadoresController())->updateValorAjax();
+        break;
+    case 'indicadores/deleteAjax':
+        (new \App\Controllers\IndicadoresController())->deleteAjax();
+        break;
+    case 'indicadores/chartsPdf':
+        (new \App\Controllers\IndicadoresController())->chartsPdf();
+        break;
     case 'indicadores/updateRealizado':
         (new \App\Controllers\IndicadoresController())->updateRealizado();
         break;
@@ -212,8 +238,23 @@ switch ($route) {
     case 'cronograma/store':
         (new CronogramaController())->store();
         break;
+    case 'cronograma/edit':
+        (new CronogramaController())->edit();
+        break;
+    case 'cronograma/update':
+        (new CronogramaController())->update();
+        break;
     case 'cronograma/show':
         (new CronogramaController())->show();
+        break;
+    case 'cronograma/delete':
+        (new CronogramaController())->delete();
+        break;
+    case 'cronograma/duplicate':
+        (new CronogramaController())->duplicate();
+        break;
+    case 'cronograma/toggleAtivo':
+        (new CronogramaController())->toggleAtivo();
         break;
     case 'cronograma/addEvento':
         (new CronogramaController())->addEvento();
@@ -419,8 +460,17 @@ switch ($route) {
     case 'treinamentos/show':
         (new TreinamentosController())->show();
         break;
+    case 'treinamentos/eligible_ajax':
+        (new TreinamentosController())->eligibleAjax();
+        break;
     case 'treinamentos/add_colaboradores':
         (new TreinamentosController())->addColaboradores();
+        break;
+    case 'treinamentos/export_selecionados':
+        (new TreinamentosController())->exportSelecionados();
+        break;
+    case 'treinamentos/rh_sync':
+        (new TreinamentosController())->rhSync();
         break;
     case 'treinamentos/remove_colaborador':
         (new TreinamentosController())->removeColaborador();
@@ -560,6 +610,9 @@ switch ($route) {
     case 'avaliacoes/associar-cliente':
         (new AvaliacoesController())->associarCliente();
         break;
+    case 'avaliacoes/delete-ajax':
+        (new AvaliacoesController())->deleteAjax();
+        break;
     case 'avaliacoes/show':
         (new AvaliacoesController())->show();
         break;
@@ -589,6 +642,9 @@ switch ($route) {
         break;
     case 'colaboradores/search':
         (new ColaboradoresController())->search();
+        break;
+    case 'colaboradores/import':
+        (new ColaboradoresController())->import();
         break;
     case 'tarefas/index':
         (new TarefasController())->index();
@@ -733,8 +789,14 @@ switch ($route) {
         echo 'OK';
         break;
     case 'dashboard/index':
+        (new DashboardController())->index();
+        break;
     case 'logs/index':
-        if ($route === 'logs/index') { (new LogsController())->index(); break; }
+        (new LogsController())->index();
+        break;
+    case 'logs/icon_health':
+        (new LogsController())->iconHealth();
+        break;
     default:
         (new DashboardController())->index();
         break;

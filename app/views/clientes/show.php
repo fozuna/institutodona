@@ -13,15 +13,23 @@
   <div class="mb-4">
     <div class="flex justify-between items-center">
       <h1 class="text-2xl font-bold text-brand-black">Perfil do Cliente</h1>
-      <div class="flex items-center gap-2">
+      <div class="flex items-end gap-4">
         <?php if (($_SESSION['user']['tipo_acesso'] ?? '') === 'instituto'): ?>
-          <a class="px-3 py-2 rounded bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors flex items-center gap-2" href="index.php?route=clientes/edit&id=<?= (int)$item['id'] ?>">
-            <span data-feather="edit" class="w-4 h-4"></span> Editar
-          </a>
+          <div class="flex flex-col items-center">
+            <div class="text-[11px] font-medium text-gray-600 mb-1">Editar</div>
+            <a class="icon-btn icon-btn--lg icon-btn--muted text-brand-brown"
+               href="index.php?route=clientes/edit&id=<?= (int)$item['id'] ?>"
+               title="Editar"
+               aria-label="Editar"><span data-feather="edit"></span></a>
+          </div>
         <?php endif; ?>
-        <a class="px-3 py-2 rounded bg-brand-red text-white flex items-center gap-2" href="index.php?route=metodologias/create&cliente=<?= $clienteAlvoId ?>">
-          <span data-feather="plus" class="w-4 h-4"></span> Criar Tarefa
-        </a>
+        <div class="flex flex-col items-center">
+          <div class="text-[11px] font-medium text-gray-600 mb-1">Criar tarefa</div>
+          <a class="icon-btn icon-btn--lg icon-btn--primary"
+             href="index.php?route=metodologias/create&cliente=<?= $clienteAlvoId ?>"
+             title="Criar tarefa"
+             aria-label="Criar tarefa"><span data-feather="plus"></span></a>
+        </div>
       </div>
     </div>
     <div class="mt-2 bg-white shadow rounded p-4">
@@ -78,13 +86,49 @@
   <div class="mb-6">
     <div class="bg-white shadow rounded p-4">
       <div class="font-semibold mb-3">Estrutura Organizacional</div>
-      <div class="flex flex-wrap gap-3">
-        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=departamentos/index&cliente=<?= $clienteAlvoId ?>">Departamentos</a>
-        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=manuais/index&empresa_id=<?= $clienteAlvoId ?>">Ver Manuais</a>
-        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=setores/index&cliente=<?= $clienteAlvoId ?>">Setores</a>
-        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=funcoes/index&cliente=<?= $clienteAlvoId ?>">Funções</a>
-        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=colaboradores/index&cliente=<?= $clienteAlvoId ?>">Colaboradores</a>
-        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=dashboard/index&cliente=<?= $clienteAlvoId ?>">Tarefas</a>
+      <div class="flex flex-wrap gap-5">
+        <div class="flex flex-col items-center">
+          <div class="text-[11px] font-medium text-gray-600 mb-1">Departamentos</div>
+          <a class="icon-btn icon-btn--lg icon-btn--primary"
+             href="index.php?route=departamentos/index&cliente=<?= $clienteAlvoId ?>"
+             title="Departamentos"
+             aria-label="Departamentos"><span data-feather="layers"></span></a>
+        </div>
+        <div class="flex flex-col items-center">
+          <div class="text-[11px] font-medium text-gray-600 mb-1">Biblioteca</div>
+          <a class="icon-btn icon-btn--lg icon-btn--primary"
+             href="index.php?route=manuais/index&empresa_id=<?= $clienteAlvoId ?>"
+             title="Biblioteca"
+             aria-label="Biblioteca"><span data-feather="book-open"></span></a>
+        </div>
+        <div class="flex flex-col items-center">
+          <div class="text-[11px] font-medium text-gray-600 mb-1">Setores</div>
+          <a class="icon-btn icon-btn--lg icon-btn--primary"
+             href="index.php?route=setores/index&cliente=<?= $clienteAlvoId ?>"
+             title="Setores"
+             aria-label="Setores"><span data-feather="sliders"></span></a>
+        </div>
+        <div class="flex flex-col items-center">
+          <div class="text-[11px] font-medium text-gray-600 mb-1">Funções</div>
+          <a class="icon-btn icon-btn--lg icon-btn--primary"
+             href="index.php?route=funcoes/index&cliente=<?= $clienteAlvoId ?>"
+             title="Funções"
+             aria-label="Funções"><span data-feather="briefcase"></span></a>
+        </div>
+        <div class="flex flex-col items-center">
+          <div class="text-[11px] font-medium text-gray-600 mb-1">Colaboradores</div>
+          <a class="icon-btn icon-btn--lg icon-btn--primary"
+             href="index.php?route=colaboradores/index&cliente=<?= $clienteAlvoId ?>"
+             title="Colaboradores"
+             aria-label="Colaboradores"><span data-feather="users"></span></a>
+        </div>
+        <div class="flex flex-col items-center">
+          <div class="text-[11px] font-medium text-gray-600 mb-1">Tarefas</div>
+          <a class="icon-btn icon-btn--lg icon-btn--primary"
+             href="index.php?route=dashboard/index&cliente=<?= $clienteAlvoId ?>"
+             title="Tarefas"
+             aria-label="Tarefas"><span data-feather="check-square"></span></a>
+        </div>
       </div>
     </div>
   </div>
@@ -100,7 +144,7 @@
           $planoPendentesPrazo = (int)($planoDeadlines['total_pendentes_prazo'] ?? 0);
           $planoVencidosPrazo = (int)($planoDeadlines['total_vencidos_prazo'] ?? 0);
         ?>
-        <a class="bg-white shadow rounded p-4 block hover:shadow-md transition-shadow" href="index.php?route=cronograma/index&id_cliente=<?= $clienteAlvoId ?>" data-loading>
+        <a class="bg-white shadow rounded p-4 block hover:shadow-md transition-shadow" href="index.php?route=cronograma/index&id_cliente=<?= $clienteAlvoId ?>" data-loading data-icon-only>
           <div class="flex items-center justify-between">
             <div class="font-semibold">Cronograma</div>
             <span class="badge"><span data-feather="calendar"></span></span>
@@ -108,7 +152,7 @@
           <div class="text-sm text-gray-600 mt-2">Cronogramas: <?= $cronCount ?></div>
           <div class="text-xs text-gray-500 mt-1">Clique para abrir cronogramas do cliente</div>
         </a>
-        <a class="bg-white shadow rounded p-4 block hover:shadow-md transition-shadow" href="index.php?route=planoacao/index&cliente=<?= $clienteAlvoId ?>" data-loading>
+        <a class="bg-white shadow rounded p-4 block hover:shadow-md transition-shadow" href="index.php?route=planoacao/index&cliente=<?= $clienteAlvoId ?>" data-loading data-icon-only>
           <div class="flex items-center justify-between">
             <div class="font-semibold">Planos de Ação</div>
             <span class="badge"><span data-feather="activity"></span></span>

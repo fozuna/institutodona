@@ -3,6 +3,17 @@ namespace App\Models;
 
 class SetorModel extends BaseModel
 {
+    private function buildClienteScopeClause(string $column, array $clienteIds, array &$params, string $prefix): string
+    {
+        $holders = [];
+        foreach (array_values($clienteIds) as $i => $clienteId) {
+            $key = $prefix . $i;
+            $holders[] = ':' . $key;
+            $params[$key] = (int)$clienteId;
+        }
+        return $column . ' IN (' . implode(',', $holders) . ')';
+    }
+
     private function ensureTable(): void
     {
         try {
@@ -38,6 +49,29 @@ class SetorModel extends BaseModel
         $scope = $this->tenantInCondition('d.cliente_id', $params, 'sbc');
         $sql = str_replace('WHERE d.cliente_id = :cid', 'WHERE d.cliente_id = :cid AND ' . $scope, $sql);
         $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    public function allByClientes(array $clienteIds): array
+    {
+        $this->ensureTable();
+        $clienteIds = array_values(array_unique(array_filter(array_map('intval', $clienteIds))));
+        if (empty($clienteIds)) {
+            return [];
+        }
+        $params = [];
+        $where = [
+            $this->buildClienteScopeClause('d.cliente_id', $clienteIds, $params, 'sabc_scope'),
+            $this->tenantInCondition('d.cliente_id', $params, 'sabc_tenant'),
+        ];
+        $stmt = $this->db->prepare(
+            "SELECT s.id, s.nome, s.departamento_id, d.nome AS departamento
+             FROM setores s
+             JOIN departamentos d ON d.id = s.departamento_id
+             WHERE " . implode(' AND ', $where) . "
+             ORDER BY d.nome, s.nome"
+        );
         $stmt->execute($params);
         return $stmt->fetchAll();
     }

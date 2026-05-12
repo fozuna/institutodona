@@ -114,6 +114,104 @@ class CronogramaEventoModel extends BaseModel
         return $row ?: null;
     }
 
+    public function deleteByCronograma(int $idCronograma): int
+    {
+        $this->ensureTables();
+        $cronograma = $this->fetchCronograma($idCronograma);
+        if (!$cronograma) {
+            return 0;
+        }
+        $params = ['id' => $idCronograma];
+        $scope = $this->tenantInCondition('cr.id_cliente', $params, 'cedelcr');
+        $stmt = $this->db->prepare("DELETE ce
+            FROM cronograma_eventos ce
+            JOIN cronogramas cr ON cr.id = ce.id_cronograma
+            WHERE ce.id_cronograma = :id AND $scope");
+        $stmt->execute($params);
+        return (int)$stmt->rowCount();
+    }
+
+    public function duplicateForCronograma(int $fromCronogramaId, int $toCronogramaId): array
+    {
+        $this->ensureTables();
+        $from = $this->fetchCronograma($fromCronogramaId);
+        $to = $this->fetchCronograma($toCronogramaId);
+        if (!$from || !$to) {
+            return ['ok' => false, 'created' => 0];
+        }
+
+        $events = $this->byCronograma($fromCronogramaId);
+        if (empty($events)) {
+            return ['ok' => true, 'created' => 0];
+        }
+
+        $roots = [];
+        $children = [];
+        foreach ($events as $ev) {
+            if (empty($ev['evento_pai_id'])) {
+                $roots[] = $ev;
+                continue;
+            }
+            $children[] = $ev;
+        }
+
+        $insert = $this->db->prepare("INSERT INTO cronograma_eventos
+            (id_cronograma, evento_pai_id, data, periodicidade, topico, unidade, atividade, responsavel, modelo, status)
+            VALUES
+            (:id_cronograma, :evento_pai_id, :data, :periodicidade, :topico, :unidade, :atividade, :responsavel, :modelo, :status)");
+
+        $created = 0;
+        $map = [];
+        $this->db->beginTransaction();
+        try {
+            foreach ($roots as $ev) {
+                $insert->execute([
+                    'id_cronograma' => $toCronogramaId,
+                    'evento_pai_id' => null,
+                    'data' => (string)($ev['data'] ?? ''),
+                    'periodicidade' => (string)($ev['periodicidade'] ?? 'unico'),
+                    'topico' => (string)($ev['topico'] ?? ''),
+                    'unidade' => $ev['unidade'] ?? null,
+                    'atividade' => (string)($ev['atividade'] ?? ''),
+                    'responsavel' => $ev['responsavel'] ?? null,
+                    'modelo' => $ev['modelo'] ?? null,
+                    'status' => (string)($ev['status'] ?? 'Planejado'),
+                ]);
+                $newId = (int)$this->db->lastInsertId();
+                $map[(int)$ev['id']] = $newId;
+                $created++;
+            }
+
+            foreach ($children as $ev) {
+                $oldParent = (int)($ev['evento_pai_id'] ?? 0);
+                $newParent = $oldParent > 0 ? ($map[$oldParent] ?? null) : null;
+                $insert->execute([
+                    'id_cronograma' => $toCronogramaId,
+                    'evento_pai_id' => $newParent,
+                    'data' => (string)($ev['data'] ?? ''),
+                    'periodicidade' => (string)($ev['periodicidade'] ?? 'unico'),
+                    'topico' => (string)($ev['topico'] ?? ''),
+                    'unidade' => $ev['unidade'] ?? null,
+                    'atividade' => (string)($ev['atividade'] ?? ''),
+                    'responsavel' => $ev['responsavel'] ?? null,
+                    'modelo' => $ev['modelo'] ?? null,
+                    'status' => (string)($ev['status'] ?? 'Planejado'),
+                ]);
+                $newId = (int)$this->db->lastInsertId();
+                $map[(int)$ev['id']] = $newId;
+                $created++;
+            }
+
+            $this->db->commit();
+            return ['ok' => true, 'created' => $created];
+        } catch (\Throwable $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            return ['ok' => false, 'created' => $created, 'error' => $e->getMessage()];
+        }
+    }
+
     public function create(int $idCronograma, array $data): int
     {
         $this->ensureTables();

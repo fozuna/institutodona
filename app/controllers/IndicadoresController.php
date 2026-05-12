@@ -2,7 +2,10 @@
 namespace App\Controllers;
 
 use App\Core\BaseController;
+use App\Core\Auth;
+use App\Core\AuditLogger;
 use App\Core\I18n;
+use App\Core\PdfSupport;
 use App\Core\Security;
 use App\Models\ClienteModel;
 use App\Models\ColaboradorModel;
@@ -341,6 +344,262 @@ class IndicadoresController extends BaseController
         }
         $_SESSION['flash_success'] = I18n::t('indicadores.flash.deleted');
         $this->redirect('index.php?route=indicadores/index' . ($cliente ? '&cliente=' . $cliente : ''));
+    }
+
+    public function updateValorAjax(): void
+    {
+        $this->requireLogin();
+        if (!(Auth::isInstituto() || Auth::isClienteAdmin())) {
+            http_response_code(403);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => 'Sem permissão para alterar valores.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST') {
+            http_response_code(405);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => 'Método inválido.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $csrf = $_POST['csrf'] ?? null;
+        if (!Security::verifyCsrf($csrf)) {
+            http_response_code(400);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => 'CSRF inválido.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        $valor = $_POST['valor'] ?? null;
+        if ($id <= 0) {
+            http_response_code(422);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => 'Indicador inválido.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $item = $this->model->find($id);
+        if (!$item) {
+            http_response_code(404);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => I18n::t('indicadores.flash.not_found')], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        if (!Auth::canAccessCliente((int)($item['cliente_id'] ?? 0))) {
+            http_response_code(403);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => 'Sem permissão para este cliente.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $ok = $this->model->updateValor($id, $valor, $this->currentUserId());
+        if (!$ok) {
+            AuditLogger::log('indicadores_update_valor_failed', 'indicadores', $id, [
+                'cliente_id' => (int)($item['cliente_id'] ?? 0),
+                'valor' => is_scalar($valor) ? (string)$valor : gettype($valor),
+            ]);
+            http_response_code(422);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => I18n::t('indicadores.validation.invalid_value_update')], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $fresh = $this->model->find($id) ?: $item;
+        $formatted = \App\Core\ValueFormatter::byUnit($fresh['valor'], [
+            'simbolo' => $fresh['unidade_simbolo'] ?? '',
+            'tipo' => $fresh['unidade_tipo'] ?? '',
+        ]);
+        AuditLogger::log('indicadores_update_valor', 'indicadores', $id, [
+            'cliente_id' => (int)($fresh['cliente_id'] ?? 0),
+            'valor' => $fresh['valor'],
+        ]);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'ok' => true,
+            'valor' => $fresh['valor'],
+            'valor_formatado' => $formatted,
+        ], JSON_UNESCAPED_UNICODE);
+    }
+
+    public function deleteAjax(): void
+    {
+        $this->requireLogin();
+        if (!(Auth::isInstituto() || Auth::isClienteAdmin())) {
+            http_response_code(403);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => 'Sem permissão para excluir.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST') {
+            http_response_code(405);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => 'Método inválido.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $csrf = $_POST['csrf'] ?? null;
+        if (!Security::verifyCsrf($csrf)) {
+            http_response_code(400);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => 'CSRF inválido.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id <= 0) {
+            http_response_code(422);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => 'Indicador inválido.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $item = $this->model->find($id);
+        if (!$item) {
+            http_response_code(404);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => I18n::t('indicadores.flash.not_found')], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        if (!Auth::canAccessCliente((int)($item['cliente_id'] ?? 0))) {
+            http_response_code(403);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => 'Sem permissão para este cliente.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $ok = $this->model->softDelete($id, $this->currentUserId());
+        if (!$ok) {
+            AuditLogger::log('indicadores_delete_failed', 'indicadores', $id, [
+                'cliente_id' => (int)($item['cliente_id'] ?? 0),
+            ]);
+            http_response_code(500);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => I18n::t('indicadores.validation.invalid_delete')], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        AuditLogger::log('delete', 'indicadores', $id, [
+            'cliente_id' => (int)($item['cliente_id'] ?? 0),
+            'via' => 'ajax',
+        ]);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
+    }
+
+    public function chartsPdf(): void
+    {
+        $this->requireLogin();
+        if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST') {
+            http_response_code(405);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => 'Método inválido.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $csrf = $_POST['csrf'] ?? null;
+        if (!Security::verifyCsrf($csrf)) {
+            http_response_code(400);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => 'CSRF inválido.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        if (!PdfSupport::isDompdfAvailable()) {
+            AuditLogger::log('pdf_unavailable', 'indicadores', null, ['route' => 'indicadores/chartsPdf']);
+            http_response_code(503);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => PdfSupport::missingDompdfMessage()], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $clienteId = (int)($this->resolveScopedClienteId((int)($_POST['cliente_id'] ?? 0)) ?? 0);
+        $clienteNome = trim((string)($_POST['cliente_nome'] ?? ''));
+        $payload = json_decode((string)($_POST['charts'] ?? '[]'), true);
+        if (!is_array($payload) || empty($payload)) {
+            http_response_code(422);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => 'Nenhum gráfico selecionado para exportação.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        if (count($payload) > 12) {
+            http_response_code(422);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => 'Selecione no máximo 12 gráficos para exportação.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $totalBytes = 0;
+        foreach ($payload as $i => $chart) {
+            $img = (string)($chart['image'] ?? '');
+            if ($img === '' || !str_starts_with($img, 'data:image/png;base64,')) {
+                http_response_code(422);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => 'Imagem inválida do gráfico.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $base64 = substr($img, strlen('data:image/png;base64,'));
+            $decoded = base64_decode($base64, true);
+            if ($decoded === false) {
+                http_response_code(422);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => 'Imagem inválida do gráfico.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $totalBytes += strlen($decoded);
+            if ($totalBytes > (8 * 1024 * 1024)) {
+                http_response_code(422);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => 'Exportação muito grande. Reduza a quantidade de gráficos.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+        }
+
+        $safeCliente = $clienteNome !== '' ? htmlspecialchars($clienteNome) : '';
+        $generatedAt = date('d/m/Y H:i');
+
+        $html = '<!doctype html><html><head><meta charset="utf-8" />'
+            . '<style>
+              body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 12px; color: #111827; }
+              .header { margin-bottom: 14px; }
+              .title { font-size: 18px; font-weight: 700; margin: 0 0 4px 0; }
+              .subtitle { font-size: 12px; color: #6b7280; margin: 0; }
+              .grid { width: 100%; }
+              .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; margin: 0 0 12px 0; }
+              .card h2 { font-size: 14px; margin: 0 0 6px 0; }
+              .meta { color: #374151; font-size: 11px; margin: 0 0 8px 0; }
+              .kv { font-size: 11px; color: #374151; margin: 0 0 6px 0; }
+              .kv strong { color: #111827; }
+              img { width: 100%; height: auto; }
+            </style></head><body>';
+
+        $html .= '<div class="header">'
+            . '<div class="title">Gráficos de Indicadores</div>'
+            . '<p class="subtitle">Cliente: ' . ($safeCliente !== '' ? $safeCliente : '—') . ' · Gerado em: ' . htmlspecialchars($generatedAt) . '</p>'
+            . '</div>';
+
+        foreach ($payload as $chart) {
+            $titulo = htmlspecialchars((string)($chart['title'] ?? 'Indicador'));
+            $trend = htmlspecialchars((string)($chart['trend'] ?? ''));
+            $meta = htmlspecialchars((string)($chart['meta'] ?? '—'));
+            $ach = htmlspecialchars((string)($chart['achieved'] ?? '—'));
+            $img = (string)($chart['image'] ?? '');
+
+            $html .= '<div class="card">'
+                . '<h2>' . $titulo . '</h2>'
+                . ($trend !== '' ? '<div class="meta">' . $trend . '</div>' : '')
+                . '<div class="kv"><strong>Meta:</strong> ' . $meta . ' &nbsp;&nbsp; <strong>Atingido:</strong> ' . $ach . '</div>'
+                . '<img src="' . $img . '" alt="" />'
+                . '</div>';
+        }
+        $html .= '</body></html>';
+
+        $options = new \Dompdf\Options();
+        $options->set('isRemoteEnabled', false);
+        $options->set('isPhpEnabled', false);
+        $dompdf = new \Dompdf\Dompdf($options);
+        $dompdf->setPaper('A4', 'landscape');
+        $dompdf->loadHtml($html, 'UTF-8');
+        $dompdf->render();
+
+        AuditLogger::log('pdf_export', 'indicadores', null, [
+            'via' => 'charts',
+            'cliente_id' => $clienteId,
+            'items' => count($payload),
+        ]);
+
+        $filename = 'graficos_indicadores_' . date('Ymd_His') . '.pdf';
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        echo $dompdf->output();
     }
 
     public function apiClientes(): void

@@ -9,6 +9,15 @@ class BaseController
         'updateaction', 'importrun', 'delete_update', 'storefilial',
         'updateaplicacao', 'deleteaplicacao', 'auditar', 'gerar-link-cliente', 'api_public_link_generate', 'log-link-share', 'associar-cliente',
         'api_store', 'api_update', 'api_delete', 'api_auditar',
+        'delete-ajax',
+        'import',
+        'updatevalorajax',
+        'deleteajax',
+        'chartspdf',
+        'export_selecionados',
+        'rh_sync',
+        'duplicate',
+        'toggleativo',
     ];
 
     protected function render(string $view, array $params = []): void
@@ -24,6 +33,12 @@ class BaseController
     protected function requireLogin(): void
     {
         if (!isset($_SESSION['user'])) {
+            $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+            if ($uri !== '' && strpos($uri, '://') === false) {
+                if (!isset($_SESSION['redirect_after_login'])) {
+                    $_SESSION['redirect_after_login'] = $uri;
+                }
+            }
             header('Location: index.php?route=auth/login');
             exit;
         }
