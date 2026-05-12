@@ -64,6 +64,8 @@ CREATE TABLE IF NOT EXISTS cronogramas (
   id_cliente INT NOT NULL,
   nome VARCHAR(255) NULL,
   ano INT NOT NULL,
+  ativo TINYINT(1) NOT NULL DEFAULT 1,
+  INDEX idx_cronogramas_cliente_ano_ativo (id_cliente, ano, ativo),
   CONSTRAINT fk_crono_cliente FOREIGN KEY (id_cliente) REFERENCES clientes(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

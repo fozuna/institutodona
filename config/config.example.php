@@ -1,8 +1,8 @@
 <?php
 return [
     'db' => [
-        'host' => getenv('DB_HOST') ?: 'database',
-        'dbname' => getenv('DB_NAME') ?: 'u357871217_institutodona',
+        'host' => getenv('DB_HOST') ?: '127.0.0.1',
+        'dbname' => getenv('DB_NAME') ?: 'institutodona',
         'user' => getenv('DB_USER') ?: 'root',
         'pass' => getenv('DB_PASS') ?: '',
         'charset' => getenv('DB_CHARSET') ?: 'utf8mb4',

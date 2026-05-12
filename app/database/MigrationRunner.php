@@ -74,6 +74,44 @@ class MigrationRunner
         return $pending;
     }
 
+    public function checksumMismatches(): array
+    {
+        $this->ensureRepository();
+        $applied = $this->appliedMigrations();
+        $mismatches = [];
+        foreach ($this->allMigrations() as $migration) {
+            $current = (string)($migration['checksum'] ?? '');
+            $stored = (string)($applied[$migration['version']]['checksum'] ?? '');
+            if ($stored !== '' && $stored !== $current) {
+                $mismatches[] = [
+                    'version' => $migration['version'],
+                    'stored_checksum' => $stored,
+                    'current_checksum' => $current,
+                ];
+            }
+        }
+        return $mismatches;
+    }
+
+    public function repairChecksumMismatches(): array
+    {
+        $this->ensureRepository();
+        $mismatches = $this->checksumMismatches();
+        if (empty($mismatches)) {
+            return [];
+        }
+        $stmt = $this->pdo->prepare('UPDATE schema_migrations SET checksum = :c WHERE version = :v');
+        $fixed = [];
+        foreach ($mismatches as $m) {
+            $stmt->execute([
+                'v' => $m['version'],
+                'c' => $m['current_checksum'],
+            ]);
+            $fixed[] = $m['version'];
+        }
+        return $fixed;
+    }
+
     public function applyAll(): array
     {
         $this->ensureRepository();
