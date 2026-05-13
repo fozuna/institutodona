@@ -494,10 +494,16 @@ class IndicadoresController extends BaseController
             return;
         }
         if (!PdfSupport::isDompdfAvailable()) {
-            AuditLogger::log('pdf_unavailable', 'indicadores', null, ['route' => 'indicadores/chartsPdf']);
+            $errorId = PdfSupport::newErrorId();
+            AuditLogger::log('pdf_unavailable', 'indicadores', null, [
+                'error_id' => $errorId,
+                'route' => 'indicadores/chartsPdf',
+                'reason' => 'dompdf_missing',
+                'diagnostics' => PdfSupport::dompdfDiagnostics(),
+            ]);
             http_response_code(503);
             header('Content-Type: application/json; charset=utf-8');
-            echo json_encode(['ok' => false, 'message' => PdfSupport::missingDompdfMessage()], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['ok' => false, 'message' => PdfSupport::missingDompdfMessage(), 'code' => $errorId], JSON_UNESCAPED_UNICODE);
             return;
         }
 

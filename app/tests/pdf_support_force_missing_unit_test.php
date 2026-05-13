@@ -12,6 +12,9 @@ function assert_true($cond, $msg) {
 putenv('PDF_FORCE_MISSING=1');
 
 assert_true(PdfSupport::isDompdfAvailable() === false, 'PDF_FORCE_MISSING desabilita Dompdf');
+assert_true((bool)preg_match('/^[0-9a-f]{10}$/', PdfSupport::newErrorId()), 'newErrorId gera codigo hex de 10 chars');
+$diag = PdfSupport::dompdfDiagnostics();
+assert_true(is_array($diag) && array_key_exists('vendor_autoload_exists', $diag) && array_key_exists('tmp_writable', $diag), 'dompdfDiagnostics retorna chaves basicas');
 
 $svc = new TreinamentoDocumentService();
 $thrown = false;
@@ -28,4 +31,3 @@ assert_true($thrown, 'renderPdf lança exceção quando Dompdf está indisponív
 putenv('PDF_FORCE_MISSING');
 
 echo "pdf_support_force_missing_unit_test passed.\n";
-

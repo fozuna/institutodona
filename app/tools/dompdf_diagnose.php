@@ -48,7 +48,21 @@ echo "  PdfSupport::isDompdfAvailable()=" . (PdfSupport::isDompdfAvailable() ? '
 echo "  class_exists(Dompdf\\\\Options)=" . (class_exists(\Dompdf\Options::class) ? 'true' : 'false') . "\n";
 echo "  class_exists(Dompdf\\\\Dompdf)=" . (class_exists(\Dompdf\Dompdf::class) ? 'true' : 'false') . "\n";
 
-echo "\n5) vendor permissions (best-effort)\n";
+echo "\n5) Ambiente e recursos\n";
+echo "  PHP_VERSION=" . PHP_VERSION . "\n";
+echo "  PHP_SAPI=" . PHP_SAPI . "\n";
+echo "  memory_limit=" . (string)ini_get('memory_limit') . "\n";
+echo "  max_execution_time=" . (string)ini_get('max_execution_time') . "\n";
+echo "  PDF_FORCE_MISSING=" . (string)getenv('PDF_FORCE_MISSING') . "\n";
+echo "  sys_get_temp_dir=" . (string)sys_get_temp_dir() . "\n";
+echo "  tmp_writable=" . (@is_writable((string)sys_get_temp_dir()) ? 'yes' : 'no') . "\n";
+echo "  storage_writable=" . (@is_writable($root . '/storage') ? 'yes' : 'no') . "\n";
+echo "  ext_mbstring=" . (extension_loaded('mbstring') ? 'yes' : 'no') . "\n";
+echo "  ext_gd=" . (extension_loaded('gd') ? 'yes' : 'no') . "\n";
+echo "  ext_iconv=" . (extension_loaded('iconv') ? 'yes' : 'no') . "\n";
+echo "  ext_zlib=" . (extension_loaded('zlib') ? 'yes' : 'no') . "\n";
+
+echo "\n6) vendor permissions (best-effort)\n";
 if (!is_dir($vendorDir)) {
     echo "  MISSING: {$vendorDir}\n";
 } else {
@@ -57,5 +71,7 @@ if (!is_dir($vendorDir)) {
     echo "  perms=" . ($perms !== false ? substr(sprintf('%o', $perms), -4) : 'unknown') . "\n";
 }
 
-echo "\nDone.\n";
+echo "\n7) PdfSupport::dompdfDiagnostics()\n";
+echo json_encode(PdfSupport::dompdfDiagnostics(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n";
 
+echo "\nDone.\n";

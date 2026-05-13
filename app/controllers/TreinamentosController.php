@@ -458,8 +458,15 @@ class TreinamentosController extends BaseController
     {
         $this->requireManagePermission();
         if (!\App\Core\PdfSupport::isDompdfAvailable()) {
+            $errorId = \App\Core\PdfSupport::newErrorId();
+            \App\Core\AuditLogger::log('pdf_unavailable', 'treinamentos', null, [
+                'error_id' => $errorId,
+                'route' => 'treinamentos/certificado',
+                'reason' => 'dompdf_missing',
+                'diagnostics' => \App\Core\PdfSupport::dompdfDiagnostics(),
+            ]);
             http_response_code(503);
-            echo \App\Core\PdfSupport::missingDompdfMessage();
+            echo \App\Core\PdfSupport::missingDompdfMessage() . ' Código: ' . $errorId;
             return;
         }
         $agendaId = (int)($_GET['agenda_id'] ?? 0);
@@ -503,8 +510,15 @@ class TreinamentosController extends BaseController
     {
         $this->requireManagePermission();
         if (!\App\Core\PdfSupport::isDompdfAvailable()) {
+            $errorId = \App\Core\PdfSupport::newErrorId();
+            \App\Core\AuditLogger::log('pdf_unavailable', 'treinamentos', null, [
+                'error_id' => $errorId,
+                'route' => 'treinamentos/certificadoLote',
+                'reason' => 'dompdf_missing',
+                'diagnostics' => \App\Core\PdfSupport::dompdfDiagnostics(),
+            ]);
             http_response_code(503);
-            echo \App\Core\PdfSupport::missingDompdfMessage();
+            echo \App\Core\PdfSupport::missingDompdfMessage() . ' Código: ' . $errorId;
             return;
         }
         if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
@@ -548,8 +562,15 @@ class TreinamentosController extends BaseController
     {
         $this->requireLogin();
         if (!\App\Core\PdfSupport::isDompdfAvailable() && strtolower(trim((string)($_GET['format'] ?? 'pdf'))) !== 'xlsx') {
+            $errorId = \App\Core\PdfSupport::newErrorId();
+            \App\Core\AuditLogger::log('pdf_unavailable', 'treinamentos', (int)($_GET['id'] ?? 0), [
+                'error_id' => $errorId,
+                'route' => 'treinamentos/exportElegiveis',
+                'reason' => 'dompdf_missing',
+                'diagnostics' => \App\Core\PdfSupport::dompdfDiagnostics(),
+            ]);
             http_response_code(503);
-            echo \App\Core\PdfSupport::missingDompdfMessage();
+            echo \App\Core\PdfSupport::missingDompdfMessage() . ' Código: ' . $errorId;
             return;
         }
         $treinamento = $this->findOrRedirect((int)($_GET['id'] ?? 0));
@@ -575,8 +596,15 @@ class TreinamentosController extends BaseController
     {
         $this->requireLogin();
         if (!\App\Core\PdfSupport::isDompdfAvailable()) {
+            $errorId = \App\Core\PdfSupport::newErrorId();
+            \App\Core\AuditLogger::log('pdf_unavailable', 'treinamentos', (int)($_GET['agenda_id'] ?? 0), [
+                'error_id' => $errorId,
+                'route' => 'treinamentos/presencaPdf',
+                'reason' => 'dompdf_missing',
+                'diagnostics' => \App\Core\PdfSupport::dompdfDiagnostics(),
+            ]);
             http_response_code(503);
-            echo \App\Core\PdfSupport::missingDompdfMessage();
+            echo \App\Core\PdfSupport::missingDompdfMessage() . ' Código: ' . $errorId;
             return;
         }
         $agenda = $this->agendaModel->find((int)($_GET['agenda_id'] ?? 0));
@@ -597,8 +625,15 @@ class TreinamentosController extends BaseController
     {
         $this->requireLogin();
         if (!\App\Core\PdfSupport::isDompdfAvailable()) {
+            $errorId = \App\Core\PdfSupport::newErrorId();
+            \App\Core\AuditLogger::log('pdf_unavailable', 'treinamentos', null, [
+                'error_id' => $errorId,
+                'route' => 'treinamentos/dashboardPdf',
+                'reason' => 'dompdf_missing',
+                'diagnostics' => \App\Core\PdfSupport::dompdfDiagnostics(),
+            ]);
             http_response_code(503);
-            echo \App\Core\PdfSupport::missingDompdfMessage();
+            echo \App\Core\PdfSupport::missingDompdfMessage() . ' Código: ' . $errorId;
             return;
         }
         $filters = $this->dashboardFilters();
