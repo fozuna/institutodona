@@ -4,6 +4,7 @@ namespace App\Controllers;
 use App\Core\BaseController;
 use App\Core\Auth;
 use App\Core\AuditLogger;
+use App\Core\PdfSupport;
 
 class LogsController extends BaseController
 {
@@ -113,5 +114,17 @@ class LogsController extends BaseController
             'ua' => substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 180),
         ]);
         http_response_code(204);
+    }
+
+    public function pdfHealth(): void
+    {
+        $this->requireRole('instituto');
+        header('Content-Type: application/json; charset=utf-8');
+        $diag = PdfSupport::dompdfDiagnostics();
+        AuditLogger::log('pdf_health_check', 'pdf', null, ['diagnostics' => $diag]);
+        echo json_encode([
+            'ok' => true,
+            'diagnostics' => $diag,
+        ], JSON_UNESCAPED_UNICODE);
     }
 }

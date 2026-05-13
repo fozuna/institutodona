@@ -344,6 +344,7 @@ class AvaliacoesController extends BaseController
                 'reason' => 'dompdf_missing',
                 'diagnostics' => \App\Core\PdfSupport::dompdfDiagnostics(),
             ]);
+            @error_log('[pdf_unavailable] id=' . $errorId . ' route=avaliacoes/relatorio_pdf avaliacao_id=' . $id);
             http_response_code(503);
             echo \App\Core\PdfSupport::missingDompdfMessage() . ' Código: ' . $errorId;
             return;

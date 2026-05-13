@@ -797,6 +797,9 @@ switch ($route) {
     case 'logs/icon_health':
         (new LogsController())->iconHealth();
         break;
+    case 'logs/pdf_health':
+        (new LogsController())->pdfHealth();
+        break;
     default:
         (new DashboardController())->index();
         break;
