@@ -18,17 +18,61 @@ require __DIR__ . '/../views/layouts/main.php';
 $html = (string)ob_get_clean();
 
 foreach ([
-    'Pilares',
-    'Tarefas',
-    'Reuniões',
-    'Coaching',
+    'Dashboard',
+    'Pessoas',
+    'Treinamentos',
     'Processos',
+    'Biblioteca',
+    'Auditorias',
+    'Resultados',
+    'Indicadores',
+    'Agenda',
+    'Plano de Ação',
+    'Tarefas',
+    'Cronograma',
+    'Avaliações',
+    'Cadastros',
+    'Clientes',
+    'Usuários',
+    'Consultores',
+    'Pilares',
+    'Manual',
+    'Sobre',
 ] as $needle) {
     if (!str_contains($html, $needle)) {
-        failFast('Menu Processos deveria conter: ' . $needle);
+        failFast('Menu deveria conter: ' . $needle);
     }
 }
 
-ok('Menu Processos renderiza itens de Pilares e novos CRUDes');
-echo "processos_menu_itens_smoke passed.\n";
+if (str_contains($html, 'Sobre & Manual')) {
+    failFast('Layout não deveria manter o rótulo antigo "Sobre & Manual".');
+}
 
+$expectedOrder = [
+    'Dashboard',
+    'Pessoas',
+    'Processos',
+    'Resultados',
+    'Agenda',
+    'Plano de Ação',
+    'Tarefas',
+    'Cronograma',
+    'Avaliações',
+    'Cadastros',
+    'Manual',
+    'Sobre',
+];
+$pos = -1;
+foreach ($expectedOrder as $label) {
+    $current = strpos($html, $label);
+    if ($current === false) {
+        failFast('Não foi possível localizar "' . $label . '" para validar ordem do menu.');
+    }
+    if ($current <= $pos) {
+        failFast('Ordem do menu incorreta: "' . $label . '" apareceu fora de sequência.');
+    }
+    $pos = $current;
+}
+
+ok('Menu reorganizado renderiza grupos e ordem conforme especificação');
+echo "processos_menu_itens_smoke passed.\n";
