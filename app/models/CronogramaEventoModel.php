@@ -596,6 +596,7 @@ class CronogramaEventoModel extends BaseModel
     {
         $ignoreIds = array_values(array_unique(array_filter(array_map('intval', $ignoreIds))));
         foreach ($dates as $date) {
+            $collation = 'utf8mb4_uca1400_ai_ci';
             $params = [
                 'id_cronograma' => $idCronograma,
                 'data' => $date,
@@ -608,11 +609,11 @@ class CronogramaEventoModel extends BaseModel
             $sql = "SELECT COUNT(*) FROM cronograma_eventos
                 WHERE id_cronograma = :id_cronograma
                   AND data = :data
-                  AND topico = :topico
-                  AND IFNULL(unidade, '') = IFNULL(:unidade, '')
-                  AND atividade = :atividade
-                  AND IFNULL(responsavel, '') = IFNULL(:responsavel, '')
-                  AND IFNULL(modelo, '') = IFNULL(:modelo, '')";
+                  AND topico COLLATE $collation = CONVERT(:topico USING utf8mb4) COLLATE $collation
+                  AND COALESCE(unidade, '') COLLATE $collation = COALESCE(CONVERT(:unidade USING utf8mb4), '') COLLATE $collation
+                  AND atividade COLLATE $collation = CONVERT(:atividade USING utf8mb4) COLLATE $collation
+                  AND COALESCE(responsavel, '') COLLATE $collation = COALESCE(CONVERT(:responsavel USING utf8mb4), '') COLLATE $collation
+                  AND COALESCE(modelo, '') COLLATE $collation = COALESCE(CONVERT(:modelo USING utf8mb4), '') COLLATE $collation";
             if (!empty($ignoreIds)) {
                 $holders = [];
                 foreach ($ignoreIds as $i => $ignoreId) {
