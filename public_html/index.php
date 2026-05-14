@@ -277,6 +277,9 @@ switch ($route) {
     case 'cronograma/ataDownload':
         (new CronogramaController())->ataDownload();
         break;
+    case 'cronograma/ataUpload':
+        (new CronogramaController())->ataUpload();
+        break;
     case 'cronograma/updateEvento':
         (new CronogramaController())->updateEvento();
         break;

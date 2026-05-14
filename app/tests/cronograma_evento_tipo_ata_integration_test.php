@@ -45,27 +45,6 @@ try {
     }
     ok('Validação: ata rejeita imagens');
 
-    $thrown = false;
-    try {
-        $model->create($cronogramaId, [
-            'data' => date('Y') . '-05-14',
-            'periodicidade' => 'unico',
-            'tipo_evento' => 'Reunião',
-            'topico' => 'Pilar ' . $suffix,
-            'unidade' => 'Depto',
-            'atividade' => 'Atividade',
-            'responsavel' => 'Resp',
-            'modelo' => 'Online',
-            'status' => 'Planejado',
-        ]);
-    } catch (Throwable $e) {
-        $thrown = true;
-    }
-    if (!$thrown) {
-        failFast('Reunião sem ata deve falhar');
-    }
-    ok('Validação: Reunião exige ata');
-
     $rootId = $model->create($cronogramaId, [
         'data' => date('Y') . '-05-15',
         'periodicidade' => 'unico',
@@ -76,17 +55,12 @@ try {
         'responsavel' => 'Resp',
         'modelo' => 'Online',
         'status' => 'Planejado',
-        'ata_path' => __DIR__ . '/dummy_ata_' . $suffix . '.pdf',
-        'ata_original_name' => 'ata_' . $suffix . '.pdf',
-        'ata_mime' => 'application/pdf',
-        'ata_size' => 123,
-        'ata_sha256' => str_repeat('a', 64),
     ]);
     if ($rootId <= 0) {
         failFast('create() deve retornar id válido');
     }
     $eventIds[] = $rootId;
-    ok('Criação: evento Reunião com ata');
+    ok('Criação: evento Reunião sem ata (permitido antes da finalização)');
 
     $all = $model->byCronograma($cronogramaId);
     $found = array_values(array_filter($all, static fn(array $r): bool => (int)($r['id'] ?? 0) === $rootId));
@@ -97,10 +71,38 @@ try {
     if (($row['tipo_evento'] ?? '') !== 'Reunião') {
         failFast('tipo_evento deve ser Reunião');
     }
-    if (($row['ata_original_name'] ?? '') === '') {
-        failFast('ata_original_name deve estar preenchido');
+    ok('Recuperação: tipo_evento persistido');
+
+    $thrown = false;
+    try {
+        $model->setStatus($rootId, 'Finalizado');
+    } catch (Throwable $e) {
+        $thrown = true;
     }
-    ok('Recuperação: tipo_evento e metadados da ata persistidos');
+    if (!$thrown) {
+        failFast('Finalização de Reunião sem ata deve falhar');
+    }
+    ok('Validação: finalizar Reunião sem ata falha');
+
+    $dummyPath = __DIR__ . '/dummy_ata_' . $suffix . '.pdf';
+    file_put_contents($dummyPath, '%PDF-1.4 dummy');
+    $saved = $model->setAta($rootId, [
+        'ata_path' => $dummyPath,
+        'ata_original_name' => 'ata_' . $suffix . '.pdf',
+        'ata_mime' => 'application/pdf',
+        'ata_size' => (int)filesize($dummyPath),
+        'ata_sha256' => hash_file('sha256', $dummyPath),
+    ]);
+    if (!$saved) {
+        failFast('setAta() deve persistir metadados');
+    }
+    ok('Anexo: ata persistida para o evento');
+
+    $okStatus = $model->setStatus($rootId, 'Finalizado');
+    if (!$okStatus) {
+        failFast('Após anexar a ata, finalização deve funcionar');
+    }
+    ok('Finalização: Reunião com ata pode ser finalizada');
 
     $view = file_get_contents(__DIR__ . '/../views/cronograma/add_evento.php');
     if ($view === false) {
@@ -109,10 +111,10 @@ try {
     if (strpos($view, 'id="cronogramaTipoEvento"') === false) {
         failFast('View deve conter seletor de tipo_evento');
     }
-    if (strpos($view, 'id="cronogramaAtaWrap"') === false) {
-        failFast('View deve conter bloco condicional de ata');
+    if (strpos($view, 'id="cronogramaAtaWrap"') !== false) {
+        failFast('View add_evento não deve exigir ata na criação');
     }
-    ok('UI: view contém seletor de tipo e bloco de ata');
+    ok('UI: view contém seletor de tipo e não exige ata na criação');
 } finally {
     try {
         if ($cronogramaId > 0) {
@@ -121,6 +123,13 @@ try {
         }
         if ($clienteId > 0) {
             $pdo->prepare('DELETE FROM clientes WHERE id = :id')->execute(['id' => $clienteId]);
+        }
+    } catch (Throwable $e) {
+    }
+    try {
+        $dummyPath = __DIR__ . '/dummy_ata_' . $suffix . '.pdf';
+        if (is_file($dummyPath)) {
+            @unlink($dummyPath);
         }
     } catch (Throwable $e) {
     }

@@ -356,11 +356,40 @@
                 </form>
               </td>
               <td class="p-3">
-                <?php if (($ev['tipo_evento'] ?? '') === 'Reunião' && !empty($ev['ata_path'])): ?>
-                  <div class="mb-2">
-                    <a class="icon-btn" title="Baixar ata" aria-label="Baixar ata" href="index.php?route=cronograma/ataDownload&id_evento=<?= (int)$ev['id'] ?>"><span data-feather="file-text"></span></a>
-                  </div>
-                <?php endif; ?>
+                <div class="mb-2 flex flex-wrap items-center gap-2" data-ata-wrap="<?= (int)$ev['id'] ?>">
+                  <?php if (($ev['tipo_evento'] ?? '') === 'Reunião'): ?>
+                    <form method="post" action="index.php?route=cronograma/ataUpload" class="cronograma-ata-form" enctype="multipart/form-data">
+                      <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+                      <input type="hidden" name="id_evento" value="<?= (int)$ev['id'] ?>" />
+                      <input type="hidden" name="id_cronograma" value="<?= (int)$crono['id'] ?>" />
+                      <input type="hidden" name="status_filter" value="<?= htmlspecialchars($statusFilter) ?>" />
+                      <input type="hidden" name="occ_date_start" value="<?= htmlspecialchars($occFilters['date_start'] ?? '') ?>" />
+                      <input type="hidden" name="occ_date_end" value="<?= htmlspecialchars($occFilters['date_end'] ?? '') ?>" />
+                      <?php foreach (($occFilters['tipo'] ?? []) as $tipo): ?>
+                        <input type="hidden" name="occ_tipo[]" value="<?= htmlspecialchars($tipo) ?>" />
+                      <?php endforeach; ?>
+                      <?php foreach (($occFilters['status'] ?? []) as $statusOpt): ?>
+                        <input type="hidden" name="occ_status[]" value="<?= htmlspecialchars($statusOpt) ?>" />
+                      <?php endforeach; ?>
+                      <input type="hidden" name="occ_responsavel" value="<?= htmlspecialchars($occFilters['responsavel'] ?? '') ?>" />
+                      <input type="hidden" name="occ_local" value="<?= htmlspecialchars($occFilters['local'] ?? '') ?>" />
+                      <input type="hidden" name="occ_sort" value="<?= htmlspecialchars($occOrder['column'] ?? 'data') ?>" />
+                      <input type="hidden" name="occ_dir" value="<?= htmlspecialchars($occOrder['direction'] ?? 'asc') ?>" />
+                      <input type="hidden" name="MAX_FILE_SIZE" value="<?= 50 * 1024 * 1024 ?>" />
+                      <input
+                        class="hidden"
+                        type="file"
+                        name="ata"
+                        data-ata-input="<?= (int)$ev['id'] ?>"
+                        accept=".pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/rtf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                      />
+                      <button type="button" class="icon-btn" title="Anexar ata" aria-label="Anexar ata" data-ata-upload="<?= (int)$ev['id'] ?>"><span data-feather="paperclip"></span></button>
+                    </form>
+                    <?php if (!empty($ev['ata_path'])): ?>
+                      <a class="icon-btn" title="Baixar ata" aria-label="Baixar ata" data-ata-download="<?= (int)$ev['id'] ?>" href="index.php?route=cronograma/ataDownload&id_evento=<?= (int)$ev['id'] ?>"><span data-feather="file-text"></span></a>
+                    <?php endif; ?>
+                  <?php endif; ?>
+                </div>
                 <form method="post" action="index.php?route=cronograma/updateEvento" class="space-y-2">
                   <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
                   <input type="hidden" name="id_evento" value="<?= (int)$ev['id'] ?>" />
@@ -541,6 +570,57 @@
           applySeriesState(serieId, payload.series || null);
         } catch (error) {
           alert(error.message || 'Erro ao atualizar o status do evento.');
+        }
+      });
+    });
+
+    document.querySelectorAll('[data-ata-upload]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const eventId = button.getAttribute('data-ata-upload');
+        const input = document.querySelector(`[data-ata-input="${eventId}"]`);
+        if (input) input.click();
+      });
+    });
+
+    document.querySelectorAll('[data-ata-input]').forEach((input) => {
+      input.addEventListener('change', async () => {
+        const eventId = input.getAttribute('data-ata-input');
+        const form = input.closest('form');
+        if (!form || !eventId) return;
+        if (!input.files || !input.files.length) return;
+        const formData = new FormData(form);
+        try {
+          const response = await fetch(form.action, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: formData,
+          });
+          const payload = await response.json();
+          if (!response.ok || !payload.ok) {
+            throw new Error(payload.message || 'Não foi possível anexar a ata.');
+          }
+          const wrap = document.querySelector(`[data-ata-wrap="${eventId}"]`);
+          if (wrap && payload.download_url) {
+            let link = wrap.querySelector(`[data-ata-download="${eventId}"]`);
+            if (!link) {
+              link = document.createElement('a');
+              link.className = 'icon-btn';
+              link.setAttribute('title', 'Baixar ata');
+              link.setAttribute('aria-label', 'Baixar ata');
+              link.setAttribute('data-ata-download', eventId);
+              link.innerHTML = '<span data-feather="file-text"></span>';
+              wrap.appendChild(link);
+              if (typeof feather !== 'undefined' && feather && typeof feather.replace === 'function') {
+                feather.replace();
+              }
+            }
+            link.setAttribute('href', payload.download_url);
+          }
+          alert(payload.message || 'Ata anexada com sucesso.');
+        } catch (error) {
+          alert(error.message || 'Erro ao anexar a ata.');
+        } finally {
+          input.value = '';
         }
       });
     });

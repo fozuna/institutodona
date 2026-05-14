@@ -401,6 +401,13 @@ class CronogramaEventoModel extends BaseModel
         if (!$event) {
             return false;
         }
+        if ($status === 'Finalizado') {
+            $tipo = self::normalizeEventType($event['tipo_evento'] ?? 'Tarefa');
+            $ataPath = Database::columnExists('cronograma_eventos', 'ata_path') ? (string)($event['ata_path'] ?? '') : '';
+            if ($tipo === 'Reunião' && ($ataPath === '' || !is_file($ataPath))) {
+                throw new RuntimeException('Para finalizar eventos do tipo Reunião, é obrigatório anexar a ata antes de marcar como finalizado.');
+            }
+        }
         $from = $this->normalizeStatus((string)($event['status'] ?? 'Planejado'));
         if (!$this->canTransition($from, $status)) {
             return false;
@@ -413,6 +420,36 @@ class CronogramaEventoModel extends BaseModel
         $stmt = $this->db->prepare("UPDATE cronograma_eventos ce
             JOIN cronogramas cr ON cr.id = ce.id_cronograma
             SET ce.status = :status
+            WHERE ce.id = :id AND $scope");
+        return $stmt->execute($params);
+    }
+
+    public function setAta(int $id, array $meta): bool
+    {
+        $this->ensureTables();
+        $event = $this->find($id);
+        if (!$event) {
+            return false;
+        }
+        if (!Database::columnExists('cronograma_eventos', 'ata_path')) {
+            return false;
+        }
+        $params = [
+            'id' => $id,
+            'ata_path' => (string)($meta['ata_path'] ?? ''),
+            'ata_original_name' => isset($meta['ata_original_name']) ? (string)$meta['ata_original_name'] : null,
+            'ata_mime' => isset($meta['ata_mime']) ? (string)$meta['ata_mime'] : null,
+            'ata_size' => isset($meta['ata_size']) ? (int)$meta['ata_size'] : null,
+            'ata_sha256' => isset($meta['ata_sha256']) ? (string)$meta['ata_sha256'] : null,
+        ];
+        $scope = $this->tenantInCondition('cr.id_cliente', $params, 'ceata');
+        $stmt = $this->db->prepare("UPDATE cronograma_eventos ce
+            JOIN cronogramas cr ON cr.id = ce.id_cronograma
+            SET ce.ata_path = :ata_path,
+                ce.ata_original_name = :ata_original_name,
+                ce.ata_mime = :ata_mime,
+                ce.ata_size = :ata_size,
+                ce.ata_sha256 = :ata_sha256
             WHERE ce.id = :id AND $scope");
         return $stmt->execute($params);
     }
@@ -469,8 +506,8 @@ class CronogramaEventoModel extends BaseModel
         if ((int)$date->format('Y') !== $ano) {
             throw new RuntimeException('A data base deve pertencer ao ano do cronograma.');
         }
-        if ($payload['tipo_evento'] === 'Reunião' && ($payload['ata_path'] === null || $payload['ata_path'] === '')) {
-            throw new RuntimeException('Para eventos do tipo Reunião, é obrigatório anexar a ata.');
+        if ($payload['status'] === 'Finalizado' && $payload['tipo_evento'] === 'Reunião' && ($payload['ata_path'] === null || $payload['ata_path'] === '')) {
+            throw new RuntimeException('Para finalizar eventos do tipo Reunião, é obrigatório anexar a ata.');
         }
         return $payload;
     }
@@ -633,6 +670,12 @@ class CronogramaEventoModel extends BaseModel
 
     private function updateSingleOccurrence(array $event, array $data): bool
     {
+        $data['tipo_evento'] = $data['tipo_evento'] ?? ($event['tipo_evento'] ?? 'Tarefa');
+        $data['ata_path'] = $data['ata_path'] ?? ($event['ata_path'] ?? null);
+        $data['ata_original_name'] = $data['ata_original_name'] ?? ($event['ata_original_name'] ?? null);
+        $data['ata_mime'] = $data['ata_mime'] ?? ($event['ata_mime'] ?? null);
+        $data['ata_size'] = $data['ata_size'] ?? ($event['ata_size'] ?? null);
+        $data['ata_sha256'] = $data['ata_sha256'] ?? ($event['ata_sha256'] ?? null);
         $payload = $this->normalizePayload($data, (int)$event['ano']);
         $payload['periodicidade'] = (string)($event['periodicidade'] ?? 'unico');
         $this->assertNoDuplicateOccurrences((int)$event['id_cronograma'], $payload, [$payload['data']], [(int)$event['id']]);
@@ -671,6 +714,12 @@ class CronogramaEventoModel extends BaseModel
         }
         $series = $this->seriesMembers($rootId);
         $ignoreIds = array_map(static fn(array $row): int => (int)$row['id'], $series);
+        $data['tipo_evento'] = $data['tipo_evento'] ?? ($root['tipo_evento'] ?? 'Tarefa');
+        $data['ata_path'] = $data['ata_path'] ?? ($root['ata_path'] ?? null);
+        $data['ata_original_name'] = $data['ata_original_name'] ?? ($root['ata_original_name'] ?? null);
+        $data['ata_mime'] = $data['ata_mime'] ?? ($root['ata_mime'] ?? null);
+        $data['ata_size'] = $data['ata_size'] ?? ($root['ata_size'] ?? null);
+        $data['ata_sha256'] = $data['ata_sha256'] ?? ($root['ata_sha256'] ?? null);
         $payload = $this->normalizePayload($data, (int)$root['ano']);
         $dates = $this->buildOccurrenceDates($payload['data'], $payload['periodicidade'], (int)$root['ano']);
         $this->assertNoDuplicateOccurrences((int)$root['id_cronograma'], $payload, $dates, $ignoreIds);

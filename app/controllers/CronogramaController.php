@@ -313,20 +313,6 @@ class CronogramaController extends BaseController
             'tipo_evento' => $tipoEvento,
         ];
 
-        $storedAtaPath = null;
-        try {
-            $ata = $this->handleAtaUploadIfAny($idCronograma, $tipoEvento);
-            if (!empty($ata)) {
-                $data = array_merge($data, $ata);
-                $storedAtaPath = (string)($ata['ata_path'] ?? '');
-            }
-        } catch (\Throwable $e) {
-            $_SESSION['flash_error'] = $e->getMessage();
-            $url = $this->buildOccRedirectUrl($idCronograma, $statusFilter, $_POST);
-            header('Location: ' . $url);
-            return;
-        }
-
         $isValid = $idCronograma && $data['data'] && $data['topico'] && $data['atividade'];
         AuditLogger::log('cronograma_add_evento_attempt', 'cronograma_evento', null, [
             'id_cronograma' => $idCronograma,
@@ -342,9 +328,6 @@ class CronogramaController extends BaseController
                     'tipo_evento' => $tipoEvento,
                 ]);
             } catch (\Throwable $e) {
-                if (is_string($storedAtaPath) && $storedAtaPath !== '' && is_file($storedAtaPath)) {
-                    @unlink($storedAtaPath);
-                }
                 $_SESSION['flash_error'] = $e->getMessage();
                 AuditLogger::log('cronograma_add_evento_error', 'cronograma_evento', null, [
                     'id_cronograma' => $idCronograma,
@@ -352,9 +335,6 @@ class CronogramaController extends BaseController
                 ]);
             }
         } else {
-            if (is_string($storedAtaPath) && $storedAtaPath !== '' && is_file($storedAtaPath)) {
-                @unlink($storedAtaPath);
-            }
             $_SESSION['flash_error'] = 'Preencha os campos obrigatorios do evento.';
             AuditLogger::log('cronograma_add_evento_invalid', 'cronograma_evento', null, [
                 'id_cronograma' => $idCronograma,
@@ -392,7 +372,93 @@ class CronogramaController extends BaseController
         exit;
     }
 
-    private function handleAtaUploadIfAny(int $idCronograma, string $tipoEvento): array
+    public function ataUpload(): void
+    {
+        $this->requireRole('instituto');
+        $csrf = $_POST['csrf'] ?? null;
+        if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
+
+        $idEvento = (int)($_POST['id_evento'] ?? 0);
+        $idCronograma = (int)($_POST['id_cronograma'] ?? 0);
+        $statusFilter = CronogramaTrafficLight::normalizeFilter($_POST['status_filter'] ?? 'todos');
+        $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
+
+        $ev = $this->eventos->find($idEvento);
+        if (!$ev) {
+            http_response_code(404);
+            $payload = ['ok' => false, 'message' => 'Evento não encontrado.'];
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $_SESSION['flash_error'] = $payload['message'];
+            $url = $this->buildOccRedirectUrl($idCronograma, $statusFilter, $_POST);
+            header('Location: ' . $url);
+            return;
+        }
+        $tipoEvento = CronogramaEventoModel::normalizeEventType($ev['tipo_evento'] ?? null);
+        if ($tipoEvento !== 'Reunião') {
+            http_response_code(400);
+            $payload = ['ok' => false, 'message' => 'O anexo de ata é permitido apenas para eventos do tipo Reunião.'];
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $_SESSION['flash_error'] = $payload['message'];
+            $url = $this->buildOccRedirectUrl($idCronograma, $statusFilter, $_POST);
+            header('Location: ' . $url);
+            return;
+        }
+
+        $storedAtaPath = null;
+        try {
+            $ata = $this->handleAtaUploadIfAny($idCronograma > 0 ? $idCronograma : (int)($ev['id_cronograma'] ?? 0), $tipoEvento, true);
+            $storedAtaPath = (string)($ata['ata_path'] ?? '');
+            $ok = $this->eventos->setAta($idEvento, $ata);
+            if (!$ok) {
+                throw new \RuntimeException('Não foi possível salvar o anexo da ata no evento.');
+            }
+            AuditLogger::log('cronograma_ata_uploaded', 'cronograma_evento', $idEvento, [
+                'id_cronograma' => (int)($ev['id_cronograma'] ?? 0),
+                'ata_size' => (int)($ata['ata_size'] ?? 0),
+                'ata_mime' => (string)($ata['ata_mime'] ?? ''),
+            ]);
+            $payload = [
+                'ok' => true,
+                'message' => 'Ata anexada com sucesso.',
+                'event_id' => $idEvento,
+                'download_url' => 'index.php?route=cronograma/ataDownload&id_evento=' . $idEvento,
+            ];
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $_SESSION['flash_success'] = $payload['message'];
+            $url = $this->buildOccRedirectUrl($idCronograma, $statusFilter, $_POST);
+            header('Location: ' . $url);
+            return;
+        } catch (\Throwable $e) {
+            if (is_string($storedAtaPath) && $storedAtaPath !== '' && is_file($storedAtaPath)) {
+                @unlink($storedAtaPath);
+            }
+            $payload = ['ok' => false, 'message' => $e->getMessage()];
+            if ($isAjax) {
+                http_response_code(422);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $_SESSION['flash_error'] = $payload['message'];
+            $url = $this->buildOccRedirectUrl($idCronograma, $statusFilter, $_POST);
+            header('Location: ' . $url);
+            return;
+        }
+    }
+
+    private function handleAtaUploadIfAny(int $idCronograma, string $tipoEvento, bool $required = false): array
     {
         if ($idCronograma <= 0) {
             return [];
@@ -405,7 +471,10 @@ class CronogramaController extends BaseController
             return [];
         }
         if (!is_array($file) || (int)($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
-            throw new \RuntimeException('Para eventos do tipo Reunião, é obrigatório anexar a ata.');
+            if ($required) {
+                throw new \RuntimeException('Selecione o arquivo da ata para anexar.');
+            }
+            return [];
         }
         if ((int)($file['error'] ?? 0) !== UPLOAD_ERR_OK) {
             throw new \RuntimeException('Falha no upload da ata.');
@@ -464,10 +533,16 @@ class CronogramaController extends BaseController
         $statusFilter = CronogramaTrafficLight::normalizeFilter($_POST['status_filter'] ?? 'todos');
         $targetStatus = $finalizado ? 'Finalizado' : 'Pendente';
 
-        $ok = $id > 0 ? $this->eventos->setStatus($id, $targetStatus) : false;
-        if (!$ok) {
-            http_response_code(400);
-            $this->respondToggleStatus(['ok' => false, 'message' => 'Nao foi possivel atualizar o status do evento.'], $idCronograma, $statusFilter, $_POST);
+        try {
+            $ok = $id > 0 ? $this->eventos->setStatus($id, $targetStatus) : false;
+            if (!$ok) {
+                http_response_code(400);
+                $this->respondToggleStatus(['ok' => false, 'message' => 'Nao foi possivel atualizar o status do evento.'], $idCronograma, $statusFilter, $_POST);
+                return;
+            }
+        } catch (\Throwable $e) {
+            http_response_code(422);
+            $this->respondToggleStatus(['ok' => false, 'message' => $e->getMessage()], $idCronograma, $statusFilter, $_POST);
             return;
         }
 
