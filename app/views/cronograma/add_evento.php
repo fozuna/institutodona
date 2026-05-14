@@ -9,10 +9,11 @@
     <a class="px-3 py-2 rounded bg-brand-brown text-white" href="index.php?route=clientes/show&id=<?= (int)($crono['id_cliente'] ?? 0) ?>">Voltar</a>
   </div>
   <div class="bg-white shadow rounded p-4">
-    <form method="post" action="index.php?route=cronograma/addEvento" class="space-y-3">
+    <form method="post" action="index.php?route=cronograma/addEvento" class="space-y-3" enctype="multipart/form-data" id="cronogramaAddEventoForm">
       <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
       <input type="hidden" name="id_cronograma" value="<?= (int)$crono['id'] ?>" />
       <input type="hidden" name="status_filter" value="todos" />
+      <input type="hidden" name="MAX_FILE_SIZE" value="<?= 50 * 1024 * 1024 ?>" />
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm">Data base</label>
@@ -23,6 +24,14 @@
           <select class="border rounded p-2 w-full" name="periodicidade" required>
             <?php foreach (($periodicidades ?? []) as $value => $label): ?>
               <option value="<?= htmlspecialchars($value) ?>"><?= htmlspecialchars($label) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Tipo de evento</label>
+          <select class="border rounded p-2 w-full" name="tipo_evento" id="cronogramaTipoEvento" required>
+            <?php foreach (\App\Models\CronogramaEventoModel::eventTypeOptions() as $tipo): ?>
+              <option value="<?= htmlspecialchars($tipo) ?>"><?= htmlspecialchars($tipo) ?></option>
             <?php endforeach; ?>
           </select>
         </div>
@@ -42,6 +51,17 @@
         <div class="md:col-span-2">
           <label class="block text-sm">Atividade</label>
           <input class="border rounded p-2 w-full" type="text" name="atividade" required />
+        </div>
+        <div class="md:col-span-2 hidden" id="cronogramaAtaWrap">
+          <label class="block text-sm">Ata (obrigatório para Reunião)</label>
+          <input
+            class="border rounded p-2 w-full bg-white"
+            type="file"
+            name="ata"
+            id="cronogramaAtaFile"
+            accept=".pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/rtf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+          />
+          <div class="text-xs text-gray-500 mt-1">Permitidos: pdf, doc, docx, txt, rtf, xls, xlsx, ppt, pptx. Limite: 50MB.</div>
         </div>
         <div>
           <label class="block text-sm">Responsável</label>
@@ -71,3 +91,33 @@
     </form>
   </div>
 </div>
+<script>
+  (function () {
+    const tipo = document.getElementById('cronogramaTipoEvento');
+    const wrap = document.getElementById('cronogramaAtaWrap');
+    const file = document.getElementById('cronogramaAtaFile');
+    const form = document.getElementById('cronogramaAddEventoForm');
+
+    function syncAtaVisibility() {
+      const isReuniao = (tipo && tipo.value) === 'Reunião';
+      if (!wrap || !file) return;
+      wrap.classList.toggle('hidden', !isReuniao);
+      if (isReuniao) {
+        file.setAttribute('required', 'required');
+      } else {
+        file.removeAttribute('required');
+        file.value = '';
+      }
+    }
+
+    if (tipo) {
+      tipo.addEventListener('change', syncAtaVisibility);
+    }
+    if (form) {
+      form.addEventListener('submit', () => {
+        syncAtaVisibility();
+      });
+    }
+    syncAtaVisibility();
+  })();
+</script>

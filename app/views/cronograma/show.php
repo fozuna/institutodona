@@ -356,6 +356,11 @@
                 </form>
               </td>
               <td class="p-3">
+                <?php if (($ev['tipo_evento'] ?? '') === 'Reunião' && !empty($ev['ata_path'])): ?>
+                  <div class="mb-2">
+                    <a class="icon-btn" title="Baixar ata" aria-label="Baixar ata" href="index.php?route=cronograma/ataDownload&id_evento=<?= (int)$ev['id'] ?>"><span data-feather="file-text"></span></a>
+                  </div>
+                <?php endif; ?>
                 <form method="post" action="index.php?route=cronograma/updateEvento" class="space-y-2">
                   <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
                   <input type="hidden" name="id_evento" value="<?= (int)$ev['id'] ?>" />

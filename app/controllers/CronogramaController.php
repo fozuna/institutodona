@@ -300,6 +300,7 @@ class CronogramaController extends BaseController
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
         $idCronograma = (int)($_POST['id_cronograma'] ?? 0);
         $statusFilter = CronogramaTrafficLight::normalizeFilter($_POST['status_filter'] ?? 'todos');
+        $tipoEvento = CronogramaEventoModel::normalizeEventType($_POST['tipo_evento'] ?? null);
         $data = [
             'data' => $_POST['data'] ?? null,
             'topico' => trim($_POST['topico'] ?? ''),
@@ -309,7 +310,23 @@ class CronogramaController extends BaseController
             'modelo' => $_POST['modelo'] ?? null,
             'status' => $_POST['status'] ?? 'Planejado',
             'periodicidade' => $_POST['periodicidade'] ?? 'unico',
+            'tipo_evento' => $tipoEvento,
         ];
+
+        $storedAtaPath = null;
+        try {
+            $ata = $this->handleAtaUploadIfAny($idCronograma, $tipoEvento);
+            if (!empty($ata)) {
+                $data = array_merge($data, $ata);
+                $storedAtaPath = (string)($ata['ata_path'] ?? '');
+            }
+        } catch (\Throwable $e) {
+            $_SESSION['flash_error'] = $e->getMessage();
+            $url = $this->buildOccRedirectUrl($idCronograma, $statusFilter, $_POST);
+            header('Location: ' . $url);
+            return;
+        }
+
         $isValid = $idCronograma && $data['data'] && $data['topico'] && $data['atividade'];
         AuditLogger::log('cronograma_add_evento_attempt', 'cronograma_evento', null, [
             'id_cronograma' => $idCronograma,
@@ -322,8 +339,12 @@ class CronogramaController extends BaseController
                 AuditLogger::log('cronograma_add_evento_success', 'cronograma_evento', $newId, [
                     'id_cronograma' => $idCronograma,
                     'periodicidade' => $data['periodicidade'],
+                    'tipo_evento' => $tipoEvento,
                 ]);
             } catch (\Throwable $e) {
+                if (is_string($storedAtaPath) && $storedAtaPath !== '' && is_file($storedAtaPath)) {
+                    @unlink($storedAtaPath);
+                }
                 $_SESSION['flash_error'] = $e->getMessage();
                 AuditLogger::log('cronograma_add_evento_error', 'cronograma_evento', null, [
                     'id_cronograma' => $idCronograma,
@@ -331,6 +352,9 @@ class CronogramaController extends BaseController
                 ]);
             }
         } else {
+            if (is_string($storedAtaPath) && $storedAtaPath !== '' && is_file($storedAtaPath)) {
+                @unlink($storedAtaPath);
+            }
             $_SESSION['flash_error'] = 'Preencha os campos obrigatorios do evento.';
             AuditLogger::log('cronograma_add_evento_invalid', 'cronograma_evento', null, [
                 'id_cronograma' => $idCronograma,
@@ -338,6 +362,90 @@ class CronogramaController extends BaseController
         }
         $url = $this->buildOccRedirectUrl($idCronograma, $statusFilter, $_POST);
         header('Location: ' . $url);
+    }
+
+    public function ataDownload(): void
+    {
+        $this->requireRole('instituto');
+        $id = (int)($_GET['id_evento'] ?? 0);
+        $ev = $this->eventos->find($id);
+        if (!$ev) {
+            http_response_code(404);
+            echo 'Evento não encontrado.';
+            return;
+        }
+        $tipo = (string)($ev['tipo_evento'] ?? '');
+        $path = (string)($ev['ata_path'] ?? '');
+        if ($tipo !== 'Reunião' || $path === '' || !is_file($path)) {
+            http_response_code(404);
+            echo 'Ata não disponível.';
+            return;
+        }
+        $mime = (string)($ev['ata_mime'] ?? 'application/octet-stream');
+        $name = (string)($ev['ata_original_name'] ?? ('ata_' . $id));
+        $safe = preg_replace('/[^A-Za-z0-9._-]+/', '_', $name) ?: ('ata_' . $id);
+        header('Content-Type: ' . ($mime !== '' ? $mime : 'application/octet-stream'));
+        header('Content-Disposition: attachment; filename="' . $safe . '"');
+        header('X-Content-Type-Options: nosniff');
+        header('Content-Length: ' . (string)filesize($path));
+        readfile($path);
+        exit;
+    }
+
+    private function handleAtaUploadIfAny(int $idCronograma, string $tipoEvento): array
+    {
+        if ($idCronograma <= 0) {
+            return [];
+        }
+        $file = $_FILES['ata'] ?? null;
+        if ($tipoEvento !== 'Reunião') {
+            if (is_array($file) && !empty($file['name'])) {
+                throw new \RuntimeException('O anexo de ata é permitido apenas para eventos do tipo Reunião.');
+            }
+            return [];
+        }
+        if (!is_array($file) || (int)($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            throw new \RuntimeException('Para eventos do tipo Reunião, é obrigatório anexar a ata.');
+        }
+        if ((int)($file['error'] ?? 0) !== UPLOAD_ERR_OK) {
+            throw new \RuntimeException('Falha no upload da ata.');
+        }
+        $tmp = (string)($file['tmp_name'] ?? '');
+        if ($tmp === '' || !is_uploaded_file($tmp)) {
+            throw new \RuntimeException('Arquivo temporário inválido.');
+        }
+        $sizeBytes = (int)($file['size'] ?? 0);
+        $finfo = function_exists('finfo_open') ? @finfo_open(FILEINFO_MIME_TYPE) : null;
+        $mime = $finfo ? (string)@finfo_file($finfo, $tmp) : (string)($file['type'] ?? '');
+        if ($finfo) {
+            @finfo_close($finfo);
+        }
+        $validated = CronogramaEventoModel::validateAtaUpload((string)($file['name'] ?? ''), $sizeBytes, $mime, 50 * 1024 * 1024);
+        if (empty($validated['ok'])) {
+            throw new \RuntimeException((string)($validated['message'] ?? 'Arquivo inválido.'));
+        }
+        $token = bin2hex(random_bytes(8));
+        $baseDir = dirname(__DIR__, 2) . '/storage/cronograma/atas/' . $idCronograma . '/' . $token;
+        if (!is_dir($baseDir) && !mkdir($baseDir, 0775, true) && !is_dir($baseDir)) {
+            throw new \RuntimeException('Não foi possível criar o diretório da ata.');
+        }
+        if (!is_writable($baseDir)) {
+            throw new \RuntimeException('Diretório da ata sem permissão de escrita.');
+        }
+        $clientName = basename((string)($file['name'] ?? 'ata'));
+        $safe = preg_replace('/[^A-Za-z0-9._-]+/', '_', $clientName) ?: 'ata';
+        $dest = $baseDir . '/' . date('Ymd_His') . '_' . $safe;
+        if (!move_uploaded_file($tmp, $dest)) {
+            throw new \RuntimeException('Não foi possível salvar o arquivo da ata.');
+        }
+        $sha256 = hash_file('sha256', $dest) ?: null;
+        return [
+            'ata_path' => $dest,
+            'ata_original_name' => $clientName,
+            'ata_mime' => (string)($validated['mime'] ?? $mime),
+            'ata_size' => $sizeBytes,
+            'ata_sha256' => $sha256,
+        ];
     }
 
     public function toggleStatus(): void

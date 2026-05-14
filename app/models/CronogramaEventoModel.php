@@ -30,6 +30,17 @@ class CronogramaEventoModel extends BaseModel
         'Não Realizado' => 'Pendente',
     ];
 
+    private const EVENT_TYPES = [
+        'Tarefa',
+        'Reunião',
+        'Indicador',
+        'Pessoas',
+        'Processos',
+        'Treinamento',
+        'Auditoria',
+        'Coaching',
+    ];
+
     private function ensureTables(): void
     {
         try {
@@ -45,18 +56,42 @@ class CronogramaEventoModel extends BaseModel
               evento_pai_id INT NULL,
               data DATE NOT NULL,
               periodicidade VARCHAR(20) NOT NULL DEFAULT 'unico',
+              tipo_evento VARCHAR(30) NOT NULL DEFAULT 'Tarefa',
               topico VARCHAR(120) NOT NULL,
               unidade VARCHAR(120) NULL,
               atividade VARCHAR(255) NOT NULL,
               responsavel VARCHAR(255) NULL,
               modelo ENUM('Online','Presencial') NULL,
-              status VARCHAR(20) NOT NULL DEFAULT 'Planejado'
+              status VARCHAR(20) NOT NULL DEFAULT 'Planejado',
+              ata_path VARCHAR(255) NULL,
+              ata_original_name VARCHAR(255) NULL,
+              ata_mime VARCHAR(100) NULL,
+              ata_size INT UNSIGNED NULL,
+              ata_sha256 CHAR(64) NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             if (!Database::columnExists('cronograma_eventos', 'evento_pai_id')) {
                 $this->db->exec("ALTER TABLE cronograma_eventos ADD COLUMN evento_pai_id INT NULL AFTER id_cronograma");
             }
             if (!Database::columnExists('cronograma_eventos', 'periodicidade')) {
                 $this->db->exec("ALTER TABLE cronograma_eventos ADD COLUMN periodicidade VARCHAR(20) NOT NULL DEFAULT 'unico' AFTER data");
+            }
+            if (!Database::columnExists('cronograma_eventos', 'tipo_evento')) {
+                $this->db->exec("ALTER TABLE cronograma_eventos ADD COLUMN tipo_evento VARCHAR(30) NOT NULL DEFAULT 'Tarefa' AFTER periodicidade");
+            }
+            if (!Database::columnExists('cronograma_eventos', 'ata_path')) {
+                $this->db->exec("ALTER TABLE cronograma_eventos ADD COLUMN ata_path VARCHAR(255) NULL AFTER status");
+            }
+            if (!Database::columnExists('cronograma_eventos', 'ata_original_name')) {
+                $this->db->exec("ALTER TABLE cronograma_eventos ADD COLUMN ata_original_name VARCHAR(255) NULL AFTER ata_path");
+            }
+            if (!Database::columnExists('cronograma_eventos', 'ata_mime')) {
+                $this->db->exec("ALTER TABLE cronograma_eventos ADD COLUMN ata_mime VARCHAR(100) NULL AFTER ata_original_name");
+            }
+            if (!Database::columnExists('cronograma_eventos', 'ata_size')) {
+                $this->db->exec("ALTER TABLE cronograma_eventos ADD COLUMN ata_size INT UNSIGNED NULL AFTER ata_mime");
+            }
+            if (!Database::columnExists('cronograma_eventos', 'ata_sha256')) {
+                $this->db->exec("ALTER TABLE cronograma_eventos ADD COLUMN ata_sha256 CHAR(64) NULL AFTER ata_size");
             }
             if (Database::columnExists('cronograma_eventos', 'status')) {
                 $type = Database::columnType('cronograma_eventos', 'status');
@@ -69,28 +104,65 @@ class CronogramaEventoModel extends BaseModel
         }
     }
 
+    public static function eventTypeOptions(): array
+    {
+        return self::EVENT_TYPES;
+    }
+
+    public static function normalizeEventType(?string $value): string
+    {
+        $value = trim((string)$value);
+        return in_array($value, self::EVENT_TYPES, true) ? $value : 'Tarefa';
+    }
+
+    public static function validateAtaUpload(string $clientFilename, int $sizeBytes, string $detectedMime, int $maxBytes = 52428800): array
+    {
+        $validated = ManualModel::validateUpload($clientFilename, $sizeBytes, $detectedMime, $maxBytes);
+        if (empty($validated['ok'])) {
+            return $validated;
+        }
+        $ext = (string)($validated['ext'] ?? '');
+        if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg'], true)) {
+            return ['ok' => false, 'error' => 'ext_invalid', 'message' => 'Tipo de arquivo inválido para ata.'];
+        }
+        return $validated;
+    }
+
     public function byCronograma(int $idCronograma): array
     {
         $this->ensureTables();
         $params = ['id' => $idCronograma];
         $scope = $this->tenantInCondition('cr.id_cliente', $params, 'ceb');
-        $stmt = $this->db->prepare("SELECT
-                ce.id,
-                ce.id_cronograma,
-                ce.evento_pai_id,
-                COALESCE(ce.evento_pai_id, ce.id) AS serie_id,
-                ce.data,
-                ce.periodicidade,
-                ce.topico,
-                ce.unidade,
-                ce.atividade,
-                ce.responsavel,
-                ce.modelo,
-                ce.status
+        $select = [
+            'ce.id',
+            'ce.id_cronograma',
+            'ce.evento_pai_id',
+            'COALESCE(ce.evento_pai_id, ce.id) AS serie_id',
+            'ce.data',
+            'ce.periodicidade',
+            'ce.topico',
+            'ce.unidade',
+            'ce.atividade',
+            'ce.responsavel',
+            'ce.modelo',
+            'ce.status',
+        ];
+        if (Database::columnExists('cronograma_eventos', 'tipo_evento')) {
+            $select[] = 'ce.tipo_evento';
+        }
+        if (Database::columnExists('cronograma_eventos', 'ata_path')) {
+            $select[] = 'ce.ata_path';
+            $select[] = 'ce.ata_original_name';
+            $select[] = 'ce.ata_mime';
+            $select[] = 'ce.ata_size';
+            $select[] = 'ce.ata_sha256';
+        }
+        $sql = "SELECT " . implode(",\n                ", $select) . "
             FROM cronograma_eventos ce
             JOIN cronogramas cr ON cr.id = ce.id_cronograma
             WHERE ce.id_cronograma = :id AND $scope
-            ORDER BY COALESCE(ce.evento_pai_id, ce.id), ce.data, ce.id");
+            ORDER BY COALESCE(ce.evento_pai_id, ce.id), ce.data, ce.id";
+        $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll();
     }
@@ -155,17 +227,38 @@ class CronogramaEventoModel extends BaseModel
             $children[] = $ev;
         }
 
-        $insert = $this->db->prepare("INSERT INTO cronograma_eventos
-            (id_cronograma, evento_pai_id, data, periodicidade, topico, unidade, atividade, responsavel, modelo, status)
-            VALUES
-            (:id_cronograma, :evento_pai_id, :data, :periodicidade, :topico, :unidade, :atividade, :responsavel, :modelo, :status)");
+        $cols = [
+            'id_cronograma',
+            'evento_pai_id',
+            'data',
+            'periodicidade',
+            'topico',
+            'unidade',
+            'atividade',
+            'responsavel',
+            'modelo',
+            'status',
+        ];
+        if (Database::columnExists('cronograma_eventos', 'tipo_evento')) {
+            $cols[] = 'tipo_evento';
+        }
+        if (Database::columnExists('cronograma_eventos', 'ata_path')) {
+            $cols[] = 'ata_path';
+            $cols[] = 'ata_original_name';
+            $cols[] = 'ata_mime';
+            $cols[] = 'ata_size';
+            $cols[] = 'ata_sha256';
+        }
+        $placeholders = array_map(static fn(string $c): string => ':' . $c, $cols);
+        $insert = $this->db->prepare("INSERT INTO cronograma_eventos (" . implode(', ', $cols) . ")
+            VALUES (" . implode(', ', $placeholders) . ")");
 
         $created = 0;
         $map = [];
         $this->db->beginTransaction();
         try {
             foreach ($roots as $ev) {
-                $insert->execute([
+                $params = [
                     'id_cronograma' => $toCronogramaId,
                     'evento_pai_id' => null,
                     'data' => (string)($ev['data'] ?? ''),
@@ -176,7 +269,18 @@ class CronogramaEventoModel extends BaseModel
                     'responsavel' => $ev['responsavel'] ?? null,
                     'modelo' => $ev['modelo'] ?? null,
                     'status' => (string)($ev['status'] ?? 'Planejado'),
-                ]);
+                ];
+                if (in_array('tipo_evento', $cols, true)) {
+                    $params['tipo_evento'] = (string)($ev['tipo_evento'] ?? 'Tarefa');
+                }
+                if (in_array('ata_path', $cols, true)) {
+                    $params['ata_path'] = $ev['ata_path'] ?? null;
+                    $params['ata_original_name'] = $ev['ata_original_name'] ?? null;
+                    $params['ata_mime'] = $ev['ata_mime'] ?? null;
+                    $params['ata_size'] = isset($ev['ata_size']) ? (int)$ev['ata_size'] : null;
+                    $params['ata_sha256'] = $ev['ata_sha256'] ?? null;
+                }
+                $insert->execute($params);
                 $newId = (int)$this->db->lastInsertId();
                 $map[(int)$ev['id']] = $newId;
                 $created++;
@@ -185,7 +289,7 @@ class CronogramaEventoModel extends BaseModel
             foreach ($children as $ev) {
                 $oldParent = (int)($ev['evento_pai_id'] ?? 0);
                 $newParent = $oldParent > 0 ? ($map[$oldParent] ?? null) : null;
-                $insert->execute([
+                $params = [
                     'id_cronograma' => $toCronogramaId,
                     'evento_pai_id' => $newParent,
                     'data' => (string)($ev['data'] ?? ''),
@@ -196,7 +300,18 @@ class CronogramaEventoModel extends BaseModel
                     'responsavel' => $ev['responsavel'] ?? null,
                     'modelo' => $ev['modelo'] ?? null,
                     'status' => (string)($ev['status'] ?? 'Planejado'),
-                ]);
+                ];
+                if (in_array('tipo_evento', $cols, true)) {
+                    $params['tipo_evento'] = (string)($ev['tipo_evento'] ?? 'Tarefa');
+                }
+                if (in_array('ata_path', $cols, true)) {
+                    $params['ata_path'] = $ev['ata_path'] ?? null;
+                    $params['ata_original_name'] = $ev['ata_original_name'] ?? null;
+                    $params['ata_mime'] = $ev['ata_mime'] ?? null;
+                    $params['ata_size'] = isset($ev['ata_size']) ? (int)$ev['ata_size'] : null;
+                    $params['ata_sha256'] = $ev['ata_sha256'] ?? null;
+                }
+                $insert->execute($params);
                 $newId = (int)$this->db->lastInsertId();
                 $map[(int)$ev['id']] = $newId;
                 $created++;
@@ -334,12 +449,18 @@ class CronogramaEventoModel extends BaseModel
         $payload = [
             'data' => trim((string)($data['data'] ?? '')),
             'periodicidade' => $this->normalizePeriodicidade($data['periodicidade'] ?? 'unico'),
+            'tipo_evento' => self::normalizeEventType($data['tipo_evento'] ?? 'Tarefa'),
             'topico' => trim((string)($data['topico'] ?? '')),
             'unidade' => trim((string)($data['unidade'] ?? '')),
             'atividade' => trim((string)($data['atividade'] ?? '')),
             'responsavel' => trim((string)($data['responsavel'] ?? '')),
             'modelo' => in_array(($data['modelo'] ?? ''), ['Online', 'Presencial'], true) ? $data['modelo'] : null,
             'status' => in_array($incomingStatus, self::STATUS_VALUES, true) ? $incomingStatus : 'Planejado',
+            'ata_path' => isset($data['ata_path']) ? (string)$data['ata_path'] : null,
+            'ata_original_name' => isset($data['ata_original_name']) ? (string)$data['ata_original_name'] : null,
+            'ata_mime' => isset($data['ata_mime']) ? (string)$data['ata_mime'] : null,
+            'ata_size' => isset($data['ata_size']) ? (int)$data['ata_size'] : null,
+            'ata_sha256' => isset($data['ata_sha256']) ? (string)$data['ata_sha256'] : null,
         ];
         if ($payload['data'] === '' || $payload['topico'] === '' || $payload['atividade'] === '') {
             throw new RuntimeException('Preencha data, pilar e atividade para salvar o evento.');
@@ -347,6 +468,9 @@ class CronogramaEventoModel extends BaseModel
         $date = new DateTimeImmutable($payload['data']);
         if ((int)$date->format('Y') !== $ano) {
             throw new RuntimeException('A data base deve pertencer ao ano do cronograma.');
+        }
+        if ($payload['tipo_evento'] === 'Reunião' && ($payload['ata_path'] === null || $payload['ata_path'] === '')) {
+            throw new RuntimeException('Para eventos do tipo Reunião, é obrigatório anexar a ata.');
         }
         return $payload;
     }
@@ -422,18 +546,48 @@ class CronogramaEventoModel extends BaseModel
 
     private function insertOccurrence(int $idCronograma, ?int $eventoPaiId, array $payload, string $date): int
     {
-        $stmt = $this->db->prepare('INSERT INTO cronograma_eventos (id_cronograma, evento_pai_id, data, periodicidade, topico, unidade, atividade, responsavel, modelo, status) VALUES (:id_cronograma, :evento_pai_id, :data, :periodicidade, :topico, :unidade, :atividade, :responsavel, :modelo, :status)');
+        $cols = [
+            'id_cronograma' => 'id_cronograma',
+            'evento_pai_id' => 'evento_pai_id',
+            'data' => 'data',
+            'periodicidade' => 'periodicidade',
+            'topico' => 'topico',
+            'unidade' => 'unidade',
+            'atividade' => 'atividade',
+            'responsavel' => 'responsavel',
+            'modelo' => 'modelo',
+            'status' => 'status',
+        ];
+        if (Database::columnExists('cronograma_eventos', 'tipo_evento')) {
+            $cols['tipo_evento'] = 'tipo_evento';
+        }
+        if (Database::columnExists('cronograma_eventos', 'ata_path')) {
+            $cols['ata_path'] = 'ata_path';
+            $cols['ata_original_name'] = 'ata_original_name';
+            $cols['ata_mime'] = 'ata_mime';
+            $cols['ata_size'] = 'ata_size';
+            $cols['ata_sha256'] = 'ata_sha256';
+        }
+        $sqlCols = implode(', ', array_keys($cols));
+        $sqlVals = implode(', ', array_map(static fn(string $p): string => ':' . $p, array_values($cols)));
+        $stmt = $this->db->prepare('INSERT INTO cronograma_eventos (' . $sqlCols . ') VALUES (' . $sqlVals . ')');
         $stmt->execute([
             'id_cronograma' => $idCronograma,
             'evento_pai_id' => $eventoPaiId,
             'data' => $date,
             'periodicidade' => $payload['periodicidade'],
+            'tipo_evento' => $payload['tipo_evento'] ?? 'Tarefa',
             'topico' => $payload['topico'],
             'unidade' => $payload['unidade'] !== '' ? $payload['unidade'] : null,
             'atividade' => $payload['atividade'],
             'responsavel' => $payload['responsavel'] !== '' ? $payload['responsavel'] : null,
             'modelo' => $payload['modelo'],
             'status' => $payload['status'],
+            'ata_path' => $payload['ata_path'] ?? null,
+            'ata_original_name' => $payload['ata_original_name'] ?? null,
+            'ata_mime' => $payload['ata_mime'] ?? null,
+            'ata_size' => $payload['ata_size'] ?? null,
+            'ata_sha256' => $payload['ata_sha256'] ?? null,
         ]);
         return (int)$this->db->lastInsertId();
     }

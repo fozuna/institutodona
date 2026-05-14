@@ -37,11 +37,23 @@ use App\Controllers\ProcessosController;
 
 $shouldAutoMigrate = empty($_SESSION['__auto_migrate_done']);
 if ($shouldAutoMigrate) {
-    try {
-        (new MigrationRunner())->applyAll();
-        $_SESSION['__auto_migrate_done'] = time();
-    } catch (\Throwable $e) {
-        error_log('[auto_migrate_failed] ' . $e->getMessage());
+    $lockPath = __DIR__ . '/../storage/.auto_migrate.lock';
+    $lockHandle = @fopen($lockPath, 'c+');
+    $locked = false;
+    if (is_resource($lockHandle)) {
+        $locked = @flock($lockHandle, LOCK_EX | LOCK_NB);
+    }
+    if ($locked) {
+        try {
+            (new MigrationRunner())->applyAll();
+            $_SESSION['__auto_migrate_done'] = time();
+        } catch (\Throwable $e) {
+            error_log('[auto_migrate_failed] ' . $e->getMessage());
+        }
+        @flock($lockHandle, LOCK_UN);
+    }
+    if (is_resource($lockHandle)) {
+        @fclose($lockHandle);
     }
 }
 
@@ -261,6 +273,9 @@ switch ($route) {
         break;
     case 'cronograma/addEventoForm':
         (new CronogramaController())->addEventoForm();
+        break;
+    case 'cronograma/ataDownload':
+        (new CronogramaController())->ataDownload();
         break;
     case 'cronograma/updateEvento':
         (new CronogramaController())->updateEvento();
