@@ -10,7 +10,6 @@ $indicadorId = (int)($indicadorId ?? 0);
 $periodoInicio = (string)($periodoInicio ?? '');
 $periodoFim = (string)($periodoFim ?? '');
 $indicadores = is_array($indicadores ?? null) ? $indicadores : [];
-$periodos = is_array($periodos ?? null) ? $periodos : [];
 $renderOnlyTable = (bool)($renderOnlyTable ?? false);
 
 $renderTable = static function (array $items, int $cliente, int $indicadorId, string $periodoInicio, string $periodoFim, callable $t, callable $formatValue): void {
@@ -102,10 +101,8 @@ $renderTable = static function (array $items, int $cliente, int $indicadorId, st
   </div>
 
   <div class="bg-white shadow rounded-xl p-4">
-    <form method="get" action="index.php" class="grid grid-cols-1 md:grid-cols-6 gap-4">
+    <form method="get" action="index.php" class="grid grid-cols-1 md:grid-cols-6 gap-4" id="indicadoresRealizadoFilterForm">
       <input type="hidden" name="route" value="indicadores/realizado" />
-      <input type="hidden" name="periodo_inicio" id="indicadoresPeriodoInicio" value="<?= htmlspecialchars($periodoInicio) ?>" />
-      <input type="hidden" name="periodo_fim" id="indicadoresPeriodoFim" value="<?= htmlspecialchars($periodoFim) ?>" />
       <div class="md:col-span-4">
         <label class="block text-sm font-medium text-gray-700 mb-1"><?= htmlspecialchars($t('indicadores.label.cliente')) ?></label>
         <select name="cliente" id="indicadoresCliente" class="border border-gray-300 rounded-lg p-3 w-full">
@@ -114,9 +111,6 @@ $renderTable = static function (array $items, int $cliente, int $indicadorId, st
             <option value="<?= (int)$c['id'] ?>" <?= ($cliente === (int)$c['id']) ? 'selected' : '' ?>><?= htmlspecialchars($c['nome_empresa']) ?></option>
           <?php endforeach; ?>
         </select>
-      </div>
-      <div class="md:col-span-2 flex items-end gap-2">
-        <button class="px-4 py-3 rounded-lg bg-brand-red text-white w-full" type="submit"><?= htmlspecialchars($t('indicadores.action.filter')) ?></button>
       </div>
       <div class="md:col-span-3">
         <label class="block text-sm font-medium text-gray-700 mb-1"><?= htmlspecialchars($t('indicadores.label.indicador')) ?></label>
@@ -129,23 +123,25 @@ $renderTable = static function (array $items, int $cliente, int $indicadorId, st
       </div>
       <div class="md:col-span-3">
         <label class="block text-sm font-medium text-gray-700 mb-1"><?= htmlspecialchars($t('indicadores.label.periodo_apuracao')) ?></label>
-        <select id="indicadoresPeriodo" class="border border-gray-300 rounded-lg p-3 w-full" <?= $cliente ? '' : 'disabled' ?>>
-          <option value=""><?= htmlspecialchars($t('indicadores.option.none')) ?></option>
-          <?php foreach ($periodos as $p): ?>
-            <?php
-              $inicio = (string)($p['periodo_inicio'] ?? '');
-              $fim = (string)($p['periodo_fim'] ?? '');
-              $value = $inicio !== '' && $fim !== '' ? $inicio . '|' . $fim : '';
-              $selected = ($inicio === $periodoInicio && $fim === $periodoFim) ? 'selected' : '';
-            ?>
-            <?php if ($value !== ''): ?>
-              <option value="<?= htmlspecialchars($value) ?>" <?= $selected ?>><?= htmlspecialchars($inicio . ' até ' . $fim) ?></option>
-            <?php endif; ?>
-          <?php endforeach; ?>
-        </select>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Início</label>
+            <input type="date" name="periodo_inicio" id="indicadoresPeriodoInicio" class="border border-gray-300 rounded-lg p-3 w-full" value="<?= htmlspecialchars($periodoInicio) ?>" <?= $cliente ? 'required' : 'disabled' ?> />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Fim</label>
+            <input type="date" name="periodo_fim" id="indicadoresPeriodoFim" class="border border-gray-300 rounded-lg p-3 w-full" value="<?= htmlspecialchars($periodoFim) ?>" <?= $cliente ? 'required' : 'disabled' ?> />
+          </div>
+        </div>
       </div>
-      <div class="md:col-span-6 flex justify-end">
-        <button type="button" id="indicadoresLimparFiltros" class="px-4 py-3 rounded-lg bg-gray-200 text-brand-brown"><?= htmlspecialchars($t('indicadores.action.clear')) ?></button>
+      <div class="md:col-span-6">
+        <div id="indicadoresFiltroErro" class="hidden rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
+      </div>
+      <div class="md:col-span-3 flex items-end">
+        <button class="px-4 py-3 rounded-lg bg-brand-red text-white w-full" type="submit" id="indicadoresAplicarBtn"><?= htmlspecialchars($t('indicadores.action.filter')) ?></button>
+      </div>
+      <div class="md:col-span-3 flex items-end">
+        <button type="button" id="indicadoresLimparFiltros" class="px-4 py-3 rounded-lg bg-gray-200 text-brand-brown w-full"><?= htmlspecialchars($t('indicadores.action.clear')) ?></button>
       </div>
     </form>
   </div>
@@ -204,71 +200,83 @@ $renderTable = static function (array $items, int $cliente, int $indicadorId, st
       });
     });
 
-    const form = document.querySelector('form[action="index.php"][method="get"]');
+    const form = document.getElementById('indicadoresRealizadoFilterForm');
     const indicadorSelect = document.getElementById('indicadoresIndicador');
-    const periodoSelect = document.getElementById('indicadoresPeriodo');
     const clienteSelect = document.getElementById('indicadoresCliente');
     const periodoInicioInput = document.getElementById('indicadoresPeriodoInicio');
     const periodoFimInput = document.getElementById('indicadoresPeriodoFim');
     const listWrap = document.getElementById('indicadoresRealizadoList');
     const limparBtn = document.getElementById('indicadoresLimparFiltros');
+    const msg = document.getElementById('indicadoresFiltroErro');
 
-    function syncPeriodoHidden() {
-      const value = String(periodoSelect?.value || '');
-      if (!periodoInicioInput || !periodoFimInput) return;
-      if (!value || !value.includes('|')) {
-        periodoInicioInput.value = '';
-        periodoFimInput.value = '';
+    function setMsg(text) {
+      if (!msg) return;
+      if (!text) {
+        msg.classList.add('hidden');
+        msg.textContent = '';
         return;
       }
-      const [ini, fim] = value.split('|', 2);
-      periodoInicioInput.value = ini || '';
-      periodoFimInput.value = fim || '';
+      msg.classList.remove('hidden');
+      msg.textContent = String(text);
     }
 
-    async function refreshList(extraParams) {
+    function validatePeriodo() {
+      const ini = String(periodoInicioInput?.value || '').trim();
+      const fim = String(periodoFimInput?.value || '').trim();
+      if (!ini || !fim) {
+        setMsg('Período de apuração é obrigatório. Selecione data de início e fim.');
+        return { ok: false, ini: '', fim: '' };
+      }
+      if (fim < ini) {
+        setMsg('A data final do período não pode ser anterior à data inicial.');
+        return { ok: false, ini, fim };
+      }
+      setMsg('');
+      return { ok: true, ini, fim };
+    }
+
+    async function refreshList() {
       if (!form || !clienteSelect || !listWrap) return;
+      const clienteId = String(clienteSelect.value || '');
+      if (!clienteId) return;
+      const period = validatePeriodo();
+      if (!period.ok) return;
       const params = new URLSearchParams(new FormData(form));
-      syncPeriodoHidden();
-      if (periodoInicioInput && periodoFimInput) {
-        params.set('periodo_inicio', periodoInicioInput.value || '');
-        params.set('periodo_fim', periodoFimInput.value || '');
-      }
-      if (extraParams) {
-        Object.keys(extraParams).forEach((k) => params.set(k, String(extraParams[k] ?? '')));
-      }
       const url = 'index.php?' + params.toString();
       try {
         const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-        if (!res.ok) return;
-        const payload = await res.json();
-        if (!payload || !payload.ok) return;
-        if (typeof payload.table_html === 'string') listWrap.innerHTML = payload.table_html;
-        if (periodoSelect && typeof payload.period_options_html === 'string') {
-          periodoSelect.innerHTML = payload.period_options_html;
-          const selected = (periodoInicioInput?.value && periodoFimInput?.value) ? (periodoInicioInput.value + '|' + periodoFimInput.value) : '';
-          if (selected) periodoSelect.value = selected;
+        const payload = await res.json().catch(() => null);
+        if (!res.ok) {
+          setMsg(payload && payload.message ? payload.message : 'Não foi possível aplicar o filtro agora.');
+          return;
         }
+        if (!payload || !payload.ok) {
+          setMsg(payload && payload.message ? payload.message : 'Não foi possível aplicar o filtro agora.');
+          return;
+        }
+        if (typeof payload.table_html === 'string') listWrap.innerHTML = payload.table_html;
         window.history.replaceState({}, '', url);
       } catch (e) {
       }
     }
 
-    if (periodoSelect) {
-      const current = (periodoInicioInput?.value && periodoFimInput?.value) ? (periodoInicioInput.value + '|' + periodoFimInput.value) : '';
-      if (current) periodoSelect.value = current;
-      periodoSelect.addEventListener('change', () => refreshList());
-    }
     if (indicadorSelect) {
       indicadorSelect.addEventListener('change', () => refreshList());
+    }
+    [periodoInicioInput, periodoFimInput].forEach((el) => {
+      if (!el) return;
+      el.addEventListener('change', () => refreshList());
     }
     if (limparBtn) {
       limparBtn.addEventListener('click', () => {
         if (indicadorSelect) indicadorSelect.value = '0';
-        if (periodoSelect) periodoSelect.value = '';
-        if (periodoInicioInput) periodoInicioInput.value = '';
-        if (periodoFimInput) periodoFimInput.value = '';
-        refreshList({ clear_filters: 1, indicador_id: 0, periodo_inicio: '', periodo_fim: '' });
+        refreshList();
+      });
+    }
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        refreshList();
       });
     }
   })();

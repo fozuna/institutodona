@@ -10,7 +10,6 @@ $indicadorId = (int)($indicadorId ?? 0);
 $periodoInicio = (string)($periodoInicio ?? '');
 $periodoFim = (string)($periodoFim ?? '');
 $indicadores = is_array($indicadores ?? null) ? $indicadores : [];
-$periodos = is_array($periodos ?? null) ? $periodos : [];
 ?>
 <div class="p-4 md:p-6 space-y-6">
   <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -26,8 +25,6 @@ $periodos = is_array($periodos ?? null) ? $periodos : [];
   <div class="bg-white shadow rounded-xl p-4">
     <form method="get" action="index.php" class="grid grid-cols-1 md:grid-cols-6 gap-4">
       <input type="hidden" name="route" value="indicadores/painel" />
-      <input type="hidden" name="periodo_inicio" id="indicadoresPainelPeriodoInicio" value="<?= htmlspecialchars($periodoInicio) ?>" />
-      <input type="hidden" name="periodo_fim" id="indicadoresPainelPeriodoFim" value="<?= htmlspecialchars($periodoFim) ?>" />
       <div class="md:col-span-3">
         <label class="block text-sm font-medium text-gray-700 mb-1"><?= htmlspecialchars($t('indicadores.label.cliente')) ?></label>
         <select name="cliente" class="border border-gray-300 rounded-lg p-3 w-full">
@@ -52,26 +49,25 @@ $periodos = is_array($periodos ?? null) ? $periodos : [];
       </div>
       <div class="md:col-span-3">
         <label class="block text-sm font-medium text-gray-700 mb-1"><?= htmlspecialchars($t('indicadores.label.periodo_apuracao')) ?></label>
-        <select id="indicadoresPainelPeriodo" class="border border-gray-300 rounded-lg p-3 w-full" <?= $cliente ? '' : 'disabled' ?>>
-          <option value=""><?= htmlspecialchars($t('indicadores.option.none')) ?></option>
-          <?php foreach ($periodos as $p): ?>
-            <?php
-              $inicio = (string)($p['periodo_inicio'] ?? '');
-              $fim = (string)($p['periodo_fim'] ?? '');
-              $value = $inicio !== '' && $fim !== '' ? $inicio . '|' . $fim : '';
-              $selected = ($inicio === $periodoInicio && $fim === $periodoFim) ? 'selected' : '';
-            ?>
-            <?php if ($value !== ''): ?>
-              <option value="<?= htmlspecialchars($value) ?>" <?= $selected ?>><?= htmlspecialchars($inicio . ' até ' . $fim) ?></option>
-            <?php endif; ?>
-          <?php endforeach; ?>
-        </select>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Início</label>
+            <input type="date" name="periodo_inicio" id="indicadoresPainelPeriodoInicio" class="border border-gray-300 rounded-lg p-3 w-full" value="<?= htmlspecialchars($periodoInicio) ?>" <?= $cliente ? 'required' : 'disabled' ?> />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Fim</label>
+            <input type="date" name="periodo_fim" id="indicadoresPainelPeriodoFim" class="border border-gray-300 rounded-lg p-3 w-full" value="<?= htmlspecialchars($periodoFim) ?>" <?= $cliente ? 'required' : 'disabled' ?> />
+          </div>
+        </div>
       </div>
       <div class="md:col-span-3 flex items-end">
         <button class="px-4 py-3 rounded-lg bg-brand-red text-white w-full" type="submit"><?= htmlspecialchars($t('indicadores.action.filter')) ?></button>
       </div>
       <div class="md:col-span-3 flex items-end">
-        <a class="px-4 py-3 rounded-lg bg-gray-200 text-brand-brown text-center w-full" href="index.php?route=indicadores/painel&cliente=<?= (int)$cliente ?>&ano=<?= (int)$ano ?>&clear_filters=1"><?= htmlspecialchars($t('indicadores.action.clear')) ?></a>
+        <button type="button" id="indicadoresPainelClear" class="px-4 py-3 rounded-lg bg-gray-200 text-brand-brown text-center w-full"><?= htmlspecialchars($t('indicadores.action.clear')) ?></button>
+      </div>
+      <div class="md:col-span-6">
+        <div id="indicadoresPainelErro" class="hidden rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
       </div>
     </form>
   </div>
@@ -146,22 +142,51 @@ $periodos = is_array($periodos ?? null) ? $periodos : [];
 </div>
 <script>
   (function () {
-    const periodoSelect = document.getElementById('indicadoresPainelPeriodo');
-    const periodoInicioInput = document.getElementById('indicadoresPainelPeriodoInicio');
-    const periodoFimInput = document.getElementById('indicadoresPainelPeriodoFim');
-    if (periodoSelect && periodoInicioInput && periodoFimInput) {
-      const current = (periodoInicioInput.value && periodoFimInput.value) ? (periodoInicioInput.value + '|' + periodoFimInput.value) : '';
-      if (current) periodoSelect.value = current;
-      periodoSelect.form?.addEventListener('submit', function () {
-        const value = String(periodoSelect.value || '');
-        if (!value || !value.includes('|')) {
-          periodoInicioInput.value = '';
-          periodoFimInput.value = '';
-          return;
+    const form = document.querySelector('form[action="index.php"][method="get"]');
+    const ini = document.getElementById('indicadoresPainelPeriodoInicio');
+    const fim = document.getElementById('indicadoresPainelPeriodoFim');
+    const msg = document.getElementById('indicadoresPainelErro');
+    const clearBtn = document.getElementById('indicadoresPainelClear');
+    const indicadorSelect = form?.querySelector('select[name="indicador_id"]');
+
+    function setMsg(text) {
+      if (!msg) return;
+      if (!text) {
+        msg.classList.add('hidden');
+        msg.textContent = '';
+        return;
+      }
+      msg.classList.remove('hidden');
+      msg.textContent = String(text);
+    }
+
+    function validatePeriodo() {
+      const vIni = String(ini?.value || '').trim();
+      const vFim = String(fim?.value || '').trim();
+      if (!vIni || !vFim) {
+        setMsg('Período de apuração é obrigatório. Selecione data de início e fim.');
+        return false;
+      }
+      if (vFim < vIni) {
+        setMsg('A data final do período não pode ser anterior à data inicial.');
+        return false;
+      }
+      setMsg('');
+      return true;
+    }
+
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        if (!validatePeriodo()) {
+          e.preventDefault();
         }
-        const [ini, fim] = value.split('|', 2);
-        periodoInicioInput.value = ini || '';
-        periodoFimInput.value = fim || '';
+      });
+    }
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        if (indicadorSelect) indicadorSelect.value = '0';
+        if (!validatePeriodo()) return;
+        form?.submit();
       });
     }
   })();

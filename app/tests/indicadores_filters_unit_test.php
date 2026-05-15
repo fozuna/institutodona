@@ -130,4 +130,11 @@ assert_true(!empty($eventsPeriodo) && array_reduce($eventsPeriodo, static functi
         && (string)$row['periodo_fim'] === (string)$firstPeriodo['periodo_fim'];
 }, true), 'Filtro por período de apuração restringe eventos corretamente');
 
+$invalidRange = $indicadorEventos->searchByCliente($clienteId, [
+    'indicador_id' => $idA,
+    'periodo_inicio' => '2026-12-31',
+    'periodo_fim' => '2026-01-01',
+]);
+assert_true($invalidRange === [], 'Bloqueia consulta quando período é inválido (fim < início)');
+
 echo "Indicadores filters unit tests passed.\n";

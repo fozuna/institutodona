@@ -59,9 +59,20 @@ class IndicadorEventoModel extends BaseModel
         $periodoInicio = trim((string)($filters['periodo_inicio'] ?? ''));
         $periodoFim = trim((string)($filters['periodo_fim'] ?? ''));
         if ($periodoInicio !== '' && $periodoFim !== '') {
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $periodoInicio) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $periodoFim)) {
+                return [];
+            }
+            $ini = DateTimeImmutable::createFromFormat('Y-m-d', $periodoInicio) ?: null;
+            $fim = DateTimeImmutable::createFromFormat('Y-m-d', $periodoFim) ?: null;
+            if (!$ini || !$fim) {
+                return [];
+            }
+            if ($fim < $ini) {
+                return [];
+            }
             $params['pini'] = $periodoInicio;
             $params['pfim'] = $periodoFim;
-            $where[] = 'ie.periodo_inicio = :pini AND ie.periodo_fim = :pfim';
+            $where[] = 'ie.periodo_inicio <= :pfim AND ie.periodo_fim >= :pini';
         }
 
         $where[] = $this->tenantInCondition('ie.cliente_id', $params, 'iebs');

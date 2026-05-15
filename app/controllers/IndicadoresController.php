@@ -160,7 +160,14 @@ class IndicadoresController extends BaseController
         $filters = $this->readEventoFilters($cliente);
         $indicadorId = (int)($filters['indicador_id'] ?? 0);
         $clientes = $this->clientes->all();
-        $eventos = $cliente ? $this->eventos->searchByCliente($cliente, $filters) : [];
+        $eventos = [];
+        if ($cliente > 0) {
+            if (!$filters['period_ok']) {
+                $_SESSION['flash_error'] = $filters['period_error'] ?: 'Selecione um período de apuração válido.';
+            } else {
+                $eventos = $this->eventos->searchByCliente($cliente, $filters);
+            }
+        }
         $series = [];
         foreach ($eventos as $evento) {
             $key = (string)($evento['indicador'] ?? '');
@@ -191,7 +198,6 @@ class IndicadoresController extends BaseController
         }
         unset($serie);
         $indicadores = $cliente ? $this->model->byCliente($cliente) : [];
-        $periodos = $cliente ? $this->eventos->periodOptionsByCliente($cliente, ['indicador_id' => $indicadorId]) : [];
         $this->render('indicadores/charts', [
             'pageTitle' => I18n::t('indicadores.title.charts'),
             'cliente' => $cliente,
@@ -201,7 +207,6 @@ class IndicadoresController extends BaseController
             'periodoInicio' => (string)($filters['periodo_inicio'] ?? ''),
             'periodoFim' => (string)($filters['periodo_fim'] ?? ''),
             'indicadores' => $indicadores,
-            'periodos' => $periodos,
             'i18n' => I18n::class,
         ]);
     }
@@ -213,22 +218,38 @@ class IndicadoresController extends BaseController
         $filters = $this->readEventoFilters($cliente);
         $indicadorId = (int)($filters['indicador_id'] ?? 0);
         $clientes = $this->clientes->all();
-        $items = $cliente ? $this->eventos->searchByCliente($cliente, $filters) : [];
+        $items = [];
+        if ($cliente > 0) {
+            if (!$filters['period_ok']) {
+                $items = [];
+            } else {
+                $items = $this->eventos->searchByCliente($cliente, $filters);
+            }
+        }
         $indicadores = $cliente ? $this->model->byCliente($cliente) : [];
-        $periodos = $cliente ? $this->eventos->periodOptionsByCliente($cliente, ['indicador_id' => $indicadorId]) : [];
 
         $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
         if ($isAjax) {
+            if ($cliente > 0 && !$filters['period_ok']) {
+                http_response_code(422);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'ok' => false,
+                    'message' => $filters['period_error'] ?: 'Selecione um período de apuração válido.',
+                ], JSON_UNESCAPED_UNICODE);
+                return;
+            }
             header('Content-Type: application/json; charset=utf-8');
             $tableHtml = $this->renderRealizadoTable($items, $cliente, $filters);
-            $periodOptionsHtml = $this->renderPeriodoOptions($periodos, (string)($filters['periodo_inicio'] ?? ''), (string)($filters['periodo_fim'] ?? ''));
             echo json_encode([
                 'ok' => true,
                 'table_html' => $tableHtml,
-                'period_options_html' => $periodOptionsHtml,
                 'count' => count($items),
             ], JSON_UNESCAPED_UNICODE);
             return;
+        }
+        if ($cliente > 0 && !$filters['period_ok']) {
+            $_SESSION['flash_error'] = $filters['period_error'] ?: 'Selecione um período de apuração válido.';
         }
         $this->render('indicadores/realizado', [
             'pageTitle' => I18n::t('indicadores.title.value'),
@@ -239,7 +260,6 @@ class IndicadoresController extends BaseController
             'periodoInicio' => (string)($filters['periodo_inicio'] ?? ''),
             'periodoFim' => (string)($filters['periodo_fim'] ?? ''),
             'indicadores' => $indicadores,
-            'periodos' => $periodos,
             'i18n' => I18n::class,
         ]);
     }
@@ -253,7 +273,15 @@ class IndicadoresController extends BaseController
         $filters['ano'] = $ano;
         $indicadorId = (int)($filters['indicador_id'] ?? 0);
         $clientes = $this->clientes->all();
-        $items = $cliente ? $this->eventos->searchByCliente($cliente, $filters) : [];
+        $items = [];
+        if ($cliente > 0) {
+            if (!$filters['period_ok']) {
+                $_SESSION['flash_error'] = $filters['period_error'] ?: 'Selecione um período de apuração válido.';
+                $items = [];
+            } else {
+                $items = $this->eventos->searchByCliente($cliente, $filters);
+            }
+        }
         $stats = ['total' => count($items), 'atingida' => 0, 'parcial' => 0, 'nao_atingida' => 0, 'pendente' => 0];
         foreach ($items as $item) {
             $key = (string)($item['meta_status_key'] ?? 'pendente');
@@ -263,7 +291,6 @@ class IndicadoresController extends BaseController
             $stats[$key]++;
         }
         $indicadores = $cliente ? $this->model->byCliente($cliente) : [];
-        $periodos = $cliente ? $this->eventos->periodOptionsByCliente($cliente, ['indicador_id' => $indicadorId, 'ano' => $ano]) : [];
         $this->render('indicadores/painel', [
             'pageTitle' => I18n::t('indicadores.title.dashboard'),
             'cliente' => $cliente,
@@ -275,7 +302,6 @@ class IndicadoresController extends BaseController
             'periodoInicio' => (string)($filters['periodo_inicio'] ?? ''),
             'periodoFim' => (string)($filters['periodo_fim'] ?? ''),
             'indicadores' => $indicadores,
-            'periodos' => $periodos,
             'i18n' => I18n::class,
         ]);
     }
@@ -711,7 +737,14 @@ class IndicadoresController extends BaseController
 
     private function readEventoFilters(int $clienteId): array
     {
-        $default = ['indicador_id' => 0, 'periodo_inicio' => '', 'periodo_fim' => ''];
+        $default = [
+            'indicador_id' => 0,
+            'periodo_inicio' => '',
+            'periodo_fim' => '',
+            'has_explicit' => false,
+            'period_ok' => false,
+            'period_error' => '',
+        ];
         if ($clienteId <= 0) {
             return $default;
         }
@@ -723,29 +756,88 @@ class IndicadoresController extends BaseController
             || array_key_exists('periodo_fim', $_GET)
             || array_key_exists('clear_filters', $_GET);
         if (!$hasExplicit) {
-            return is_array($stored) ? array_merge($default, $stored) : $default;
+            $out = is_array($stored) ? array_merge($default, $stored) : $default;
+            $out['has_explicit'] = false;
+            $period = $this->validatePeriodoApuracao((string)($out['periodo_inicio'] ?? ''), (string)($out['periodo_fim'] ?? ''));
+            $out['period_ok'] = $period['ok'];
+            $out['period_error'] = $period['error'];
+            return $out;
         }
 
         if ((string)($_GET['clear_filters'] ?? '') === '1') {
-            $_SESSION[$key][$clienteId] = $default;
-            return $default;
+            $storedReset = $default;
+            unset($storedReset['has_explicit'], $storedReset['period_ok'], $storedReset['period_error']);
+            $_SESSION[$key][$clienteId] = $storedReset;
+            $out = $default;
+            $out['has_explicit'] = true;
+            return $out;
         }
 
         $indicadorId = isset($_GET['indicador_id']) ? (int)$_GET['indicador_id'] : 0;
         $periodoInicio = trim((string)($_GET['periodo_inicio'] ?? ''));
         $periodoFim = trim((string)($_GET['periodo_fim'] ?? ''));
-        if (($periodoInicio === '') xor ($periodoFim === '')) {
-            $periodoInicio = '';
-            $periodoFim = '';
-        }
+        $period = $this->validatePeriodoApuracao($periodoInicio, $periodoFim);
 
         $filters = [
             'indicador_id' => $indicadorId > 0 ? $indicadorId : 0,
-            'periodo_inicio' => $periodoInicio,
-            'periodo_fim' => $periodoFim,
+            'periodo_inicio' => $period['inicio'],
+            'periodo_fim' => $period['fim'],
+            'has_explicit' => true,
+            'period_ok' => $period['ok'],
+            'period_error' => $period['error'],
         ];
-        $_SESSION[$key][$clienteId] = $filters;
+        $_SESSION[$key][$clienteId] = [
+            'indicador_id' => $filters['indicador_id'],
+            'periodo_inicio' => $filters['periodo_inicio'],
+            'periodo_fim' => $filters['periodo_fim'],
+        ];
         return $filters;
+    }
+
+    private function validatePeriodoApuracao(string $inicio, string $fim): array
+    {
+        $inicio = trim($inicio);
+        $fim = trim($fim);
+        if ($inicio === '' || $fim === '') {
+            return [
+                'ok' => false,
+                'inicio' => '',
+                'fim' => '',
+                'error' => 'Período de apuração é obrigatório. Selecione data de início e fim.',
+            ];
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $inicio) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fim)) {
+            return [
+                'ok' => false,
+                'inicio' => '',
+                'fim' => '',
+                'error' => 'Período de apuração inválido. Selecione datas válidas.',
+            ];
+        }
+        $ini = \DateTimeImmutable::createFromFormat('Y-m-d', $inicio) ?: null;
+        $end = \DateTimeImmutable::createFromFormat('Y-m-d', $fim) ?: null;
+        if (!$ini || !$end) {
+            return [
+                'ok' => false,
+                'inicio' => '',
+                'fim' => '',
+                'error' => 'Período de apuração inválido. Selecione datas válidas.',
+            ];
+        }
+        if ($end < $ini) {
+            return [
+                'ok' => false,
+                'inicio' => $inicio,
+                'fim' => $fim,
+                'error' => 'A data final do período não pode ser anterior à data inicial.',
+            ];
+        }
+        return [
+            'ok' => true,
+            'inicio' => $inicio,
+            'fim' => $fim,
+            'error' => '',
+        ];
     }
 
     private function renderPeriodoOptions(array $periodos, string $selectedInicio, string $selectedFim): string
