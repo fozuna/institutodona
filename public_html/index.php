@@ -809,6 +809,9 @@ switch ($route) {
     case 'dashboard/index':
         (new DashboardController())->index();
         break;
+    case 'dashboard/metrics':
+        (new DashboardController())->metrics();
+        break;
     case 'logs/index':
         (new LogsController())->index();
         break;
