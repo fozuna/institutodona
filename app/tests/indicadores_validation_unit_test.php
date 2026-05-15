@@ -125,6 +125,12 @@ $baseData = [
 $errors = $indicadores->validate($baseData);
 assert_true($errors === [], 'Payload base passa pelas validações');
 
+$commaErrors = $indicadores->validate(array_merge($baseData, [
+    'indicador' => 'Indicador Vírgula ' . $suffix,
+    'valor' => '85,5',
+]));
+assert_true($commaErrors === [], 'Aceita valores decimais com vírgula');
+
 $indicadorId = $indicadores->create($baseData, 1);
 assert_true($indicadorId > 0, 'Criou indicador com responsáveis');
 
@@ -189,6 +195,10 @@ assert_true($indicadorEventos->updateAchievedValue((int)$createdEvents[0]['id'],
 $updatedEvent = $indicadorEventos->find((int)$createdEvents[0]['id']);
 assert_true(($updatedEvent['meta_status_key'] ?? '') === 'parcial', 'Calcula status parcial para cumprimento entre 80 e 99%');
 assert_true((float)($updatedEvent['percentual_cumprimento'] ?? 0) === 80.0, 'Calcula percentual de cumprimento do evento');
+assert_true($indicadorEventos->updateAchievedValue((int)$createdEvents[2]['id'], '68,50', 1, 'Decimais pt-BR'), 'Atualiza evento aceitando decimal com vírgula');
+$updatedEventComma = $indicadorEventos->find((int)$createdEvents[2]['id']);
+assert_true($updatedEventComma !== null && abs((float)($updatedEventComma['valor_atingido'] ?? 0) - 68.5) < 0.0001, 'Persistiu valor com vírgula corretamente');
+assert_true(!$indicadorEventos->updateAchievedValue((int)$createdEvents[3]['id'], '10,0,0', 1, 'Inválido'), 'Rejeita formato com múltiplas vírgulas');
 assert_true($indicadorEventos->updateAchievedValue((int)$createdEvents[1]['id'], '85', 1, 'Meta atendida'), 'Atualiza evento com meta atingida');
 assert_true(($indicadorEventos->find((int)$createdEvents[1]['id'])['meta_status_key'] ?? '') === 'atingida', 'Marca meta atingida quando valor supera 100%');
 

@@ -35,6 +35,73 @@ class IndicadorEventoModel extends BaseModel
         return array_map(fn(array $row): array => $this->decorate($row), $stmt->fetchAll() ?: []);
     }
 
+    public function searchByCliente(int $clienteId, array $filters = []): array
+    {
+        if ($clienteId <= 0) {
+            return [];
+        }
+        $params = ['cid' => $clienteId];
+        $where = ['ie.cliente_id = :cid', 'ie.deleted_at IS NULL'];
+
+        $ano = isset($filters['ano']) ? (int)$filters['ano'] : 0;
+        if ($ano > 0) {
+            $params['start_year'] = sprintf('%04d-01-01', $ano);
+            $params['end_year'] = sprintf('%04d-12-31', $ano);
+            $where[] = 'ie.data_evento BETWEEN :start_year AND :end_year';
+        }
+
+        $indicadorId = isset($filters['indicador_id']) ? (int)$filters['indicador_id'] : 0;
+        if ($indicadorId > 0) {
+            $params['iid'] = $indicadorId;
+            $where[] = 'ie.indicador_id = :iid';
+        }
+
+        $periodoInicio = trim((string)($filters['periodo_inicio'] ?? ''));
+        $periodoFim = trim((string)($filters['periodo_fim'] ?? ''));
+        if ($periodoInicio !== '' && $periodoFim !== '') {
+            $params['pini'] = $periodoInicio;
+            $params['pfim'] = $periodoFim;
+            $where[] = 'ie.periodo_inicio = :pini AND ie.periodo_fim = :pfim';
+        }
+
+        $where[] = $this->tenantInCondition('ie.cliente_id', $params, 'iebs');
+        $stmt = $this->db->prepare($this->baseSelect() . '
+            WHERE ' . implode(' AND ', $where) . '
+            ORDER BY ie.data_evento DESC, i.indicador ASC');
+        $stmt->execute($params);
+        return array_map(fn(array $row): array => $this->decorate($row), $stmt->fetchAll() ?: []);
+    }
+
+    public function periodOptionsByCliente(int $clienteId, array $filters = []): array
+    {
+        if ($clienteId <= 0) {
+            return [];
+        }
+        $params = ['cid' => $clienteId];
+        $where = ['cliente_id = :cid', 'deleted_at IS NULL'];
+        $ano = isset($filters['ano']) ? (int)$filters['ano'] : 0;
+        if ($ano > 0) {
+            $params['start_year'] = sprintf('%04d-01-01', $ano);
+            $params['end_year'] = sprintf('%04d-12-31', $ano);
+            $where[] = 'data_evento BETWEEN :start_year AND :end_year';
+        }
+        $indicadorId = isset($filters['indicador_id']) ? (int)$filters['indicador_id'] : 0;
+        if ($indicadorId > 0) {
+            $params['iid'] = $indicadorId;
+            $where[] = 'indicador_id = :iid';
+        }
+        $where[] = $this->tenantInCondition('cliente_id', $params, 'iepo');
+        $stmt = $this->db->prepare('SELECT DISTINCT periodo_inicio, periodo_fim
+            FROM indicador_eventos
+            WHERE ' . implode(' AND ', $where) . '
+            ORDER BY periodo_inicio DESC, periodo_fim DESC');
+        $stmt->execute($params);
+        return array_map(static fn(array $row): array => [
+            'periodo_inicio' => (string)($row['periodo_inicio'] ?? ''),
+            'periodo_fim' => (string)($row['periodo_fim'] ?? ''),
+        ], $stmt->fetchAll() ?: []);
+    }
+
     public function byIndicador(int $indicadorId): array
     {
         if ($indicadorId <= 0) {
@@ -411,12 +478,33 @@ class IndicadorEventoModel extends BaseModel
             return null;
         }
         if (is_string($value)) {
-            $value = trim($value);
-            $value = str_replace(['R$', ' '], '', $value);
-            if (substr_count($value, ',') === 1 && substr_count($value, '.') >= 1) {
-                $value = str_replace('.', '', $value);
+            $raw = trim($value);
+            $raw = str_replace(['R$', ' '], '', $raw);
+            if ($raw === '' || preg_match('/[^0-9,\\.\\-]/', $raw)) {
+                return null;
             }
-            $value = str_replace(',', '.', $value);
+            if (substr_count($raw, ',') > 1) {
+                return null;
+            }
+            if (str_contains($raw, ',')) {
+                [$intPart, $decPart] = array_pad(explode(',', $raw, 2), 2, '');
+                if ($decPart === '' || preg_match('/[^0-9]/', $decPart)) {
+                    return null;
+                }
+                if ($intPart === '' || preg_match('/[^0-9\\.\\-]/', $intPart)) {
+                    return null;
+                }
+                $intPart = str_replace('.', '', $intPart);
+                $raw = $intPart . '.' . $decPart;
+            } else {
+                if (str_contains($raw, '.')) {
+                    if (!preg_match('/^-?\d{1,3}(\.\d{3})+$/', $raw)) {
+                        return null;
+                    }
+                    $raw = str_replace('.', '', $raw);
+                }
+            }
+            $value = $raw;
         }
         if (!is_numeric($value)) {
             return null;

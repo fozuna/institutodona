@@ -61,7 +61,14 @@ $formatValue = static function ($value) use ($evento): string {
       <input type="hidden" name="redirect_evento" value="1" />
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1"><?= htmlspecialchars($t('indicadores.label.valor_atingido')) ?></label>
-        <input type="text" inputmode="decimal" name="valor" data-indicador-decimal class="border border-gray-300 rounded-lg p-3 w-full" value="<?= $evento['valor_atingido'] !== null ? htmlspecialchars(\App\Core\ValueFormatter::decimal($evento['valor_atingido'], 2)) : '' ?>" required />
+        <input type="text"
+               inputmode="decimal"
+               pattern="^-?(?:\\d+|\\d{1,3}(?:\\.\\d{3})+)(?:,\\d{1,4})?$"
+               name="valor"
+               data-indicador-decimal
+               class="border border-gray-300 rounded-lg p-3 w-full"
+               value="<?= $evento['valor_atingido'] !== null ? htmlspecialchars(\App\Core\ValueFormatter::decimal($evento['valor_atingido'], 2)) : '' ?>"
+               required />
       </div>
       <div class="lg:col-span-2">
         <label class="block text-sm font-medium text-gray-700 mb-1"><?= htmlspecialchars($t('indicadores.label.observacao')) ?></label>
@@ -122,21 +129,46 @@ $formatValue = static function ($value) use ($evento): string {
 </div>
 <script>
   (function () {
-    function normalizeDecimal(value) {
+    const decimalRe = /^-?(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d{1,4})?$/;
+
+    function toPtBrDecimal(value) {
       let raw = String(value || '').trim();
       if (!raw) return '';
+      raw = raw.replace(/\s+/g, '').replace(/R\$/g, '');
+      raw = raw.replace(/[^0-9,.\-]/g, '');
+      const parts = raw.split(',');
+      if (parts.length > 2) return '';
+      if (parts.length === 2) {
+        raw = parts[0].replace(/\./g, '') + ',' + parts[1];
+      }
+      if (!decimalRe.test(raw)) return '';
       if (raw.includes(',') && raw.includes('.')) raw = raw.replace(/\./g, '');
       raw = raw.replace(',', '.');
       const numeric = Number(raw);
       if (!Number.isFinite(numeric)) return '';
       return numeric.toFixed(2).replace('.', ',');
     }
+
+    function normalizeDecimal(value) {
+      return toPtBrDecimal(value);
+    }
     document.querySelectorAll('[data-indicador-decimal]').forEach((input) => {
       input.addEventListener('blur', function () {
         this.value = normalizeDecimal(this.value);
       });
+      input.addEventListener('input', function () {
+        const raw = String(this.value || '').replace(/[^0-9,.\-]/g, '');
+        const parts = raw.split(',');
+        this.value = parts.length > 2 ? (parts[0] + ',' + parts.slice(1).join('')) : raw;
+      });
       input.form?.addEventListener('submit', function () {
-        input.value = normalizeDecimal(input.value);
+        const normalized = normalizeDecimal(input.value);
+        if (!normalized) {
+          alert('Informe um valor válido. Use apenas números e, se necessário, uma vírgula para decimais.');
+          input.focus();
+          return;
+        }
+        input.value = normalized;
       });
     });
   })();

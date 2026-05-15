@@ -237,10 +237,18 @@ $dateEnd = $dateEnd ?? '';
       nameInput.addEventListener('change', scheduleSearch);
     }
 
+    const decimalRe = /^-?(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d{1,4})?$/;
     function normalizeDecimal(value) {
       let raw = String(value || '').trim();
       if (!raw) return '';
-      raw = raw.replace(/\s+/g, '');
+      raw = raw.replace(/\s+/g, '').replace(/R\$/g, '');
+      raw = raw.replace(/[^0-9,.\-]/g, '');
+      const parts = raw.split(',');
+      if (parts.length > 2) return '';
+      if (parts.length === 2) {
+        raw = parts[0].replace(/\./g, '') + ',' + parts[1];
+      }
+      if (!decimalRe.test(raw)) return '';
       if (raw.includes(',') && raw.includes('.')) {
         raw = raw.replace(/\./g, '');
       }

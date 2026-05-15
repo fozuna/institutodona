@@ -1,4 +1,11 @@
-<?php $t = static fn(string $key, array $replace = []): string => \App\Core\I18n::t($key, $replace); ?>
+<?php
+$t = static fn(string $key, array $replace = []): string => \App\Core\I18n::t($key, $replace);
+$indicadorId = (int)($indicadorId ?? 0);
+$periodoInicio = (string)($periodoInicio ?? '');
+$periodoFim = (string)($periodoFim ?? '');
+$indicadores = is_array($indicadores ?? null) ? $indicadores : [];
+$periodos = is_array($periodos ?? null) ? $periodos : [];
+?>
 <div class="p-4 md:p-6 space-y-6">
   <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
     <div>
@@ -20,6 +27,8 @@
   <div class="bg-white shadow rounded-xl p-4">
     <form method="get" action="index.php" class="grid grid-cols-1 md:grid-cols-6 gap-4">
       <input type="hidden" name="route" value="indicadores/charts" />
+      <input type="hidden" name="periodo_inicio" id="indicadoresChartsPeriodoInicio" value="<?= htmlspecialchars($periodoInicio) ?>" />
+      <input type="hidden" name="periodo_fim" id="indicadoresChartsPeriodoFim" value="<?= htmlspecialchars($periodoFim) ?>" />
       <div class="md:col-span-4">
         <label class="block text-sm font-medium text-gray-700 mb-1"><?= htmlspecialchars($t('indicadores.label.cliente')) ?></label>
         <select name="cliente" class="border border-gray-300 rounded-lg p-3 w-full">
@@ -31,6 +40,35 @@
       </div>
       <div class="md:col-span-2 flex items-end">
         <button class="px-4 py-3 rounded-lg bg-brand-red text-white w-full" type="submit"><?= htmlspecialchars($t('indicadores.action.filter')) ?></button>
+      </div>
+      <div class="md:col-span-3">
+        <label class="block text-sm font-medium text-gray-700 mb-1"><?= htmlspecialchars($t('indicadores.label.indicador')) ?></label>
+        <select name="indicador_id" class="border border-gray-300 rounded-lg p-3 w-full" <?= $cliente ? '' : 'disabled' ?>>
+          <option value="0"><?= htmlspecialchars($t('indicadores.option.none')) ?></option>
+          <?php foreach ($indicadores as $ind): ?>
+            <option value="<?= (int)$ind['id'] ?>" <?= $indicadorId === (int)$ind['id'] ? 'selected' : '' ?>><?= htmlspecialchars((string)($ind['indicador'] ?? $ind['nome'] ?? '')) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="md:col-span-3">
+        <label class="block text-sm font-medium text-gray-700 mb-1"><?= htmlspecialchars($t('indicadores.label.periodo_apuracao')) ?></label>
+        <select id="indicadoresChartsPeriodo" class="border border-gray-300 rounded-lg p-3 w-full" <?= $cliente ? '' : 'disabled' ?>>
+          <option value=""><?= htmlspecialchars($t('indicadores.option.none')) ?></option>
+          <?php foreach ($periodos as $p): ?>
+            <?php
+              $inicio = (string)($p['periodo_inicio'] ?? '');
+              $fim = (string)($p['periodo_fim'] ?? '');
+              $value = $inicio !== '' && $fim !== '' ? $inicio . '|' . $fim : '';
+              $selected = ($inicio === $periodoInicio && $fim === $periodoFim) ? 'selected' : '';
+            ?>
+            <?php if ($value !== ''): ?>
+              <option value="<?= htmlspecialchars($value) ?>" <?= $selected ?>><?= htmlspecialchars($inicio . ' até ' . $fim) ?></option>
+            <?php endif; ?>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="md:col-span-6 flex justify-end">
+        <a class="px-4 py-3 rounded-lg bg-gray-200 text-brand-brown text-center" href="index.php?route=indicadores/charts&cliente=<?= (int)$cliente ?>&clear_filters=1"><?= htmlspecialchars($t('indicadores.action.clear')) ?></a>
       </div>
     </form>
   </div>
@@ -67,9 +105,14 @@
           $payload = $seriesItem['points'] ?? [];
           $lastPoint = !empty($payload) ? $payload[count($payload) - 1] : null;
           $metaAtual = $lastPoint ? \App\Core\ValueFormatter::byUnit($lastPoint['meta'], $seriesItem['unit']) : '—';
-          $atingidoAtual = ($lastPoint && $lastPoint['achieved'] !== null)
-              ? \App\Core\ValueFormatter::byUnit($lastPoint['achieved'], $seriesItem['unit'])
-              : '—';
+          $atingidos = array_values(array_filter(array_map(static fn(array $p): ?float => $p['achieved'] === null ? null : (float)$p['achieved'], $payload), static fn($v): bool => $v !== null));
+          $useAvg = $periodoInicio === '' && $periodoFim === '' && !empty($atingidos);
+          $avgAtingido = $useAvg ? (array_sum($atingidos) / count($atingidos)) : null;
+          $atingidoAtual = $useAvg
+              ? \App\Core\ValueFormatter::byUnit($avgAtingido, $seriesItem['unit'])
+              : (($lastPoint && $lastPoint['achieved'] !== null)
+                  ? \App\Core\ValueFormatter::byUnit($lastPoint['achieved'], $seriesItem['unit'])
+                  : '—');
           $trendKey = $seriesItem['trend']['trend'] === 'alta'
             ? 'indicadores.meta.trend.up'
             : ($seriesItem['trend']['trend'] === 'queda' ? 'indicadores.meta.trend.down' : 'indicadores.meta.trend.stable');
@@ -158,6 +201,10 @@
               ctx.beginPath();
               ctx.arc(x(index), y(Number(point.achieved)), 4, 0, Math.PI * 2);
               ctx.fill();
+              ctx.fillStyle = '#111827';
+              ctx.font = '11px sans-serif';
+              const txt = nf.format(Number(point.achieved));
+              ctx.fillText(txt, x(index) - 12, y(Number(point.achieved)) - 10);
             }
           });
 
@@ -319,3 +366,25 @@
     </script>
   <?php endif; ?>
 </div>
+<script>
+  (function () {
+    const periodoSelect = document.getElementById('indicadoresChartsPeriodo');
+    const periodoInicioInput = document.getElementById('indicadoresChartsPeriodoInicio');
+    const periodoFimInput = document.getElementById('indicadoresChartsPeriodoFim');
+    if (periodoSelect && periodoInicioInput && periodoFimInput) {
+      const current = (periodoInicioInput.value && periodoFimInput.value) ? (periodoInicioInput.value + '|' + periodoFimInput.value) : '';
+      if (current) periodoSelect.value = current;
+      periodoSelect.form?.addEventListener('submit', function () {
+        const value = String(periodoSelect.value || '');
+        if (!value || !value.includes('|')) {
+          periodoInicioInput.value = '';
+          periodoFimInput.value = '';
+          return;
+        }
+        const [ini, fim] = value.split('|', 2);
+        periodoInicioInput.value = ini || '';
+        periodoFimInput.value = fim || '';
+      });
+    }
+  })();
+</script>

@@ -157,8 +157,10 @@ class IndicadoresController extends BaseController
     {
         $this->requireLogin();
         $cliente = (int)($this->resolveScopedClienteId(isset($_GET['cliente']) ? (int)$_GET['cliente'] : null) ?? 0);
+        $filters = $this->readEventoFilters($cliente);
+        $indicadorId = (int)($filters['indicador_id'] ?? 0);
         $clientes = $this->clientes->all();
-        $eventos = $cliente ? $this->eventos->byCliente($cliente) : [];
+        $eventos = $cliente ? $this->eventos->searchByCliente($cliente, $filters) : [];
         $series = [];
         foreach ($eventos as $evento) {
             $key = (string)($evento['indicador'] ?? '');
@@ -188,11 +190,18 @@ class IndicadoresController extends BaseController
             usort($serie['points'], static fn(array $a, array $b): int => strcmp((string)$a['date'], (string)$b['date']));
         }
         unset($serie);
+        $indicadores = $cliente ? $this->model->byCliente($cliente) : [];
+        $periodos = $cliente ? $this->eventos->periodOptionsByCliente($cliente, ['indicador_id' => $indicadorId]) : [];
         $this->render('indicadores/charts', [
             'pageTitle' => I18n::t('indicadores.title.charts'),
             'cliente' => $cliente,
             'clientes' => $clientes,
             'series' => $series,
+            'indicadorId' => $indicadorId,
+            'periodoInicio' => (string)($filters['periodo_inicio'] ?? ''),
+            'periodoFim' => (string)($filters['periodo_fim'] ?? ''),
+            'indicadores' => $indicadores,
+            'periodos' => $periodos,
             'i18n' => I18n::class,
         ]);
     }
@@ -201,13 +210,36 @@ class IndicadoresController extends BaseController
     {
         $this->requireLogin();
         $cliente = (int)($this->resolveScopedClienteId(isset($_GET['cliente']) ? (int)$_GET['cliente'] : null) ?? 0);
+        $filters = $this->readEventoFilters($cliente);
+        $indicadorId = (int)($filters['indicador_id'] ?? 0);
         $clientes = $this->clientes->all();
-        $items = $cliente ? $this->eventos->byCliente($cliente) : [];
+        $items = $cliente ? $this->eventos->searchByCliente($cliente, $filters) : [];
+        $indicadores = $cliente ? $this->model->byCliente($cliente) : [];
+        $periodos = $cliente ? $this->eventos->periodOptionsByCliente($cliente, ['indicador_id' => $indicadorId]) : [];
+
+        $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+        if ($isAjax) {
+            header('Content-Type: application/json; charset=utf-8');
+            $tableHtml = $this->renderRealizadoTable($items, $cliente, $filters);
+            $periodOptionsHtml = $this->renderPeriodoOptions($periodos, (string)($filters['periodo_inicio'] ?? ''), (string)($filters['periodo_fim'] ?? ''));
+            echo json_encode([
+                'ok' => true,
+                'table_html' => $tableHtml,
+                'period_options_html' => $periodOptionsHtml,
+                'count' => count($items),
+            ], JSON_UNESCAPED_UNICODE);
+            return;
+        }
         $this->render('indicadores/realizado', [
             'pageTitle' => I18n::t('indicadores.title.value'),
             'clientes' => $clientes,
             'cliente' => $cliente,
             'items' => $items,
+            'indicadorId' => $indicadorId,
+            'periodoInicio' => (string)($filters['periodo_inicio'] ?? ''),
+            'periodoFim' => (string)($filters['periodo_fim'] ?? ''),
+            'indicadores' => $indicadores,
+            'periodos' => $periodos,
             'i18n' => I18n::class,
         ]);
     }
@@ -217,8 +249,11 @@ class IndicadoresController extends BaseController
         $this->requireLogin();
         $cliente = (int)($this->resolveScopedClienteId(isset($_GET['cliente']) ? (int)$_GET['cliente'] : null) ?? 0);
         $ano = isset($_GET['ano']) ? (int)$_GET['ano'] : (int)date('Y');
+        $filters = $this->readEventoFilters($cliente);
+        $filters['ano'] = $ano;
+        $indicadorId = (int)($filters['indicador_id'] ?? 0);
         $clientes = $this->clientes->all();
-        $items = $cliente ? $this->eventos->byCliente($cliente, $ano) : [];
+        $items = $cliente ? $this->eventos->searchByCliente($cliente, $filters) : [];
         $stats = ['total' => count($items), 'atingida' => 0, 'parcial' => 0, 'nao_atingida' => 0, 'pendente' => 0];
         foreach ($items as $item) {
             $key = (string)($item['meta_status_key'] ?? 'pendente');
@@ -227,6 +262,8 @@ class IndicadoresController extends BaseController
             }
             $stats[$key]++;
         }
+        $indicadores = $cliente ? $this->model->byCliente($cliente) : [];
+        $periodos = $cliente ? $this->eventos->periodOptionsByCliente($cliente, ['indicador_id' => $indicadorId, 'ano' => $ano]) : [];
         $this->render('indicadores/painel', [
             'pageTitle' => I18n::t('indicadores.title.dashboard'),
             'cliente' => $cliente,
@@ -234,6 +271,11 @@ class IndicadoresController extends BaseController
             'ano' => $ano,
             'items' => $items,
             'stats' => $cliente ? $stats : ['total' => 0, 'atingida' => 0, 'parcial' => 0, 'nao_atingida' => 0, 'pendente' => 0],
+            'indicadorId' => $indicadorId,
+            'periodoInicio' => (string)($filters['periodo_inicio'] ?? ''),
+            'periodoFim' => (string)($filters['periodo_fim'] ?? ''),
+            'indicadores' => $indicadores,
+            'periodos' => $periodos,
             'i18n' => I18n::class,
         ]);
     }
@@ -316,15 +358,25 @@ class IndicadoresController extends BaseController
         }
         $id = (int)($_POST['evento_id'] ?? ($_POST['id'] ?? 0));
         $cliente = (int)($this->resolveScopedClienteId((int)($_POST['cliente'] ?? 0)) ?? 0);
+        $indicadorId = (int)($_POST['indicador_id'] ?? 0);
+        $periodoInicio = trim((string)($_POST['periodo_inicio'] ?? ''));
+        $periodoFim = trim((string)($_POST['periodo_fim'] ?? ''));
+        if (($periodoInicio === '') xor ($periodoFim === '')) {
+            $periodoInicio = '';
+            $periodoFim = '';
+        }
+        $redirect = 'index.php?route=indicadores/realizado&cliente=' . $cliente
+            . ($indicadorId > 0 ? '&indicador_id=' . $indicadorId : '')
+            . ($periodoInicio !== '' && $periodoFim !== '' ? '&periodo_inicio=' . urlencode($periodoInicio) . '&periodo_fim=' . urlencode($periodoFim) : '');
         if ($id <= 0 || !$this->eventos->updateAchievedValue($id, $_POST['valor'] ?? null, $this->currentUserId(), $_POST['observacao'] ?? null)) {
             $_SESSION['flash_error'] = I18n::t('indicadores.validation.invalid_value_update');
-            $this->redirect('index.php?route=indicadores/realizado&cliente=' . $cliente);
+            $this->redirect($redirect);
         }
         $_SESSION['flash_success'] = I18n::t('indicadores.flash.value_updated');
         if (!empty($_POST['redirect_evento'])) {
             $this->redirect('index.php?route=indicadores/evento&id=' . $id);
         }
-        $this->redirect('index.php?route=indicadores/realizado&cliente=' . $cliente);
+        $this->redirect($redirect);
     }
 
     public function delete(): void
@@ -655,6 +707,74 @@ class IndicadoresController extends BaseController
             return;
         }
         echo json_encode(['success' => true, 'items' => $this->colaboradores->searchActiveByCliente($cliente, $q, 15)], JSON_UNESCAPED_UNICODE);
+    }
+
+    private function readEventoFilters(int $clienteId): array
+    {
+        $default = ['indicador_id' => 0, 'periodo_inicio' => '', 'periodo_fim' => ''];
+        if ($clienteId <= 0) {
+            return $default;
+        }
+        $key = '__indicadores_event_filters';
+        $stored = $_SESSION[$key][$clienteId] ?? $default;
+
+        $hasExplicit = array_key_exists('indicador_id', $_GET)
+            || array_key_exists('periodo_inicio', $_GET)
+            || array_key_exists('periodo_fim', $_GET)
+            || array_key_exists('clear_filters', $_GET);
+        if (!$hasExplicit) {
+            return is_array($stored) ? array_merge($default, $stored) : $default;
+        }
+
+        if ((string)($_GET['clear_filters'] ?? '') === '1') {
+            $_SESSION[$key][$clienteId] = $default;
+            return $default;
+        }
+
+        $indicadorId = isset($_GET['indicador_id']) ? (int)$_GET['indicador_id'] : 0;
+        $periodoInicio = trim((string)($_GET['periodo_inicio'] ?? ''));
+        $periodoFim = trim((string)($_GET['periodo_fim'] ?? ''));
+        if (($periodoInicio === '') xor ($periodoFim === '')) {
+            $periodoInicio = '';
+            $periodoFim = '';
+        }
+
+        $filters = [
+            'indicador_id' => $indicadorId > 0 ? $indicadorId : 0,
+            'periodo_inicio' => $periodoInicio,
+            'periodo_fim' => $periodoFim,
+        ];
+        $_SESSION[$key][$clienteId] = $filters;
+        return $filters;
+    }
+
+    private function renderPeriodoOptions(array $periodos, string $selectedInicio, string $selectedFim): string
+    {
+        $html = '<option value="">' . htmlspecialchars(I18n::t('indicadores.option.none')) . '</option>';
+        foreach ($periodos as $p) {
+            $inicio = (string)($p['periodo_inicio'] ?? '');
+            $fim = (string)($p['periodo_fim'] ?? '');
+            if ($inicio === '' || $fim === '') {
+                continue;
+            }
+            $value = $inicio . '|' . $fim;
+            $selected = ($inicio === $selectedInicio && $fim === $selectedFim) ? ' selected' : '';
+            $label = htmlspecialchars($inicio . ' até ' . $fim);
+            $html .= '<option value="' . htmlspecialchars($value) . '"' . $selected . '>' . $label . '</option>';
+        }
+        return $html;
+    }
+
+    private function renderRealizadoTable(array $items, int $clienteId, array $filters): string
+    {
+        $cliente = $clienteId;
+        $indicadorId = (int)($filters['indicador_id'] ?? 0);
+        $periodoInicio = (string)($filters['periodo_inicio'] ?? '');
+        $periodoFim = (string)($filters['periodo_fim'] ?? '');
+        $renderOnlyTable = true;
+        ob_start();
+        require __DIR__ . '/../views/indicadores/realizado.php';
+        return (string)ob_get_clean();
     }
 
     private function renderForm(string $view, array $formData, array $errors, ?array $item = null): void

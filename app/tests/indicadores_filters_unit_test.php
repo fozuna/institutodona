@@ -4,6 +4,7 @@ require_once __DIR__ . '/../autoload.php';
 use App\Database\MigrationRunner;
 use App\Models\ClienteModel;
 use App\Models\DepartamentoModel;
+use App\Models\IndicadorEventoModel;
 use App\Models\IndicadorModel;
 use App\Models\SetorModel;
 use App\Database\Database;
@@ -32,6 +33,7 @@ $clientes = new ClienteModel();
 $departamentos = new DepartamentoModel();
 $setores = new SetorModel();
 $indicadores = new IndicadorModel();
+$indicadorEventos = new IndicadorEventoModel();
 
 $suffix = uniqid('indf', true);
 $makeCnpj = static function (): string {
@@ -107,5 +109,25 @@ assert_true(!in_array($idB, $ids, true), 'Filtro por período exclui indicador f
 $result = $indicadores->autocomplete($clienteId, 'Pro', 10);
 assert_true(count($result) >= 2, 'Autocomplete retorna sugestões coerentes');
 
-echo "Indicadores filters unit tests passed.\n";
+$_SESSION['user']['allowed_client_ids'] = [];
+$eventsAll = $indicadorEventos->searchByCliente($clienteId, []);
+assert_true(count($eventsAll) > 0, 'Carrega eventos do cliente para filtros');
 
+$eventsOnlyA = $indicadorEventos->searchByCliente($clienteId, ['indicador_id' => $idA]);
+assert_true(!empty($eventsOnlyA) && array_reduce($eventsOnlyA, static fn(bool $ok, array $row): bool => $ok && (int)$row['indicador_id'] === $idA, true), 'Filtro por indicador restringe eventos corretamente');
+
+$periodosA = $indicadorEventos->periodOptionsByCliente($clienteId, ['indicador_id' => $idA]);
+assert_true(!empty($periodosA), 'Carrega opções de período de apuração para o indicador');
+$firstPeriodo = $periodosA[0];
+$eventsPeriodo = $indicadorEventos->searchByCliente($clienteId, [
+    'indicador_id' => $idA,
+    'periodo_inicio' => $firstPeriodo['periodo_inicio'],
+    'periodo_fim' => $firstPeriodo['periodo_fim'],
+]);
+assert_true(!empty($eventsPeriodo) && array_reduce($eventsPeriodo, static function (bool $ok, array $row) use ($firstPeriodo): bool {
+    return $ok
+        && (string)$row['periodo_inicio'] === (string)$firstPeriodo['periodo_inicio']
+        && (string)$row['periodo_fim'] === (string)$firstPeriodo['periodo_fim'];
+}, true), 'Filtro por período de apuração restringe eventos corretamente');
+
+echo "Indicadores filters unit tests passed.\n";
