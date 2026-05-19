@@ -110,8 +110,8 @@ $publicPdf = (string)ob_get_clean();
 echo json_encode([
     'static_endpoint' => '/public/avaliacoes.php',
     'public_link_renders_step1' => str_contains($step1Html, 'Dados iniciais'),
-    'form_action_https_when_forwarded' => str_contains($step1Html, 'action="https://localhost/public/avaliacoes.php"'),
-    'form_action_keeps_query_when_served_via_index' => str_contains($step1HtmlViaIndex, 'action="https://localhost/index.php?route=avaliacao-publica/open&amp;slug=teste-publico"'),
+    'form_action_is_relative_static' => str_contains($step1Html, 'action="/public/avaliacoes.php"'),
+    'form_action_keeps_query_when_served_via_index' => str_contains($step1HtmlViaIndex, 'action="/index.php?route=avaliacao-publica/open&amp;slug=teste-publico"'),
     'step1_advances_to_step2' => str_contains($step2Html, 'Questionário da avaliação'),
     'created_new_avaliacao' => $afterCount === ($beforeCount + 1),
     'redirected_after_finish' => str_contains($publicController->redirectUrl, 'submitted=1'),

@@ -106,7 +106,11 @@ class PublicAvaliacoesController
         if ($submitted && $avaliacaoId > 0 && $this->isValidDownloadSignature($avaliacaoId, $sig)) {
             $pdfPath = (new AvaliacaoPdfService())->pdfPath($avaliacaoId);
             if (is_file($pdfPath)) {
-                $pdfUrl = $this->currentUrl() . '?download=pdf&avaliacao_id=' . $avaliacaoId . '&sig=' . rawurlencode($sig);
+                $pdfUrl = $this->withQuery($this->currentUrl(), [
+                    'download' => 'pdf',
+                    'avaliacao_id' => $avaliacaoId,
+                    'sig' => $sig,
+                ]);
             }
         }
         $this->render($context, 1, $this->defaultValues($context), [], [], $submitted, '', $pdfUrl);
@@ -213,7 +217,11 @@ class PublicAvaliacoesController
             'cliente_id' => $context['cliente_id'] ?? null,
             'empresa_nome' => $context['empresa_nome'] ?? null,
         ]);
-        $this->redirect($this->currentUrl() . '?submitted=1&avaliacao_id=' . $avaliacaoId . '&sig=' . $this->downloadSignature($avaliacaoId));
+        $this->redirect($this->withQuery($this->currentUrl(), [
+            'submitted' => 1,
+            'avaliacao_id' => $avaliacaoId,
+            'sig' => $this->downloadSignature($avaliacaoId),
+        ]));
     }
 
     private function downloadPdf(array $context): void
@@ -370,15 +378,35 @@ class PublicAvaliacoesController
 
     private function currentUrl(): string
     {
-        $scheme = $this->requestScheme();
-        $host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
         $requestUri = (string)($_SERVER['REQUEST_URI'] ?? '');
-        if ($requestUri !== '' && strpos($requestUri, '/') === 0) {
-            $requestUri = str_replace(["\r", "\n"], '', $requestUri);
-            return $scheme . '://' . $host . $requestUri;
+        if ($requestUri !== '' && str_starts_with($requestUri, '/')) {
+            return str_replace(["\r", "\n"], '', $requestUri);
         }
         $scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? '/public/avaliacoes.php'));
-        return $scheme . '://' . $host . $scriptName;
+        if ($scriptName === '' || !str_starts_with($scriptName, '/')) {
+            $scriptName = '/' . ltrim($scriptName, '/');
+        }
+        return $scriptName;
+    }
+
+    private function withQuery(string $url, array $params): string
+    {
+        $parts = parse_url($url);
+        $path = (string)($parts['path'] ?? $url);
+        if ($path === '' || !str_starts_with($path, '/')) {
+            $path = '/' . ltrim($path, '/');
+        }
+        $existing = [];
+        if (!empty($parts['query'])) {
+            parse_str((string)$parts['query'], $existing);
+        }
+        $merged = array_merge($existing, $params);
+        $query = http_build_query($merged);
+        $final = $path . ($query !== '' ? ('?' . $query) : '');
+        if (!empty($parts['fragment'])) {
+            $final .= '#' . $parts['fragment'];
+        }
+        return $final;
     }
 
     private function applyHeaders(): void

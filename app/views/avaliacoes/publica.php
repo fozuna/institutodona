@@ -153,7 +153,7 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
                 </div>
               </div>
               <div class="flex flex-wrap gap-3 pt-2">
-                <button class="px-5 py-3 rounded bg-orange-600 text-white font-medium hover:bg-orange-700 public-action-button" type="submit" data-public-action="continue" autocomplete="off">Continuar</button>
+                <button class="px-5 py-3 rounded bg-orange-600 text-white font-medium hover:bg-orange-700 public-action-button touch-manipulation" type="submit" data-public-action="continue" autocomplete="off">Continuar</button>
                 <button class="px-5 py-3 rounded bg-gray-200 text-gray-800 font-medium hover:bg-gray-300" type="reset">Limpar formulário</button>
                 <a class="px-5 py-3 rounded border border-gray-300 text-gray-700 font-medium hover:bg-gray-50" href="<?= htmlspecialchars($publicUrl ?? $formAction) ?>">Cancelar</a>
               </div>
@@ -221,7 +221,7 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
                 <?php endforeach; ?>
               </div>
               <div class="flex flex-wrap gap-3 pt-2">
-                <button class="px-5 py-3 rounded bg-orange-600 text-white font-medium hover:bg-orange-700 public-action-button" type="submit" data-public-action="finish" autocomplete="off">Enviar avaliação</button>
+                <button class="px-5 py-3 rounded bg-orange-600 text-white font-medium hover:bg-orange-700 public-action-button touch-manipulation" type="submit" data-public-action="finish" autocomplete="off">Enviar avaliação</button>
                 <button class="px-5 py-3 rounded bg-gray-200 text-gray-800 font-medium hover:bg-gray-300" type="reset">Limpar seleção</button>
                 <a class="px-5 py-3 rounded border border-gray-300 text-gray-700 font-medium hover:bg-gray-50" href="<?= htmlspecialchars($publicUrl ?? $formAction) ?>">Cancelar</a>
               </div>
@@ -233,6 +233,103 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
   </div>
   <script>
     (function(){
+      const params = new URLSearchParams(window.location.search || '');
+      const DEBUG = params.has('debug');
+
+      function log(...args) {
+        if (!DEBUG) return;
+        if (window.console && typeof window.console.log === 'function') {
+          window.console.log('[avaliacoes_publicas]', ...args);
+        }
+      }
+
+      function warn(...args) {
+        if (window.console && typeof window.console.warn === 'function') {
+          window.console.warn('[avaliacoes_publicas]', ...args);
+        }
+      }
+
+      function error(...args) {
+        if (window.console && typeof window.console.error === 'function') {
+          window.console.error('[avaliacoes_publicas]', ...args);
+        }
+      }
+
+      window.addEventListener('error', (e) => {
+        try {
+          error('window.error', e && e.message ? e.message : e, e && e.filename ? e.filename : null, e && e.lineno ? e.lineno : null);
+        } catch (_) {
+        }
+      });
+      window.addEventListener('unhandledrejection', (e) => {
+        try {
+          error('unhandledrejection', e && e.reason ? e.reason : e);
+        } catch (_) {
+        }
+      });
+
+      function ensureErrorBox(form) {
+        let box = form.querySelector('[data-public-error-box="1"]');
+        if (box) return box;
+        box = document.createElement('div');
+        box.setAttribute('data-public-error-box', '1');
+        box.className = 'mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 hidden';
+        form.prepend(box);
+        return box;
+      }
+
+      function firstInvalidControl(form) {
+        try {
+          const q = form.querySelector(':invalid');
+          if (q && q.willValidate) return q;
+        } catch (_) {
+        }
+        const els = form.querySelectorAll('input, select, textarea');
+        for (const el of els) {
+          if (!el || el.disabled || !el.willValidate) continue;
+          try {
+            if (typeof el.checkValidity === 'function' && !el.checkValidity()) return el;
+          } catch (_) {
+          }
+        }
+        return null;
+      }
+
+      function validateAndExplain(form, source) {
+        try {
+          const box = ensureErrorBox(form);
+          const ok = typeof form.checkValidity === 'function' ? form.checkValidity() : true;
+          log('validate', { source, ok });
+          if (ok) {
+            box.textContent = '';
+            box.classList.add('hidden');
+            return true;
+          }
+          const first = firstInvalidControl(form);
+          if (first) {
+            const label = first.getAttribute('aria-label') || first.name || first.id || 'campo';
+            const msg = first.validationMessage || 'Verifique o preenchimento do formulário.';
+            box.textContent = (label ? (label + ': ') : '') + msg;
+            box.classList.remove('hidden');
+            try {
+              first.focus({ preventScroll: false });
+            } catch (_) {
+              try { first.focus(); } catch (_) {}
+            }
+          } else {
+            box.textContent = 'Verifique o preenchimento do formulário.';
+            box.classList.remove('hidden');
+          }
+          if (typeof form.reportValidity === 'function') {
+            try { form.reportValidity(); } catch (_) {}
+          }
+          return false;
+        } catch (e) {
+          error('validate_exception', e);
+          return true;
+        }
+      }
+
       function fixFormActionScheme() {
         document.querySelectorAll('form').forEach((form) => {
           try {
@@ -241,9 +338,10 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
             if (url.protocol !== window.location.protocol || url.host !== window.location.host) {
               form.action = window.location.href.split('#')[0];
               if (window.console && typeof window.console.warn === 'function') {
-                window.console.warn('[avaliacoes_publicas] action corrigida para evitar bloqueio por mixed-content/csp');
+                warn('action corrigida para evitar bloqueio por mixed-content/csp', { from: String(url), to: form.action });
               }
             }
+            log('form.action', form.action);
           } catch (e) {
           }
         });
@@ -262,6 +360,20 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
         document.querySelectorAll('form').forEach((form) => {
           if (form.dataset.publicBound === '1') return;
           form.dataset.publicBound = '1';
+          form.addEventListener('invalid', (ev) => {
+            try {
+              const target = ev && ev.target ? ev.target : null;
+              if (target && target.willValidate) {
+                log('invalid', { name: target.name || target.id || null, message: target.validationMessage || null });
+              } else {
+                log('invalid', { name: null, message: null });
+              }
+              validateAndExplain(form, 'invalid');
+            } catch (e) {
+              error('invalid_handler_exception', e);
+            }
+          }, true);
+
           form.addEventListener('submit', () => {
             try {
               const whatsapp = form.querySelector('input[name="public_whatsapp"]');
@@ -280,6 +392,20 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
               resetPublicActionButtons();
             }, 4000);
           });
+
+          const submitButton = form.querySelector('.public-action-button');
+          if (submitButton) {
+            const validateOnTap = (evtName) => {
+              try {
+                validateAndExplain(form, evtName);
+              } catch (e) {
+                error('validateOnTap_exception', e);
+              }
+            };
+            submitButton.addEventListener('pointerup', () => validateOnTap('pointerup'));
+            submitButton.addEventListener('click', () => validateOnTap('click'));
+            submitButton.addEventListener('touchend', () => validateOnTap('touchend'));
+          }
         });
       }
 
