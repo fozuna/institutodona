@@ -117,6 +117,15 @@ class PublicAvaliacoesController
         $values = $this->valuesFromPost($context);
         $errors = $this->validateStep1($values);
         if (!empty($errors)) {
+            AuditLogger::log('public_avaliacoes_step1_invalid', 'avaliacao_publica_fixa', 0, [
+                'host' => $context['host'] ?? null,
+                'cliente_id' => $context['cliente_id'] ?? null,
+                'empresa_nome' => $context['empresa_nome'] ?? null,
+                'errors' => array_keys($errors),
+                'meta' => $this->requestMeta(),
+                'whatsapp_len' => strlen((string)($values['whatsapp'] ?? '')),
+                'email_domain' => strpos((string)($values['email'] ?? ''), '@') !== false ? substr((string)$values['email'], (int)strpos((string)$values['email'], '@') + 1) : '',
+            ]);
             http_response_code(422);
             $this->render($context, 1, $values, $errors, [], false, '', '');
             return;
@@ -363,6 +372,11 @@ class PublicAvaliacoesController
     {
         $scheme = $this->requestScheme();
         $host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
+        $requestUri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        if ($requestUri !== '' && strpos($requestUri, '/') === 0) {
+            $requestUri = str_replace(["\r", "\n"], '', $requestUri);
+            return $scheme . '://' . $host . $requestUri;
+        }
         $scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? '/public/avaliacoes.php'));
         return $scheme . '://' . $host . $scriptName;
     }

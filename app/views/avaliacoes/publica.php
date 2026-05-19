@@ -114,7 +114,7 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
                 </div>
                 <div>
                   <label class="block text-sm font-medium mb-2">WhatsApp</label>
-                  <input name="public_whatsapp" autocomplete="off" inputmode="numeric" pattern="\d{10,15}" class="border rounded p-3 w-full" value="<?= $fieldValue('whatsapp') ?>" required />
+                  <input type="tel" name="public_whatsapp" autocomplete="off" inputmode="tel" class="border rounded p-3 w-full" value="<?= $fieldValue('whatsapp') ?>" required />
                   <?php if (!empty($errors['whatsapp'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['whatsapp']) ?></p><?php endif; ?>
                 </div>
                 <div>
@@ -263,6 +263,13 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
           if (form.dataset.publicBound === '1') return;
           form.dataset.publicBound = '1';
           form.addEventListener('submit', () => {
+            try {
+              const whatsapp = form.querySelector('input[name="public_whatsapp"]');
+              if (whatsapp) {
+                whatsapp.value = String(whatsapp.value || '').replace(/\\D+/g, '');
+              }
+            } catch (e) {
+            }
             const submitButton = form.querySelector('.public-action-button');
             if (!submitButton) return;
             submitButton.disabled = true;

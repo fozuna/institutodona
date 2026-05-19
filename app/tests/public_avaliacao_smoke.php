@@ -26,6 +26,7 @@ $_SERVER['HTTP_HOST'] = 'localhost';
 $_SERVER['HTTPS'] = 'off';
 $_SERVER['HTTP_X_FORWARDED_PROTO'] = 'https';
 $_SERVER['SCRIPT_NAME'] = '/public/avaliacoes.php';
+$_SERVER['REQUEST_URI'] = '/public/avaliacoes.php';
 
 $pdo = Database::getConnection();
 $beforeCount = (int)$pdo->query('SELECT COUNT(*) FROM avaliacoes')->fetchColumn();
@@ -38,6 +39,21 @@ $_POST = [];
 ob_start();
 $publicController->handle();
 $step1Html = (string)ob_get_clean();
+
+$_SERVER['SCRIPT_NAME'] = '/index.php';
+$_SERVER['REQUEST_URI'] = '/index.php?route=avaliacao-publica/open&slug=teste-publico';
+$_SERVER['REQUEST_METHOD'] = 'GET';
+$_GET = ['route' => 'avaliacao-publica/open', 'slug' => 'teste-publico'];
+$_POST = [];
+ob_start();
+$publicController->handle();
+$step1HtmlViaIndex = (string)ob_get_clean();
+
+$_SERVER['SCRIPT_NAME'] = '/public/avaliacoes.php';
+$_SERVER['REQUEST_URI'] = '/public/avaliacoes.php';
+$_SERVER['REQUEST_METHOD'] = 'GET';
+$_GET = [];
+$_POST = [];
 
 $_SERVER['REQUEST_METHOD'] = 'POST';
 $_POST = [
@@ -95,6 +111,7 @@ echo json_encode([
     'static_endpoint' => '/public/avaliacoes.php',
     'public_link_renders_step1' => str_contains($step1Html, 'Dados iniciais'),
     'form_action_https_when_forwarded' => str_contains($step1Html, 'action="https://localhost/public/avaliacoes.php"'),
+    'form_action_keeps_query_when_served_via_index' => str_contains($step1HtmlViaIndex, 'action="https://localhost/index.php?route=avaliacao-publica/open&amp;slug=teste-publico"'),
     'step1_advances_to_step2' => str_contains($step2Html, 'Questionário da avaliação'),
     'created_new_avaliacao' => $afterCount === ($beforeCount + 1),
     'redirected_after_finish' => str_contains($publicController->redirectUrl, 'submitted=1'),
