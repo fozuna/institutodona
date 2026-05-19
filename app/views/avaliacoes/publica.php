@@ -233,6 +233,22 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
   </div>
   <script>
     (function(){
+      function fixFormActionScheme() {
+        document.querySelectorAll('form').forEach((form) => {
+          try {
+            if (!form.action) return;
+            const url = new URL(form.action, window.location.href);
+            if (url.protocol !== window.location.protocol || url.host !== window.location.host) {
+              form.action = window.location.href.split('#')[0];
+              if (window.console && typeof window.console.warn === 'function') {
+                window.console.warn('[avaliacoes_publicas] action corrigida para evitar bloqueio por mixed-content/csp');
+              }
+            }
+          } catch (e) {
+          }
+        });
+      }
+
       function resetPublicActionButtons() {
         document.querySelectorAll('.public-action-button').forEach((button) => {
           button.disabled = false;
@@ -260,6 +276,7 @@ $fieldValue = static function(string $key, $default = '') use ($values) {
         });
       }
 
+      fixFormActionScheme();
       resetPublicActionButtons();
       bindPublicActionButtons();
       window.addEventListener('pageshow', resetPublicActionButtons);

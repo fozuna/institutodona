@@ -495,7 +495,7 @@ class AvaliacaoPublicaController
             }
             return rtrim($configured, '/') . '/' . rawurlencode($identifier);
         }
-        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $scheme = $this->requestScheme();
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
         $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/index.php');
         if (PHP_SAPI === 'cli' || strpos($scriptName, '/app/tests/') !== false) {
@@ -517,7 +517,7 @@ class AvaliacaoPublicaController
         if ($configured !== '') {
             return rtrim($configured, '/');
         }
-        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $scheme = $this->requestScheme();
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
         $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/index.php');
         $base = rtrim(dirname($scriptName), '/');
@@ -528,6 +528,27 @@ class AvaliacaoPublicaController
             $base = '/' . ltrim($base, '/');
         }
         return $scheme . '://' . $host . $base . '/public/avaliacoes.php';
+    }
+
+    private function requestScheme(): string
+    {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $forwardedProto = strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+        $forwardedSsl = strtolower((string)($_SERVER['HTTP_X_FORWARDED_SSL'] ?? ''));
+        $frontEndHttps = strtolower((string)($_SERVER['HTTP_FRONT_END_HTTPS'] ?? ''));
+        $cfVisitor = (string)($_SERVER['HTTP_CF_VISITOR'] ?? '');
+        $serverPort = (string)($_SERVER['SERVER_PORT'] ?? '');
+
+        if ($forwardedProto !== '' && strpos($forwardedProto, 'https') !== false) {
+            return 'https';
+        }
+        if ($forwardedSsl === 'on' || $frontEndHttps === 'on' || $serverPort === '443') {
+            return 'https';
+        }
+        if ($cfVisitor !== '' && strpos($cfVisitor, '"scheme":"https"') !== false) {
+            return 'https';
+        }
+        return $scheme;
     }
 
     private function createAvaliacaoFromPublicSubmission(array $record, array $values, array $selectedMap, array $totais): int

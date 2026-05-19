@@ -24,6 +24,7 @@ $_SESSION['user'] = [
 putenv('PUBLIC_AVALIACOES_DEFAULT_EMPRESA=Empresa Pública Fixa');
 $_SERVER['HTTP_HOST'] = 'localhost';
 $_SERVER['HTTPS'] = 'off';
+$_SERVER['HTTP_X_FORWARDED_PROTO'] = 'https';
 $_SERVER['SCRIPT_NAME'] = '/public/avaliacoes.php';
 
 $pdo = Database::getConnection();
@@ -93,6 +94,7 @@ $publicPdf = (string)ob_get_clean();
 echo json_encode([
     'static_endpoint' => '/public/avaliacoes.php',
     'public_link_renders_step1' => str_contains($step1Html, 'Dados iniciais'),
+    'form_action_https_when_forwarded' => str_contains($step1Html, 'action="https://localhost/public/avaliacoes.php"'),
     'step1_advances_to_step2' => str_contains($step2Html, 'Questionário da avaliação'),
     'created_new_avaliacao' => $afterCount === ($beforeCount + 1),
     'redirected_after_finish' => str_contains($publicController->redirectUrl, 'submitted=1'),

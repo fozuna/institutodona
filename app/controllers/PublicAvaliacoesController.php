@@ -330,9 +330,38 @@ class PublicAvaliacoesController
         require __DIR__ . '/../views/avaliacoes/publica.php';
     }
 
-    private function currentUrl(): string
+    private function requestScheme(): string
     {
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $forwardedProto = strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+        $forwardedSsl = strtolower((string)($_SERVER['HTTP_X_FORWARDED_SSL'] ?? ''));
+        $frontEndHttps = strtolower((string)($_SERVER['HTTP_FRONT_END_HTTPS'] ?? ''));
+        $cfVisitor = (string)($_SERVER['HTTP_CF_VISITOR'] ?? '');
+        $serverPort = (string)($_SERVER['SERVER_PORT'] ?? '');
+
+        $viaProxyHttps = false;
+        if ($forwardedProto !== '' && strpos($forwardedProto, 'https') !== false) {
+            $viaProxyHttps = true;
+        } elseif ($forwardedSsl === 'on') {
+            $viaProxyHttps = true;
+        } elseif ($frontEndHttps === 'on') {
+            $viaProxyHttps = true;
+        } elseif ($serverPort === '443') {
+            $viaProxyHttps = true;
+        } elseif ($cfVisitor !== '' && strpos($cfVisitor, '"scheme":"https"') !== false) {
+            $viaProxyHttps = true;
+        }
+
+        if ($viaProxyHttps && $scheme !== 'https') {
+            $scheme = 'https';
+            @error_log('[public_avaliacoes_scheme_fix] https_detected_via_proxy host=' . (string)($_SERVER['HTTP_HOST'] ?? '') . ' script=' . (string)($_SERVER['SCRIPT_NAME'] ?? '') . ' forwarded_proto=' . $forwardedProto);
+        }
+        return $scheme;
+    }
+
+    private function currentUrl(): string
+    {
+        $scheme = $this->requestScheme();
         $host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
         $scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? '/public/avaliacoes.php'));
         return $scheme . '://' . $host . $scriptName;
