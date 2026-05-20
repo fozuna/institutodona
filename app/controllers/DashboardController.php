@@ -3,9 +3,12 @@ namespace App\Controllers;
 
 use App\Core\BaseController;
 use App\Core\Auth;
+use App\Core\PdfSupport;
+use App\Core\AuditLogger;
 use App\Models\ClienteModel;
 use App\Models\AplicacaoModel;
 use App\Database\Database;
+use App\Services\DashboardPdfService;
 use DateTimeImmutable;
 
 class DashboardController extends BaseController
@@ -67,11 +70,73 @@ class DashboardController extends BaseController
     {
         $this->requireLogin();
         $filters = $this->readDashboardFilters();
-        if (!$filters['period_ok']) {
+        $payload = $this->computeMetrics($filters);
+        if (($payload['ok'] ?? false) !== true) {
             http_response_code(422);
-            header('Content-Type: application/json; charset=utf-8');
-            echo json_encode(['ok' => false, 'message' => $filters['period_error']], JSON_UNESCAPED_UNICODE);
+        }
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+    }
+
+    public function pdf(): void
+    {
+        $this->requireLogin();
+        $filters = $this->readDashboardFilters();
+        $payload = $this->computeMetrics($filters);
+        if (($payload['ok'] ?? false) !== true) {
+            http_response_code(422);
+            echo (string)($payload['message'] ?? 'Filtro inválido.');
             return;
+        }
+        if (!PdfSupport::isDompdfAvailable()) {
+            $errorId = PdfSupport::newErrorId();
+            AuditLogger::log('pdf_unavailable', 'dashboard', null, [
+                'error_id' => $errorId,
+                'service' => 'DashboardPdfService',
+                'reason' => 'dompdf_missing',
+                'diagnostics' => PdfSupport::dompdfDiagnostics(),
+            ]);
+            @error_log('[pdf_unavailable] id=' . $errorId . ' route=dashboard/pdf');
+            http_response_code(503);
+            echo PdfSupport::missingDompdfMessage() . ' Código: ' . $errorId;
+            return;
+        }
+        AuditLogger::log('dashboard_pdf_export', 'dashboard', null, [
+            'cliente_ids_count' => is_array($filters['cliente_ids'] ?? null) ? count($filters['cliente_ids']) : 0,
+            'month_start' => (string)($filters['month_start'] ?? ''),
+            'month_end' => (string)($filters['month_end'] ?? ''),
+        ]);
+        $all = $this->clientes->all();
+        $map = [];
+        foreach ($all as $c) {
+            $id = (int)($c['id'] ?? 0);
+            if ($id > 0) {
+                $map[$id] = (string)($c['nome_empresa'] ?? '');
+            }
+        }
+        $names = [];
+        foreach (($filters['cliente_ids'] ?? []) as $id) {
+            $id = (int)$id;
+            if ($id > 0) {
+                $names[] = $map[$id] ?? ('Empresa #' . $id);
+            }
+        }
+        $payload['pdf'] = [
+            'cliente_label' => count($names) === 1 ? $names[0] : (count($names) . ' empresa(s)'),
+            'cliente_nomes' => $names,
+        ];
+        $service = new DashboardPdfService();
+        $ok = $service->outputToBrowser($payload, !empty($_GET['download']));
+        if (!$ok) {
+            http_response_code(500);
+            echo 'Falha ao gerar PDF: ' . ($service->getLastError() ?: 'erro desconhecido');
+        }
+    }
+
+    private function computeMetrics(array $filters): array
+    {
+        if (empty($filters['period_ok'])) {
+            return ['ok' => false, 'message' => (string)($filters['period_error'] ?? 'Período inválido.')];
         }
         $clienteIds = $filters['cliente_ids'];
         $range = $this->rangeFromMonths($filters['month_start'], $filters['month_end']);
@@ -133,9 +198,7 @@ class DashboardController extends BaseController
         ];
 
         if (empty($clienteIds)) {
-            header('Content-Type: application/json; charset=utf-8');
-            echo json_encode($payload, JSON_UNESCAPED_UNICODE);
-            return;
+            return $payload;
         }
 
         $inParams = [];
@@ -279,8 +342,7 @@ class DashboardController extends BaseController
             $payload['treinamentos']['participacao_pct'] = $ins > 0 ? round(($pres / $ins) * 100, 2) : 0.0;
         }
 
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+        return $payload;
     }
 
     private function readDashboardFilters(): array

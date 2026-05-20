@@ -5,6 +5,12 @@ $monthStart = (string)($filters['month_start'] ?? '');
 $monthEnd = (string)($filters['month_end'] ?? '');
 $clienteIds = is_array($filters['cliente_ids'] ?? null) ? array_values(array_map('intval', $filters['cliente_ids'])) : [];
 $selectedLabel = $clienteIds ? (count($clienteIds) . ' empresa(s) selecionada(s)') : 'Todas as empresas';
+$pdfUrl = 'index.php?' . http_build_query([
+  'route' => 'dashboard/pdf',
+  'month_start' => $monthStart,
+  'month_end' => $monthEnd,
+  'clientes' => $clienteIds,
+]);
 ?>
 
 <div class="p-4 md:p-6 space-y-6">
@@ -52,6 +58,7 @@ $selectedLabel = $clienteIds ? (count($clienteIds) . ' empresa(s) selecionada(s)
       </div>
       <div class="lg:col-span-2 flex items-end gap-2">
         <button class="px-4 py-3 rounded-lg bg-brand-red text-white w-full" type="submit" id="dashboardApplyBtn">Aplicar</button>
+        <a class="px-4 py-3 rounded-lg bg-gray-200 text-brand-brown w-full text-center" id="dashboardPdfLink" href="<?= htmlspecialchars($pdfUrl) ?>" target="_blank" rel="noopener">Exportar PDF</a>
       </div>
       <div class="lg:col-span-12">
         <div id="dashboardFilterError" class="hidden rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
@@ -147,6 +154,7 @@ $selectedLabel = $clienteIds ? (count($clienteIds) . ' empresa(s) selecionada(s)
     const periodLabel = document.getElementById('dashboardPeriodLabel');
     const btnAll = document.getElementById('dashboardEmpresasAll');
     const btnNone = document.getElementById('dashboardEmpresasNone');
+    const pdfLink = document.getElementById('dashboardPdfLink');
 
     const elCronPct = document.getElementById('dashCronogramaPct');
     const elCronDone = document.getElementById('dashCronogramaDone');
@@ -193,6 +201,20 @@ $selectedLabel = $clienteIds ? (count($clienteIds) . ' empresa(s) selecionada(s)
       const label = n ? (n + ' empresa(s) selecionada(s)') : 'Todas as empresas';
       if (summary) summary.textContent = label;
       if (empresaLabel) empresaLabel.textContent = label;
+      updatePdfLink();
+    }
+
+    function updatePdfLink() {
+      if (!pdfLink || !form) return;
+      const params = new URLSearchParams();
+      params.set('route', 'dashboard/pdf');
+      params.set('month_start', String(monthStart?.value || ''));
+      params.set('month_end', String(monthEnd?.value || ''));
+      Array.from(form.querySelectorAll('input[name="clientes[]"]:checked')).forEach((el) => {
+        const v = String(el.value || '').trim();
+        if (v) params.append('clientes[]', v);
+      });
+      pdfLink.href = 'index.php?' + params.toString();
     }
 
     function validateMonths() {
@@ -443,10 +465,11 @@ $selectedLabel = $clienteIds ? (count($clienteIds) . ' empresa(s) selecionada(s)
       });
       form.querySelectorAll('input[name="clientes[]"]').forEach((el) => el.addEventListener('change', updateEmpresaLabels));
     }
-    if (monthStart) monthStart.addEventListener('change', loadMetrics);
-    if (monthEnd) monthEnd.addEventListener('change', loadMetrics);
+    if (monthStart) monthStart.addEventListener('change', () => { updatePdfLink(); loadMetrics(); });
+    if (monthEnd) monthEnd.addEventListener('change', () => { updatePdfLink(); loadMetrics(); });
 
     updateEmpresaLabels();
+    updatePdfLink();
     loadMetrics();
   })();
 </script>

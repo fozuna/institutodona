@@ -812,6 +812,9 @@ switch ($route) {
     case 'dashboard/metrics':
         (new DashboardController())->metrics();
         break;
+    case 'dashboard/pdf':
+        (new DashboardController())->pdf();
+        break;
     case 'logs/index':
         (new LogsController())->index();
         break;
