@@ -9,15 +9,29 @@ use Dompdf\Options;
 class DashboardPdfService
 {
     private ?string $lastError = null;
+    private int $lastPageCount = 0;
+    private ?array $lastLayout = null;
 
     public function getLastError(): ?string
     {
         return $this->lastError;
     }
 
+    public function getLastPageCount(): int
+    {
+        return $this->lastPageCount;
+    }
+
+    public function getLastLayout(): ?array
+    {
+        return $this->lastLayout;
+    }
+
     public function outputToBrowser(array $payload, bool $download = false): bool
     {
         $this->lastError = null;
+        $this->lastPageCount = 0;
+        $this->lastLayout = null;
         try {
             $pdf = $this->renderPdfBinary($payload);
             if ($pdf === '' || !str_starts_with($pdf, '%PDF')) {
@@ -46,6 +60,71 @@ class DashboardPdfService
 
     private function renderPdfBinary(array $payload): string
     {
+        $variants = [
+            [
+                'name' => 'normal',
+                'branding_margins' => ['top' => 14, 'right' => 12, 'bottom' => 14, 'left' => 12],
+                'layout' => [
+                    'base_font' => 9,
+                    'title_font' => 14,
+                    'value_font' => 18,
+                    'grid_pad' => 4,
+                    'card_pad_y' => 7,
+                    'card_pad_x' => 9,
+                    'header_pad_y' => 7,
+                    'header_pad_x' => 9,
+                    'header_margin_bottom' => 8,
+                    'bar_height' => 8,
+                    'logo_max_height' => 32,
+                    'footer_bottom_mm' => 8,
+                ],
+            ],
+            [
+                'name' => 'compact',
+                'branding_margins' => ['top' => 12, 'right' => 10, 'bottom' => 12, 'left' => 10],
+                'layout' => [
+                    'base_font' => 8,
+                    'title_font' => 13,
+                    'value_font' => 16,
+                    'grid_pad' => 3,
+                    'card_pad_y' => 6,
+                    'card_pad_x' => 8,
+                    'header_pad_y' => 6,
+                    'header_pad_x' => 8,
+                    'header_margin_bottom' => 6,
+                    'bar_height' => 7,
+                    'logo_max_height' => 28,
+                    'footer_bottom_mm' => 7,
+                ],
+            ],
+        ];
+
+        $bestPdf = '';
+        $bestPages = 0;
+        $bestLayout = null;
+
+        foreach ($variants as $variant) {
+            $res = $this->renderWithVariant($payload, $variant);
+            if ($res['pdf'] === '') {
+                continue;
+            }
+            if ($bestPdf === '' || $res['pages'] < $bestPages) {
+                $bestPdf = $res['pdf'];
+                $bestPages = $res['pages'];
+                $bestLayout = $variant;
+            }
+            if ($res['pages'] <= 1) {
+                break;
+            }
+        }
+
+        $this->lastPageCount = $bestPages;
+        $this->lastLayout = $bestLayout;
+        return $bestPdf;
+    }
+
+    private function renderWithVariant(array $payload, array $variant): array
+    {
         $options = new Options();
         $options->set('isRemoteEnabled', false);
         $options->set('isHtml5ParserEnabled', true);
@@ -55,16 +134,24 @@ class DashboardPdfService
         $options->setChroot(dirname(__DIR__, 2));
 
         $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($this->buildHtml($payload), 'UTF-8');
+        $dompdf->loadHtml($this->buildHtml($payload, $variant), 'UTF-8');
         $dompdf->setPaper('A4', 'landscape');
         $dompdf->render();
-        return $dompdf->output();
+        $pages = 0;
+        try {
+            $pages = (int)$dompdf->getCanvas()->get_page_count();
+        } catch (\Throwable $e) {
+            $pages = 0;
+        }
+        return ['pdf' => $dompdf->output(), 'pages' => $pages > 0 ? $pages : 999];
     }
 
-    private function buildHtml(array $payload): string
+    private function buildHtml(array $payload, array $variant): string
     {
         $filters = is_array($payload['filters'] ?? null) ? $payload['filters'] : [];
         $pdfMeta = is_array($payload['pdf'] ?? null) ? $payload['pdf'] : [];
+        $margins = is_array($variant['branding_margins'] ?? null) ? $variant['branding_margins'] : ['top' => 14, 'right' => 12, 'bottom' => 14, 'left' => 12];
+        $layout = is_array($variant['layout'] ?? null) ? $variant['layout'] : [];
 
         $branding = ReportBranding::aplicarBrandingRelatorio('pdf', [
             'report_title' => 'Dashboard',
@@ -72,7 +159,7 @@ class DashboardPdfService
             'header_subtitle' => 'Visão consolidada de desempenho',
             'logo_position' => 'left',
             'logo_width' => 108,
-            'margins' => ['top' => 14, 'right' => 12, 'bottom' => 14, 'left' => 12],
+            'margins' => $margins,
             'footer_text' => 'Relatório do sistema',
             'generated_at' => DateHelper::now(),
         ]);
@@ -101,4 +188,3 @@ class DashboardPdfService
         return (string)ob_get_clean();
     }
 }
-

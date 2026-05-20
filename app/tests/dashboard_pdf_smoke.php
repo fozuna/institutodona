@@ -69,5 +69,10 @@ $pdf = (string)ob_get_clean();
 assert_true(substr($pdf, 0, 4) === '%PDF', 'dashboard/pdf retorna PDF');
 assert_true(strlen($pdf) > 1000, 'dashboard/pdf retorna um PDF com tamanho mínimo');
 
-echo "Dashboard PDF smoke tests passed.\n";
+$pageCount = 0;
+if (preg_match_all('/\/Type\s*\/Page\b(?!s)/', $pdf, $m)) {
+    $pageCount = count($m[0] ?? []);
+}
+assert_true($pageCount <= 1, 'dashboard/pdf deve gerar 1 página em cenário padrão (atual=' . $pageCount . ')');
 
+echo "Dashboard PDF smoke tests passed.\n";
