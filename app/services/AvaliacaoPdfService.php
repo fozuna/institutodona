@@ -144,6 +144,8 @@ class AvaliacaoPdfService
             ];
         }
         $pillars = AvaliacaoQuestionario::pilares();
+        $qs = $pillars;
+        $resp = $respostas;
         $scores = [
             'eu' => (int)($item['nota_financeiro'] ?? 0),
             'lideranca' => (int)($item['nota_mercado'] ?? 0),

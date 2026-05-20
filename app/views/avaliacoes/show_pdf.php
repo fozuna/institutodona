@@ -38,7 +38,8 @@
     .report-footer { position: fixed; bottom: -10mm; left: 0; right: 0; font-size: 9px; color: #6b7280; text-align: center; }
     .report-footer .page-number:before { content: counter(page); }
     .report-footer .page-count:before { content: counter(pages); }
-    .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; page-break-inside: avoid; }
+    .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+    .card.keep { page-break-inside: avoid; }
     .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 10px; border: 1px solid #e5e7eb; background: #f9fafb; color: #374151; }
     .badge.yellow { background: #FEF3C7; color: #92400E; border-color: #FDE68A; }
     .badge.green { background: #D1FAE5; color: #065F46; border-color: #A7F3D0; }
@@ -65,6 +66,9 @@
     .list li { margin: 0 0 3px 0; }
     .ok { font-weight: bold; color: #111827; }
     .nok { color: #b91c1c; }
+    .grid-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .grid-table td { vertical-align: top; padding-right: 10px; }
+    .grid-table td:last-child { padding-right: 0; }
   </style>
 </head>
 <body>
@@ -83,7 +87,7 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card keep">
     <div class="muted">Empresa</div>
     <div style="font-size: 14px; font-weight: bold; margin-top: 2px;"><?= htmlspecialchars((string)$empresa ?: '—', ENT_QUOTES, 'UTF-8') ?></div>
     <div style="margin-top: 8px;">
@@ -145,25 +149,25 @@
     </table>
   </div>
 
-  <div class="row clearfix" style="margin-bottom: 10px;">
-    <?php
-      $max = 7;
-      $pct = static fn(int $n): int => (int)round(($n / $max) * 100);
-      $i = 0;
-      foreach ($labels as $name => $score):
-        $i++;
-    ?>
-      <div class="col col-4<?= $i === 4 ? ' col-last' : '' ?>">
-        <div class="pillar">
-          <div class="pillar-title"><?= htmlspecialchars((string)$name, ENT_QUOTES, 'UTF-8') ?></div>
-          <div class="bar"><span style="width: <?= $pct((int)$score) ?>%"></span></div>
-          <div class="score"><?= (int)$score ?>/7</div>
-        </div>
-      </div>
-    <?php endforeach; ?>
-  </div>
+  <?php
+    $max = 7;
+    $pct = static fn(int $n): int => (int)round(($n / $max) * 100);
+  ?>
+  <table class="grid-table" style="margin-bottom: 10px;">
+    <tr>
+      <?php foreach ($labels as $name => $score): ?>
+        <td style="width:25%;">
+          <div class="pillar">
+            <div class="pillar-title"><?= htmlspecialchars((string)$name, ENT_QUOTES, 'UTF-8') ?></div>
+            <div class="bar"><span style="width: <?= $pct((int)$score) ?>%"></span></div>
+            <div class="score"><?= (int)$score ?>/7</div>
+          </div>
+        </td>
+      <?php endforeach; ?>
+    </tr>
+  </table>
 
-  <div class="card">
+  <div class="card keep">
     <div style="font-weight: bold; margin-bottom: 8px;">Nota total dos 4 pilares</div>
     <div class="row clearfix">
       <div class="col col-3">
@@ -192,25 +196,23 @@
 
   <div class="card">
     <div style="font-weight: bold; margin-bottom: 10px;">Itens pontuados e não pontuados</div>
-    <div class="row clearfix">
-      <?php
-        $keys = ['eu', 'lideranca', 'processo', 'gestao'];
-        $col = 0;
-        foreach ($keys as $key):
-          $col++;
-          $selected = array_map('intval', (array)($resp[$key] ?? []));
-      ?>
-        <div class="col col-4<?= $col === 4 ? ' col-last' : '' ?>">
-          <div class="list-title"><?= htmlspecialchars((string)($pillarTitles[$key] ?? strtoupper($key)), ENT_QUOTES, 'UTF-8') ?></div>
-          <ul class="list">
-            <?php foreach (($qs[$key] ?? []) as $idx => $q): ?>
-              <?php $on = in_array($idx + 1, $selected, true); ?>
-              <li class="<?= $on ? 'ok' : 'nok' ?>"><?= htmlspecialchars((string)$q, ENT_QUOTES, 'UTF-8') ?></li>
-            <?php endforeach; ?>
-          </ul>
-        </div>
-      <?php endforeach; ?>
-    </div>
+    <?php $keys = ['eu', 'lideranca', 'processo', 'gestao']; ?>
+    <table class="grid-table">
+      <tr>
+        <?php foreach ($keys as $key): ?>
+          <?php $selected = array_map('intval', (array)($resp[$key] ?? [])); ?>
+          <td style="width:25%;">
+            <div class="list-title"><?= htmlspecialchars((string)($pillarTitles[$key] ?? strtoupper($key)), ENT_QUOTES, 'UTF-8') ?></div>
+            <ul class="list">
+              <?php foreach (($qs[$key] ?? []) as $idx => $q): ?>
+                <?php $on = in_array($idx + 1, $selected, true); ?>
+                <li class="<?= $on ? 'ok' : 'nok' ?>"><?= htmlspecialchars((string)$q, ENT_QUOTES, 'UTF-8') ?></li>
+              <?php endforeach; ?>
+            </ul>
+          </td>
+        <?php endforeach; ?>
+      </tr>
+    </table>
   </div>
   <div class="report-footer">
     Página <span class="page-number"></span> de <span class="page-count"></span> · Gerado em <?= htmlspecialchars((string)($branding['generated_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?>

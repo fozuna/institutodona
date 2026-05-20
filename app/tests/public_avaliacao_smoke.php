@@ -95,6 +95,7 @@ $afterCount = (int)$pdo->query('SELECT COUNT(*) FROM avaliacoes')->fetchColumn()
 $latest = $pdo->query('SELECT id, nome, empresa_nome, nota_financeiro, nota_mercado, nota_pessoas, nota_processo FROM avaliacoes ORDER BY id DESC LIMIT 1')->fetch(PDO::FETCH_ASSOC);
 $service = new AvaliacaoPdfService();
 $pdfPath = $service->pdfPath((int)($latest['id'] ?? 0));
+$pdfHtml = $service->renderHtml((int)($latest['id'] ?? 0)) ?: '';
 parse_str((string)parse_url($publicController->redirectUrl, PHP_URL_QUERY), $redirectQuery);
 
 $_SERVER['REQUEST_METHOD'] = 'GET';
@@ -118,6 +119,8 @@ echo json_encode([
     'redirect_has_pdf_signature' => !empty($redirectQuery['sig']),
     'finish_output_empty' => $finishOutput === '',
     'pdf_cached' => is_file($pdfPath),
+    'pdf_html_has_answers_section' => str_contains($pdfHtml, 'Itens pontuados e não pontuados'),
+    'pdf_html_has_answer_items' => str_contains($pdfHtml, 'class="ok"') || str_contains($pdfHtml, 'class="nok"'),
     'public_pdf_header' => substr($publicPdf, 0, 4),
     'latest_nome' => $latest['nome'] ?? null,
     'latest_empresa' => $latest['empresa_nome'] ?? null,
