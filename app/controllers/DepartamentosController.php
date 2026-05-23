@@ -29,8 +29,9 @@ class DepartamentosController extends BaseController
     public function create(): void
     {
         $this->requireLogin();
+        $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
         $clientes = $this->clientes->all();
-        $this->render('departamentos/create', ['clientes' => $clientes]);
+        $this->render('departamentos/create', ['clientes' => $clientes, 'cliente' => $cliente]);
     }
 
     public function store(): void
@@ -59,7 +60,8 @@ class DepartamentosController extends BaseController
         $id = (int)($_GET['id'] ?? 0);
         $item = $this->deps->find($id);
         $clientes = $this->clientes->all();
-        $this->render('departamentos/edit', ['item' => $item, 'clientes' => $clientes]);
+        $cliente = (int)($_GET['cliente'] ?? (($item['cliente_id'] ?? 0)));
+        $this->render('departamentos/edit', ['item' => $item, 'clientes' => $clientes, 'cliente' => $cliente]);
     }
 
     public function update(): void

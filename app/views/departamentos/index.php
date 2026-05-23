@@ -1,10 +1,11 @@
 <?php /** @var array $items */ /** @var array $clientes */ /** @var int $selectedCliente */ ?>
+<?php $backUrl = $selectedCliente ? ('index.php?route=clientes/show&id=' . (int)$selectedCliente) : 'index.php?route=clientes/index'; ?>
 <div class="p-6">
     <div class="flex justify-between items-center mb-4">
         <h1 class="text-2xl font-bold"><?= htmlspecialchars($pageTitle ?? 'Departamentos') ?></h1>
         <div class="flex items-center gap-2">
-            <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=departamentos/create">Novo Departamento</a>
-            <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="javascript:history.back()">Voltar</a>
+            <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=departamentos/create<?= $selectedCliente ? '&cliente=' . (int)$selectedCliente : '' ?>">Novo Departamento</a>
+            <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="<?= htmlspecialchars($backUrl) ?>">Voltar</a>
         </div>
     </div>
     <form method="get" action="index.php" class="mb-4 flex items-center gap-2">

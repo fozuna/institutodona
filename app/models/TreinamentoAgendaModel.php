@@ -163,6 +163,7 @@ class TreinamentoAgendaModel extends BaseModel
         $params = ['treinamento_id' => $treinamentoId];
         $sql = "SELECT
                     tc.colaborador_id,
+                    tc.status,
                     col.nome AS colaborador_nome,
                     col.email AS colaborador_email,
                     f.nome AS funcao_nome,
@@ -172,7 +173,7 @@ class TreinamentoAgendaModel extends BaseModel
                 LEFT JOIN funcoes f ON f.id = col.funcao_id
                 LEFT JOIN setores s ON s.id = f.setor_id
                 WHERE tc.treinamento_id = :treinamento_id
-                  AND tc.status = 'pendente'";
+                ";
         if ($agendaId) {
             $sql .= " AND tc.colaborador_id NOT IN (
                 SELECT tp.colaborador_id

@@ -11,6 +11,16 @@ ob_start();
 function ok(string $msg): void { echo "OK: $msg\n"; }
 function failFast(string $msg): void { echo "FAIL: $msg\n"; exit(1); }
 
+class TestIndicadoresController extends IndicadoresController
+{
+    public string $redirectedTo = '';
+
+    protected function redirect(string $url): void
+    {
+        $this->redirectedTo = $url;
+    }
+}
+
 $_SESSION['user'] = [
     'id' => 1,
     'nome' => 'Instituto',
@@ -22,7 +32,7 @@ $_SESSION['user'] = [
 $pdo = Database::getConnection();
 $suffix = substr(bin2hex(random_bytes(4)), 0, 8);
 $cleanup = [
-    'indicador_id' => 0,
+    'indicador_ids' => [],
     'unidade_id' => 0,
     'setor_id' => 0,
     'departamento_id' => 0,
@@ -31,7 +41,14 @@ $cleanup = [
 
 register_shutdown_function(function() use ($pdo, &$cleanup) {
     try {
-        if (!empty($cleanup['indicador_id'])) { $pdo->prepare('DELETE FROM indicadores WHERE id = :id')->execute(['id' => $cleanup['indicador_id']]); }
+        if (!empty($cleanup['indicador_ids']) && is_array($cleanup['indicador_ids'])) {
+            $stmt = $pdo->prepare('DELETE FROM indicadores WHERE id = :id');
+            foreach (array_values(array_unique(array_map('intval', $cleanup['indicador_ids']))) as $id) {
+                if ($id > 0) {
+                    $stmt->execute(['id' => $id]);
+                }
+            }
+        }
         if (!empty($cleanup['unidade_id'])) { $pdo->prepare('DELETE FROM unidades_medida WHERE id = :id')->execute(['id' => $cleanup['unidade_id']]); }
         if (!empty($cleanup['setor_id'])) { $pdo->prepare('DELETE FROM setores WHERE id = :id')->execute(['id' => $cleanup['setor_id']]); }
         if (!empty($cleanup['departamento_id'])) { $pdo->prepare('DELETE FROM departamentos WHERE id = :id')->execute(['id' => $cleanup['departamento_id']]); }
@@ -68,6 +85,89 @@ $unidadeId = (int)$pdo->lastInsertId();
 if ($unidadeId <= 0) failFast('Falha ao criar unidade');
 $cleanup['unidade_id'] = $unidadeId;
 
+$csrf = Security::csrfToken();
+$_SERVER['REQUEST_METHOD'] = 'POST';
+$_GET = ['route' => 'indicadores/store'];
+$_POST = [
+    'csrf' => $csrf,
+    'cliente_id' => (string)$clienteId,
+    'cliente_nome' => 'Cliente Indicadores ' . $suffix,
+    'indicador' => 'Indicador Store ' . $suffix,
+    'departamento_id' => (string)$departamentoId,
+    'setor_id' => (string)$setorId,
+    'responsavel_ids' => [],
+    'periodicidade_tipo' => 'mensal',
+    'data_inicial' => date('Y-m-01'),
+    'data_final' => date('Y-m-t'),
+    'valor' => '10',
+    'unidade_medida_id' => (string)$unidadeId,
+    'valor_minimo' => '0',
+    'valor_maximo' => '100',
+];
+unset($_SERVER['HTTP_X_REQUESTED_WITH']);
+
+ob_start();
+$ctrl = new TestIndicadoresController();
+$ctrl->store();
+$html = ob_get_clean();
+if ($html !== '') {
+    failFast('Store não deveria renderizar HTML em caso de sucesso');
+}
+if ($ctrl->redirectedTo === '' || strpos($ctrl->redirectedTo, 'route=indicadores/index') === false) {
+    failFast('Store não redirecionou corretamente: ' . $ctrl->redirectedTo);
+}
+if (strpos($ctrl->redirectedTo, '&cliente=' . $clienteId) === false) {
+    failFast('Store não preservou cliente no redirect: ' . $ctrl->redirectedTo);
+}
+$stmt = $pdo->prepare('SELECT id, cliente_id FROM indicadores WHERE indicador = :nome ORDER BY id DESC LIMIT 1');
+$stmt->execute(['nome' => 'Indicador Store ' . $suffix]);
+$createdRow = $stmt->fetch();
+if (!$createdRow) {
+    failFast('Indicador não foi criado via controller store');
+}
+ok('Store criou indicador');
+if ((int)$createdRow['cliente_id'] !== $clienteId) {
+    failFast('cliente_id não persistiu via store. Atual=' . json_encode($createdRow['cliente_id']));
+}
+ok('Store persistiu cliente_id corretamente');
+$cleanup['indicador_ids'][] = (int)$createdRow['id'];
+
+$stmt = $pdo->prepare('SELECT COUNT(*) FROM indicadores WHERE indicador = :nome');
+$stmt->execute(['nome' => 'Indicador Missing Cliente ' . $suffix]);
+$beforeMissing = (int)$stmt->fetchColumn();
+$csrf = Security::csrfToken();
+$_SERVER['REQUEST_METHOD'] = 'POST';
+$_GET = ['route' => 'indicadores/store'];
+$_POST = [
+    'csrf' => $csrf,
+    'cliente_id' => '',
+    'cliente_nome' => 'Cliente Indicadores ' . $suffix,
+    'indicador' => 'Indicador Missing Cliente ' . $suffix,
+    'departamento_id' => (string)$departamentoId,
+    'setor_id' => (string)$setorId,
+    'responsavel_ids' => [],
+    'periodicidade_tipo' => 'mensal',
+    'data_inicial' => date('Y-m-01'),
+    'data_final' => date('Y-m-t'),
+    'valor' => '10',
+    'unidade_medida_id' => (string)$unidadeId,
+    'valor_minimo' => '0',
+    'valor_maximo' => '100',
+];
+ob_start();
+(new TestIndicadoresController())->store();
+$outMissing = ob_get_clean();
+$stmt = $pdo->prepare('SELECT COUNT(*) FROM indicadores WHERE indicador = :nome');
+$stmt->execute(['nome' => 'Indicador Missing Cliente ' . $suffix]);
+$afterMissing = (int)$stmt->fetchColumn();
+if ($afterMissing !== $beforeMissing) {
+    failFast('Store deveria bloquear criação sem cliente_id');
+}
+if (strpos($outMissing, 'Selecione um cliente ativo e válido.') === false) {
+    failFast('Store deveria exibir mensagem de erro para cliente inválido');
+}
+ok('Store bloqueia criação sem cliente selecionado');
+
 $model = new IndicadorModel();
 $payload = [
     'cliente_id' => $clienteId,
@@ -87,10 +187,9 @@ $errors = $model->validate($payload);
 if ($errors) failFast('Payload inválido: ' . json_encode($errors, JSON_UNESCAPED_UNICODE));
 $indicadorId = $model->create($payload, 1);
 if ($indicadorId <= 0) failFast('Falha ao criar indicador');
-$cleanup['indicador_id'] = $indicadorId;
+$cleanup['indicador_ids'][] = $indicadorId;
 ok('Indicador criado');
 
-$csrf = Security::csrfToken();
 $_SERVER['REQUEST_METHOD'] = 'POST';
 $_POST = ['csrf' => $csrf, 'id' => $indicadorId, 'valor' => '25,50'];
 $_GET = ['route' => 'indicadores/updateValorAjax'];

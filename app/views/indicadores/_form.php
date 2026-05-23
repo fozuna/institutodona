@@ -60,7 +60,8 @@ $formatInput = static function ($raw): string {
           />
           <div id="indicadorClienteResults" class="hidden absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow max-h-56 overflow-auto"></div>
         </div>
-        <?php if ($fieldError('cliente_id')): ?><p class="text-sm text-red-600 mt-1"><?= htmlspecialchars($fieldError('cliente_id')) ?></p><?php endif; ?>
+        <?php $clienteIdError = $fieldError('cliente_id'); ?>
+        <p id="indicadorClienteIdError" class="text-sm text-red-600 mt-1<?= $clienteIdError ? '' : ' hidden' ?>"><?= htmlspecialchars($clienteIdError) ?></p>
       </div>
 
       <div class="md:col-span-2">
@@ -206,11 +207,13 @@ $formatInput = static function ($raw): string {
     const clientIdInput = document.getElementById('indicadorClienteId');
     const clientNameInput = document.getElementById('indicadorClienteNome');
     const clientResults = document.getElementById('indicadorClienteResults');
+    const clientError = document.getElementById('indicadorClienteIdError');
     const departmentSelect = document.getElementById('indicadorDepartamento');
     const sectorSelect = document.getElementById('indicadorSetor');
     const responsavelInput = document.getElementById('indicadorResponsavelBusca');
     const responsavelResults = document.getElementById('indicadorResponsavelResults');
     const selectedContainer = document.getElementById('indicadorResponsaveisSelecionados');
+    const invalidClientMsg = <?= json_encode($t('indicadores.validation.invalid_client'), JSON_UNESCAPED_UNICODE) ?>;
 
     function escapeHtml(value) {
       return String(value || '')
@@ -230,6 +233,24 @@ $formatInput = static function ($raw): string {
     function clearResults(node) {
       node.innerHTML = '';
       node.classList.add('hidden');
+    }
+
+    function setClientError(message) {
+      if (clientError) {
+        clientError.textContent = message || '';
+        clientError.classList.toggle('hidden', !message);
+      }
+      if (clientInput) {
+        clientInput.classList.toggle('border-red-400', !!message);
+        clientInput.classList.toggle('border-gray-300', !message);
+      }
+    }
+
+    function clearClientError() {
+      setClientError('');
+      if (clientInput) {
+        clientInput.setCustomValidity('');
+      }
     }
 
     function renderResults(node, items, onSelect, formatter) {
@@ -325,7 +346,19 @@ $formatInput = static function ($raw): string {
     });
 
     const form = document.querySelector('form[action*="indicadores/"]');
-    form?.addEventListener('submit', function () {
+    form?.addEventListener('submit', function (e) {
+      const clienteId = parseInt(clientIdInput?.value || '0', 10);
+      if (!clienteId) {
+        e.preventDefault();
+        setClientError(invalidClientMsg);
+        if (clientInput) {
+          clientInput.setCustomValidity(invalidClientMsg);
+          clientInput.reportValidity();
+          clientInput.focus();
+        }
+        return;
+      }
+      clearClientError();
       this.querySelectorAll('[data-indicador-decimal]').forEach((input) => {
         input.value = normalizeDecimal(input.value);
       });
@@ -357,6 +390,9 @@ $formatInput = static function ($raw): string {
     clientInput.addEventListener('input', function () {
       clientIdInput.value = '';
       clientNameInput.value = this.value;
+      if (this.value.trim() === '') {
+        clearClientError();
+      }
       if (this.value.trim().length < 2) {
         clearResults(clientResults);
         return;
@@ -366,6 +402,7 @@ $formatInput = static function ($raw): string {
           clientInput.value = item.nome_empresa || '';
           clientIdInput.value = item.id || '';
           clientNameInput.value = item.nome_empresa || '';
+          clearClientError();
           clearResults(clientResults);
           loadDepartamentos('');
           selectedIds().forEach(removeResponsavel);

@@ -295,6 +295,9 @@ class IndicadorModel extends BaseModel
     public function create(array $input, int $userId): int
     {
         $data = $this->sanitize($input);
+        if ($data['cliente_id'] <= 0 || !$this->canAccessClienteId($data['cliente_id']) || !$this->clientes->findActive($data['cliente_id'])) {
+            return 0;
+        }
         $stmt = $this->db->prepare(
             'INSERT INTO indicadores (
                 cliente_id, indicador, nome, departamento_id, setor_id, periodicidade_tipo,
@@ -331,6 +334,9 @@ class IndicadorModel extends BaseModel
     public function update(int $id, array $input, int $userId): bool
     {
         $data = $this->sanitize($input);
+        if ($data['cliente_id'] <= 0 || !$this->canAccessClienteId($data['cliente_id']) || !$this->clientes->findActive($data['cliente_id'])) {
+            return false;
+        }
         $params = [
             'id' => $id,
             'cliente_id' => $data['cliente_id'],

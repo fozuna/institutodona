@@ -136,6 +136,13 @@ class IndicadoresController extends BaseController
             return;
         }
         $id = $this->model->create($formData, $this->currentUserId());
+        if ($id <= 0) {
+            $_SESSION['flash_error'] = I18n::t('indicadores.flash.invalid_request');
+            $this->renderForm('create', $formData, [
+                'cliente_id' => I18n::t('indicadores.validation.invalid_client'),
+            ]);
+            return;
+        }
         $_SESSION['flash_success'] = I18n::t('indicadores.flash.created');
         $clienteId = (int)($formData['cliente_id'] ?? 0);
         $this->redirect('index.php?route=indicadores/index' . ($clienteId > 0 ? '&cliente=' . $clienteId : ''));

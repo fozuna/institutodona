@@ -100,25 +100,22 @@ class TreinamentoDocumentService
         $logo = $logoUri !== '' ? '<img src="' . $this->e($logoUri) . '" class="logo" alt="Logo" />' : '';
 
         $thead = '<tr>'
-            . '<th>Nome do participante</th>'
-            . '<th>Departamento</th>'
-            . '<th>Função/Cargo</th>'
-            . '<th>Data do treinamento</th>'
+            . '<th class="col-name">Nome completo</th>'
+            . '<th class="col-dep">Departamento</th>'
+            . '<th class="col-sign">Assinatura</th>'
             . '</tr>';
         $tbody = '';
         foreach ($participants as $p) {
             $nome = (string)($p['colaborador_nome'] ?? '');
             $dep = (string)($p['departamento_nome'] ?? '');
-            $cargo = (string)($p['funcao_nome'] ?? '');
             $tbody .= '<tr>'
-                . '<td><span class="name-text">' . $this->e($nome) . '</span><span class="sign-line"></span></td>'
-                . '<td>' . $this->e($dep) . '</td>'
-                . '<td>' . $this->e($cargo) . '</td>'
-                . '<td>' . $this->e($startDate !== '' ? DateHelper::formatDate($startDate) : '') . '</td>'
+                . '<td class="col-name">' . $this->e($nome) . '</td>'
+                . '<td class="col-dep">' . $this->e($dep) . '</td>'
+                . '<td class="col-sign"><span class="sign-line"></span></td>'
                 . '</tr>';
         }
         if ($tbody === '') {
-            $tbody = '<tr><td colspan="4">Nenhum participante pré-cadastrado para este agendamento.</td></tr>';
+            $tbody = '<tr><td colspan="3">Nenhum participante pré-cadastrado para este agendamento.</td></tr>';
         }
 
         $header = '<div class="doc-header">'
@@ -152,13 +149,15 @@ class TreinamentoDocumentService
             . 'thead{display:table-header-group;}'
             . 'tr{page-break-inside:avoid;}'
             . 'td{height:14mm;}'
-            . '.name-text{display:inline-block;width:44%;vertical-align:bottom;}'
-            . '.sign-line{display:inline-block;width:54%;border-bottom:1px solid #000;height:10mm;vertical-align:bottom;margin-left:2%;}'
+            . '.col-name{width:48%;}'
+            . '.col-dep{width:22%;}'
+            . '.col-sign{width:30%;}'
+            . '.sign-line{display:block;width:100%;border-bottom:1px solid #000;height:10mm;}'
             . '.footnote{margin-top:6mm;font-size:9pt;}'
             . '</style></head><body>'
             . $header
             . '<table><thead>' . $thead . '</thead><tbody>' . $tbody . '</tbody></table>'
-            . '<div class="footnote"><strong>Assinatura:</strong> assine no campo ao lado do nome para autenticar a presença.</div>'
+            . '<div class="footnote"><strong>Assinatura:</strong> assine no campo reservado na coluna de assinatura para autenticar a presença.</div>'
             . '<script type="text/php">'
             . 'if (isset($pdf) && isset($fontMetrics)) {'
             . '$text = "Página {PAGE_NUM} de {PAGE_COUNT}";'

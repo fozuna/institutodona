@@ -374,12 +374,12 @@ class TreinamentoModel extends BaseModel
         $acumulados = $this->periodAccumulators($filters);
         $alertasSetor = array_values(array_filter($setores, static fn(array $row): bool => (float)($row['percentual_participacao'] ?? 0) < 50.0));
         return [
-            'por_treinamento' => $this->dashboardBy('t.id', 't.nome'),
-            'por_funcao' => $this->dashboardBy('f.id', 'f.nome'),
-            'por_unidade' => $this->dashboardBy('c.id', 'c.nome_empresa'),
-            'pendentes' => $this->dashboardListByStatus('pendente'),
-            'concluidos' => $this->dashboardListByStatus('concluido'),
-            'alertas' => $this->pendingAlerts(),
+            'por_treinamento' => $this->dashboardBy($filters, 't.id', 't.nome'),
+            'por_funcao' => $this->dashboardBy($filters, 'f.id', 'f.nome'),
+            'por_unidade' => $this->dashboardBy($filters, 'c.id', 'c.nome_empresa'),
+            'pendentes' => $this->dashboardListByStatus($filters, 'pendente'),
+            'concluidos' => $this->dashboardListByStatus($filters, 'concluido'),
+            'alertas' => $this->pendingAlertsFiltered($filters),
             'participacao_treinamento' => $participacao,
             'setores' => $setores,
             'acumulados' => $acumulados,
@@ -433,7 +433,7 @@ class TreinamentoModel extends BaseModel
         }
     }
 
-    private function dashboardBy(string $groupExpr, string $labelExpr): array
+    private function dashboardBy(array $filters, string $groupExpr, string $labelExpr): array
     {
         $params = [];
         $sql = "SELECT
@@ -448,6 +448,7 @@ class TreinamentoModel extends BaseModel
                 LEFT JOIN clientes c ON c.id = col.cliente_id
                 JOIN departamentos d ON d.id = t.departamento_id
                 WHERE 1=1";
+        $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['d.cliente_id', 'col.cliente_id']);
         $scope = $this->tenantInCondition('d.cliente_id', $params, 'trdash');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
@@ -463,7 +464,7 @@ class TreinamentoModel extends BaseModel
         return $rows;
     }
 
-    private function dashboardListByStatus(string $status): array
+    private function dashboardListByStatus(array $filters, string $status): array
     {
         $params = ['status' => $status];
         $sql = "SELECT
@@ -477,6 +478,7 @@ class TreinamentoModel extends BaseModel
                 JOIN clientes c ON c.id = col.cliente_id
                 JOIN departamentos d ON d.id = t.departamento_id
                 WHERE tc.status = :status";
+        $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['d.cliente_id', 'col.cliente_id', 'c.id']);
         $scope = $this->tenantInCondition('d.cliente_id', $params, 'trlist');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
@@ -485,6 +487,65 @@ class TreinamentoModel extends BaseModel
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll() ?: [];
+    }
+
+    private function pendingAlertsFiltered(array $filters): array
+    {
+        $this->ensureSchema();
+        $this->refreshStatuses();
+        $params = [];
+        $sql = "SELECT
+                    t.id AS treinamento_id,
+                    t.nome AS treinamento_nome,
+                    t.periodicidade,
+                    tc.colaborador_id,
+                    col.nome AS colaborador_nome,
+                    c.nome_empresa AS unidade_nome,
+                    (
+                        SELECT MAX(ta.data)
+                        FROM treinamento_participantes tp
+                        JOIN treinamentos_agenda ta ON ta.id = tp.agenda_id
+                        WHERE tp.colaborador_id = tc.colaborador_id
+                          AND ta.treinamento_id = tc.treinamento_id
+                          AND (tp.presenca = 1 OR tp.certificado_emitido = 1)
+                    ) AS ultima_conclusao
+                FROM treinamento_colaboradores tc
+                JOIN treinamentos t ON t.id = tc.treinamento_id
+                JOIN colaboradores col ON col.id = tc.colaborador_id
+                JOIN clientes c ON c.id = col.cliente_id
+                JOIN departamentos d ON d.id = t.departamento_id
+                WHERE 1=1";
+        $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['d.cliente_id', 'col.cliente_id', 'c.id']);
+        $scope = $this->tenantInCondition('d.cliente_id', $params, 'tralert');
+        if ($scope !== '1=1') {
+            $sql .= " AND {$scope}";
+        }
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll() ?: [];
+
+        $alerts = [];
+        $today = strtotime(date('Y-m-d'));
+        foreach ($rows as $row) {
+            $days = self::periodicidadeDias($row['periodicidade'] ?? null);
+            if ($days === null) {
+                continue;
+            }
+            $last = !empty($row['ultima_conclusao']) ? strtotime((string)$row['ultima_conclusao']) : null;
+            if (!$last) {
+                $alerts[] = array_merge($row, ['alerta' => 'pendente', 'dias_restantes' => null]);
+                continue;
+            }
+            $expires = strtotime('+' . $days . ' days', $last);
+            $remaining = (int)floor(($expires - $today) / 86400);
+            if ($remaining <= 30) {
+                $alerts[] = array_merge($row, [
+                    'alerta' => $remaining < 0 ? 'vencido' : 'proximo_vencimento',
+                    'dias_restantes' => $remaining,
+                ]);
+            }
+        }
+        return $alerts;
     }
 
     private function idsFor(string $table, string $column, int $treinamentoId): array
@@ -787,6 +848,7 @@ class TreinamentoModel extends BaseModel
                 LEFT JOIN treinamentos t ON t.id = ta.treinamento_id
                 LEFT JOIN departamentos d ON d.id = s.departamento_id
                 WHERE 1=1";
+        $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['d.cliente_id', 'col_all.cliente_id'], true);
         if (!empty($filters['setor_id'])) {
             $sql .= " AND s.id = :setor_id";
             $params['setor_id'] = (int)$filters['setor_id'];
@@ -861,8 +923,11 @@ class TreinamentoModel extends BaseModel
     {
         $sql = '';
         if (!empty($filters['cliente_id'])) {
-            $sql .= " AND d.cliente_id = :cliente_id";
-            $params['cliente_id'] = (int)$filters['cliente_id'];
+            $cid = (int)$filters['cliente_id'];
+            $params['cliente_id_dep'] = $cid;
+            $params['cliente_id_unidade'] = $cid;
+            $params['cliente_id_col'] = $cid;
+            $sql .= " AND d.cliente_id = :cliente_id_dep AND ta.unidade_id = :cliente_id_unidade AND (col.id IS NULL OR col.cliente_id = :cliente_id_col)";
         }
         if (!empty($filters['periodo_inicio'])) {
             $sql .= " AND DATE(ta.data) >= :periodo_inicio";
@@ -885,6 +950,25 @@ class TreinamentoModel extends BaseModel
             $params['instrutor'] = '%' . trim((string)$filters['instrutor']) . '%';
         }
         return $sql;
+    }
+
+    private function applyEmpresaDashboardFilter(array $filters, array &$params, array $clienteColumns, bool $agendaNullable = false): string
+    {
+        if (empty($filters['cliente_id'])) {
+            return '';
+        }
+        $cid = (int)$filters['cliente_id'];
+        $clauses = [];
+        foreach (array_values($clienteColumns) as $i => $col) {
+            $k = 'dash_cliente_' . $i;
+            $params[$k] = $cid;
+            $clauses[] = $col . ' = :' . $k;
+        }
+        if ($agendaNullable) {
+            $params['dash_cliente_ag'] = $cid;
+            $clauses[] = '(ta.id IS NULL OR ta.unidade_id = :dash_cliente_ag)';
+        }
+        return ' AND ' . implode(' AND ', $clauses);
     }
 
     private function cacheGet(string $cacheKey): ?array

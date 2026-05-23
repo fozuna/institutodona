@@ -43,6 +43,16 @@ class TreinamentosController extends BaseController
     {
         $this->requireLogin();
         $filters = $this->dashboardFilters();
+        AuditLogger::log('treinamentos_dashboard_access', 'treinamentos', null, [
+            'cliente_id' => (int)($filters['cliente_id'] ?? 0),
+            'setor_id' => (int)($filters['setor_id'] ?? 0),
+            'periodo_inicio' => (string)($filters['periodo_inicio'] ?? ''),
+            'periodo_fim' => (string)($filters['periodo_fim'] ?? ''),
+            'tipo_treinamento' => (string)($filters['tipo_treinamento'] ?? ''),
+            'instrutor' => (string)($filters['instrutor'] ?? ''),
+            'allowed_client_ids' => Auth::allowedClientIds(),
+            'tipo_acesso' => (string)($_SESSION['user']['tipo_acesso'] ?? ''),
+        ]);
         $clientes = $this->clienteOptions();
         $setores = $this->setorOptions();
         if (!empty($filters['cliente_id'])) {
@@ -55,7 +65,7 @@ class TreinamentosController extends BaseController
             'filters' => $filters,
             'clientes' => $clientes,
             'setores' => $setores,
-            'tipoTreinamentoOptions' => $this->tipoTreinamentoOptions(),
+            'tipoTreinamentoOptions' => $this->tipoTreinamentoOptions((int)($filters['cliente_id'] ?? 0)),
         ]);
     }
 
@@ -637,6 +647,16 @@ class TreinamentosController extends BaseController
             return;
         }
         $filters = $this->dashboardFilters();
+        AuditLogger::log('treinamentos_dashboard_pdf', 'treinamentos', null, [
+            'cliente_id' => (int)($filters['cliente_id'] ?? 0),
+            'setor_id' => (int)($filters['setor_id'] ?? 0),
+            'periodo_inicio' => (string)($filters['periodo_inicio'] ?? ''),
+            'periodo_fim' => (string)($filters['periodo_fim'] ?? ''),
+            'tipo_treinamento' => (string)($filters['tipo_treinamento'] ?? ''),
+            'instrutor' => (string)($filters['instrutor'] ?? ''),
+            'allowed_client_ids' => Auth::allowedClientIds(),
+            'tipo_acesso' => (string)($_SESSION['user']['tipo_acesso'] ?? ''),
+        ]);
         $dashboard = $this->model->dashboard($filters);
         $this->sendBinaryPdf(
             'dashboard-treinamentos-' . date('Ymd-His') . '.pdf',
@@ -911,11 +931,35 @@ class TreinamentosController extends BaseController
         return $stmt->fetchAll() ?: [];
     }
 
-    private function tipoTreinamentoOptions(): array
+    private function tipoTreinamentoOptions(int $clienteId = 0): array
     {
         $pdo = Database::getConnection();
-        $stmt = $pdo->query("SELECT DISTINCT tipo_treinamento FROM treinamentos WHERE tipo_treinamento IS NOT NULL AND TRIM(tipo_treinamento) <> '' ORDER BY tipo_treinamento");
-        return array_values(array_filter(array_map(static fn(array $row): string => (string)$row['tipo_treinamento'], $stmt->fetchAll() ?: [])));
+        $params = [];
+        $sql = "SELECT DISTINCT t.tipo_treinamento
+                FROM treinamentos t
+                JOIN departamentos d ON d.id = t.departamento_id
+                WHERE t.tipo_treinamento IS NOT NULL AND TRIM(t.tipo_treinamento) <> ''";
+        if ($clienteId > 0) {
+            $sql .= " AND d.cliente_id = :cid";
+            $params['cid'] = $clienteId;
+        }
+        if (!Auth::isInstituto()) {
+            $ids = Auth::allowedClientIds();
+            if (empty($ids)) {
+                return [];
+            }
+            $holders = [];
+            foreach (array_values($ids) as $i => $id) {
+                $key = 'tt' . $i;
+                $holders[] = ':' . $key;
+                $params[$key] = (int)$id;
+            }
+            $sql .= " AND d.cliente_id IN (" . implode(',', $holders) . ")";
+        }
+        $sql .= " ORDER BY t.tipo_treinamento";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        return array_values(array_filter(array_map(static fn(array $row): string => (string)($row['tipo_treinamento'] ?? ''), $stmt->fetchAll() ?: [])));
     }
 
     private function statusAtualOptions(): array
@@ -1152,12 +1196,16 @@ class TreinamentosController extends BaseController
         if ($clienteId > 0 && !$this->canAccessCliente($clienteId)) {
             $clienteId = 0;
         }
+        $setorId = (int)($_GET['setor_id'] ?? 0);
+        if ($setorId > 0 && $clienteId > 0 && !$this->setoresBelongToCliente([$setorId], $clienteId)) {
+            $setorId = 0;
+        }
 
         return [
             'cliente_id' => $clienteId,
             'periodo_inicio' => trim((string)($_GET['periodo_inicio'] ?? '')),
             'periodo_fim' => trim((string)($_GET['periodo_fim'] ?? '')),
-            'setor_id' => (int)($_GET['setor_id'] ?? 0),
+            'setor_id' => $setorId,
             'tipo_treinamento' => trim((string)($_GET['tipo_treinamento'] ?? '')),
             'instrutor' => trim((string)($_GET['instrutor'] ?? '')),
         ];

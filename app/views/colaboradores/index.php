@@ -1,10 +1,11 @@
 <?php /** @var array $items */ /** @var array $funcoes */ /** @var int $cliente */ ?>
+<?php $backUrl = ((int)($cliente ?? 0) > 0) ? ('index.php?route=clientes/show&id=' . (int)$cliente) : 'index.php?route=clientes/index'; ?>
 <div class="p-6">
     <div class="flex justify-between items-center mb-4">
         <h1 class="text-2xl font-bold"><?= htmlspecialchars($pageTitle ?? 'Colaboradores') ?></h1>
         <div class="flex items-center gap-2">
             <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=colaboradores/create<?= $cliente ? '&cliente='.(int)$cliente : '' ?>">Novo Colaborador</a>
-            <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="javascript:history.back()">Voltar</a>
+            <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="<?= htmlspecialchars($backUrl) ?>">Voltar</a>
         </div>
     </div>
     <?php if (\App\Core\Auth::isInstituto() || \App\Core\Auth::isClienteAdmin()): ?>
