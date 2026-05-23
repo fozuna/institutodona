@@ -41,6 +41,8 @@ class CronogramaEventoModel extends BaseModel
         'Coaching',
     ];
 
+    private ?string $dedupCollation = null;
+
     private function ensureTables(): void
     {
         try {
@@ -633,7 +635,7 @@ class CronogramaEventoModel extends BaseModel
     {
         $ignoreIds = array_values(array_unique(array_filter(array_map('intval', $ignoreIds))));
         foreach ($dates as $date) {
-            $collation = 'utf8mb4_uca1400_ai_ci';
+            $collation = $this->resolveDedupCollation();
             $params = [
                 'id_cronograma' => $idCronograma,
                 'data' => $date,
@@ -665,6 +667,33 @@ class CronogramaEventoModel extends BaseModel
             if ((int)$stmt->fetchColumn() > 0) {
                 throw new RuntimeException('Ja existe um evento igual nesta data para o cronograma selecionado.');
             }
+        }
+    }
+
+    private function resolveDedupCollation(): string
+    {
+        if (is_string($this->dedupCollation) && $this->dedupCollation !== '') {
+            return $this->dedupCollation;
+        }
+        $candidates = ['utf8mb4_uca1400_ai_ci', 'utf8mb4_unicode_ci', 'utf8mb4_general_ci'];
+        foreach ($candidates as $candidate) {
+            if ($this->collationExists($candidate)) {
+                $this->dedupCollation = $candidate;
+                return $candidate;
+            }
+        }
+        $this->dedupCollation = 'utf8mb4_unicode_ci';
+        return $this->dedupCollation;
+    }
+
+    private function collationExists(string $collation): bool
+    {
+        try {
+            $stmt = $this->db->prepare('SELECT 1 FROM information_schema.COLLATIONS WHERE COLLATION_NAME = :c LIMIT 1');
+            $stmt->execute(['c' => $collation]);
+            return (bool)$stmt->fetchColumn();
+        } catch (\Throwable $e) {
+            return $collation !== 'utf8mb4_uca1400_ai_ci';
         }
     }
 
