@@ -72,14 +72,16 @@ $brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'dashboard/')===0?'is-active':'' ?>" href="index.php?route=dashboard/index" title="Dashboard"><span data-feather="home" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Dashboard</span></a>
                     <div class="submenu-group">
                         <button type="button"
-                                class="w-full px-3 py-2 rounded nav-link submenu-trigger flex items-center <?= $isPessoasActive ? 'is-active' : '' ?>"
+                                class="w-full px-3 py-2 rounded nav-link submenu-trigger <?= $isPessoasActive ? 'is-active' : '' ?>"
                                 data-submenu-trigger="pessoas"
                                 data-default-open="<?= $isPessoasActive ? 'true' : 'false' ?>"
                                 aria-expanded="<?= $isPessoasActive ? 'true' : 'false' ?>"
                                 title="Pessoas">
-                            <span data-feather="users" class="inline-block mr-2 shrink-0"></span>
-                            <span class="flex-1 text-left sidebar-label">Pessoas</span>
-                            <span data-feather="chevron-down" class="submenu-chevron"></span>
+                            <span class="flex items-center">
+                                <span data-feather="users" class="inline-block mr-2 shrink-0"></span>
+                                <span class="flex-1 text-left sidebar-label">Pessoas</span>
+                                <span data-feather="chevron-down" class="submenu-chevron"></span>
+                            </span>
                         </button>
                         <div class="submenu-panel <?= $isPessoasActive ? '' : 'hidden' ?>" data-submenu-panel="pessoas">
                             <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'treinamentos/')===0?'is-active':'' ?>" href="index.php?route=treinamentos/index" title="Treinamentos"><span data-feather="award" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Treinamentos</span></a>
@@ -87,14 +89,16 @@ $brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
                     </div>
                     <div class="submenu-group">
                         <button type="button"
-                                class="w-full px-3 py-2 rounded nav-link submenu-trigger flex items-center <?= $isProcessosActive ? 'is-active' : '' ?>"
+                                class="w-full px-3 py-2 rounded nav-link submenu-trigger <?= $isProcessosActive ? 'is-active' : '' ?>"
                                 data-submenu-trigger="processos"
                                 data-default-open="<?= $isProcessosActive ? 'true' : 'false' ?>"
                                 aria-expanded="<?= $isProcessosActive ? 'true' : 'false' ?>"
                                 title="Processos">
-                            <span data-feather="layers" class="inline-block mr-2 shrink-0"></span>
-                            <span class="flex-1 text-left sidebar-label">Processos</span>
-                            <span data-feather="chevron-down" class="submenu-chevron"></span>
+                            <span class="flex items-center">
+                                <span data-feather="layers" class="inline-block mr-2 shrink-0"></span>
+                                <span class="flex-1 text-left sidebar-label">Processos</span>
+                                <span data-feather="chevron-down" class="submenu-chevron"></span>
+                            </span>
                         </button>
                         <div class="submenu-panel <?= $isProcessosActive ? '' : 'hidden' ?>" data-submenu-panel="processos">
                             <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'manuais/')===0?'is-active':'' ?>" href="index.php?route=manuais/index" title="Biblioteca"><span data-feather="book-open" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Biblioteca</span></a>
@@ -106,14 +110,16 @@ $brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
                     </div>
                     <div class="submenu-group">
                         <button type="button"
-                                class="w-full px-3 py-2 rounded nav-link submenu-trigger flex items-center <?= $isResultadosActive ? 'is-active' : '' ?>"
+                                class="w-full px-3 py-2 rounded nav-link submenu-trigger <?= $isResultadosActive ? 'is-active' : '' ?>"
                                 data-submenu-trigger="resultados"
                                 data-default-open="<?= $isResultadosActive ? 'true' : 'false' ?>"
                                 aria-expanded="<?= $isResultadosActive ? 'true' : 'false' ?>"
                                 title="Resultados">
-                            <span data-feather="bar-chart-2" class="inline-block mr-2 shrink-0"></span>
-                            <span class="flex-1 text-left sidebar-label">Resultados</span>
-                            <span data-feather="chevron-down" class="submenu-chevron"></span>
+                            <span class="flex items-center">
+                                <span data-feather="bar-chart-2" class="inline-block mr-2 shrink-0"></span>
+                                <span class="flex-1 text-left sidebar-label">Resultados</span>
+                                <span data-feather="chevron-down" class="submenu-chevron"></span>
+                            </span>
                         </button>
                         <div class="submenu-panel <?= $isResultadosActive ? '' : 'hidden' ?>" data-submenu-panel="resultados">
                             <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'indicadores/')===0?'is-active':'' ?>" href="index.php?route=indicadores/index" title="Indicadores"><span data-feather="bar-chart-2" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Indicadores</span></a>
@@ -126,14 +132,16 @@ $brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'avaliacoes/')===0?'is-active':'' ?>" href="index.php?route=avaliacoes/index" title="Avaliações"><span data-feather="check-square" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Avaliações</span></a>
                     <div class="submenu-group">
                         <button type="button"
-                                class="w-full px-3 py-2 rounded nav-link submenu-trigger flex items-center <?= $isCadastrosActive ? 'is-active' : '' ?>"
+                                class="w-full px-3 py-2 rounded nav-link submenu-trigger <?= $isCadastrosActive ? 'is-active' : '' ?>"
                                 data-submenu-trigger="cadastros"
                                 data-default-open="<?= $isCadastrosActive ? 'true' : 'false' ?>"
                                 aria-expanded="<?= $isCadastrosActive ? 'true' : 'false' ?>"
                                 title="Cadastros">
-                            <span data-feather="folder" class="inline-block mr-2 shrink-0"></span>
-                            <span class="flex-1 text-left sidebar-label">Cadastros</span>
-                            <span data-feather="chevron-down" class="submenu-chevron"></span>
+                            <span class="flex items-center">
+                                <span data-feather="folder" class="inline-block mr-2 shrink-0"></span>
+                                <span class="flex-1 text-left sidebar-label">Cadastros</span>
+                                <span data-feather="chevron-down" class="submenu-chevron"></span>
+                            </span>
                         </button>
                         <div class="submenu-panel <?= $isCadastrosActive ? '' : 'hidden' ?>" data-submenu-panel="cadastros">
                             <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'clientes/')===0?'is-active':'' ?>" href="index.php?route=clientes/index" title="Clientes"><span data-feather="briefcase" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Clientes</span></a>
