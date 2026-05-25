@@ -66,9 +66,7 @@ $brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
                         || strpos($r, 'usuarios/') === 0
                         || strpos($r, 'consultores/') === 0
                         || strpos($r, 'pilares/') === 0;
-                    $aboutTab = (string)($_GET['tab'] ?? '');
-                    $isManualActive = strpos($r, 'about/') === 0 && $aboutTab !== 'sobre';
-                    $isSobreActive = strpos($r, 'about/') === 0 && $aboutTab === 'sobre';
+                    $isSobreManualActive = strpos($r, 'about/') === 0;
                 ?>
                 <nav class="px-4 py-4 space-y-1">
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'dashboard/')===0?'is-active':'' ?>" href="index.php?route=dashboard/index" title="Dashboard"><span data-feather="home" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Dashboard</span></a>
@@ -155,8 +153,7 @@ $brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
                     <?php if (($user['email'] ?? '') === 'admin@agencialester.com.br'): ?>
                     <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'logs/')===0?'is-active':'' ?>" href="index.php?route=logs/index" title="Logs"><span data-feather="file-text" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Logs</span></a>
                     <?php endif; ?>
-                    <a class="block px-3 py-2 rounded nav-link <?= $isManualActive ? 'is-active' : '' ?>" href="index.php?route=about/index&tab=manual" title="Manual"><span data-feather="book" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Manual</span></a>
-                    <a class="block px-3 py-2 rounded nav-link <?= $isSobreActive ? 'is-active' : '' ?>" href="index.php?route=about/index&tab=sobre" title="Sobre"><span data-feather="info" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Sobre</span></a>
+                    <a class="block px-3 py-2 rounded nav-link <?= $isSobreManualActive ? 'is-active' : '' ?>" href="index.php?route=about/index" title="Sobre e Manual de Uso"><span data-feather="book" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Sobre e Manual de Uso</span></a>
                 </nav>
                 <div class="mt-auto px-4 py-3 border-t border-brand-brown flex items-center justify-between">
                     <button id="themeToggle" class="text-sm flex items-center gap-2">
