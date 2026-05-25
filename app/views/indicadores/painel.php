@@ -17,9 +17,29 @@ $indicadores = is_array($indicadores ?? null) ? $indicadores : [];
       <h1 class="text-2xl font-bold text-brand-black"><?= htmlspecialchars($t('indicadores.title.dashboard')) ?></h1>
       <p class="text-sm text-gray-600"><?= htmlspecialchars($t('indicadores.help.limites')) ?></p>
     </div>
-    <a class="px-4 py-3 rounded-lg bg-gray-200 text-brand-brown text-center" href="index.php?route=indicadores/index<?= $cliente ? '&cliente=' . (int)$cliente : '' ?>">
-      <?= htmlspecialchars($t('indicadores.action.back')) ?>
-    </a>
+    <div class="flex flex-col sm:flex-row gap-2">
+      <?php
+        $canPdf = $cliente && $periodoInicio !== '' && $periodoFim !== '';
+        $pdfHref = 'index.php?route=indicadores/painelPdf'
+          . '&cliente=' . (int)$cliente
+          . '&ano=' . (int)$ano
+          . '&indicador_id=' . (int)$indicadorId
+          . '&periodo_inicio=' . urlencode($periodoInicio)
+          . '&periodo_fim=' . urlencode($periodoFim);
+      ?>
+      <?php if ($canPdf): ?>
+        <a class="px-4 py-3 rounded-lg bg-brand-red text-white text-center" href="<?= htmlspecialchars($pdfHref) ?>">
+          Exportar PDF
+        </a>
+      <?php else: ?>
+        <span class="px-4 py-3 rounded-lg bg-gray-200 text-gray-400 text-center select-none" aria-disabled="true">
+          Exportar PDF
+        </span>
+      <?php endif; ?>
+      <a class="px-4 py-3 rounded-lg bg-gray-200 text-brand-brown text-center" href="index.php?route=indicadores/index<?= $cliente ? '&cliente=' . (int)$cliente : '' ?>">
+        <?= htmlspecialchars($t('indicadores.action.back')) ?>
+      </a>
+    </div>
   </div>
 
   <div class="bg-white shadow rounded-xl p-4">

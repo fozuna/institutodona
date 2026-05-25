@@ -4,8 +4,10 @@ namespace App\Controllers;
 use App\Core\BaseController;
 use App\Core\Auth;
 use App\Core\AuditLogger;
+use App\Core\DateHelper;
 use App\Core\I18n;
 use App\Core\PdfSupport;
+use App\Core\ReportBranding;
 use App\Core\Security;
 use App\Models\ClienteModel;
 use App\Models\ColaboradorModel;
@@ -311,6 +313,138 @@ class IndicadoresController extends BaseController
             'indicadores' => $indicadores,
             'i18n' => I18n::class,
         ]);
+    }
+
+    public function painelPdf(): void
+    {
+        $this->requireLogin();
+        if (!PdfSupport::isDompdfAvailable()) {
+            $errorId = PdfSupport::newErrorId();
+            AuditLogger::log('pdf_unavailable', 'indicadores', null, [
+                'error_id' => $errorId,
+                'route' => 'indicadores/painelPdf',
+                'reason' => 'dompdf_missing',
+                'diagnostics' => PdfSupport::dompdfDiagnostics(),
+            ]);
+            http_response_code(503);
+            echo PdfSupport::missingDompdfMessage() . ' Código: ' . $errorId;
+            return;
+        }
+
+        $cliente = (int)($this->resolveScopedClienteId(isset($_GET['cliente']) ? (int)$_GET['cliente'] : null) ?? 0);
+        $ano = isset($_GET['ano']) ? (int)$_GET['ano'] : (int)date('Y');
+        $filters = $this->readEventoFilters($cliente);
+        $filters['ano'] = $ano;
+
+        if ($cliente <= 0) {
+            http_response_code(422);
+            echo 'Selecione um cliente para gerar o PDF.';
+            return;
+        }
+        if (!$filters['period_ok']) {
+            http_response_code(422);
+            echo $filters['period_error'] ?: 'Selecione um período de apuração válido.';
+            return;
+        }
+
+        $clienteRow = $this->clientes->find($cliente);
+        if (!$clienteRow) {
+            http_response_code(404);
+            echo 'Cliente não encontrado.';
+            return;
+        }
+
+        $indicadorId = (int)($filters['indicador_id'] ?? 0);
+        $items = $this->eventos->searchByCliente($cliente, $filters);
+        $stats = ['total' => count($items), 'atingida' => 0, 'parcial' => 0, 'nao_atingida' => 0, 'pendente' => 0];
+        foreach ($items as $item) {
+            $key = (string)($item['meta_status_key'] ?? 'pendente');
+            if (!isset($stats[$key])) {
+                $stats[$key] = 0;
+            }
+            $stats[$key]++;
+        }
+
+        $indicadorNome = '';
+        if ($indicadorId > 0) {
+            $indRow = $this->model->find($indicadorId);
+            if ($indRow) {
+                $indicadorNome = (string)($indRow['indicador'] ?? $indRow['nome'] ?? '');
+            }
+        }
+
+        $branding = ReportBranding::aplicarBrandingRelatorio('pdf', [
+            'report_title' => 'Painel de Indicadores',
+            'header_title' => 'Painel de Indicadores',
+            'header_subtitle' => 'Visão consolidada de metas, realizado e status',
+            'logo_position' => 'left',
+            'logo_width' => 108,
+            'margins' => ['top' => 14, 'right' => 12, 'bottom' => 14, 'left' => 12],
+            'footer_text' => 'Relatório do sistema',
+            'generated_at' => DateHelper::now(),
+        ]);
+
+        $data = [
+            'clienteNome' => (string)($clienteRow['nome_empresa'] ?? ''),
+            'clienteId' => $cliente,
+            'ano' => $ano,
+            'indicadorId' => $indicadorId,
+            'indicadorNome' => $indicadorNome,
+            'periodoInicio' => (string)($filters['periodo_inicio'] ?? ''),
+            'periodoFim' => (string)($filters['periodo_fim'] ?? ''),
+            'items' => $items,
+            'stats' => $stats,
+            'branding' => $branding,
+        ];
+
+        ob_start();
+        require __DIR__ . '/../views/indicadores/painel_pdf.php';
+        $html = (string)ob_get_clean();
+
+        if (!empty($_GET['preview'])) {
+            header('Content-Type: text/html; charset=utf-8');
+            echo $html;
+            return;
+        }
+
+        $options = new \Dompdf\Options();
+        $options->set('isRemoteEnabled', false);
+        $options->set('isHtml5ParserEnabled', true);
+        $options->set('isPhpEnabled', false);
+        $options->set('defaultFont', 'DejaVu Sans');
+        $options->set('dpi', 120);
+        $options->setChroot(dirname(__DIR__, 2));
+
+        $dompdf = new \Dompdf\Dompdf($options);
+        $dompdf->setPaper('A4', 'landscape');
+        $dompdf->loadHtml($html, 'UTF-8');
+        $dompdf->render();
+        $pdf = (string)$dompdf->output();
+
+        AuditLogger::log('pdf_export', 'indicadores', null, [
+            'via' => 'painel',
+            'cliente_id' => $cliente,
+            'ano' => $ano,
+            'indicador_id' => $indicadorId,
+            'periodo_inicio' => (string)($filters['periodo_inicio'] ?? ''),
+            'periodo_fim' => (string)($filters['periodo_fim'] ?? ''),
+            'items' => count($items),
+        ]);
+
+        $filename = 'painel_indicadores_' . $cliente . '_' . $ano . '_' . date('Ymd_His') . '.pdf';
+        if (PHP_SAPI !== 'cli') {
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+        }
+        header('Content-Type: application/pdf');
+        header('X-Content-Type-Options: nosniff');
+        header('Content-Transfer-Encoding: binary');
+        header('Cache-Control: private, max-age=0, must-revalidate');
+        header('Pragma: public');
+        header('Content-Length: ' . strlen($pdf));
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        echo $pdf;
     }
 
     public function evento(): void

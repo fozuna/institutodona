@@ -36,8 +36,7 @@ foreach ([
     'Usuários',
     'Consultores',
     'Pilares',
-    'Manual',
-    'Sobre',
+    'Sobre e Manual de Uso',
 ] as $needle) {
     if (!str_contains($html, $needle)) {
         failFast('Menu deveria conter: ' . $needle);
@@ -59,8 +58,7 @@ $expectedOrder = [
     'Cronograma',
     'Avaliações',
     'Cadastros',
-    'Manual',
-    'Sobre',
+    'Sobre e Manual de Uso',
 ];
 $pos = -1;
 foreach ($expectedOrder as $label) {

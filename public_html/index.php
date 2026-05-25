@@ -211,6 +211,9 @@ switch ($route) {
     case 'indicadores/painel':
         (new \App\Controllers\IndicadoresController())->painel();
         break;
+    case 'indicadores/painelPdf':
+        (new \App\Controllers\IndicadoresController())->painelPdf();
+        break;
     case 'biblioteca/index':
         (new BibliotecaController())->index();
         break;
