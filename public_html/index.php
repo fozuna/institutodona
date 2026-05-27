@@ -664,6 +664,9 @@ switch ($route) {
     case 'colaboradores/search':
         (new ColaboradoresController())->search();
         break;
+    case 'colaboradores/filterAjax':
+        (new ColaboradoresController())->filterAjax();
+        break;
     case 'colaboradores/import':
         (new ColaboradoresController())->import();
         break;

@@ -38,12 +38,17 @@ class ColaboradoresController extends BaseController
         $perPage = isset($_GET['per']) ? max(5, min(100, (int)$_GET['per'])) : 20;
         $lider = isset($_GET['lider']) && in_array($_GET['lider'], ['sim','não'], true) ? $_GET['lider'] : '';
         $departamentoId = isset($_GET['departamento']) ? (int)$_GET['departamento'] : 0;
+        $setorId = isset($_GET['setor']) ? (int)$_GET['setor'] : 0;
         $funcaoId = isset($_GET['funcao']) ? (int)$_GET['funcao'] : 0;
+        $unidadeId = isset($_GET['unidade_id']) ? (int)$_GET['unidade_id'] : 0;
+        $status = trim((string)($_GET['status'] ?? ''));
         $allFuncionarios = !empty($_GET['all_funcionarios']) && (string)$_GET['all_funcionarios'] !== '0';
         $filters = [
             'lider' => $lider,
             'departamento_id' => $departamentoId ?: null,
+            'setor_id' => $setorId ?: null,
             'funcao_id' => $funcaoId ?: null,
+            'status' => $status !== '' ? $status : null,
         ];
 
         $clienteModel = new ClienteModel();
@@ -54,6 +59,7 @@ class ColaboradoresController extends BaseController
 
         $scopeClienteIds = [];
         $canAllFuncionarios = false;
+        $catalogClienteId = 0;
         if ($cliente > 0 && $selectedCliente) {
             $matrizId = (int)($selectedCliente['matriz_id'] ?? 0);
             $isMatriz = $matrizId <= 0 && (int)($selectedCliente['is_matriz'] ?? 1) === 1;
@@ -64,6 +70,7 @@ class ColaboradoresController extends BaseController
             if ($groupRootId !== $cliente && !$clienteModel->find($groupRootId)) {
                 $groupRootId = $cliente;
             }
+            $catalogClienteId = $groupRootId;
             $filiais = $clienteModel->filiaisByMatriz($groupRootId);
             $scopeClienteIds = array_values(array_unique(array_merge(
                 [$groupRootId],
@@ -78,25 +85,29 @@ class ColaboradoresController extends BaseController
             $allFuncionarios = false;
         }
 
+        if (!empty($scopeClienteIds) && $unidadeId > 0 && in_array($unidadeId, $scopeClienteIds, true)) {
+            $scopeClienteIds = [$unidadeId];
+        } else {
+            $unidadeId = 0;
+        }
+
         $items = !empty($scopeClienteIds) ? $this->colabs->paginatedByClientesWithFilters($scopeClienteIds, $page, $perPage, $filters) : [];
         $total = !empty($scopeClienteIds) ? $this->colabs->countByClientesWithFilters($scopeClienteIds, $filters) : 0;
         $totalPages = !empty($scopeClienteIds) ? max(1, (int)ceil($total / $perPage)) : 1;
 
         if (!empty($scopeClienteIds)) {
-            if (count($scopeClienteIds) > 1) {
-                $departamentos = $this->deps->allByClientes($scopeClienteIds);
-                $setores = $this->setores->allByClientes($scopeClienteIds);
-                $funcoes = $this->funcoes->allByClientes($scopeClienteIds);
-            } else {
-                $departamentos = $this->deps->allByCliente($scopeClienteIds[0]);
-                $setores = $this->setores->allByCliente($scopeClienteIds[0]);
-                $funcoes = $this->funcoes->allByCliente($scopeClienteIds[0]);
-            }
+            $effectiveCatalogId = $catalogClienteId > 0 ? $catalogClienteId : (int)($scopeClienteIds[0] ?? 0);
+            $departamentos = $effectiveCatalogId > 0 ? $this->deps->allByCliente($effectiveCatalogId) : [];
+            $setores = $departamentoId > 0 ? $this->setores->activeByDepartamento($departamentoId) : ($effectiveCatalogId > 0 ? $this->setores->allByCliente($effectiveCatalogId) : []);
+            $funcoes = $setorId > 0 ? $this->funcoes->allBySetor($setorId, [$effectiveCatalogId]) : ($effectiveCatalogId > 0 ? $this->funcoes->allByCliente($effectiveCatalogId) : []);
         } else {
             $departamentos = $this->deps->all();
             $setores = $this->setores->all();
             $funcoes = [];
         }
+
+        $unidades = !empty($scopeClienteIds) ? $clienteModel->byIds($scopeClienteIds) : [];
+        $statusOptions = !empty($scopeClienteIds) ? $this->colabs->statusOptionsByClientes($scopeClienteIds) : [];
 
         $clientes = (new ClienteModel())->all();
         $this->render('colaboradores/index', [
@@ -106,16 +117,212 @@ class ColaboradoresController extends BaseController
             'funcoes' => $funcoes,
             'cliente' => $cliente,
             'clientes' => $clientes,
+            'unidades' => $unidades,
+            'status_options' => $statusOptions,
             'page' => $page,
             'per' => $perPage,
             'total' => $total,
             'total_pages' => $totalPages,
             'filter_lider' => $lider,
             'filter_departamento' => $departamentoId,
+            'filter_setor' => $setorId,
             'filter_funcao' => $funcaoId,
+            'filter_unidade' => $unidadeId,
+            'filter_status' => $status,
             'filter_all_funcionarios' => $allFuncionarios,
             'can_all_funcionarios' => $canAllFuncionarios
         ]);
+    }
+
+    public function filterAjax(): void
+    {
+        $this->requireLogin();
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+        }
+
+        $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
+        if ($cliente > 0) {
+            $cliente = (int)($this->resolveScopedClienteId($cliente) ?? 0);
+        }
+        $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+        $perPage = isset($_GET['per']) ? max(5, min(100, (int)$_GET['per'])) : 20;
+        $lider = isset($_GET['lider']) && in_array($_GET['lider'], ['sim','não'], true) ? $_GET['lider'] : '';
+        $departamentoId = isset($_GET['departamento']) ? (int)$_GET['departamento'] : 0;
+        $setorId = isset($_GET['setor']) ? (int)$_GET['setor'] : 0;
+        $funcaoId = isset($_GET['funcao']) ? (int)$_GET['funcao'] : 0;
+        $unidadeId = isset($_GET['unidade_id']) ? (int)$_GET['unidade_id'] : 0;
+        $status = trim((string)($_GET['status'] ?? ''));
+        $allFuncionarios = !empty($_GET['all_funcionarios']) && (string)$_GET['all_funcionarios'] !== '0';
+
+        $clienteModel = new ClienteModel();
+        $selectedCliente = $cliente > 0 ? $clienteModel->find($cliente) : null;
+        if ($cliente > 0 && !$selectedCliente) {
+            echo json_encode(['ok' => true, 'options' => [], 'items' => [], 'rows_html' => $this->renderColaboradoresRows([] ,0), 'page' => 1, 'total' => 0, 'total_pages' => 1], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $scopeClienteIds = [];
+        $canAllFuncionarios = false;
+        $catalogClienteId = 0;
+        if ($cliente > 0 && $selectedCliente) {
+            $matrizId = (int)($selectedCliente['matriz_id'] ?? 0);
+            $isMatriz = $matrizId <= 0 && (int)($selectedCliente['is_matriz'] ?? 1) === 1;
+            $groupRootId = $isMatriz ? $cliente : $matrizId;
+            if ($groupRootId <= 0) {
+                $groupRootId = $cliente;
+            }
+            if ($groupRootId !== $cliente && !$clienteModel->find($groupRootId)) {
+                $groupRootId = $cliente;
+            }
+            $catalogClienteId = $groupRootId;
+            $filiais = $clienteModel->filiaisByMatriz($groupRootId);
+            $scopeClienteIds = array_values(array_unique(array_merge(
+                [$groupRootId],
+                array_map(static fn(array $row): int => (int)$row['id'], $filiais)
+            )));
+            $canAllFuncionarios = count($scopeClienteIds) > 1;
+            if (!$allFuncionarios || !$canAllFuncionarios) {
+                $scopeClienteIds = [$cliente];
+                $allFuncionarios = false;
+            }
+        } else {
+            $allFuncionarios = false;
+        }
+
+        if (empty($scopeClienteIds)) {
+            echo json_encode(['ok' => true, 'options' => [], 'items' => [], 'rows_html' => $this->renderColaboradoresRows([] ,0), 'page' => 1, 'total' => 0, 'total_pages' => 1], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $unidades = $clienteModel->byIds($scopeClienteIds);
+        if ($unidadeId > 0 && in_array($unidadeId, $scopeClienteIds, true)) {
+            $scopeClienteIds = [$unidadeId];
+        } else {
+            $unidadeId = 0;
+        }
+
+        $effectiveCatalogId = $catalogClienteId > 0 ? $catalogClienteId : (int)($scopeClienteIds[0] ?? 0);
+
+        if ($departamentoId > 0) {
+            $dep = $this->deps->find($departamentoId);
+            if (!$dep || (int)($dep['cliente_id'] ?? 0) !== $effectiveCatalogId) {
+                $departamentoId = 0;
+                $setorId = 0;
+                $funcaoId = 0;
+            }
+        }
+        if ($setorId > 0) {
+            $set = $this->setores->find($setorId);
+            if (!$set) {
+                $setorId = 0;
+                $funcaoId = 0;
+            } else {
+                $dep = $this->deps->find((int)($set['departamento_id'] ?? 0));
+                $setCliente = $dep ? (int)($dep['cliente_id'] ?? 0) : 0;
+                if ($setCliente <= 0 || $setCliente !== $effectiveCatalogId || ($departamentoId > 0 && (int)($set['departamento_id'] ?? 0) !== $departamentoId)) {
+                    $setorId = 0;
+                    $funcaoId = 0;
+                }
+            }
+        }
+        if ($funcaoId > 0) {
+            $f = $this->funcoes->find($funcaoId);
+            if (!$f || ($setorId > 0 && (int)($f['setor_id'] ?? 0) !== $setorId)) {
+                $funcaoId = 0;
+            } elseif ($setorId === 0) {
+                $set = $this->setores->find((int)($f['setor_id'] ?? 0));
+                if (!$set) {
+                    $funcaoId = 0;
+                } else {
+                    $dep = $this->deps->find((int)($set['departamento_id'] ?? 0));
+                    if (!$dep || (int)($dep['cliente_id'] ?? 0) !== $effectiveCatalogId) {
+                        $funcaoId = 0;
+                    }
+                }
+            } else {
+                $set = $this->setores->find((int)($f['setor_id'] ?? 0));
+                $dep = $set ? $this->deps->find((int)($set['departamento_id'] ?? 0)) : null;
+                if (!$dep || (int)($dep['cliente_id'] ?? 0) !== $effectiveCatalogId) {
+                    $funcaoId = 0;
+                }
+            }
+        }
+
+        $filters = [
+            'lider' => $lider,
+            'departamento_id' => $departamentoId ?: null,
+            'setor_id' => $setorId ?: null,
+            'funcao_id' => $funcaoId ?: null,
+            'status' => $status !== '' ? $status : null,
+        ];
+
+        $items = $this->colabs->paginatedByClientesWithFilters($scopeClienteIds, $page, $perPage, $filters);
+        $total = $this->colabs->countByClientesWithFilters($scopeClienteIds, $filters);
+        $totalPages = max(1, (int)ceil($total / $perPage));
+        $page = min($page, $totalPages);
+        if ($page !== (int)($_GET['page'] ?? $page)) {
+            $items = $this->colabs->paginatedByClientesWithFilters($scopeClienteIds, $page, $perPage, $filters);
+        }
+
+        $departamentos = $effectiveCatalogId > 0 ? $this->deps->allByCliente($effectiveCatalogId) : [];
+        $setores = $departamentoId > 0 ? $this->setores->activeByDepartamento($departamentoId) : ($effectiveCatalogId > 0 ? $this->setores->allByCliente($effectiveCatalogId) : []);
+        $funcoes = $setorId > 0 ? $this->funcoes->allBySetor($setorId, [$effectiveCatalogId]) : ($effectiveCatalogId > 0 ? $this->funcoes->allByCliente($effectiveCatalogId) : []);
+
+        $statusOptions = $this->colabs->statusOptionsByClientes($scopeClienteIds);
+
+        echo json_encode([
+            'ok' => true,
+            'page' => $page,
+            'per' => $perPage,
+            'total' => $total,
+            'total_pages' => $totalPages,
+            'filters' => [
+                'cliente' => $cliente,
+                'all_funcionarios' => $allFuncionarios ? 1 : 0,
+                'can_all_funcionarios' => $canAllFuncionarios ? 1 : 0,
+                'unidade_id' => $unidadeId,
+                'lider' => $lider,
+                'departamento' => $departamentoId,
+                'setor' => $setorId,
+                'funcao' => $funcaoId,
+                'status' => $status,
+            ],
+            'options' => [
+                'unidades' => $unidades,
+                'departamentos' => $departamentos,
+                'setores' => $setores,
+                'funcoes' => $funcoes,
+                'status' => $statusOptions,
+            ],
+            'rows_html' => $this->renderColaboradoresRows($items, $cliente),
+            'summary' => 'Total: ' . (int)$total . ' • Página ' . (int)$page . ' de ' . (int)$totalPages,
+        ], JSON_UNESCAPED_UNICODE);
+    }
+
+    private function renderColaboradoresRows(array $items, int $cliente): string
+    {
+        $e = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+        if (empty($items)) {
+            return '<tr data-empty-row><td class="p-3 text-sm text-gray-600" colspan="7">Nenhum colaborador encontrado para os filtros selecionados.</td></tr>';
+        }
+        $html = '';
+        foreach ($items as $c) {
+            $id = (int)($c['id'] ?? 0);
+            $html .= '<tr class="border-b">';
+            $html .= '<td class="p-3">' . $e((string)($c['nome'] ?? '')) . '</td>';
+            $html .= '<td class="p-3">' . $e((string)($c['email'] ?? '')) . '</td>';
+            $html .= '<td class="p-3">' . $e((string)($c['unidade'] ?? '')) . '</td>';
+            $html .= '<td class="p-3">' . $e((string)($c['funcao'] ?? '')) . '</td>';
+            $html .= '<td class="p-3">' . $e((string)($c['setor'] ?? '')) . '</td>';
+            $html .= '<td class="p-3">' . $e((string)($c['departamento'] ?? '')) . '</td>';
+            $html .= '<td class="p-3 whitespace-nowrap">';
+            $html .= '<a class="text-brand-pink icon-action" href="index.php?route=colaboradores/edit&id=' . $id . ($cliente ? '&cliente=' . (int)$cliente : '') . '" title="Editar" aria-label="Editar"><span data-feather="edit"></span></a>';
+            $html .= '<a class="text-brand-brown icon-action ml-2" href="index.php?route=colaboradores/delete&id=' . $id . ($cliente ? '&cliente=' . (int)$cliente : '') . '" title="Excluir" aria-label="Excluir"><span data-feather="trash-2"></span></a>';
+            $html .= '</td>';
+            $html .= '</tr>';
+        }
+        return $html;
     }
 
     public function search(): void
@@ -139,8 +346,21 @@ class ColaboradoresController extends BaseController
     {
         $this->requireLogin();
         $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
-        $funcoes = $cliente ? $this->funcoes->allByCliente($cliente) : [];
-        $this->render('colaboradores/create', ['funcoes' => $funcoes, 'cliente' => $cliente]);
+        if ($cliente > 0) {
+            $cliente = (int)($this->resolveScopedClienteId($cliente) ?? 0);
+        }
+        $catalogClienteId = $cliente > 0 ? $this->catalogClienteIdForCliente($cliente) : 0;
+        $departamentos = $catalogClienteId > 0 ? $this->deps->allByCliente($catalogClienteId) : [];
+        $setores = $catalogClienteId > 0 ? $this->setores->allByCliente($catalogClienteId) : [];
+        $funcoes = $catalogClienteId > 0 ? $this->funcoes->allByCliente($catalogClienteId) : [];
+        $this->render('colaboradores/create', [
+            'departamentos' => $departamentos,
+            'setores' => $setores,
+            'funcoes' => $funcoes,
+            'cliente' => $cliente,
+            'selected_departamento_id' => 0,
+            'selected_setor_id' => 0,
+        ]);
     }
 
     public function store(): void
@@ -153,8 +373,29 @@ class ColaboradoresController extends BaseController
         $funcaoId = (int)($_POST['funcao_id'] ?? 0);
         $lider = ($_POST['lider'] ?? 'não') === 'sim' ? 'sim' : 'não';
         $cliente = isset($_POST['cliente']) ? (int)$_POST['cliente'] : 0;
-        if ($nome && $funcaoId) { $this->colabs->create(['nome' => $nome, 'email' => $email, 'funcao_id' => $funcaoId, 'lider' => $lider, 'cliente_id' => $cliente]); }
-        header('Location: index.php?route=colaboradores/index' . ($cliente ? '&cliente=' . $cliente : ''));
+        if ($cliente > 0) {
+            $cliente = (int)($this->resolveScopedClienteId($cliente) ?? 0);
+        }
+        $catalogClienteId = $cliente > 0 ? $this->catalogClienteIdForCliente($cliente) : 0;
+        if (!$nome || $cliente <= 0 || $funcaoId <= 0) {
+            $_SESSION['flash_error'] = 'Preencha os campos obrigatórios.';
+            if (!headers_sent()) {
+                header('Location: index.php?route=colaboradores/create' . ($cliente ? '&cliente=' . $cliente : ''));
+            }
+            return;
+        }
+        if ($catalogClienteId <= 0 || !$this->funcaoBelongsToCatalog($funcaoId, $catalogClienteId)) {
+            $_SESSION['flash_error'] = 'Função inválida para a empresa selecionada.';
+            if (!headers_sent()) {
+                header('Location: index.php?route=colaboradores/create&cliente=' . $cliente);
+            }
+            return;
+        }
+        $this->colabs->create(['nome' => $nome, 'email' => $email, 'funcao_id' => $funcaoId, 'lider' => $lider, 'cliente_id' => $cliente]);
+        if (!headers_sent()) {
+            header('Location: index.php?route=colaboradores/index' . ($cliente ? '&cliente=' . $cliente : ''));
+        }
+        return;
     }
 
     public function edit(): void
@@ -163,8 +404,84 @@ class ColaboradoresController extends BaseController
         $id = (int)($_GET['id'] ?? 0);
         $item = $this->colabs->find($id);
         $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
-        $funcoes = $cliente ? $this->funcoes->allByCliente($cliente) : [];
-        $this->render('colaboradores/edit', ['item' => $item, 'funcoes' => $funcoes, 'cliente' => $cliente]);
+        if ($cliente <= 0 && $item) {
+            $cliente = (int)($item['cliente_id'] ?? 0);
+        }
+        if ($cliente > 0) {
+            $cliente = (int)($this->resolveScopedClienteId($cliente) ?? 0);
+        }
+        $catalogClienteId = $cliente > 0 ? $this->catalogClienteIdForCliente($cliente) : 0;
+        $departamentos = $catalogClienteId > 0 ? $this->deps->allByCliente($catalogClienteId) : [];
+        $setores = $catalogClienteId > 0 ? $this->setores->allByCliente($catalogClienteId) : [];
+        $funcoes = $catalogClienteId > 0 ? $this->funcoes->allByCliente($catalogClienteId) : [];
+        $path = $item ? $this->resolveFuncaoPathIds((int)($item['funcao_id'] ?? 0)) : ['departamento_id' => 0, 'setor_id' => 0];
+
+        if ($item && (int)($item['funcao_id'] ?? 0) > 0) {
+            $currentFuncaoId = (int)$item['funcao_id'];
+            $hasCurrentInList = false;
+            foreach ($funcoes as $f) {
+                if ((int)($f['id'] ?? 0) === $currentFuncaoId) {
+                    $hasCurrentInList = true;
+                    break;
+                }
+            }
+            if (!$hasCurrentInList) {
+                $setorId = (int)($path['setor_id'] ?? 0);
+                $depId = (int)($path['departamento_id'] ?? 0);
+                $allowedGroupClienteIds = $catalogClienteId > 0 ? array_values(array_unique(array_merge([$catalogClienteId], array_map(static fn(array $r): int => (int)$r['id'], (new ClienteModel())->filiaisByMatriz($catalogClienteId))))) : [];
+                $dep = $depId > 0 ? $this->deps->find($depId) : null;
+                $depClienteId = (int)($dep['cliente_id'] ?? 0);
+                if ($dep && ($catalogClienteId <= 0 || in_array($depClienteId, $allowedGroupClienteIds, true))) {
+                    $hasDepInList = false;
+                    foreach ($departamentos as $d) {
+                        if ((int)($d['id'] ?? 0) === $depId) {
+                            $hasDepInList = true;
+                            break;
+                        }
+                    }
+                    if (!$hasDepInList) {
+                        $departamentos[] = $dep;
+                    }
+                    $set = $setorId > 0 ? $this->setores->find($setorId) : null;
+                    if ($set) {
+                        $hasSetInList = false;
+                        foreach ($setores as $s) {
+                            if ((int)($s['id'] ?? 0) === $setorId) {
+                                $hasSetInList = true;
+                                break;
+                            }
+                        }
+                        if (!$hasSetInList) {
+                            $setores[] = [
+                                'id' => (int)$set['id'],
+                                'nome' => (string)($set['nome'] ?? ''),
+                                'departamento_id' => (int)($set['departamento_id'] ?? 0),
+                                'departamento' => (string)($dep['nome'] ?? ''),
+                            ];
+                        }
+                    }
+                    $func = $this->funcoes->find($currentFuncaoId);
+                    if ($func) {
+                        $funcoes[] = [
+                            'id' => (int)$func['id'],
+                            'nome' => (string)($func['nome'] ?? ''),
+                            'setor_id' => (int)($func['setor_id'] ?? 0),
+                            'setor' => (string)($set['nome'] ?? ''),
+                            'departamento' => (string)($dep['nome'] ?? ''),
+                        ];
+                    }
+                }
+            }
+        }
+        $this->render('colaboradores/edit', [
+            'item' => $item,
+            'departamentos' => $departamentos,
+            'setores' => $setores,
+            'funcoes' => $funcoes,
+            'cliente' => $cliente,
+            'selected_departamento_id' => (int)($path['departamento_id'] ?? 0),
+            'selected_setor_id' => (int)($path['setor_id'] ?? 0),
+        ]);
     }
 
     public function update(): void
@@ -173,13 +490,102 @@ class ColaboradoresController extends BaseController
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
         $id = (int)($_POST['id'] ?? 0);
+        $current = $id > 0 ? $this->colabs->find($id) : null;
+        if ($id <= 0 || !$current) {
+            $_SESSION['flash_error'] = 'Colaborador não encontrado.';
+            header('Location: index.php?route=colaboradores/index');
+            return;
+        }
         $nome = trim($_POST['nome'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $funcaoId = (int)($_POST['funcao_id'] ?? 0);
         $lider = ($_POST['lider'] ?? 'não') === 'sim' ? 'sim' : 'não';
         $cliente = isset($_POST['cliente']) ? (int)$_POST['cliente'] : 0;
-        if ($id) { $this->colabs->update($id, ['nome' => $nome, 'email' => $email, 'funcao_id' => $funcaoId, 'lider' => $lider, 'cliente_id' => $cliente]); }
-        header('Location: index.php?route=colaboradores/index' . ($cliente ? '&cliente=' . $cliente : ''));
+        if ($cliente > 0) {
+            $cliente = (int)($this->resolveScopedClienteId($cliente) ?? 0);
+        }
+        $catalogClienteId = $cliente > 0 ? $this->catalogClienteIdForCliente($cliente) : 0;
+        $isCatalogFuncao = $catalogClienteId > 0 && $this->funcaoBelongsToCatalog($funcaoId, $catalogClienteId);
+        $isKeepingLegacyFuncao = !$isCatalogFuncao && (int)($current['funcao_id'] ?? 0) > 0 && (int)($current['funcao_id'] ?? 0) === $funcaoId;
+        if ($cliente > 0 && $funcaoId > 0 && ($isCatalogFuncao || $isKeepingLegacyFuncao)) {
+            $this->colabs->update($id, ['nome' => $nome, 'email' => $email, 'funcao_id' => $funcaoId, 'lider' => $lider, 'cliente_id' => $cliente]);
+        } else {
+            $_SESSION['flash_error'] = 'Dados inválidos para salvar o colaborador.';
+            if (!headers_sent()) {
+                header('Location: index.php?route=colaboradores/edit&id=' . $id . ($cliente ? '&cliente=' . $cliente : ''));
+            }
+            return;
+        }
+        if (!headers_sent()) {
+            header('Location: index.php?route=colaboradores/index' . ($cliente ? '&cliente=' . $cliente : ''));
+        }
+        return;
+    }
+
+    private function catalogClienteIdForCliente(int $clienteId): int
+    {
+        $clienteId = (int)$clienteId;
+        if ($clienteId <= 0) {
+            return 0;
+        }
+        $clienteModel = new ClienteModel();
+        $selected = $clienteModel->find($clienteId);
+        if (!$selected) {
+            return 0;
+        }
+        $matrizId = (int)($selected['matriz_id'] ?? 0);
+        $isMatriz = $matrizId <= 0 && (int)($selected['is_matriz'] ?? 1) === 1;
+        $groupRootId = $isMatriz ? $clienteId : $matrizId;
+        if ($groupRootId <= 0) {
+            $groupRootId = $clienteId;
+        }
+        if ($groupRootId !== $clienteId && !$clienteModel->find($groupRootId)) {
+            $groupRootId = $clienteId;
+        }
+        return $groupRootId;
+    }
+
+    private function funcaoBelongsToCatalog(int $funcaoId, int $catalogClienteId): bool
+    {
+        $funcaoId = (int)$funcaoId;
+        $catalogClienteId = (int)$catalogClienteId;
+        if ($funcaoId <= 0 || $catalogClienteId <= 0) {
+            return false;
+        }
+        $f = $this->funcoes->find($funcaoId);
+        if (!$f) {
+            return false;
+        }
+        $set = $this->setores->find((int)($f['setor_id'] ?? 0));
+        if (!$set) {
+            return false;
+        }
+        $dep = $this->deps->find((int)($set['departamento_id'] ?? 0));
+        if (!$dep) {
+            return false;
+        }
+        return (int)($dep['cliente_id'] ?? 0) === $catalogClienteId;
+    }
+
+    private function resolveFuncaoPathIds(int $funcaoId): array
+    {
+        $funcaoId = (int)$funcaoId;
+        if ($funcaoId <= 0) {
+            return ['departamento_id' => 0, 'setor_id' => 0];
+        }
+        $f = $this->funcoes->find($funcaoId);
+        if (!$f) {
+            return ['departamento_id' => 0, 'setor_id' => 0];
+        }
+        $setorId = (int)($f['setor_id'] ?? 0);
+        $set = $setorId > 0 ? $this->setores->find($setorId) : null;
+        if (!$set) {
+            return ['departamento_id' => 0, 'setor_id' => 0];
+        }
+        return [
+            'departamento_id' => (int)($set['departamento_id'] ?? 0),
+            'setor_id' => $setorId,
+        ];
     }
 
     public function delete(): void

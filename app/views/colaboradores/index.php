@@ -249,11 +249,11 @@
         })();
       </script>
     <?php endif; ?>
-    <form method="get" action="index.php" class="mb-4 grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+    <form method="get" action="index.php" id="colaboradoresFilterForm" class="mb-4 grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
         <input type="hidden" name="route" value="colaboradores/index" />
         <div class="md:col-span-4">
           <label class="text-sm">Cliente</label>
-          <select name="cliente" class="border rounded p-2 w-full">
+          <select name="cliente" id="colaboradoresCliente" class="border rounded p-2 w-full">
             <option value="">-- Selecione --</option>
             <?php foreach ($clientes as $cl): ?>
                 <option value="<?= (int)$cl['id'] ?>" <?= ((int)$cliente === (int)$cl['id']) ? 'selected' : '' ?>>
@@ -263,22 +263,42 @@
           </select>
           <?php if (!empty($can_all_funcionarios)): ?>
             <label class="mt-2 flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" name="all_funcionarios" value="1" class="form-checkbox h-4 w-4 text-brand-red" <?= !empty($filter_all_funcionarios) ? 'checked' : '' ?> />
+              <input type="checkbox" name="all_funcionarios" value="1" id="colaboradoresAllFuncionarios" class="form-checkbox h-4 w-4 text-brand-red" <?= !empty($filter_all_funcionarios) ? 'checked' : '' ?> />
               <span>Selecionar todos os funcionários (matriz + filiais)</span>
             </label>
           <?php endif; ?>
         </div>
         <div class="md:col-span-2">
+          <label class="text-sm">Unidade</label>
+          <select name="unidade_id" id="colaboradoresUnidade" class="border rounded p-2 w-full" <?= !empty($cliente) ? '' : 'disabled' ?>>
+              <option value="0">Todas</option>
+              <?php foreach (($unidades ?? []) as $u): ?>
+                <option value="<?= (int)$u['id'] ?>" <?= ((int)($filter_unidade ?? 0) === (int)$u['id']) ? 'selected' : '' ?>>
+                  <?= htmlspecialchars((string)($u['nome_empresa'] ?? '')) ?>
+                </option>
+              <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="md:col-span-2">
           <label class="text-sm">Líder</label>
-          <select name="lider" class="border rounded p-2 w-full">
+          <select name="lider" id="colaboradoresLider" class="border rounded p-2 w-full" <?= !empty($cliente) ? '' : 'disabled' ?>>
               <option value="">Todos</option>
               <option value="sim" <?= (($filter_lider ?? '') === 'sim') ? 'selected' : '' ?>>Sim</option>
               <option value="não" <?= (($filter_lider ?? '') === 'não') ? 'selected' : '' ?>>Não</option>
           </select>
         </div>
+        <div class="md:col-span-2">
+          <label class="text-sm">Status</label>
+          <select name="status" id="colaboradoresStatus" class="border rounded p-2 w-full" <?= !empty($cliente) ? '' : 'disabled' ?>>
+              <option value="">Todos</option>
+              <?php foreach (($status_options ?? []) as $st): ?>
+                <option value="<?= htmlspecialchars((string)$st) ?>" <?= (($filter_status ?? '') === (string)$st) ? 'selected' : '' ?>><?= htmlspecialchars((string)$st) ?></option>
+              <?php endforeach; ?>
+          </select>
+        </div>
         <div class="md:col-span-3">
           <label class="text-sm">Departamento</label>
-          <select name="departamento" class="border rounded p-2 w-full">
+          <select name="departamento" id="colaboradoresDepartamento" class="border rounded p-2 w-full" <?= !empty($cliente) ? '' : 'disabled' ?>>
               <option value="0">Todos</option>
               <?php foreach ($departamentos as $d): ?>
                   <?php $depLabel = isset($d['cliente']) ? ((string)$d['cliente'] . ' — ' . (string)$d['nome']) : (string)$d['nome']; ?>
@@ -286,9 +306,19 @@
               <?php endforeach; ?>
           </select>
         </div>
-        <div class="md:col-span-2">
+        <div class="md:col-span-3">
+          <label class="text-sm">Setor</label>
+          <select name="setor" id="colaboradoresSetor" class="border rounded p-2 w-full" <?= !empty($cliente) ? '' : 'disabled' ?>>
+              <option value="0">Todos</option>
+              <?php foreach (($setores ?? []) as $s): ?>
+                  <?php $setLabel = isset($s['departamento']) ? ((string)$s['departamento'] . ' — ' . (string)$s['nome']) : (string)$s['nome']; ?>
+                  <option value="<?= (int)$s['id'] ?>" <?= ((int)($filter_setor ?? 0) === (int)$s['id']) ? 'selected' : '' ?>><?= htmlspecialchars($setLabel) ?></option>
+              <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="md:col-span-3">
           <label class="text-sm">Função</label>
-          <select name="funcao" class="border rounded p-2 w-full">
+          <select name="funcao" id="colaboradoresFuncao" class="border rounded p-2 w-full" <?= !empty($cliente) ? '' : 'disabled' ?>>
               <option value="0">Todas</option>
               <?php foreach ($funcoes as $f): ?>
                   <?php
@@ -307,16 +337,18 @@
         </div>
         <div class="md:col-span-1">
           <label class="text-sm">Por página</label>
-          <select name="per" class="border rounded p-2 w-full">
+          <select name="per" id="colaboradoresPer" class="border rounded p-2 w-full">
               <?php foreach ([10,20,50,100] as $opt): ?>
                   <option value="<?= $opt ?>" <?= ((int)($per ?? 20) === $opt) ? 'selected' : '' ?>><?= $opt ?></option>
               <?php endforeach; ?>
           </select>
         </div>
-        <div class="md:col-span-12 md:col-auto">
-          <button class="px-4 py-2 rounded bg-brand-red text-white w-full md:w-auto" type="submit">Filtrar</button>
+        <div class="md:col-span-12 flex flex-col md:flex-row gap-2 md:items-center md:justify-end">
+          <button class="px-4 py-2 rounded bg-gray-200 text-brand-brown w-full md:w-auto" type="button" id="colaboradoresClear">Limpar</button>
+          <button class="px-4 py-2 rounded bg-brand-red text-white w-full md:w-auto" type="submit" id="colaboradoresSubmit">Filtrar</button>
         </div>
     </form>
+    <div id="colaboradoresFilterError" class="hidden mb-3 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
     <div class="bg-white shadow rounded">
         <table class="min-w-full">
             <thead>
@@ -330,46 +362,276 @@
                     <th class="p-3">Ações</th>
                 </tr>
             </thead>
-            <tbody>
-                <?php foreach ($items as $c): ?>
-                    <tr class="border-b">
-                        <td class="p-3"><?= htmlspecialchars($c['nome']) ?></td>
-                        <td class="p-3"><?= htmlspecialchars($c['email'] ?? '') ?></td>
-                        <td class="p-3"><?= htmlspecialchars($c['unidade'] ?? '') ?></td>
-                        <td class="p-3"><?= htmlspecialchars($c['funcao'] ?? '') ?></td>
-                        <td class="p-3"><?= htmlspecialchars($c['setor'] ?? '') ?></td>
-                        <td class="p-3"><?= htmlspecialchars($c['departamento'] ?? '') ?></td>
-                        <td class="p-3 whitespace-nowrap">
-                            <a class="text-brand-pink icon-action" href="index.php?route=colaboradores/edit&id=<?= (int)$c['id'] ?><?= $cliente ? '&cliente='.(int)$cliente : '' ?>" title="Editar" aria-label="Editar"><span data-feather="edit"></span></a>
-                            <a class="text-brand-brown icon-action ml-2" href="index.php?route=colaboradores/delete&id=<?= (int)$c['id'] ?><?= $cliente ? '&cliente='.(int)$cliente : '' ?>" title="Excluir" aria-label="Excluir"><span data-feather="trash-2"></span></a>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
+            <tbody id="colaboradoresTableBody">
+                <?php if (empty($items)): ?>
+                  <tr data-empty-row><td class="p-3 text-sm text-gray-600" colspan="7">Nenhum colaborador encontrado para os filtros selecionados.</td></tr>
+                <?php else: ?>
+                  <?php foreach ($items as $c): ?>
+                      <tr class="border-b">
+                          <td class="p-3"><?= htmlspecialchars($c['nome']) ?></td>
+                          <td class="p-3"><?= htmlspecialchars($c['email'] ?? '') ?></td>
+                          <td class="p-3"><?= htmlspecialchars($c['unidade'] ?? '') ?></td>
+                          <td class="p-3"><?= htmlspecialchars($c['funcao'] ?? '') ?></td>
+                          <td class="p-3"><?= htmlspecialchars($c['setor'] ?? '') ?></td>
+                          <td class="p-3"><?= htmlspecialchars($c['departamento'] ?? '') ?></td>
+                          <td class="p-3 whitespace-nowrap">
+                              <a class="text-brand-pink icon-action" href="index.php?route=colaboradores/edit&id=<?= (int)$c['id'] ?><?= $cliente ? '&cliente='.(int)$cliente : '' ?>" title="Editar" aria-label="Editar"><span data-feather="edit"></span></a>
+                              <a class="text-brand-brown icon-action ml-2" href="index.php?route=colaboradores/delete&id=<?= (int)$c['id'] ?><?= $cliente ? '&cliente='.(int)$cliente : '' ?>" title="Excluir" aria-label="Excluir"><span data-feather="trash-2"></span></a>
+                          </td>
+                      </tr>
+                  <?php endforeach; ?>
+                <?php endif; ?>
             </tbody>
         </table>
     </div>
     <div class="mt-4 flex items-center justify-between">
-        <div class="text-sm text-gray-600">Total: <?= (int)($total ?? 0) ?> • Página <?= (int)($page ?? 1) ?> de <?= (int)($total_pages ?? 1) ?></div>
-        <?php if (($total_pages ?? 1) > 1): ?>
-            <div class="flex items-center gap-2">
-                <?php
-                    $prev = max(1, (int)($page ?? 1) - 1);
-                    $next = min((int)($total_pages ?? 1), (int)($page ?? 1) + 1);
-                    $base = [
-                        'route' => 'colaboradores/index',
-                        'cliente' => (int)$cliente,
-                        'per' => (int)($per ?? 20),
-                        'lider' => ($filter_lider ?? '') !== '' ? (string)$filter_lider : null,
-                        'departamento' => (int)($filter_departamento ?? 0) ?: null,
-                        'funcao' => (int)($filter_funcao ?? 0) ?: null,
-                        'all_funcionarios' => !empty($filter_all_funcionarios) ? '1' : null,
-                    ];
-                    $prevQuery = http_build_query(array_merge($base, ['page' => $prev]));
-                    $nextQuery = http_build_query(array_merge($base, ['page' => $next]));
-                ?>
-                <a class="px-3 py-1 rounded bg-gray-200 text-brand-brown" href="index.php?<?= htmlspecialchars($prevQuery) ?>">◀</a>
-                <a class="px-3 py-1 rounded bg-gray-200 text-brand-brown" href="index.php?<?= htmlspecialchars($nextQuery) ?>">▶</a>
-            </div>
-        <?php endif; ?>
+        <div class="text-sm text-gray-600" id="colaboradoresSummary">Total: <?= (int)($total ?? 0) ?> • Página <?= (int)($page ?? 1) ?> de <?= (int)($total_pages ?? 1) ?></div>
+        <div class="flex items-center gap-2" id="colaboradoresPager">
+          <?php if (($total_pages ?? 1) > 1): ?>
+              <?php
+                  $prev = max(1, (int)($page ?? 1) - 1);
+                  $next = min((int)($total_pages ?? 1), (int)($page ?? 1) + 1);
+                  $base = [
+                      'route' => 'colaboradores/index',
+                      'cliente' => (int)$cliente,
+                      'per' => (int)($per ?? 20),
+                      'lider' => ($filter_lider ?? '') !== '' ? (string)$filter_lider : null,
+                      'unidade_id' => (int)($filter_unidade ?? 0) ?: null,
+                      'status' => ($filter_status ?? '') !== '' ? (string)$filter_status : null,
+                      'departamento' => (int)($filter_departamento ?? 0) ?: null,
+                      'setor' => (int)($filter_setor ?? 0) ?: null,
+                      'funcao' => (int)($filter_funcao ?? 0) ?: null,
+                      'all_funcionarios' => !empty($filter_all_funcionarios) ? '1' : null,
+                  ];
+                  $prevQuery = http_build_query(array_merge($base, ['page' => $prev]));
+                  $nextQuery = http_build_query(array_merge($base, ['page' => $next]));
+              ?>
+              <a class="px-3 py-1 rounded bg-gray-200 text-brand-brown" data-page="<?= (int)$prev ?>" href="index.php?<?= htmlspecialchars($prevQuery) ?>">◀</a>
+              <a class="px-3 py-1 rounded bg-gray-200 text-brand-brown" data-page="<?= (int)$next ?>" href="index.php?<?= htmlspecialchars($nextQuery) ?>">▶</a>
+          <?php endif; ?>
+        </div>
     </div>
 </div>
+
+<script>
+  (function () {
+    const form = document.getElementById('colaboradoresFilterForm');
+    if (!form) return;
+
+    const cliente = document.getElementById('colaboradoresCliente');
+    const all = document.getElementById('colaboradoresAllFuncionarios');
+    const unidade = document.getElementById('colaboradoresUnidade');
+    const lider = document.getElementById('colaboradoresLider');
+    const status = document.getElementById('colaboradoresStatus');
+    const departamento = document.getElementById('colaboradoresDepartamento');
+    const setor = document.getElementById('colaboradoresSetor');
+    const funcao = document.getElementById('colaboradoresFuncao');
+    const per = document.getElementById('colaboradoresPer');
+    const clearBtn = document.getElementById('colaboradoresClear');
+    const tbody = document.getElementById('colaboradoresTableBody');
+    const summary = document.getElementById('colaboradoresSummary');
+    const pager = document.getElementById('colaboradoresPager');
+    const err = document.getElementById('colaboradoresFilterError');
+
+    const setError = (message) => {
+      if (!err) return;
+      const text = String(message || '').trim();
+      if (!text) {
+        err.classList.add('hidden');
+        err.textContent = '';
+        return;
+      }
+      err.classList.remove('hidden');
+      err.textContent = text;
+    };
+
+    const getParams = (page) => {
+      const p = new URLSearchParams(new FormData(form));
+      p.set('route', 'colaboradores/filterAjax');
+      p.set('page', String(page || 1));
+      return p;
+    };
+
+    const buildOptions = (select, options, currentValue, buildLabel) => {
+      if (!select) return;
+      const cur = String(currentValue ?? select.value ?? '');
+      const keepPlaceholder = select.querySelector('option[value="0"], option[value=""]');
+      const placeholderHtml = keepPlaceholder ? keepPlaceholder.outerHTML : '';
+      let html = placeholderHtml;
+      (options || []).forEach((row) => {
+        const id = row && (row.id !== undefined) ? String(row.id) : '';
+        if (!id) return;
+        const label = buildLabel(row);
+        html += '<option value="' + String(id).replace(/"/g, '&quot;') + '">' + String(label).replace(/</g, '&lt;') + '</option>';
+      });
+      select.innerHTML = html;
+      const exists = Array.from(select.options).some((o) => o.value === cur);
+      select.value = exists ? cur : (keepPlaceholder ? keepPlaceholder.value : '');
+    };
+
+    const buildSimpleOptions = (select, values, currentValue) => {
+      if (!select) return;
+      const cur = String(currentValue ?? select.value ?? '');
+      const keepPlaceholder = select.querySelector('option[value=""], option[value="0"]');
+      const placeholderHtml = keepPlaceholder ? keepPlaceholder.outerHTML : '';
+      let html = placeholderHtml;
+      (values || []).forEach((v) => {
+        const val = String(v || '').trim();
+        if (!val) return;
+        html += '<option value="' + val.replace(/"/g, '&quot;') + '">' + val.replace(/</g, '&lt;') + '</option>';
+      });
+      select.innerHTML = html;
+      const exists = Array.from(select.options).some((o) => o.value === cur);
+      select.value = exists ? cur : (keepPlaceholder ? keepPlaceholder.value : '');
+    };
+
+    const setDisabledDependents = (disabled) => {
+      [unidade, lider, status, departamento, setor, funcao].forEach((el) => {
+        if (el) el.disabled = !!disabled;
+      });
+      if (all) all.disabled = !!disabled;
+    };
+
+    const buildPager = (page, totalPages) => {
+      if (!pager) return;
+      pager.innerHTML = '';
+      if (!totalPages || totalPages <= 1) return;
+      const prev = Math.max(1, page - 1);
+      const next = Math.min(totalPages, page + 1);
+      const buildHref = (targetPage) => {
+        const p = new URLSearchParams(new FormData(form));
+        p.set('route', 'colaboradores/index');
+        p.set('page', String(targetPage));
+        return 'index.php?' + p.toString();
+      };
+      pager.innerHTML =
+        '<a class="px-3 py-1 rounded bg-gray-200 text-brand-brown" data-page="' + prev + '" href="' + buildHref(prev) + '">◀</a>' +
+        '<a class="px-3 py-1 rounded bg-gray-200 text-brand-brown" data-page="' + next + '" href="' + buildHref(next) + '">▶</a>';
+    };
+
+    const refresh = (page) => {
+      const clientId = parseInt((cliente && cliente.value) ? cliente.value : '0', 10) || 0;
+      setError('');
+      if (!clientId) {
+        setDisabledDependents(true);
+        if (tbody) tbody.innerHTML = '<tr data-empty-row><td class="p-3 text-sm text-gray-600" colspan="7">Selecione um cliente para listar colaboradores.</td></tr>';
+        if (summary) summary.textContent = 'Total: 0 • Página 1 de 1';
+        if (pager) pager.innerHTML = '';
+        return;
+      }
+
+      setDisabledDependents(false);
+      const url = 'index.php?' + getParams(page).toString();
+      fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then((res) => res.json().then((data) => ({ res, data })))
+        .then(({ res, data }) => {
+          if (!res.ok || !data || !data.ok) {
+            throw new Error((data && data.message) ? data.message : ('Erro ao filtrar (' + res.status + ').'));
+          }
+          const opts = data.options || {};
+          const f = data.filters || {};
+
+          if (unidade) {
+            buildOptions(unidade, opts.unidades || [], f.unidade_id || 0, (row) => row.nome_empresa || '');
+          }
+          if (departamento) {
+            buildOptions(departamento, opts.departamentos || [], f.departamento || 0, (row) => row.cliente ? (row.cliente + ' — ' + (row.nome || '')) : (row.nome || ''));
+          }
+          if (setor) {
+            buildOptions(setor, opts.setores || [], f.setor || 0, (row) => row.departamento ? (row.departamento + ' — ' + (row.nome || '')) : (row.nome || ''));
+          }
+          if (funcao) {
+            buildOptions(funcao, opts.funcoes || [], f.funcao || 0, (row) => {
+              const dep = row.departamento || '';
+              const set = row.setor || '';
+              const nome = row.nome || '';
+              const parts = [];
+              if (dep) parts.push(dep);
+              if (set) parts.push(set);
+              if (nome) parts.push(nome);
+              return parts.length ? parts.join(' — ') : nome;
+            });
+          }
+          if (status) {
+            buildSimpleOptions(status, opts.status || [], f.status || '');
+          }
+
+          if (tbody) tbody.innerHTML = String(data.rows_html || '');
+          if (summary) summary.textContent = String(data.summary || '');
+          buildPager(parseInt(data.page || 1, 10) || 1, parseInt(data.total_pages || 1, 10) || 1);
+
+          if (window.feather && typeof window.feather.replace === 'function') {
+            window.feather.replace();
+          }
+        })
+        .catch((e) => {
+          setError(e && e.message ? e.message : 'Falha ao aplicar filtros.');
+        });
+    };
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      refresh(1);
+    });
+
+    const resetSelect = (sel, value) => { if (sel) sel.value = String(value); };
+
+    const onClienteChange = () => {
+      resetSelect(unidade, '0');
+      resetSelect(departamento, '0');
+      resetSelect(setor, '0');
+      resetSelect(funcao, '0');
+      resetSelect(status, '');
+      refresh(1);
+    };
+
+    if (cliente) cliente.addEventListener('change', onClienteChange);
+    if (all) all.addEventListener('change', onClienteChange);
+    if (unidade) unidade.addEventListener('change', () => {
+      resetSelect(departamento, '0');
+      resetSelect(setor, '0');
+      resetSelect(funcao, '0');
+      refresh(1);
+    });
+    if (departamento) departamento.addEventListener('change', () => {
+      resetSelect(setor, '0');
+      resetSelect(funcao, '0');
+      refresh(1);
+    });
+    if (setor) setor.addEventListener('change', () => {
+      resetSelect(funcao, '0');
+      refresh(1);
+    });
+    if (funcao) funcao.addEventListener('change', () => refresh(1));
+    if (lider) lider.addEventListener('change', () => refresh(1));
+    if (status) status.addEventListener('change', () => refresh(1));
+    if (per) per.addEventListener('change', () => refresh(1));
+
+    if (pager) {
+      pager.addEventListener('click', (e) => {
+        const link = e.target && e.target.closest ? e.target.closest('a[data-page]') : null;
+        if (!link) return;
+        e.preventDefault();
+        const page = parseInt(link.getAttribute('data-page') || '1', 10) || 1;
+        refresh(page);
+      });
+    }
+
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        resetSelect(cliente, '');
+        if (all) all.checked = false;
+        resetSelect(unidade, '0');
+        resetSelect(lider, '');
+        resetSelect(status, '');
+        resetSelect(departamento, '0');
+        resetSelect(setor, '0');
+        resetSelect(funcao, '0');
+        resetSelect(per, '20');
+        refresh(1);
+      });
+    }
+
+    refresh(parseInt(new URLSearchParams(window.location.search).get('page') || '1', 10) || 1);
+  })();
+</script>

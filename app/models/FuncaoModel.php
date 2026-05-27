@@ -91,6 +91,32 @@ class FuncaoModel extends BaseModel
         }
     }
 
+    public function allBySetor(int $setorId, array $clienteIds = []): array
+    {
+        $this->ensureTable();
+        $setorId = (int)$setorId;
+        if ($setorId <= 0) {
+            return [];
+        }
+        $clienteIds = array_values(array_unique(array_filter(array_map('intval', $clienteIds))));
+        $params = ['sid' => $setorId];
+        $where = ['s.id = :sid'];
+        if (!empty($clienteIds)) {
+            $where[] = $this->buildClienteScopeClause('d.cliente_id', $clienteIds, $params, 'fbs_scope');
+        }
+        $where[] = $this->tenantInCondition('d.cliente_id', $params, 'fbs_tenant');
+        $stmt = $this->db->prepare(
+            "SELECT f.id, f.nome, f.setor_id, s.nome AS setor, d.nome AS departamento
+             FROM funcoes f
+             JOIN setores s ON s.id = f.setor_id
+             JOIN departamentos d ON d.id = s.departamento_id
+             WHERE " . implode(' AND ', $where) . "
+             ORDER BY f.nome"
+        );
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
     public function find(int $id): ?array
     {
         $this->ensureTable();

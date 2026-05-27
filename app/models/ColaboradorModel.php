@@ -14,6 +14,34 @@ class ColaboradorModel extends BaseModel
         return $column . ' IN (' . implode(',', $holders) . ')';
     }
 
+    private function statusExpression(): string
+    {
+        if (\App\Database\Database::columnExists('colaboradores', 'status_atual')) {
+            return "COALESCE(NULLIF(TRIM(col.status_atual), ''), 'ativo')";
+        }
+        if (\App\Database\Database::columnExists('colaboradores', 'ativo')) {
+            return "CASE WHEN col.ativo = 1 THEN 'ativo' ELSE 'inativo' END";
+        }
+        return "'ativo'";
+    }
+
+    private function applyStatusFilter(string $status, array &$conds, array &$params): void
+    {
+        $status = trim($status);
+        if ($status === '') {
+            return;
+        }
+        if (\App\Database\Database::columnExists('colaboradores', 'ativo') && ($status === 'ativo' || $status === 'inativo')) {
+            $conds[] = 'col.ativo = :ativo';
+            $params['ativo'] = $status === 'ativo' ? 1 : 0;
+            return;
+        }
+        if (\App\Database\Database::columnExists('colaboradores', 'status_atual')) {
+            $conds[] = $this->statusExpression() . ' = :status';
+            $params['status'] = $status;
+        }
+    }
+
     private function ensureTable(): void
     {
         try {
@@ -97,7 +125,9 @@ class ColaboradorModel extends BaseModel
         $conds[] = $this->tenantInCondition('col.cliente_id', $params, 'ccf');
         if (!empty($filters['lider'])) { $conds[] = 'col.lider = :lider'; $params['lider'] = $filters['lider']; }
         if (!empty($filters['departamento_id'])) { $conds[] = 'd.id = :dep'; $params['dep'] = (int)$filters['departamento_id']; }
+        if (!empty($filters['setor_id'])) { $conds[] = 's.id = :setor'; $params['setor'] = (int)$filters['setor_id']; }
         if (!empty($filters['funcao_id'])) { $conds[] = 'f.id = :func'; $params['func'] = (int)$filters['funcao_id']; }
+        if (!empty($filters['status'])) { $this->applyStatusFilter((string)$filters['status'], $conds, $params); }
         $sql = 'SELECT COUNT(*) AS total
                 FROM colaboradores col
                 JOIN funcoes f ON f.id = col.funcao_id
@@ -122,7 +152,9 @@ class ColaboradorModel extends BaseModel
         $conds[] = $this->tenantInCondition('col.cliente_id', $params, 'ccmf_tenant');
         if (!empty($filters['lider'])) { $conds[] = 'col.lider = :lider'; $params['lider'] = $filters['lider']; }
         if (!empty($filters['departamento_id'])) { $conds[] = 'd.id = :dep'; $params['dep'] = (int)$filters['departamento_id']; }
+        if (!empty($filters['setor_id'])) { $conds[] = 's.id = :setor'; $params['setor'] = (int)$filters['setor_id']; }
         if (!empty($filters['funcao_id'])) { $conds[] = 'f.id = :func'; $params['func'] = (int)$filters['funcao_id']; }
+        if (!empty($filters['status'])) { $this->applyStatusFilter((string)$filters['status'], $conds, $params); }
         $sql = 'SELECT COUNT(DISTINCT col.id) AS total
                 FROM colaboradores col
                 JOIN funcoes f ON f.id = col.funcao_id
@@ -166,7 +198,9 @@ class ColaboradorModel extends BaseModel
         $conds[] = $this->tenantInCondition('col.cliente_id', $params, 'cpf');
         if (!empty($filters['lider'])) { $conds[] = 'col.lider = :lider'; $params['lider'] = $filters['lider']; }
         if (!empty($filters['departamento_id'])) { $conds[] = 'd.id = :dep'; $params['dep'] = (int)$filters['departamento_id']; }
+        if (!empty($filters['setor_id'])) { $conds[] = 's.id = :setor'; $params['setor'] = (int)$filters['setor_id']; }
         if (!empty($filters['funcao_id'])) { $conds[] = 'f.id = :func'; $params['func'] = (int)$filters['funcao_id']; }
+        if (!empty($filters['status'])) { $this->applyStatusFilter((string)$filters['status'], $conds, $params); }
         $sql = 'SELECT col.id, col.nome, col.email, col.funcao_id, col.cliente_id,
                        cli.nome_empresa AS unidade, f.nome AS funcao, s.nome AS setor, d.nome AS departamento
                 FROM colaboradores col
@@ -198,7 +232,9 @@ class ColaboradorModel extends BaseModel
         $conds[] = $this->tenantInCondition('col.cliente_id', $params, 'cpmf_tenant');
         if (!empty($filters['lider'])) { $conds[] = 'col.lider = :lider'; $params['lider'] = $filters['lider']; }
         if (!empty($filters['departamento_id'])) { $conds[] = 'd.id = :dep'; $params['dep'] = (int)$filters['departamento_id']; }
+        if (!empty($filters['setor_id'])) { $conds[] = 's.id = :setor'; $params['setor'] = (int)$filters['setor_id']; }
         if (!empty($filters['funcao_id'])) { $conds[] = 'f.id = :func'; $params['func'] = (int)$filters['funcao_id']; }
+        if (!empty($filters['status'])) { $this->applyStatusFilter((string)$filters['status'], $conds, $params); }
 
         $sql = 'SELECT DISTINCT col.id, col.nome, col.email, col.funcao_id, col.cliente_id,
                        cli.nome_empresa AS unidade, f.nome AS funcao, s.nome AS setor, d.nome AS departamento
@@ -466,5 +502,40 @@ class ColaboradorModel extends BaseModel
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         return (bool)$stmt->fetchColumn();
+    }
+
+    public function statusOptionsByClientes(array $clienteIds): array
+    {
+        $this->ensureTable();
+        $clienteIds = array_values(array_unique(array_filter(array_map('intval', $clienteIds))));
+        if (empty($clienteIds)) {
+            return [];
+        }
+        $params = [];
+        $conds = [
+            $this->buildClienteScopeClause('col.cliente_id', $clienteIds, $params, 'csoc_scope'),
+            $this->tenantInCondition('col.cliente_id', $params, 'csoc_tenant'),
+        ];
+        $out = [];
+        if (\App\Database\Database::columnExists('colaboradores', 'ativo')) {
+            $out[] = 'ativo';
+            $out[] = 'inativo';
+        }
+        if (\App\Database\Database::columnExists('colaboradores', 'status_atual')) {
+            $sql = 'SELECT DISTINCT COALESCE(NULLIF(TRIM(col.status_atual), \'\'), \'ativo\') AS status_value
+                    FROM colaboradores col
+                    WHERE ' . implode(' AND ', $conds) . '
+                    ORDER BY status_value
+                    LIMIT 30';
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
+            foreach (($stmt->fetchAll() ?: []) as $row) {
+                $val = trim((string)($row['status_value'] ?? ''));
+                if ($val !== '') {
+                    $out[] = $val;
+                }
+            }
+        }
+        return array_values(array_unique(array_values(array_filter($out, static fn($v) => trim((string)$v) !== ''))));
     }
 }

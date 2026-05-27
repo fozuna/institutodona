@@ -257,6 +257,30 @@ class ClienteModel extends BaseModel
         }
     }
 
+    public function byIds(array $ids): array
+    {
+        $this->ensureColumns();
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if (empty($ids)) {
+            return [];
+        }
+        $params = [];
+        $holders = [];
+        foreach ($ids as $i => $id) {
+            $k = 'id' . $i;
+            $holders[] = ':' . $k;
+            $params[$k] = $id;
+        }
+        $scope = $this->tenantInCondition('id', $params, 'cbids');
+        $sql = 'SELECT id, nome_empresa, is_matriz, matriz_id
+                FROM clientes
+                WHERE id IN (' . implode(',', $holders) . ') AND ' . $scope . '
+                ORDER BY nome_empresa';
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll() ?: [];
+    }
+
     public function findByPublicHost(string $host): ?array
     {
         $this->ensureColumns();
