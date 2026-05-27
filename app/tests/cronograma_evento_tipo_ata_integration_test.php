@@ -55,13 +55,12 @@ try {
         'responsavel' => 'Resp',
         'modelo' => 'Online',
         'status' => 'Planejado',
-        'anexos_count' => 1,
     ]);
     if ($rootId <= 0) {
         failFast('create() deve retornar id válido');
     }
     $eventIds[] = $rootId;
-    ok('Criação: evento Reunião (validação de anexos aplicada)');
+    ok('Criação: evento Reunião sem documentos (permitido)');
 
     $all = $model->byCronograma($cronogramaId);
     $found = array_values(array_filter($all, static fn(array $r): bool => (int)($r['id'] ?? 0) === $rootId));
@@ -109,10 +108,10 @@ try {
     if (strpos($view, 'id="cronogramaTipoEvento"') === false) {
         failFast('View deve conter seletor de tipo_evento');
     }
-    if (strpos($view, 'name="anexos[]"') === false) {
-        failFast('View deve oferecer upload de anexos para reunião');
+    if (strpos($view, 'name="anexos[]"') !== false) {
+        failFast('View não deve exigir/anexar documentos na criação do evento');
     }
-    ok('UI: view contém seletor de tipo e upload de anexos');
+    ok('UI: criação não exige anexos para reunião');
 } finally {
     try {
         if ($cronogramaId > 0) {

@@ -60,6 +60,25 @@ $events = [
             'data' => '2026-01-15',
         ], new DateTimeImmutable('2026-01-01')),
     ],
+    [
+        'id' => 11,
+        'id_cronograma' => 1,
+        'evento_pai_id' => null,
+        'serie_id' => 11,
+        'data' => '2026-02-20',
+        'periodicidade' => 'unico',
+        'tipo_evento' => 'Tarefa',
+        'topico' => 'Pilar Render',
+        'unidade' => 'Departamento Render',
+        'atividade' => 'Atividade Render 2',
+        'responsavel' => 'Responsavel Render',
+        'modelo' => 'Presencial',
+        'status' => 'Planejado',
+        'traffic' => CronogramaTrafficLight::occurrence([
+            'status' => 'Planejado',
+            'data' => '2026-02-20',
+        ], new DateTimeImmutable('2026-01-01')),
+    ],
 ];
 
 ob_start();

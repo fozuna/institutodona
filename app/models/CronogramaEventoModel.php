@@ -435,7 +435,7 @@ class CronogramaEventoModel extends BaseModel
             $tipo = self::normalizeEventType($event['tipo_evento'] ?? 'Tarefa');
             if ($tipo === 'Reunião') {
                 $ataPath = Database::columnExists('cronograma_eventos', 'ata_path') ? (string)($event['ata_path'] ?? '') : '';
-                if ($this->documentosCountForSerie((int)($event['serie_id'] ?? $event['id']), $ataPath) <= 0) {
+                if ($this->documentosCountForEvent((int)($event['id'] ?? 0), $ataPath) <= 0) {
                     throw new RuntimeException('Para finalizar eventos do tipo Reunião, é obrigatório anexar pelo menos um documento antes de marcar como finalizado.');
                 }
             }
@@ -530,7 +530,6 @@ class CronogramaEventoModel extends BaseModel
             'ata_mime' => isset($data['ata_mime']) ? (string)$data['ata_mime'] : null,
             'ata_size' => isset($data['ata_size']) ? (int)$data['ata_size'] : null,
             'ata_sha256' => isset($data['ata_sha256']) ? (string)$data['ata_sha256'] : null,
-            'anexos_count' => isset($data['anexos_count']) ? max(0, (int)$data['anexos_count']) : 0,
         ];
         if ($payload['data'] === '' || $payload['topico'] === '' || $payload['atividade'] === '') {
             throw new RuntimeException('Preencha data, pilar e atividade para salvar o evento.');
@@ -539,24 +538,17 @@ class CronogramaEventoModel extends BaseModel
         if ((int)$date->format('Y') !== $ano) {
             throw new RuntimeException('A data base deve pertencer ao ano do cronograma.');
         }
-        if ($payload['tipo_evento'] === 'Reunião') {
-            $legacyAta = (string)($payload['ata_path'] ?? '');
-            $hasAny = $payload['anexos_count'] > 0 || $legacyAta !== '';
-            if (!$hasAny) {
-                throw new RuntimeException('Para eventos do tipo Reunião, é obrigatório anexar pelo menos um documento.');
-            }
-        }
         return $payload;
     }
 
-    private function documentosCountForSerie(int $serieId, ?string $legacyAtaPath = null): int
+    private function documentosCountForEvent(int $eventoId, ?string $legacyAtaPath = null): int
     {
         $count = 0;
         $legacyAtaPath = (string)($legacyAtaPath ?? '');
         if ($legacyAtaPath !== '') {
             $count++;
         }
-        $params = ['evento_id' => $serieId];
+        $params = ['evento_id' => $eventoId];
         $scope = $this->tenantInCondition('cr.id_cliente', $params, 'ceanexos_ct');
         $stmt = $this->db->prepare("SELECT COUNT(*)
             FROM cronograma_evento_anexos a
@@ -759,8 +751,13 @@ class CronogramaEventoModel extends BaseModel
         $data['ata_mime'] = $data['ata_mime'] ?? ($event['ata_mime'] ?? null);
         $data['ata_size'] = $data['ata_size'] ?? ($event['ata_size'] ?? null);
         $data['ata_sha256'] = $data['ata_sha256'] ?? ($event['ata_sha256'] ?? null);
-        $data['anexos_count'] = $data['anexos_count'] ?? $this->documentosCountForSerie((int)($event['serie_id'] ?? $event['id']), isset($event['ata_path']) ? (string)$event['ata_path'] : null);
         $payload = $this->normalizePayload($data, (int)$event['ano']);
+        if ($payload['tipo_evento'] === 'Reunião' && $payload['status'] === 'Finalizado') {
+            $ataPath = Database::columnExists('cronograma_eventos', 'ata_path') ? (string)($event['ata_path'] ?? '') : '';
+            if ($this->documentosCountForEvent((int)($event['id'] ?? 0), $ataPath) <= 0) {
+                throw new RuntimeException('Para finalizar eventos do tipo Reunião, é obrigatório anexar pelo menos um documento antes de marcar como finalizado.');
+            }
+        }
         $payload['periodicidade'] = (string)($event['periodicidade'] ?? 'unico');
         $this->assertNoDuplicateOccurrences((int)$event['id_cronograma'], $payload, [$payload['data']], [(int)$event['id']]);
         $params = [
@@ -804,8 +801,10 @@ class CronogramaEventoModel extends BaseModel
         $data['ata_mime'] = $data['ata_mime'] ?? ($root['ata_mime'] ?? null);
         $data['ata_size'] = $data['ata_size'] ?? ($root['ata_size'] ?? null);
         $data['ata_sha256'] = $data['ata_sha256'] ?? ($root['ata_sha256'] ?? null);
-        $data['anexos_count'] = $data['anexos_count'] ?? $this->documentosCountForSerie($rootId, isset($root['ata_path']) ? (string)$root['ata_path'] : null);
         $payload = $this->normalizePayload($data, (int)$root['ano']);
+        if ($payload['tipo_evento'] === 'Reunião' && $payload['status'] === 'Finalizado') {
+            throw new RuntimeException('O encerramento de reuniões deve ser feito por ocorrência (não pela série).');
+        }
         $dates = $this->buildOccurrenceDates($payload['data'], $payload['periodicidade'], (int)$root['ano']);
         $this->assertNoDuplicateOccurrences((int)$root['id_cronograma'], $payload, $dates, $ignoreIds);
 
@@ -913,7 +912,7 @@ class CronogramaEventoModel extends BaseModel
         $params = ['id' => $anexoId];
         $scope = $this->tenantInCondition('cr.id_cliente', $params, 'ceanexos_f');
         $stmt = $this->db->prepare("SELECT a.id, a.evento_id, a.path, a.original_name, a.mime, a.size, a.sha256, a.created_at, a.deleted_at,
-                   ce.id_cronograma, ce.tipo_evento
+                   ce.id_cronograma, ce.tipo_evento, ce.status
             FROM cronograma_evento_anexos a
             JOIN cronograma_eventos ce ON ce.id = a.evento_id
             JOIN cronogramas cr ON cr.id = ce.id_cronograma

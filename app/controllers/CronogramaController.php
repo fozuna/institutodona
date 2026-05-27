@@ -267,20 +267,20 @@ class CronogramaController extends BaseController
         $events = $this->filterEventsByCriteria($events, $filters);
         $events = $this->sortEvents($events, $order);
         $grid = $this->sortGridRows($grid, $order);
-        $serieIds = [];
+        $eventIds = [];
         foreach ($events as $ev) {
             if (($ev['tipo_evento'] ?? '') === 'Reunião') {
-                $serieIds[] = (int)($ev['serie_id'] ?? $ev['id'] ?? 0);
+                $eventIds[] = (int)($ev['id'] ?? 0);
             }
         }
-        $serieIds = array_values(array_unique(array_filter($serieIds, static fn(int $v): bool => $v > 0)));
-        $anexosMap = !empty($serieIds) ? $this->eventos->anexosByEventIds($serieIds) : [];
+        $eventIds = array_values(array_unique(array_filter($eventIds, static fn(int $v): bool => $v > 0)));
+        $anexosMap = !empty($eventIds) ? $this->eventos->anexosByEventIds($eventIds) : [];
         foreach ($events as $i => $ev) {
             if (($ev['tipo_evento'] ?? '') !== 'Reunião') {
                 continue;
             }
-            $sid = (int)($ev['serie_id'] ?? $ev['id'] ?? 0);
-            $events[$i]['anexos'] = $sid > 0 ? ($anexosMap[$sid] ?? []) : [];
+            $eid = (int)($ev['id'] ?? 0);
+            $events[$i]['anexos'] = $eid > 0 ? ($anexosMap[$eid] ?? []) : [];
         }
         $pilares = (new PilarModel())->all();
         $occOptions = $this->buildOcorrenciasOptions($annotatedEvents);
@@ -318,7 +318,6 @@ class CronogramaController extends BaseController
         $idCronograma = (int)($_POST['id_cronograma'] ?? 0);
         $statusFilter = CronogramaTrafficLight::normalizeFilter($_POST['status_filter'] ?? 'todos');
         $tipoEvento = CronogramaEventoModel::normalizeEventType($_POST['tipo_evento'] ?? null);
-        $anexosCount = $tipoEvento === 'Reunião' ? $this->countUploadedFiles('anexos') : 0;
         $data = [
             'data' => $_POST['data'] ?? null,
             'topico' => trim($_POST['topico'] ?? ''),
@@ -329,7 +328,6 @@ class CronogramaController extends BaseController
             'status' => $_POST['status'] ?? 'Planejado',
             'periodicidade' => $_POST['periodicidade'] ?? 'unico',
             'tipo_evento' => $tipoEvento,
-            'anexos_count' => $anexosCount,
         ];
 
         $isValid = $idCronograma && $data['data'] && $data['topico'] && $data['atividade'];
@@ -340,14 +338,6 @@ class CronogramaController extends BaseController
         if ($isValid) {
             try {
                 $newId = $this->eventos->create($idCronograma, $data);
-                if ($tipoEvento === 'Reunião') {
-                    try {
-                        $this->storeReuniaoAnexosFromRequest($newId, $idCronograma, true);
-                    } catch (\Throwable $e) {
-                        $this->eventos->delete($newId, 'serie');
-                        throw $e;
-                    }
-                }
                 $_SESSION['flash_success'] = 'Evento salvo com recorrencia processada com sucesso.';
                 AuditLogger::log('cronograma_add_evento_success', 'cronograma_evento', $newId, [
                     'id_cronograma' => $idCronograma,
@@ -553,6 +543,7 @@ class CronogramaController extends BaseController
         $idEvento = (int)($_POST['id_evento'] ?? 0);
         $idCronograma = (int)($_POST['id_cronograma'] ?? 0);
         $statusFilter = CronogramaTrafficLight::normalizeFilter($_POST['status_filter'] ?? 'todos');
+        $encerramento = (int)($_POST['encerramento'] ?? 0) === 1;
         $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
 
         $ev = $this->eventos->find($idEvento);
@@ -583,16 +574,41 @@ class CronogramaController extends BaseController
             header('Location: ' . $url);
             return;
         }
-        $serieId = (int)($ev['serie_id'] ?? $idEvento);
+        if (!$encerramento) {
+            http_response_code(400);
+            $payload = ['ok' => false, 'message' => 'Documentos de reuniões só podem ser anexados na etapa de encerramento.'];
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $_SESSION['flash_error'] = $payload['message'];
+            $url = $this->buildOccRedirectUrl($idCronograma, $statusFilter, $_POST);
+            header('Location: ' . $url);
+            return;
+        }
+        if ((string)($ev['status'] ?? '') === 'Finalizado') {
+            http_response_code(400);
+            $payload = ['ok' => false, 'message' => 'Esta reunião já está encerrada.'];
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $_SESSION['flash_error'] = $payload['message'];
+            $url = $this->buildOccRedirectUrl($idCronograma, $statusFilter, $_POST);
+            header('Location: ' . $url);
+            return;
+        }
         $cronogramaId = $idCronograma > 0 ? $idCronograma : (int)($ev['id_cronograma'] ?? 0);
 
         try {
-            $this->storeReuniaoAnexosFromRequest($serieId, $cronogramaId, true);
-            $anexos = $this->eventos->anexosList($serieId);
+            $this->storeReuniaoAnexosFromRequest($idEvento, $cronogramaId, true);
+            $anexos = $this->eventos->anexosList($idEvento);
             $payload = [
                 'ok' => true,
                 'message' => 'Documentos anexados com sucesso.',
-                'serie_id' => $serieId,
+                'event_id' => $idEvento,
                 'anexos' => array_map(static fn(array $a): array => [
                     'id' => (int)($a['id'] ?? 0),
                     'name' => (string)($a['original_name'] ?? ''),
@@ -666,6 +682,7 @@ class CronogramaController extends BaseController
         $idAnexo = (int)($_POST['id_anexo'] ?? 0);
         $idCronograma = (int)($_POST['id_cronograma'] ?? 0);
         $statusFilter = CronogramaTrafficLight::normalizeFilter($_POST['status_filter'] ?? 'todos');
+        $encerramento = (int)($_POST['encerramento'] ?? 0) === 1;
         $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
 
         try {
@@ -677,6 +694,12 @@ class CronogramaController extends BaseController
             if ($tipo !== 'Reunião') {
                 throw new \RuntimeException('Anexos são permitidos apenas para eventos do tipo Reunião.');
             }
+            if (!$encerramento) {
+                throw new \RuntimeException('Documentos de reuniões só podem ser gerenciados na etapa de encerramento.');
+            }
+            if ((string)($anexo['status'] ?? '') === 'Finalizado') {
+                throw new \RuntimeException('Esta reunião já está encerrada.');
+            }
             $path = (string)($anexo['path'] ?? '');
             $ok = $this->eventos->anexoSoftDelete($idAnexo);
             if (!$ok) {
@@ -685,12 +708,12 @@ class CronogramaController extends BaseController
             if ($path !== '' && is_file($path)) {
                 @unlink($path);
             }
-            $serieId = (int)($anexo['evento_id'] ?? 0);
-            $anexos = $this->eventos->anexosList($serieId);
+            $eventId = (int)($anexo['evento_id'] ?? 0);
+            $anexos = $this->eventos->anexosList($eventId);
             $payload = [
                 'ok' => true,
                 'message' => 'Anexo removido com sucesso.',
-                'serie_id' => $serieId,
+                'event_id' => $eventId,
                 'anexos' => array_map(static fn(array $a): array => [
                     'id' => (int)($a['id'] ?? 0),
                     'name' => (string)($a['original_name'] ?? ''),
@@ -742,7 +765,8 @@ class CronogramaController extends BaseController
 
     private function storeReuniaoAnexosFromRequest(int $serieId, int $idCronograma, bool $required): void
     {
-        if ($serieId <= 0 || $idCronograma <= 0) {
+        $eventId = (int)$serieId;
+        if ($eventId <= 0 || $idCronograma <= 0) {
             throw new \RuntimeException('Evento inválido para anexos.');
         }
         $files = $_FILES['anexos'] ?? null;
@@ -792,7 +816,7 @@ class CronogramaController extends BaseController
                 throw new \RuntimeException((string)($validated['message'] ?? 'Arquivo inválido.'));
             }
             $token = bin2hex(random_bytes(8));
-            $baseDir = dirname(__DIR__, 2) . '/storage/cronograma/reunioes/' . $idCronograma . '/' . $serieId . '/' . $token;
+            $baseDir = dirname(__DIR__, 2) . '/storage/cronograma/reunioes/' . $idCronograma . '/' . $eventId . '/' . $token;
             if (!is_dir($baseDir) && !mkdir($baseDir, 0775, true) && !is_dir($baseDir)) {
                 throw new \RuntimeException('Não foi possível criar o diretório do anexo.');
             }
@@ -822,7 +846,7 @@ class CronogramaController extends BaseController
             return;
         }
         try {
-            $this->eventos->anexosCreateMany($serieId, $items);
+            $this->eventos->anexosCreateMany($eventId, $items);
         } catch (\Throwable $e) {
             foreach ($storedPaths as $p) {
                 if (is_string($p) && $p !== '' && is_file($p)) {
@@ -922,6 +946,31 @@ class CronogramaController extends BaseController
         $scope = ($_POST['escopo'] ?? 'evento') === 'serie' ? 'serie' : 'evento';
         if ($id) {
             try {
+                $event = $this->eventos->find($id);
+                if ($event) {
+                    $tipo = CronogramaEventoModel::normalizeEventType($event['tipo_evento'] ?? null);
+                    $currentStatus = (string)($event['status'] ?? 'Planejado');
+                    $targetStatus = (string)($data['status'] ?? 'Planejado');
+                    if ($tipo === 'Reunião' && $targetStatus === 'Finalizado') {
+                        if ($scope === 'serie') {
+                            throw new \RuntimeException('O encerramento de reuniões deve ser feito por ocorrência (não pela série).');
+                        }
+                        if ($currentStatus === 'Finalizado') {
+                            throw new \RuntimeException('Esta reunião já está encerrada.');
+                        }
+                        $effectiveCronogramaId = $idCronograma > 0 ? $idCronograma : (int)($event['id_cronograma'] ?? 0);
+                        $legacy = !empty($event['ata_path']) ? 1 : 0;
+                        $existing = count($this->eventos->anexosList($id)) + $legacy;
+                        $hasNewFiles = $this->countUploadedFiles('anexos') > 0;
+                        if ($hasNewFiles) {
+                            $this->storeReuniaoAnexosFromRequest($id, $effectiveCronogramaId, true);
+                            $existing = count($this->eventos->anexosList($id)) + $legacy;
+                        }
+                        if ($existing <= 0) {
+                            throw new \RuntimeException('Para encerrar uma reunião, anexe pelo menos um documento.');
+                        }
+                    }
+                }
                 $this->eventos->update($id, $data, $scope);
                 $_SESSION['flash_success'] = $scope === 'serie'
                     ? 'Serie atualizada com sucesso.'

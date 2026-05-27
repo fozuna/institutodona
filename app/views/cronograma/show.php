@@ -325,51 +325,55 @@
                 <span class="text-xs px-2 py-1 rounded cronograma-traffic-badge <?= htmlspecialchars($ev['traffic']['badge_class'] ?? 'bg-gray-200 text-gray-700') ?>" data-event-badge="<?= (int)$ev['id'] ?>"><?= htmlspecialchars($ev['traffic']['label'] ?? $ev['status']) ?></span>
               </td>
               <td class="p-3">
-                <form method="post" action="index.php?route=cronograma/toggleStatus" class="cronograma-toggle-form">
-                  <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
-                  <input type="hidden" name="id_evento" value="<?= (int)$ev['id'] ?>" />
-                  <input type="hidden" name="id_cronograma" value="<?= (int)$crono['id'] ?>" />
-                  <input type="hidden" name="status_filter" value="<?= htmlspecialchars($statusFilter) ?>" />
-                  <input type="hidden" name="occ_date_start" value="<?= htmlspecialchars($occFilters['date_start'] ?? '') ?>" />
-                  <input type="hidden" name="occ_date_end" value="<?= htmlspecialchars($occFilters['date_end'] ?? '') ?>" />
-                  <?php foreach (($occFilters['tipo'] ?? []) as $tipo): ?>
-                    <input type="hidden" name="occ_tipo[]" value="<?= htmlspecialchars($tipo) ?>" />
-                  <?php endforeach; ?>
-                  <?php foreach (($occFilters['status'] ?? []) as $statusOpt): ?>
-                    <input type="hidden" name="occ_status[]" value="<?= htmlspecialchars($statusOpt) ?>" />
-                  <?php endforeach; ?>
-                  <input type="hidden" name="occ_responsavel" value="<?= htmlspecialchars($occFilters['responsavel'] ?? '') ?>" />
-                  <input type="hidden" name="occ_local" value="<?= htmlspecialchars($occFilters['local'] ?? '') ?>" />
-                  <input type="hidden" name="occ_sort" value="<?= htmlspecialchars($occOrder['column'] ?? 'data') ?>" />
-                  <input type="hidden" name="occ_dir" value="<?= htmlspecialchars($occOrder['direction'] ?? 'asc') ?>" />
-                  <input type="hidden" name="realizado" value="<?= !empty($ev['traffic']['toggle_checked']) ? '1' : '0' ?>" data-realizado-input="<?= (int)$ev['id'] ?>" />
-                  <button
-                    type="button"
-                    class="cronograma-toggle <?= !empty($ev['traffic']['toggle_checked']) ? 'bg-green-500' : 'bg-gray-300' ?>"
-                    data-toggle-status
-                    data-event-id="<?= (int)$ev['id'] ?>"
-                    data-serie-id="<?= (int)($ev['serie_id'] ?? $ev['id']) ?>"
-                    data-checked="<?= !empty($ev['traffic']['toggle_checked']) ? '1' : '0' ?>"
-                    aria-label="Alternar finalizado"
-                    title="Marcar ou desmarcar como finalizado"
-                  ></button>
-                </form>
+                <?php if (($ev['tipo_evento'] ?? '') !== 'Reunião'): ?>
+                  <form method="post" action="index.php?route=cronograma/toggleStatus" class="cronograma-toggle-form">
+                    <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+                    <input type="hidden" name="id_evento" value="<?= (int)$ev['id'] ?>" />
+                    <input type="hidden" name="id_cronograma" value="<?= (int)$crono['id'] ?>" />
+                    <input type="hidden" name="status_filter" value="<?= htmlspecialchars($statusFilter) ?>" />
+                    <input type="hidden" name="occ_date_start" value="<?= htmlspecialchars($occFilters['date_start'] ?? '') ?>" />
+                    <input type="hidden" name="occ_date_end" value="<?= htmlspecialchars($occFilters['date_end'] ?? '') ?>" />
+                    <?php foreach (($occFilters['tipo'] ?? []) as $tipo): ?>
+                      <input type="hidden" name="occ_tipo[]" value="<?= htmlspecialchars($tipo) ?>" />
+                    <?php endforeach; ?>
+                    <?php foreach (($occFilters['status'] ?? []) as $statusOpt): ?>
+                      <input type="hidden" name="occ_status[]" value="<?= htmlspecialchars($statusOpt) ?>" />
+                    <?php endforeach; ?>
+                    <input type="hidden" name="occ_responsavel" value="<?= htmlspecialchars($occFilters['responsavel'] ?? '') ?>" />
+                    <input type="hidden" name="occ_local" value="<?= htmlspecialchars($occFilters['local'] ?? '') ?>" />
+                    <input type="hidden" name="occ_sort" value="<?= htmlspecialchars($occOrder['column'] ?? 'data') ?>" />
+                    <input type="hidden" name="occ_dir" value="<?= htmlspecialchars($occOrder['direction'] ?? 'asc') ?>" />
+                    <input type="hidden" name="realizado" value="<?= !empty($ev['traffic']['toggle_checked']) ? '1' : '0' ?>" data-realizado-input="<?= (int)$ev['id'] ?>" />
+                    <button
+                      type="button"
+                      class="cronograma-toggle <?= !empty($ev['traffic']['toggle_checked']) ? 'bg-green-500' : 'bg-gray-300' ?>"
+                      data-toggle-status
+                      data-event-id="<?= (int)$ev['id'] ?>"
+                      data-serie-id="<?= (int)($ev['serie_id'] ?? $ev['id']) ?>"
+                      data-checked="<?= !empty($ev['traffic']['toggle_checked']) ? '1' : '0' ?>"
+                      aria-label="Alternar finalizado"
+                      title="Marcar ou desmarcar como finalizado"
+                    ></button>
+                  </form>
+                <?php endif; ?>
               </td>
               <td class="p-3">
                 <?php if (($ev['tipo_evento'] ?? '') === 'Reunião'): ?>
                   <?php
-                    $serieId = (int)($ev['serie_id'] ?? $ev['id']);
+                    $eventId = (int)($ev['id'] ?? 0);
                     $anexos = $ev['anexos'] ?? [];
                     $hasLegacyAta = !empty($ev['ata_path']);
                     $anexosCount = count($anexos) + ($hasLegacyAta ? 1 : 0);
+                    $isFinalizado = (string)($ev['status'] ?? '') === 'Finalizado';
                   ?>
-                  <div class="mb-2 space-y-2" data-anexos-wrap="<?= $serieId ?>" data-serie-id="<?= $serieId ?>" data-anexos-count="<?= $anexosCount ?>" data-has-legacy-ata="<?= $hasLegacyAta ? '1' : '0' ?>">
+                  <div class="mb-2 space-y-2" data-anexos-wrap="<?= $eventId ?>" data-event-id="<?= $eventId ?>" data-event-status="<?= htmlspecialchars((string)($ev['status'] ?? '')) ?>" data-anexos-count="<?= $anexosCount ?>" data-has-legacy-ata="<?= $hasLegacyAta ? '1' : '0' ?>">
                     <div class="flex flex-wrap items-center gap-2">
                       <form method="post" action="index.php?route=cronograma/anexosUpload" class="cronograma-anexos-form" enctype="multipart/form-data">
                         <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
                         <input type="hidden" name="id_evento" value="<?= (int)$ev['id'] ?>" />
                         <input type="hidden" name="id_cronograma" value="<?= (int)$crono['id'] ?>" />
                         <input type="hidden" name="status_filter" value="<?= htmlspecialchars($statusFilter) ?>" />
+                        <input type="hidden" name="encerramento" value="0" data-encerramento="<?= $eventId ?>" />
                         <input type="hidden" name="MAX_FILE_SIZE" value="<?= 20 * 1024 * 1024 ?>" />
                         <input
                           class="hidden"
@@ -379,14 +383,14 @@
                           multiple
                           accept=".pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.bmp,.svg,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/rtf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/jpeg,image/png,image/gif,image/bmp,image/svg+xml"
                         />
-                        <button type="button" class="icon-btn" title="Anexar documentos" aria-label="Anexar documentos" data-anexos-upload="<?= (int)$ev['id'] ?>"><span data-feather="paperclip"></span></button>
+                        <button type="button" class="icon-btn" title="Anexar documentos (encerramento)" aria-label="Anexar documentos (encerramento)" data-anexos-upload="<?= (int)$ev['id'] ?>" <?= $isFinalizado ? 'disabled' : '' ?>><span data-feather="paperclip"></span></button>
                       </form>
-                      <div class="text-xs text-gray-600" data-anexos-summary="<?= $serieId ?>">
+                      <div class="text-xs text-gray-600" data-anexos-summary="<?= $eventId ?>">
                         <?= $anexosCount > 0 ? ('Documentos anexados: ' . (int)$anexosCount) : 'Nenhum documento anexado' ?>
                       </div>
                     </div>
-                    <div class="hidden px-3 py-2 text-xs text-red-700 bg-red-100 rounded" data-anexos-error="<?= $serieId ?>"></div>
-                    <div class="flex flex-col gap-1" data-anexos-list="<?= $serieId ?>">
+                    <div class="hidden px-3 py-2 text-xs text-red-700 bg-red-100 rounded" data-anexos-error="<?= $eventId ?>"></div>
+                    <div class="flex flex-col gap-1" data-anexos-list="<?= $eventId ?>">
                       <?php if ($hasLegacyAta): ?>
                         <div class="flex items-center gap-2">
                           <a class="text-xs text-brand-red hover:underline" href="index.php?route=cronograma/ataDownload&id_evento=<?= (int)$ev['id'] ?>">Ata (legado): <?= htmlspecialchars((string)($ev['ata_original_name'] ?? 'arquivo')) ?></a>
@@ -396,7 +400,7 @@
                         <?php foreach ($anexos as $a): ?>
                           <div class="flex items-center gap-2" data-anexo-item="<?= (int)($a['id'] ?? 0) ?>">
                             <a class="text-xs text-brand-red hover:underline" href="index.php?route=cronograma/anexoDownload&id_anexo=<?= (int)($a['id'] ?? 0) ?>"><?= htmlspecialchars((string)($a['original_name'] ?? 'arquivo')) ?></a>
-                            <button type="button" class="icon-btn" title="Remover anexo" aria-label="Remover anexo" data-anexo-delete="<?= (int)($a['id'] ?? 0) ?>" data-serie-id="<?= $serieId ?>"><span data-feather="trash-2"></span></button>
+                            <button type="button" class="icon-btn" title="Remover anexo (encerramento)" aria-label="Remover anexo (encerramento)" data-anexo-delete="<?= (int)($a['id'] ?? 0) ?>" data-event-id="<?= $eventId ?>" <?= $isFinalizado ? 'disabled' : '' ?>><span data-feather="trash-2"></span></button>
                           </div>
                         <?php endforeach; ?>
                       <?php endif; ?>
@@ -587,19 +591,19 @@
       });
     });
 
-    const setAnexosError = (serieId, message) => {
-      const wrap = document.querySelector(`[data-anexos-wrap="${serieId}"]`);
+    const setAnexosError = (eventId, message) => {
+      const wrap = document.querySelector(`[data-anexos-wrap="${eventId}"]`);
       if (!wrap) return;
-      const box = wrap.querySelector(`[data-anexos-error="${serieId}"]`);
+      const box = wrap.querySelector(`[data-anexos-error="${eventId}"]`);
       if (!box) return;
       box.textContent = message || '';
       box.classList.toggle('hidden', !message);
     };
 
-    const updateSerieAnexos = (serieId, anexos) => {
-      document.querySelectorAll(`[data-anexos-wrap="${serieId}"]`).forEach((wrap) => {
-        const list = wrap.querySelector(`[data-anexos-list="${serieId}"]`);
-        const summary = wrap.querySelector(`[data-anexos-summary="${serieId}"]`);
+    const updateEventAnexos = (eventId, anexos) => {
+      document.querySelectorAll(`[data-anexos-wrap="${eventId}"]`).forEach((wrap) => {
+        const list = wrap.querySelector(`[data-anexos-list="${eventId}"]`);
+        const summary = wrap.querySelector(`[data-anexos-summary="${eventId}"]`);
         const legacy = wrap.getAttribute('data-has-legacy-ata') === '1' ? 1 : 0;
         const count = (Array.isArray(anexos) ? anexos.length : 0) + legacy;
         wrap.setAttribute('data-anexos-count', String(count));
@@ -618,9 +622,10 @@
               .replace(/>/g, '&gt;')
               .replace(/"/g, '&quot;')
               .replace(/'/g, '&#39;');
+            const canDelete = wrap.getAttribute('data-encerramento-enabled') === '1';
             return `<div class="flex items-center gap-2" data-anexo-item="${id}">
               <a class="text-xs text-brand-red hover:underline" href="${url}">${safeName}</a>
-              <button type="button" class="icon-btn" title="Remover anexo" aria-label="Remover anexo" data-anexo-delete="${id}" data-serie-id="${serieId}"><span data-feather="trash-2"></span></button>
+              <button type="button" class="icon-btn" title="Remover anexo (encerramento)" aria-label="Remover anexo (encerramento)" data-anexo-delete="${id}" data-event-id="${eventId}" ${canDelete ? '' : 'disabled'}><span data-feather="trash-2"></span></button>
             </div>`;
           }).join('');
           list.innerHTML = legacyHtml + itemsHtml;
@@ -631,9 +636,40 @@
       });
     };
 
+    const getEncerramentoEnabled = (wrap) => {
+      if (!wrap) return false;
+      if ((wrap.getAttribute('data-event-status') || '') === 'Finalizado') return false;
+      const td = wrap.closest('td');
+      const form = td ? td.querySelector('form[action*="route=cronograma/updateEvento"]') : null;
+      const select = form ? form.querySelector('select[name="status"]') : null;
+      return !!(select && select.value === 'Finalizado');
+    };
+
+    const syncEncerramentoUi = (wrap) => {
+      if (!wrap) return;
+      const eventId = wrap.getAttribute('data-event-id') || wrap.getAttribute('data-anexos-wrap') || '';
+      if (!eventId) return;
+      const enabled = getEncerramentoEnabled(wrap);
+      wrap.setAttribute('data-encerramento-enabled', enabled ? '1' : '0');
+      const encerramentoInput = wrap.querySelector(`[data-encerramento="${eventId}"]`);
+      if (encerramentoInput) encerramentoInput.value = enabled ? '1' : '0';
+      wrap.querySelectorAll(`[data-anexos-upload="${eventId}"]`).forEach((btn) => {
+        btn.toggleAttribute('disabled', !enabled);
+      });
+      wrap.querySelectorAll('[data-anexo-delete]').forEach((btn) => {
+        btn.toggleAttribute('disabled', !enabled);
+      });
+    };
+
     document.querySelectorAll('[data-anexos-upload]').forEach((button) => {
       button.addEventListener('click', () => {
         const eventId = button.getAttribute('data-anexos-upload');
+        const wrap = document.querySelector(`[data-anexos-wrap="${eventId}"]`);
+        if (wrap) syncEncerramentoUi(wrap);
+        if (wrap && wrap.getAttribute('data-encerramento-enabled') !== '1') {
+          setAnexosError(eventId, 'Para anexar documentos, selecione o status "Finalizado" e salve o evento para encerrar a reunião.');
+          return;
+        }
         const input = document.querySelector(`[data-anexos-input="${eventId}"]`);
         if (input) input.click();
       });
@@ -645,8 +681,14 @@
         const form = input.closest('form');
         if (!form || !eventId) return;
         if (!input.files || !input.files.length) return;
-        const serieId = form.closest('[data-serie-id]')?.getAttribute('data-serie-id') || '';
-        if (serieId) setAnexosError(serieId, '');
+        const wrap = form.closest('[data-anexos-wrap]');
+        if (wrap) syncEncerramentoUi(wrap);
+        if (wrap && wrap.getAttribute('data-encerramento-enabled') !== '1') {
+          setAnexosError(eventId, 'Documentos de reuniões só podem ser anexados na etapa de encerramento.');
+          input.value = '';
+          return;
+        }
+        setAnexosError(eventId, '');
         const formData = new FormData(form);
         try {
           const response = await fetch(form.action, {
@@ -658,10 +700,10 @@
           if (!response.ok || !payload.ok) {
             throw new Error(payload.message || 'Não foi possível anexar os documentos.');
           }
-          updateSerieAnexos(String(payload.serie_id || ''), payload.anexos || []);
+          updateEventAnexos(String(payload.event_id || ''), payload.anexos || []);
           alert(payload.message || 'Documentos anexados com sucesso.');
         } catch (error) {
-          if (serieId) setAnexosError(serieId, error.message || 'Erro ao anexar os documentos.');
+          setAnexosError(eventId, error.message || 'Erro ao anexar os documentos.');
           alert(error.message || 'Erro ao anexar os documentos.');
         } finally {
           input.value = '';
@@ -673,16 +715,22 @@
       const btn = e.target && e.target.closest ? e.target.closest('[data-anexo-delete]') : null;
       if (!btn) return;
       const anexoId = btn.getAttribute('data-anexo-delete');
-      const serieId = btn.getAttribute('data-serie-id') || '';
-      const wrap = document.querySelector(`[data-anexos-wrap="${serieId}"]`);
+      const eventId = btn.getAttribute('data-event-id') || '';
+      const wrap = document.querySelector(`[data-anexos-wrap="${eventId}"]`);
       const form = wrap ? wrap.querySelector('form.cronograma-anexos-form') : null;
       if (!anexoId || !form) return;
-      setAnexosError(serieId, '');
+      syncEncerramentoUi(wrap);
+      if (wrap && wrap.getAttribute('data-encerramento-enabled') !== '1') {
+        setAnexosError(eventId, 'Documentos de reuniões só podem ser gerenciados na etapa de encerramento.');
+        return;
+      }
+      setAnexosError(eventId, '');
       const formData = new FormData();
       formData.set('csrf', form.querySelector('input[name="csrf"]')?.value || '');
       formData.set('id_anexo', anexoId);
       formData.set('id_cronograma', form.querySelector('input[name="id_cronograma"]')?.value || '');
       formData.set('status_filter', form.querySelector('input[name="status_filter"]')?.value || 'todos');
+      formData.set('encerramento', '1');
       try {
         const response = await fetch('index.php?route=cronograma/anexoDelete', {
           method: 'POST',
@@ -693,9 +741,9 @@
         if (!response.ok || !payload.ok) {
           throw new Error(payload.message || 'Não foi possível remover o anexo.');
         }
-        updateSerieAnexos(String(payload.serie_id || ''), payload.anexos || []);
+        updateEventAnexos(String(payload.event_id || ''), payload.anexos || []);
       } catch (error) {
-        setAnexosError(serieId, error.message || 'Erro ao remover o anexo.');
+        setAnexosError(eventId, error.message || 'Erro ao remover o anexo.');
         alert(error.message || 'Erro ao remover o anexo.');
       }
     });
@@ -705,13 +753,27 @@
         const td = form.closest('td');
         const wrap = td ? td.querySelector('[data-anexos-wrap]') : null;
         if (!wrap) return;
-        const serieId = wrap.getAttribute('data-serie-id') || wrap.getAttribute('data-anexos-wrap') || '';
+        const eventId = wrap.getAttribute('data-event-id') || wrap.getAttribute('data-anexos-wrap') || '';
         const count = parseInt(wrap.getAttribute('data-anexos-count') || '0', 10) || 0;
+        const statusSelect = form.querySelector('select[name="status"]');
+        const target = statusSelect ? statusSelect.value : '';
+        syncEncerramentoUi(wrap);
+        if (target !== 'Finalizado') return;
         if (count > 0) return;
         e.preventDefault();
-        if (serieId) setAnexosError(serieId, 'Para salvar uma reunião, anexe pelo menos um documento.');
-        alert('Para salvar uma reunião, anexe pelo menos um documento.');
+        setAnexosError(eventId, 'Para encerrar uma reunião, anexe pelo menos um documento.');
+        alert('Para encerrar uma reunião, anexe pelo menos um documento.');
       });
+    });
+
+    document.querySelectorAll('[data-anexos-wrap]').forEach((wrap) => {
+      syncEncerramentoUi(wrap);
+      const td = wrap.closest('td');
+      const form = td ? td.querySelector('form[action*="route=cronograma/updateEvento"]') : null;
+      const select = form ? form.querySelector('select[name="status"]') : null;
+      if (select) {
+        select.addEventListener('change', () => syncEncerramentoUi(wrap));
+      }
     });
 
     const occForm = document.getElementById('occFiltersForm');
