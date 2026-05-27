@@ -283,6 +283,15 @@ switch ($route) {
     case 'cronograma/ataUpload':
         (new CronogramaController())->ataUpload();
         break;
+    case 'cronograma/anexosUpload':
+        (new CronogramaController())->anexosUpload();
+        break;
+    case 'cronograma/anexoDownload':
+        (new CronogramaController())->anexoDownload();
+        break;
+    case 'cronograma/anexoDelete':
+        (new CronogramaController())->anexoDelete();
+        break;
     case 'cronograma/updateEvento':
         (new CronogramaController())->updateEvento();
         break;

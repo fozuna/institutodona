@@ -24,6 +24,8 @@ class CronogramaController extends BaseController
 
     private CronogramaModel $cronogramas;
     private CronogramaEventoModel $eventos;
+    private const REUNIAO_ANEXO_MAX_BYTES = 20971520;
+    private const REUNIAO_ANEXO_MAX_FILES = 10;
 
     public function __construct()
     {
@@ -265,6 +267,21 @@ class CronogramaController extends BaseController
         $events = $this->filterEventsByCriteria($events, $filters);
         $events = $this->sortEvents($events, $order);
         $grid = $this->sortGridRows($grid, $order);
+        $serieIds = [];
+        foreach ($events as $ev) {
+            if (($ev['tipo_evento'] ?? '') === 'Reunião') {
+                $serieIds[] = (int)($ev['serie_id'] ?? $ev['id'] ?? 0);
+            }
+        }
+        $serieIds = array_values(array_unique(array_filter($serieIds, static fn(int $v): bool => $v > 0)));
+        $anexosMap = !empty($serieIds) ? $this->eventos->anexosByEventIds($serieIds) : [];
+        foreach ($events as $i => $ev) {
+            if (($ev['tipo_evento'] ?? '') !== 'Reunião') {
+                continue;
+            }
+            $sid = (int)($ev['serie_id'] ?? $ev['id'] ?? 0);
+            $events[$i]['anexos'] = $sid > 0 ? ($anexosMap[$sid] ?? []) : [];
+        }
         $pilares = (new PilarModel())->all();
         $occOptions = $this->buildOcorrenciasOptions($annotatedEvents);
 
@@ -301,6 +318,7 @@ class CronogramaController extends BaseController
         $idCronograma = (int)($_POST['id_cronograma'] ?? 0);
         $statusFilter = CronogramaTrafficLight::normalizeFilter($_POST['status_filter'] ?? 'todos');
         $tipoEvento = CronogramaEventoModel::normalizeEventType($_POST['tipo_evento'] ?? null);
+        $anexosCount = $tipoEvento === 'Reunião' ? $this->countUploadedFiles('anexos') : 0;
         $data = [
             'data' => $_POST['data'] ?? null,
             'topico' => trim($_POST['topico'] ?? ''),
@@ -311,6 +329,7 @@ class CronogramaController extends BaseController
             'status' => $_POST['status'] ?? 'Planejado',
             'periodicidade' => $_POST['periodicidade'] ?? 'unico',
             'tipo_evento' => $tipoEvento,
+            'anexos_count' => $anexosCount,
         ];
 
         $isValid = $idCronograma && $data['data'] && $data['topico'] && $data['atividade'];
@@ -321,6 +340,14 @@ class CronogramaController extends BaseController
         if ($isValid) {
             try {
                 $newId = $this->eventos->create($idCronograma, $data);
+                if ($tipoEvento === 'Reunião') {
+                    try {
+                        $this->storeReuniaoAnexosFromRequest($newId, $idCronograma, true);
+                    } catch (\Throwable $e) {
+                        $this->eventos->delete($newId, 'serie');
+                        throw $e;
+                    }
+                }
                 $_SESSION['flash_success'] = 'Evento salvo com recorrencia processada com sucesso.';
                 AuditLogger::log('cronograma_add_evento_success', 'cronograma_evento', $newId, [
                     'id_cronograma' => $idCronograma,
@@ -515,6 +542,295 @@ class CronogramaController extends BaseController
             'ata_size' => $sizeBytes,
             'ata_sha256' => $sha256,
         ];
+    }
+
+    public function anexosUpload(): void
+    {
+        $this->requireRole('instituto');
+        $csrf = $_POST['csrf'] ?? null;
+        if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
+
+        $idEvento = (int)($_POST['id_evento'] ?? 0);
+        $idCronograma = (int)($_POST['id_cronograma'] ?? 0);
+        $statusFilter = CronogramaTrafficLight::normalizeFilter($_POST['status_filter'] ?? 'todos');
+        $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
+
+        $ev = $this->eventos->find($idEvento);
+        if (!$ev) {
+            http_response_code(404);
+            $payload = ['ok' => false, 'message' => 'Evento não encontrado.'];
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $_SESSION['flash_error'] = $payload['message'];
+            $url = $this->buildOccRedirectUrl($idCronograma, $statusFilter, $_POST);
+            header('Location: ' . $url);
+            return;
+        }
+        $tipoEvento = CronogramaEventoModel::normalizeEventType($ev['tipo_evento'] ?? null);
+        if ($tipoEvento !== 'Reunião') {
+            http_response_code(400);
+            $payload = ['ok' => false, 'message' => 'Anexos são permitidos apenas para eventos do tipo Reunião.'];
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $_SESSION['flash_error'] = $payload['message'];
+            $url = $this->buildOccRedirectUrl($idCronograma, $statusFilter, $_POST);
+            header('Location: ' . $url);
+            return;
+        }
+        $serieId = (int)($ev['serie_id'] ?? $idEvento);
+        $cronogramaId = $idCronograma > 0 ? $idCronograma : (int)($ev['id_cronograma'] ?? 0);
+
+        try {
+            $this->storeReuniaoAnexosFromRequest($serieId, $cronogramaId, true);
+            $anexos = $this->eventos->anexosList($serieId);
+            $payload = [
+                'ok' => true,
+                'message' => 'Documentos anexados com sucesso.',
+                'serie_id' => $serieId,
+                'anexos' => array_map(static fn(array $a): array => [
+                    'id' => (int)($a['id'] ?? 0),
+                    'name' => (string)($a['original_name'] ?? ''),
+                    'size' => (int)($a['size'] ?? 0),
+                    'download_url' => 'index.php?route=cronograma/anexoDownload&id_anexo=' . (int)($a['id'] ?? 0),
+                ], $anexos),
+            ];
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $_SESSION['flash_success'] = $payload['message'];
+            $url = $this->buildOccRedirectUrl($cronogramaId, $statusFilter, $_POST);
+            header('Location: ' . $url);
+            return;
+        } catch (\Throwable $e) {
+            $payload = ['ok' => false, 'message' => $e->getMessage()];
+            if ($isAjax) {
+                http_response_code(422);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $_SESSION['flash_error'] = $payload['message'];
+            $url = $this->buildOccRedirectUrl($cronogramaId, $statusFilter, $_POST);
+            header('Location: ' . $url);
+            return;
+        }
+    }
+
+    public function anexoDownload(): void
+    {
+        $this->requireRole('instituto');
+        $id = (int)($_GET['id_anexo'] ?? 0);
+        $anexo = $this->eventos->anexoFind($id);
+        if (!$anexo || !empty($anexo['deleted_at'])) {
+            http_response_code(404);
+            echo 'Anexo não encontrado.';
+            return;
+        }
+        $tipo = CronogramaEventoModel::normalizeEventType($anexo['tipo_evento'] ?? null);
+        if ($tipo !== 'Reunião') {
+            http_response_code(404);
+            echo 'Anexo não disponível.';
+            return;
+        }
+        $path = (string)($anexo['path'] ?? '');
+        if ($path === '' || !is_file($path)) {
+            http_response_code(404);
+            echo 'Arquivo não disponível.';
+            return;
+        }
+        $mime = (string)($anexo['mime'] ?? 'application/octet-stream');
+        $name = (string)($anexo['original_name'] ?? ('anexo_' . $id));
+        $safe = preg_replace('/[^A-Za-z0-9._-]+/', '_', $name) ?: ('anexo_' . $id);
+        header('Content-Type: ' . ($mime !== '' ? $mime : 'application/octet-stream'));
+        header('Content-Disposition: attachment; filename="' . $safe . '"');
+        header('X-Content-Type-Options: nosniff');
+        header('Content-Length: ' . (string)filesize($path));
+        readfile($path);
+        exit;
+    }
+
+    public function anexoDelete(): void
+    {
+        $this->requireRole('instituto');
+        $csrf = $_POST['csrf'] ?? null;
+        if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
+
+        $idAnexo = (int)($_POST['id_anexo'] ?? 0);
+        $idCronograma = (int)($_POST['id_cronograma'] ?? 0);
+        $statusFilter = CronogramaTrafficLight::normalizeFilter($_POST['status_filter'] ?? 'todos');
+        $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
+
+        try {
+            $anexo = $this->eventos->anexoFind($idAnexo);
+            if (!$anexo || !empty($anexo['deleted_at'])) {
+                throw new \RuntimeException('Anexo não encontrado.');
+            }
+            $tipo = CronogramaEventoModel::normalizeEventType($anexo['tipo_evento'] ?? null);
+            if ($tipo !== 'Reunião') {
+                throw new \RuntimeException('Anexos são permitidos apenas para eventos do tipo Reunião.');
+            }
+            $path = (string)($anexo['path'] ?? '');
+            $ok = $this->eventos->anexoSoftDelete($idAnexo);
+            if (!$ok) {
+                throw new \RuntimeException('Não foi possível remover o anexo.');
+            }
+            if ($path !== '' && is_file($path)) {
+                @unlink($path);
+            }
+            $serieId = (int)($anexo['evento_id'] ?? 0);
+            $anexos = $this->eventos->anexosList($serieId);
+            $payload = [
+                'ok' => true,
+                'message' => 'Anexo removido com sucesso.',
+                'serie_id' => $serieId,
+                'anexos' => array_map(static fn(array $a): array => [
+                    'id' => (int)($a['id'] ?? 0),
+                    'name' => (string)($a['original_name'] ?? ''),
+                    'size' => (int)($a['size'] ?? 0),
+                    'download_url' => 'index.php?route=cronograma/anexoDownload&id_anexo=' . (int)($a['id'] ?? 0),
+                ], $anexos),
+            ];
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $_SESSION['flash_success'] = $payload['message'];
+            $url = $this->buildOccRedirectUrl($idCronograma, $statusFilter, $_POST);
+            header('Location: ' . $url);
+            return;
+        } catch (\Throwable $e) {
+            $payload = ['ok' => false, 'message' => $e->getMessage()];
+            if ($isAjax) {
+                http_response_code(422);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $_SESSION['flash_error'] = $payload['message'];
+            $url = $this->buildOccRedirectUrl($idCronograma, $statusFilter, $_POST);
+            header('Location: ' . $url);
+            return;
+        }
+    }
+
+    private function countUploadedFiles(string $inputName): int
+    {
+        $files = $_FILES[$inputName] ?? null;
+        if (!is_array($files) || !isset($files['name'])) {
+            return 0;
+        }
+        $names = is_array($files['name']) ? $files['name'] : [$files['name']];
+        $errors = is_array($files['error'] ?? null) ? $files['error'] : [($files['error'] ?? UPLOAD_ERR_NO_FILE)];
+        $count = 0;
+        foreach ($names as $i => $name) {
+            $err = (int)($errors[$i] ?? UPLOAD_ERR_NO_FILE);
+            if ($err === UPLOAD_ERR_OK && trim((string)$name) !== '') {
+                $count++;
+            }
+        }
+        return $count;
+    }
+
+    private function storeReuniaoAnexosFromRequest(int $serieId, int $idCronograma, bool $required): void
+    {
+        if ($serieId <= 0 || $idCronograma <= 0) {
+            throw new \RuntimeException('Evento inválido para anexos.');
+        }
+        $files = $_FILES['anexos'] ?? null;
+        if (!is_array($files) || !isset($files['name'])) {
+            if ($required) {
+                throw new \RuntimeException('Para eventos do tipo Reunião, é obrigatório anexar pelo menos um documento.');
+            }
+            return;
+        }
+        $names = is_array($files['name']) ? $files['name'] : [$files['name']];
+        $tmpNames = is_array($files['tmp_name'] ?? null) ? $files['tmp_name'] : [($files['tmp_name'] ?? '')];
+        $errors = is_array($files['error'] ?? null) ? $files['error'] : [($files['error'] ?? UPLOAD_ERR_NO_FILE)];
+        $sizes = is_array($files['size'] ?? null) ? $files['size'] : [($files['size'] ?? 0)];
+        $types = is_array($files['type'] ?? null) ? $files['type'] : [($files['type'] ?? '')];
+
+        $items = [];
+        $storedPaths = [];
+        $total = 0;
+        for ($i = 0; $i < count($names); $i++) {
+            $name = trim((string)($names[$i] ?? ''));
+            $err = (int)($errors[$i] ?? UPLOAD_ERR_NO_FILE);
+            if ($err === UPLOAD_ERR_NO_FILE && $name === '') {
+                continue;
+            }
+            if ($err !== UPLOAD_ERR_OK) {
+                if (in_array($err, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
+                    throw new \RuntimeException('Arquivo excede o limite permitido.');
+                }
+                throw new \RuntimeException('Falha no upload do arquivo.');
+            }
+            $total++;
+            if ($total > self::REUNIAO_ANEXO_MAX_FILES) {
+                throw new \RuntimeException('Limite de arquivos excedido (máximo de 10 por envio).');
+            }
+            $tmp = (string)($tmpNames[$i] ?? '');
+            if ($tmp === '' || !is_uploaded_file($tmp)) {
+                throw new \RuntimeException('Arquivo temporário inválido.');
+            }
+            $sizeBytes = (int)($sizes[$i] ?? 0);
+            $finfo = function_exists('finfo_open') ? @finfo_open(FILEINFO_MIME_TYPE) : null;
+            $mime = $finfo ? (string)@finfo_file($finfo, $tmp) : (string)($types[$i] ?? '');
+            if ($finfo) {
+                @finfo_close($finfo);
+            }
+            $validated = CronogramaEventoModel::validateReuniaoDocumentoUpload($name, $sizeBytes, $mime, self::REUNIAO_ANEXO_MAX_BYTES);
+            if (empty($validated['ok'])) {
+                throw new \RuntimeException((string)($validated['message'] ?? 'Arquivo inválido.'));
+            }
+            $token = bin2hex(random_bytes(8));
+            $baseDir = dirname(__DIR__, 2) . '/storage/cronograma/reunioes/' . $idCronograma . '/' . $serieId . '/' . $token;
+            if (!is_dir($baseDir) && !mkdir($baseDir, 0775, true) && !is_dir($baseDir)) {
+                throw new \RuntimeException('Não foi possível criar o diretório do anexo.');
+            }
+            if (!is_writable($baseDir)) {
+                throw new \RuntimeException('Diretório do anexo sem permissão de escrita.');
+            }
+            $clientName = basename((string)$name);
+            $safe = preg_replace('/[^A-Za-z0-9._-]+/', '_', $clientName) ?: 'anexo';
+            $dest = $baseDir . '/' . date('Ymd_His') . '_' . $safe;
+            if (!move_uploaded_file($tmp, $dest)) {
+                throw new \RuntimeException('Não foi possível salvar o arquivo.');
+            }
+            $storedPaths[] = $dest;
+            $sha256 = hash_file('sha256', $dest) ?: null;
+            $items[] = [
+                'path' => $dest,
+                'original_name' => $clientName,
+                'mime' => (string)($validated['mime'] ?? $mime),
+                'size' => $sizeBytes,
+                'sha256' => $sha256,
+            ];
+        }
+        if (empty($items)) {
+            if ($required) {
+                throw new \RuntimeException('Para eventos do tipo Reunião, é obrigatório anexar pelo menos um documento.');
+            }
+            return;
+        }
+        try {
+            $this->eventos->anexosCreateMany($serieId, $items);
+        } catch (\Throwable $e) {
+            foreach ($storedPaths as $p) {
+                if (is_string($p) && $p !== '' && is_file($p)) {
+                    @unlink($p);
+                }
+            }
+            throw $e;
+        }
     }
 
     public function toggleStatus(): void

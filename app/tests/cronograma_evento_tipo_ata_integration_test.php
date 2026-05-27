@@ -55,12 +55,13 @@ try {
         'responsavel' => 'Resp',
         'modelo' => 'Online',
         'status' => 'Planejado',
+        'anexos_count' => 1,
     ]);
     if ($rootId <= 0) {
         failFast('create() deve retornar id válido');
     }
     $eventIds[] = $rootId;
-    ok('Criação: evento Reunião sem ata (permitido antes da finalização)');
+    ok('Criação: evento Reunião (validação de anexos aplicada)');
 
     $all = $model->byCronograma($cronogramaId);
     $found = array_values(array_filter($all, static fn(array $r): bool => (int)($r['id'] ?? 0) === $rootId));
@@ -80,29 +81,26 @@ try {
         $thrown = true;
     }
     if (!$thrown) {
-        failFast('Finalização de Reunião sem ata deve falhar');
+        failFast('Finalização de Reunião sem documentos deve falhar');
     }
-    ok('Validação: finalizar Reunião sem ata falha');
+    ok('Validação: finalizar Reunião sem documentos falha');
 
-    $dummyPath = __DIR__ . '/dummy_ata_' . $suffix . '.pdf';
-    file_put_contents($dummyPath, '%PDF-1.4 dummy');
-    $saved = $model->setAta($rootId, [
-        'ata_path' => $dummyPath,
-        'ata_original_name' => 'ata_' . $suffix . '.pdf',
-        'ata_mime' => 'application/pdf',
-        'ata_size' => (int)filesize($dummyPath),
-        'ata_sha256' => hash_file('sha256', $dummyPath),
-    ]);
-    if (!$saved) {
-        failFast('setAta() deve persistir metadados');
-    }
-    ok('Anexo: ata persistida para o evento');
+    $pdo->prepare('INSERT INTO cronograma_evento_anexos (evento_id, path, original_name, mime, size, sha256) VALUES (:e,:p,:n,:m,:s,:h)')
+        ->execute([
+            'e' => $rootId,
+            'p' => '/tmp/' . $suffix . '_doc.pdf',
+            'n' => 'doc.pdf',
+            'm' => 'application/pdf',
+            's' => 123,
+            'h' => null,
+        ]);
+    ok('Anexo: documento persistido para o evento');
 
     $okStatus = $model->setStatus($rootId, 'Finalizado');
     if (!$okStatus) {
-        failFast('Após anexar a ata, finalização deve funcionar');
+        failFast('Após anexar documento, finalização deve funcionar');
     }
-    ok('Finalização: Reunião com ata pode ser finalizada');
+    ok('Finalização: Reunião com documento pode ser finalizada');
 
     $view = file_get_contents(__DIR__ . '/../views/cronograma/add_evento.php');
     if ($view === false) {
@@ -111,25 +109,19 @@ try {
     if (strpos($view, 'id="cronogramaTipoEvento"') === false) {
         failFast('View deve conter seletor de tipo_evento');
     }
-    if (strpos($view, 'id="cronogramaAtaWrap"') !== false) {
-        failFast('View add_evento não deve exigir ata na criação');
+    if (strpos($view, 'name="anexos[]"') === false) {
+        failFast('View deve oferecer upload de anexos para reunião');
     }
-    ok('UI: view contém seletor de tipo e não exige ata na criação');
+    ok('UI: view contém seletor de tipo e upload de anexos');
 } finally {
     try {
         if ($cronogramaId > 0) {
+            $pdo->prepare('DELETE FROM cronograma_evento_anexos WHERE evento_id IN (SELECT id FROM cronograma_eventos WHERE id_cronograma = :id)')->execute(['id' => $cronogramaId]);
             $pdo->prepare('DELETE FROM cronograma_eventos WHERE id_cronograma = :id')->execute(['id' => $cronogramaId]);
             $pdo->prepare('DELETE FROM cronogramas WHERE id = :id')->execute(['id' => $cronogramaId]);
         }
         if ($clienteId > 0) {
             $pdo->prepare('DELETE FROM clientes WHERE id = :id')->execute(['id' => $clienteId]);
-        }
-    } catch (Throwable $e) {
-    }
-    try {
-        $dummyPath = __DIR__ . '/dummy_ata_' . $suffix . '.pdf';
-        if (is_file($dummyPath)) {
-            @unlink($dummyPath);
         }
     } catch (Throwable $e) {
     }

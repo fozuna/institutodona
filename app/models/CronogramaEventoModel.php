@@ -71,6 +71,21 @@ class CronogramaEventoModel extends BaseModel
               ata_size INT UNSIGNED NULL,
               ata_sha256 CHAR(64) NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            $this->db->exec("CREATE TABLE IF NOT EXISTS cronograma_evento_anexos (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              evento_id INT NOT NULL,
+              path VARCHAR(255) NOT NULL,
+              original_name VARCHAR(255) NOT NULL,
+              mime VARCHAR(100) NOT NULL,
+              size INT UNSIGNED NOT NULL,
+              sha256 CHAR(64) NULL,
+              created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              deleted_at DATETIME NULL,
+              INDEX idx_cronograma_evento_anexos_evento (evento_id),
+              INDEX idx_cronograma_evento_anexos_evento_deleted (evento_id, deleted_at),
+              CONSTRAINT fk_cronograma_evento_anexos_evento
+                FOREIGN KEY (evento_id) REFERENCES cronograma_eventos(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             if (!Database::columnExists('cronograma_eventos', 'evento_pai_id')) {
                 $this->db->exec("ALTER TABLE cronograma_eventos ADD COLUMN evento_pai_id INT NULL AFTER id_cronograma");
             }
@@ -126,6 +141,19 @@ class CronogramaEventoModel extends BaseModel
         $ext = (string)($validated['ext'] ?? '');
         if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg'], true)) {
             return ['ok' => false, 'error' => 'ext_invalid', 'message' => 'Tipo de arquivo inválido para ata.'];
+        }
+        return $validated;
+    }
+
+    public static function validateReuniaoDocumentoUpload(string $clientFilename, int $sizeBytes, string $detectedMime, int $maxBytes = 20971520): array
+    {
+        $validated = ManualModel::validateUpload($clientFilename, $sizeBytes, $detectedMime, $maxBytes);
+        if (empty($validated['ok'])) {
+            $err = (string)($validated['error'] ?? '');
+            if ($err === 'size_exceeded') {
+                return ['ok' => false, 'error' => 'size_exceeded', 'message' => 'Arquivo excede o limite de 20MB.'];
+            }
+            return $validated;
         }
         return $validated;
     }
@@ -405,9 +433,11 @@ class CronogramaEventoModel extends BaseModel
         }
         if ($status === 'Finalizado') {
             $tipo = self::normalizeEventType($event['tipo_evento'] ?? 'Tarefa');
-            $ataPath = Database::columnExists('cronograma_eventos', 'ata_path') ? (string)($event['ata_path'] ?? '') : '';
-            if ($tipo === 'Reunião' && ($ataPath === '' || !is_file($ataPath))) {
-                throw new RuntimeException('Para finalizar eventos do tipo Reunião, é obrigatório anexar a ata antes de marcar como finalizado.');
+            if ($tipo === 'Reunião') {
+                $ataPath = Database::columnExists('cronograma_eventos', 'ata_path') ? (string)($event['ata_path'] ?? '') : '';
+                if ($this->documentosCountForSerie((int)($event['serie_id'] ?? $event['id']), $ataPath) <= 0) {
+                    throw new RuntimeException('Para finalizar eventos do tipo Reunião, é obrigatório anexar pelo menos um documento antes de marcar como finalizado.');
+                }
             }
         }
         $from = $this->normalizeStatus((string)($event['status'] ?? 'Planejado'));
@@ -500,6 +530,7 @@ class CronogramaEventoModel extends BaseModel
             'ata_mime' => isset($data['ata_mime']) ? (string)$data['ata_mime'] : null,
             'ata_size' => isset($data['ata_size']) ? (int)$data['ata_size'] : null,
             'ata_sha256' => isset($data['ata_sha256']) ? (string)$data['ata_sha256'] : null,
+            'anexos_count' => isset($data['anexos_count']) ? max(0, (int)$data['anexos_count']) : 0,
         ];
         if ($payload['data'] === '' || $payload['topico'] === '' || $payload['atividade'] === '') {
             throw new RuntimeException('Preencha data, pilar e atividade para salvar o evento.');
@@ -508,10 +539,33 @@ class CronogramaEventoModel extends BaseModel
         if ((int)$date->format('Y') !== $ano) {
             throw new RuntimeException('A data base deve pertencer ao ano do cronograma.');
         }
-        if ($payload['status'] === 'Finalizado' && $payload['tipo_evento'] === 'Reunião' && ($payload['ata_path'] === null || $payload['ata_path'] === '')) {
-            throw new RuntimeException('Para finalizar eventos do tipo Reunião, é obrigatório anexar a ata.');
+        if ($payload['tipo_evento'] === 'Reunião') {
+            $legacyAta = (string)($payload['ata_path'] ?? '');
+            $hasAny = $payload['anexos_count'] > 0 || $legacyAta !== '';
+            if (!$hasAny) {
+                throw new RuntimeException('Para eventos do tipo Reunião, é obrigatório anexar pelo menos um documento.');
+            }
         }
         return $payload;
+    }
+
+    private function documentosCountForSerie(int $serieId, ?string $legacyAtaPath = null): int
+    {
+        $count = 0;
+        $legacyAtaPath = (string)($legacyAtaPath ?? '');
+        if ($legacyAtaPath !== '') {
+            $count++;
+        }
+        $params = ['evento_id' => $serieId];
+        $scope = $this->tenantInCondition('cr.id_cliente', $params, 'ceanexos_ct');
+        $stmt = $this->db->prepare("SELECT COUNT(*)
+            FROM cronograma_evento_anexos a
+            JOIN cronograma_eventos ce ON ce.id = a.evento_id
+            JOIN cronogramas cr ON cr.id = ce.id_cronograma
+            WHERE a.evento_id = :evento_id AND a.deleted_at IS NULL AND $scope");
+        $stmt->execute($params);
+        $count += (int)$stmt->fetchColumn();
+        return $count;
     }
 
     private function normalizeStatus(string $status): string
@@ -705,6 +759,7 @@ class CronogramaEventoModel extends BaseModel
         $data['ata_mime'] = $data['ata_mime'] ?? ($event['ata_mime'] ?? null);
         $data['ata_size'] = $data['ata_size'] ?? ($event['ata_size'] ?? null);
         $data['ata_sha256'] = $data['ata_sha256'] ?? ($event['ata_sha256'] ?? null);
+        $data['anexos_count'] = $data['anexos_count'] ?? $this->documentosCountForSerie((int)($event['serie_id'] ?? $event['id']), isset($event['ata_path']) ? (string)$event['ata_path'] : null);
         $payload = $this->normalizePayload($data, (int)$event['ano']);
         $payload['periodicidade'] = (string)($event['periodicidade'] ?? 'unico');
         $this->assertNoDuplicateOccurrences((int)$event['id_cronograma'], $payload, [$payload['data']], [(int)$event['id']]);
@@ -749,6 +804,7 @@ class CronogramaEventoModel extends BaseModel
         $data['ata_mime'] = $data['ata_mime'] ?? ($root['ata_mime'] ?? null);
         $data['ata_size'] = $data['ata_size'] ?? ($root['ata_size'] ?? null);
         $data['ata_sha256'] = $data['ata_sha256'] ?? ($root['ata_sha256'] ?? null);
+        $data['anexos_count'] = $data['anexos_count'] ?? $this->documentosCountForSerie($rootId, isset($root['ata_path']) ? (string)$root['ata_path'] : null);
         $payload = $this->normalizePayload($data, (int)$root['ano']);
         $dates = $this->buildOccurrenceDates($payload['data'], $payload['periodicidade'], (int)$root['ano']);
         $this->assertNoDuplicateOccurrences((int)$root['id_cronograma'], $payload, $dates, $ignoreIds);
@@ -790,6 +846,127 @@ class CronogramaEventoModel extends BaseModel
             }
             throw $e;
         }
+    }
+
+    public function anexosList(int $eventoId): array
+    {
+        $this->ensureTables();
+        if ($eventoId <= 0) {
+            return [];
+        }
+        $params = ['evento_id' => $eventoId];
+        $scope = $this->tenantInCondition('cr.id_cliente', $params, 'ceanexos_l');
+        $stmt = $this->db->prepare("SELECT a.id, a.evento_id, a.original_name, a.mime, a.size, a.sha256, a.created_at
+            FROM cronograma_evento_anexos a
+            JOIN cronograma_eventos ce ON ce.id = a.evento_id
+            JOIN cronogramas cr ON cr.id = ce.id_cronograma
+            WHERE a.evento_id = :evento_id AND a.deleted_at IS NULL AND $scope
+            ORDER BY a.created_at DESC, a.id DESC");
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    public function anexosByEventIds(array $eventIds): array
+    {
+        $this->ensureTables();
+        $eventIds = array_values(array_filter(array_map('intval', $eventIds), static fn(int $v): bool => $v > 0));
+        if (empty($eventIds)) {
+            return [];
+        }
+        $params = [];
+        $holders = [];
+        foreach ($eventIds as $i => $id) {
+            $key = 'e' . $i;
+            $holders[] = ':' . $key;
+            $params[$key] = $id;
+        }
+        $in = implode(',', $holders);
+        $scope = $this->tenantInCondition('cr.id_cliente', $params, 'ceanexos_m');
+        $stmt = $this->db->prepare("SELECT a.id, a.evento_id, a.original_name, a.mime, a.size, a.sha256, a.created_at
+            FROM cronograma_evento_anexos a
+            JOIN cronograma_eventos ce ON ce.id = a.evento_id
+            JOIN cronogramas cr ON cr.id = ce.id_cronograma
+            WHERE a.deleted_at IS NULL AND a.evento_id IN ($in) AND $scope
+            ORDER BY a.created_at DESC, a.id DESC");
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll();
+        $map = [];
+        foreach ($rows as $row) {
+            $eid = (int)($row['evento_id'] ?? 0);
+            if ($eid <= 0) {
+                continue;
+            }
+            if (!isset($map[$eid])) {
+                $map[$eid] = [];
+            }
+            $map[$eid][] = $row;
+        }
+        return $map;
+    }
+
+    public function anexoFind(int $anexoId): ?array
+    {
+        $this->ensureTables();
+        if ($anexoId <= 0) {
+            return null;
+        }
+        $params = ['id' => $anexoId];
+        $scope = $this->tenantInCondition('cr.id_cliente', $params, 'ceanexos_f');
+        $stmt = $this->db->prepare("SELECT a.id, a.evento_id, a.path, a.original_name, a.mime, a.size, a.sha256, a.created_at, a.deleted_at,
+                   ce.id_cronograma, ce.tipo_evento
+            FROM cronograma_evento_anexos a
+            JOIN cronograma_eventos ce ON ce.id = a.evento_id
+            JOIN cronogramas cr ON cr.id = ce.id_cronograma
+            WHERE a.id = :id AND $scope
+            LIMIT 1");
+        $stmt->execute($params);
+        $row = $stmt->fetch();
+        return $row ?: null;
+    }
+
+    public function anexosCreateMany(int $eventoId, array $items): array
+    {
+        $this->ensureTables();
+        $eventoId = (int)$eventoId;
+        if ($eventoId <= 0 || empty($items)) {
+            return [];
+        }
+        $event = $this->find($eventoId);
+        if (!$event) {
+            return [];
+        }
+        $createdIds = [];
+        $stmt = $this->db->prepare("INSERT INTO cronograma_evento_anexos (evento_id, path, original_name, mime, size, sha256)
+            VALUES (:evento_id, :path, :original_name, :mime, :size, :sha256)");
+        foreach ($items as $item) {
+            $stmt->execute([
+                'evento_id' => $eventoId,
+                'path' => (string)($item['path'] ?? ''),
+                'original_name' => (string)($item['original_name'] ?? ''),
+                'mime' => (string)($item['mime'] ?? 'application/octet-stream'),
+                'size' => (int)($item['size'] ?? 0),
+                'sha256' => $item['sha256'] ?? null,
+            ]);
+            $createdIds[] = (int)$this->db->lastInsertId();
+        }
+        return $createdIds;
+    }
+
+    public function anexoSoftDelete(int $anexoId): bool
+    {
+        $this->ensureTables();
+        $anexo = $this->anexoFind($anexoId);
+        if (!$anexo || !empty($anexo['deleted_at'])) {
+            return false;
+        }
+        $params = ['id' => $anexoId];
+        $scope = $this->tenantInCondition('cr.id_cliente', $params, 'ceanexos_d');
+        $stmt = $this->db->prepare("UPDATE cronograma_evento_anexos a
+            JOIN cronograma_eventos ce ON ce.id = a.evento_id
+            JOIN cronogramas cr ON cr.id = ce.id_cronograma
+            SET a.deleted_at = NOW()
+            WHERE a.id = :id AND a.deleted_at IS NULL AND $scope");
+        return $stmt->execute($params);
     }
 
     private function deleteSeries(int $rootId): bool

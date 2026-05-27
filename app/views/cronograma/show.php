@@ -356,40 +356,53 @@
                 </form>
               </td>
               <td class="p-3">
-                <div class="mb-2 flex flex-wrap items-center gap-2" data-ata-wrap="<?= (int)$ev['id'] ?>">
-                  <?php if (($ev['tipo_evento'] ?? '') === 'Reunião'): ?>
-                    <form method="post" action="index.php?route=cronograma/ataUpload" class="cronograma-ata-form" enctype="multipart/form-data">
-                      <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
-                      <input type="hidden" name="id_evento" value="<?= (int)$ev['id'] ?>" />
-                      <input type="hidden" name="id_cronograma" value="<?= (int)$crono['id'] ?>" />
-                      <input type="hidden" name="status_filter" value="<?= htmlspecialchars($statusFilter) ?>" />
-                      <input type="hidden" name="occ_date_start" value="<?= htmlspecialchars($occFilters['date_start'] ?? '') ?>" />
-                      <input type="hidden" name="occ_date_end" value="<?= htmlspecialchars($occFilters['date_end'] ?? '') ?>" />
-                      <?php foreach (($occFilters['tipo'] ?? []) as $tipo): ?>
-                        <input type="hidden" name="occ_tipo[]" value="<?= htmlspecialchars($tipo) ?>" />
-                      <?php endforeach; ?>
-                      <?php foreach (($occFilters['status'] ?? []) as $statusOpt): ?>
-                        <input type="hidden" name="occ_status[]" value="<?= htmlspecialchars($statusOpt) ?>" />
-                      <?php endforeach; ?>
-                      <input type="hidden" name="occ_responsavel" value="<?= htmlspecialchars($occFilters['responsavel'] ?? '') ?>" />
-                      <input type="hidden" name="occ_local" value="<?= htmlspecialchars($occFilters['local'] ?? '') ?>" />
-                      <input type="hidden" name="occ_sort" value="<?= htmlspecialchars($occOrder['column'] ?? 'data') ?>" />
-                      <input type="hidden" name="occ_dir" value="<?= htmlspecialchars($occOrder['direction'] ?? 'asc') ?>" />
-                      <input type="hidden" name="MAX_FILE_SIZE" value="<?= 50 * 1024 * 1024 ?>" />
-                      <input
-                        class="hidden"
-                        type="file"
-                        name="ata"
-                        data-ata-input="<?= (int)$ev['id'] ?>"
-                        accept=".pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/rtf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                      />
-                      <button type="button" class="icon-btn" title="Anexar ata" aria-label="Anexar ata" data-ata-upload="<?= (int)$ev['id'] ?>"><span data-feather="paperclip"></span></button>
-                    </form>
-                    <?php if (!empty($ev['ata_path'])): ?>
-                      <a class="icon-btn" title="Baixar ata" aria-label="Baixar ata" data-ata-download="<?= (int)$ev['id'] ?>" href="index.php?route=cronograma/ataDownload&id_evento=<?= (int)$ev['id'] ?>"><span data-feather="file-text"></span></a>
-                    <?php endif; ?>
-                  <?php endif; ?>
-                </div>
+                <?php if (($ev['tipo_evento'] ?? '') === 'Reunião'): ?>
+                  <?php
+                    $serieId = (int)($ev['serie_id'] ?? $ev['id']);
+                    $anexos = $ev['anexos'] ?? [];
+                    $hasLegacyAta = !empty($ev['ata_path']);
+                    $anexosCount = count($anexos) + ($hasLegacyAta ? 1 : 0);
+                  ?>
+                  <div class="mb-2 space-y-2" data-anexos-wrap="<?= $serieId ?>" data-serie-id="<?= $serieId ?>" data-anexos-count="<?= $anexosCount ?>" data-has-legacy-ata="<?= $hasLegacyAta ? '1' : '0' ?>">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <form method="post" action="index.php?route=cronograma/anexosUpload" class="cronograma-anexos-form" enctype="multipart/form-data">
+                        <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+                        <input type="hidden" name="id_evento" value="<?= (int)$ev['id'] ?>" />
+                        <input type="hidden" name="id_cronograma" value="<?= (int)$crono['id'] ?>" />
+                        <input type="hidden" name="status_filter" value="<?= htmlspecialchars($statusFilter) ?>" />
+                        <input type="hidden" name="MAX_FILE_SIZE" value="<?= 20 * 1024 * 1024 ?>" />
+                        <input
+                          class="hidden"
+                          type="file"
+                          name="anexos[]"
+                          data-anexos-input="<?= (int)$ev['id'] ?>"
+                          multiple
+                          accept=".pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.bmp,.svg,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/rtf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/jpeg,image/png,image/gif,image/bmp,image/svg+xml"
+                        />
+                        <button type="button" class="icon-btn" title="Anexar documentos" aria-label="Anexar documentos" data-anexos-upload="<?= (int)$ev['id'] ?>"><span data-feather="paperclip"></span></button>
+                      </form>
+                      <div class="text-xs text-gray-600" data-anexos-summary="<?= $serieId ?>">
+                        <?= $anexosCount > 0 ? ('Documentos anexados: ' . (int)$anexosCount) : 'Nenhum documento anexado' ?>
+                      </div>
+                    </div>
+                    <div class="hidden px-3 py-2 text-xs text-red-700 bg-red-100 rounded" data-anexos-error="<?= $serieId ?>"></div>
+                    <div class="flex flex-col gap-1" data-anexos-list="<?= $serieId ?>">
+                      <?php if ($hasLegacyAta): ?>
+                        <div class="flex items-center gap-2">
+                          <a class="text-xs text-brand-red hover:underline" href="index.php?route=cronograma/ataDownload&id_evento=<?= (int)$ev['id'] ?>">Ata (legado): <?= htmlspecialchars((string)($ev['ata_original_name'] ?? 'arquivo')) ?></a>
+                        </div>
+                      <?php endif; ?>
+                      <?php if (!empty($anexos)): ?>
+                        <?php foreach ($anexos as $a): ?>
+                          <div class="flex items-center gap-2" data-anexo-item="<?= (int)($a['id'] ?? 0) ?>">
+                            <a class="text-xs text-brand-red hover:underline" href="index.php?route=cronograma/anexoDownload&id_anexo=<?= (int)($a['id'] ?? 0) ?>"><?= htmlspecialchars((string)($a['original_name'] ?? 'arquivo')) ?></a>
+                            <button type="button" class="icon-btn" title="Remover anexo" aria-label="Remover anexo" data-anexo-delete="<?= (int)($a['id'] ?? 0) ?>" data-serie-id="<?= $serieId ?>"><span data-feather="trash-2"></span></button>
+                          </div>
+                        <?php endforeach; ?>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                <?php endif; ?>
                 <form method="post" action="index.php?route=cronograma/updateEvento" class="space-y-2">
                   <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
                   <input type="hidden" name="id_evento" value="<?= (int)$ev['id'] ?>" />
@@ -574,20 +587,66 @@
       });
     });
 
-    document.querySelectorAll('[data-ata-upload]').forEach((button) => {
+    const setAnexosError = (serieId, message) => {
+      const wrap = document.querySelector(`[data-anexos-wrap="${serieId}"]`);
+      if (!wrap) return;
+      const box = wrap.querySelector(`[data-anexos-error="${serieId}"]`);
+      if (!box) return;
+      box.textContent = message || '';
+      box.classList.toggle('hidden', !message);
+    };
+
+    const updateSerieAnexos = (serieId, anexos) => {
+      document.querySelectorAll(`[data-anexos-wrap="${serieId}"]`).forEach((wrap) => {
+        const list = wrap.querySelector(`[data-anexos-list="${serieId}"]`);
+        const summary = wrap.querySelector(`[data-anexos-summary="${serieId}"]`);
+        const legacy = wrap.getAttribute('data-has-legacy-ata') === '1' ? 1 : 0;
+        const count = (Array.isArray(anexos) ? anexos.length : 0) + legacy;
+        wrap.setAttribute('data-anexos-count', String(count));
+        if (summary) {
+          summary.textContent = count > 0 ? `Documentos anexados: ${count}` : 'Nenhum documento anexado';
+        }
+        if (list) {
+          const legacyHtml = legacy ? list.querySelector('a[href*="route=cronograma/ataDownload"]')?.closest('div')?.outerHTML || '' : '';
+          const itemsHtml = (Array.isArray(anexos) ? anexos : []).map((a) => {
+            const id = a.id;
+            const name = a.name || 'arquivo';
+            const url = a.download_url || '#';
+            const safeName = String(name)
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#39;');
+            return `<div class="flex items-center gap-2" data-anexo-item="${id}">
+              <a class="text-xs text-brand-red hover:underline" href="${url}">${safeName}</a>
+              <button type="button" class="icon-btn" title="Remover anexo" aria-label="Remover anexo" data-anexo-delete="${id}" data-serie-id="${serieId}"><span data-feather="trash-2"></span></button>
+            </div>`;
+          }).join('');
+          list.innerHTML = legacyHtml + itemsHtml;
+          if (typeof feather !== 'undefined' && feather && typeof feather.replace === 'function') {
+            feather.replace();
+          }
+        }
+      });
+    };
+
+    document.querySelectorAll('[data-anexos-upload]').forEach((button) => {
       button.addEventListener('click', () => {
-        const eventId = button.getAttribute('data-ata-upload');
-        const input = document.querySelector(`[data-ata-input="${eventId}"]`);
+        const eventId = button.getAttribute('data-anexos-upload');
+        const input = document.querySelector(`[data-anexos-input="${eventId}"]`);
         if (input) input.click();
       });
     });
 
-    document.querySelectorAll('[data-ata-input]').forEach((input) => {
+    document.querySelectorAll('[data-anexos-input]').forEach((input) => {
       input.addEventListener('change', async () => {
-        const eventId = input.getAttribute('data-ata-input');
+        const eventId = input.getAttribute('data-anexos-input');
         const form = input.closest('form');
         if (!form || !eventId) return;
         if (!input.files || !input.files.length) return;
+        const serieId = form.closest('[data-serie-id]')?.getAttribute('data-serie-id') || '';
+        if (serieId) setAnexosError(serieId, '');
         const formData = new FormData(form);
         try {
           const response = await fetch(form.action, {
@@ -597,31 +656,61 @@
           });
           const payload = await response.json();
           if (!response.ok || !payload.ok) {
-            throw new Error(payload.message || 'Não foi possível anexar a ata.');
+            throw new Error(payload.message || 'Não foi possível anexar os documentos.');
           }
-          const wrap = document.querySelector(`[data-ata-wrap="${eventId}"]`);
-          if (wrap && payload.download_url) {
-            let link = wrap.querySelector(`[data-ata-download="${eventId}"]`);
-            if (!link) {
-              link = document.createElement('a');
-              link.className = 'icon-btn';
-              link.setAttribute('title', 'Baixar ata');
-              link.setAttribute('aria-label', 'Baixar ata');
-              link.setAttribute('data-ata-download', eventId);
-              link.innerHTML = '<span data-feather="file-text"></span>';
-              wrap.appendChild(link);
-              if (typeof feather !== 'undefined' && feather && typeof feather.replace === 'function') {
-                feather.replace();
-              }
-            }
-            link.setAttribute('href', payload.download_url);
-          }
-          alert(payload.message || 'Ata anexada com sucesso.');
+          updateSerieAnexos(String(payload.serie_id || ''), payload.anexos || []);
+          alert(payload.message || 'Documentos anexados com sucesso.');
         } catch (error) {
-          alert(error.message || 'Erro ao anexar a ata.');
+          if (serieId) setAnexosError(serieId, error.message || 'Erro ao anexar os documentos.');
+          alert(error.message || 'Erro ao anexar os documentos.');
         } finally {
           input.value = '';
         }
+      });
+    });
+
+    document.addEventListener('click', async (e) => {
+      const btn = e.target && e.target.closest ? e.target.closest('[data-anexo-delete]') : null;
+      if (!btn) return;
+      const anexoId = btn.getAttribute('data-anexo-delete');
+      const serieId = btn.getAttribute('data-serie-id') || '';
+      const wrap = document.querySelector(`[data-anexos-wrap="${serieId}"]`);
+      const form = wrap ? wrap.querySelector('form.cronograma-anexos-form') : null;
+      if (!anexoId || !form) return;
+      setAnexosError(serieId, '');
+      const formData = new FormData();
+      formData.set('csrf', form.querySelector('input[name="csrf"]')?.value || '');
+      formData.set('id_anexo', anexoId);
+      formData.set('id_cronograma', form.querySelector('input[name="id_cronograma"]')?.value || '');
+      formData.set('status_filter', form.querySelector('input[name="status_filter"]')?.value || 'todos');
+      try {
+        const response = await fetch('index.php?route=cronograma/anexoDelete', {
+          method: 'POST',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          body: formData,
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.message || 'Não foi possível remover o anexo.');
+        }
+        updateSerieAnexos(String(payload.serie_id || ''), payload.anexos || []);
+      } catch (error) {
+        setAnexosError(serieId, error.message || 'Erro ao remover o anexo.');
+        alert(error.message || 'Erro ao remover o anexo.');
+      }
+    });
+
+    document.querySelectorAll('form[action*="route=cronograma/updateEvento"]').forEach((form) => {
+      form.addEventListener('submit', (e) => {
+        const td = form.closest('td');
+        const wrap = td ? td.querySelector('[data-anexos-wrap]') : null;
+        if (!wrap) return;
+        const serieId = wrap.getAttribute('data-serie-id') || wrap.getAttribute('data-anexos-wrap') || '';
+        const count = parseInt(wrap.getAttribute('data-anexos-count') || '0', 10) || 0;
+        if (count > 0) return;
+        e.preventDefault();
+        if (serieId) setAnexosError(serieId, 'Para salvar uma reunião, anexe pelo menos um documento.');
+        alert('Para salvar uma reunião, anexe pelo menos um documento.');
       });
     });
 

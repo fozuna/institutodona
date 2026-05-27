@@ -9,7 +9,7 @@
     <a class="px-3 py-2 rounded bg-brand-brown text-white" href="index.php?route=clientes/show&id=<?= (int)($crono['id_cliente'] ?? 0) ?>">Voltar</a>
   </div>
   <div class="bg-white shadow rounded p-4">
-    <form method="post" action="index.php?route=cronograma/addEvento" class="space-y-3">
+    <form method="post" action="index.php?route=cronograma/addEvento" class="space-y-3" enctype="multipart/form-data" id="cronogramaAddEventoForm">
       <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
       <input type="hidden" name="id_cronograma" value="<?= (int)$crono['id'] ?>" />
       <input type="hidden" name="status_filter" value="todos" />
@@ -73,8 +73,65 @@
           </select>
         </div>
       </div>
+      <div id="reuniaoAnexosBlock" class="hidden">
+        <div class="p-3 border rounded bg-gray-50 space-y-2">
+          <div class="text-sm font-medium">Documentos da reunião</div>
+          <div id="reuniaoAnexosError" class="hidden px-3 py-2 text-xs text-red-700 bg-red-100 rounded"></div>
+          <input type="hidden" name="MAX_FILE_SIZE" value="<?= 20 * 1024 * 1024 ?>" />
+          <input
+            class="border rounded p-2 w-full"
+            type="file"
+            name="anexos[]"
+            id="reuniaoAnexosInput"
+            multiple
+            accept=".pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.bmp,.svg,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/rtf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/jpeg,image/png,image/gif,image/bmp,image/svg+xml"
+          />
+          <div class="text-xs text-gray-600">Obrigatório anexar pelo menos um documento. Limite: 10 arquivos por envio, até 20MB por arquivo.</div>
+        </div>
+      </div>
       <p class="text-xs text-gray-500">A recorrência é gerada no momento do cadastro, apenas dentro do ano deste cronograma.</p>
       <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">Salvar evento</button>
     </form>
   </div>
 </div>
+
+<script>
+  (function () {
+    const form = document.getElementById('cronogramaAddEventoForm');
+    const tipo = document.getElementById('cronogramaTipoEvento');
+    const block = document.getElementById('reuniaoAnexosBlock');
+    const input = document.getElementById('reuniaoAnexosInput');
+    const error = document.getElementById('reuniaoAnexosError');
+
+    const showError = (msg) => {
+      if (!error) return;
+      error.textContent = msg;
+      error.classList.remove('hidden');
+    };
+    const clearError = () => {
+      if (!error) return;
+      error.textContent = '';
+      error.classList.add('hidden');
+    };
+    const sync = () => {
+      const isReuniao = tipo && tipo.value === 'Reunião';
+      if (block) block.classList.toggle('hidden', !isReuniao);
+      clearError();
+    };
+
+    if (tipo) tipo.addEventListener('change', sync);
+    if (input) input.addEventListener('change', clearError);
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        const isReuniao = tipo && tipo.value === 'Reunião';
+        if (!isReuniao) return;
+        const count = input && input.files ? input.files.length : 0;
+        if (count <= 0) {
+          e.preventDefault();
+          showError('Para salvar uma reunião, anexe pelo menos um documento.');
+        }
+      });
+    }
+    sync();
+  })();
+</script>
