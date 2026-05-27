@@ -358,104 +358,265 @@
                 <?php endif; ?>
               </td>
               <td class="p-3">
-                <?php if (($ev['tipo_evento'] ?? '') === 'Reunião'): ?>
-                  <?php
-                    $eventId = (int)($ev['id'] ?? 0);
-                    $anexos = $ev['anexos'] ?? [];
-                    $hasLegacyAta = !empty($ev['ata_path']);
-                    $anexosCount = count($anexos) + ($hasLegacyAta ? 1 : 0);
-                    $isFinalizado = (string)($ev['status'] ?? '') === 'Finalizado';
-                  ?>
-                  <div class="mb-2 space-y-2" data-anexos-wrap="<?= $eventId ?>" data-event-id="<?= $eventId ?>" data-event-status="<?= htmlspecialchars((string)($ev['status'] ?? '')) ?>" data-anexos-count="<?= $anexosCount ?>" data-has-legacy-ata="<?= $hasLegacyAta ? '1' : '0' ?>">
+                <?php
+                  $eventId = (int)($ev['id'] ?? 0);
+                  $serieId = (int)($ev['serie_id'] ?? $eventId);
+                  $isReuniao = ($ev['tipo_evento'] ?? '') === 'Reunião';
+                  $isFinalizado = (string)($ev['status'] ?? '') === 'Finalizado';
+                  $panelBase = 'event_' . $eventId;
+                  $anexos = $ev['anexos'] ?? [];
+                  $hasLegacyAta = !empty($ev['ata_path']);
+                  $anexosCount = (int)count($anexos) + ($hasLegacyAta ? 1 : 0);
+                ?>
+
+                <div class="flex flex-wrap items-center gap-2">
+                  <button type="button" class="px-3 py-2 rounded bg-brand-brown text-white text-xs" data-action-toggle="<?= $panelBase ?>_edit">Editar evento</button>
+                  <?php if ($isSeries): ?>
+                    <button type="button" class="px-3 py-2 rounded bg-gray-200 text-brand-brown text-xs" data-action-toggle="<?= $panelBase ?>_serie">Editar série</button>
+                  <?php endif; ?>
+                  <button type="button" class="px-3 py-2 rounded bg-green-600 text-white text-xs <?= $isFinalizado ? 'opacity-50 cursor-not-allowed' : '' ?>" <?= $isFinalizado ? 'disabled' : '' ?> data-action-toggle="<?= $panelBase ?>_encerrar">Encerrar evento</button>
+                  <?php if ($isReuniao): ?>
+                    <button type="button" class="px-3 py-2 rounded bg-gray-100 text-brand-brown text-xs" data-action-toggle="<?= $panelBase ?>_docs">Documentos</button>
+                  <?php endif; ?>
+                </div>
+
+                <div id="<?= $panelBase ?>_edit" class="hidden mt-3 p-3 border rounded bg-white" data-action-panel="<?= $panelBase ?>">
+                  <div class="text-sm font-medium mb-2">Editar evento</div>
+                  <form method="post" action="index.php?route=cronograma/updateEvento" class="space-y-2" <?= $isReuniao ? 'enctype="multipart/form-data"' : '' ?> data-edit-form="<?= $eventId ?>" data-anexos-count="<?= $anexosCount ?>">
+                    <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+                    <input type="hidden" name="id_evento" value="<?= (int)$ev['id'] ?>" />
+                    <input type="hidden" name="id_cronograma" value="<?= (int)$crono['id'] ?>" />
+                    <input type="hidden" name="status_filter" value="<?= htmlspecialchars($statusFilter) ?>" />
+                    <input type="hidden" name="occ_date_start" value="<?= htmlspecialchars($occFilters['date_start'] ?? '') ?>" />
+                    <input type="hidden" name="occ_date_end" value="<?= htmlspecialchars($occFilters['date_end'] ?? '') ?>" />
+                    <?php foreach (($occFilters['tipo'] ?? []) as $tipo): ?>
+                      <input type="hidden" name="occ_tipo[]" value="<?= htmlspecialchars($tipo) ?>" />
+                    <?php endforeach; ?>
+                    <?php foreach (($occFilters['status'] ?? []) as $statusOpt): ?>
+                      <input type="hidden" name="occ_status[]" value="<?= htmlspecialchars($statusOpt) ?>" />
+                    <?php endforeach; ?>
+                    <input type="hidden" name="occ_responsavel" value="<?= htmlspecialchars($occFilters['responsavel'] ?? '') ?>" />
+                    <input type="hidden" name="occ_local" value="<?= htmlspecialchars($occFilters['local'] ?? '') ?>" />
+                    <input type="hidden" name="occ_sort" value="<?= htmlspecialchars($occOrder['column'] ?? 'data') ?>" />
+                    <input type="hidden" name="occ_dir" value="<?= htmlspecialchars($occOrder['direction'] ?? 'asc') ?>" />
+                    <input type="hidden" name="escopo" value="evento" />
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <input class="border rounded p-2" type="date" name="data" value="<?= htmlspecialchars($ev['data']) ?>" />
+                      <input class="border rounded p-2" type="text" name="topico" list="pilares_options" value="<?= htmlspecialchars($ev['topico']) ?>" placeholder="Pilar" />
+                      <input class="border rounded p-2" type="text" name="unidade" value="<?= htmlspecialchars($ev['unidade'] ?? '') ?>" placeholder="Departamento" />
+                      <input class="border rounded p-2" type="text" name="atividade" value="<?= htmlspecialchars($ev['atividade']) ?>" placeholder="Atividade" />
+                      <input class="border rounded p-2" type="text" name="responsavel" value="<?= htmlspecialchars($ev['responsavel'] ?? '') ?>" placeholder="Responsável" />
+                      <select class="border rounded p-2" name="modelo">
+                        <option value="">—</option>
+                        <option value="Online" <?= ($ev['modelo'] ?? '') === 'Online' ? 'selected' : '' ?>>On-line</option>
+                        <option value="Presencial" <?= ($ev['modelo'] ?? '') === 'Presencial' ? 'selected' : '' ?>>Presencial</option>
+                      </select>
+                      <select class="border rounded p-2" name="periodicidade">
+                        <?php foreach (($periodicidades ?? []) as $value => $label): ?>
+                          <option value="<?= htmlspecialchars($value) ?>" <?= ($ev['periodicidade'] ?? 'unico') === $value ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                      <select class="border rounded p-2" name="status" data-status-select="<?= $eventId ?>">
+                        <?php foreach (['Planejado','Pendente','Andamento','Adiado','Finalizado'] as $status): ?>
+                          <option value="<?= $status ?>" <?= ($ev['status'] ?? '') === $status ? 'selected' : '' ?>><?= $status ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
+
+                    <?php if ($isReuniao && !$isFinalizado): ?>
+                      <div class="hidden p-3 border rounded bg-gray-50" data-reuniao-anexos="<?= $eventId ?>">
+                        <div class="text-xs text-gray-700 mb-2">Para encerrar a reunião, anexe pelo menos um documento.</div>
+                        <input type="hidden" name="MAX_FILE_SIZE" value="<?= 20 * 1024 * 1024 ?>" />
+                        <input class="border rounded p-2 w-full" type="file" name="anexos[]" multiple accept=".pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.bmp,.svg,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/rtf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/jpeg,image/png,image/gif,image/bmp,image/svg+xml" />
+                        <div class="text-xs text-gray-600 mt-1">Limite: 10 arquivos por envio, até 20MB por arquivo.</div>
+                      </div>
+                    <?php endif; ?>
+
                     <div class="flex flex-wrap items-center gap-2">
-                      <form method="post" action="index.php?route=cronograma/anexosUpload" class="cronograma-anexos-form" enctype="multipart/form-data">
+                      <button class="px-3 py-2 rounded bg-brand-red text-white text-xs" type="submit">Salvar alterações</button>
+                      <button class="px-3 py-2 rounded bg-gray-200 text-brand-brown text-xs" type="button" data-action-toggle="<?= $panelBase ?>_edit">Fechar</button>
+                    </div>
+                  </form>
+                </div>
+
+                <?php if ($isSeries): ?>
+                  <div id="<?= $panelBase ?>_serie" class="hidden mt-3 p-3 border rounded bg-white" data-action-panel="<?= $panelBase ?>">
+                    <div class="text-sm font-medium mb-2">Editar série</div>
+                    <form method="post" action="index.php?route=cronograma/updateEvento" class="space-y-2">
+                      <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+                      <input type="hidden" name="id_evento" value="<?= (int)$ev['id'] ?>" />
+                      <input type="hidden" name="id_cronograma" value="<?= (int)$crono['id'] ?>" />
+                      <input type="hidden" name="status_filter" value="<?= htmlspecialchars($statusFilter) ?>" />
+                      <input type="hidden" name="occ_date_start" value="<?= htmlspecialchars($occFilters['date_start'] ?? '') ?>" />
+                      <input type="hidden" name="occ_date_end" value="<?= htmlspecialchars($occFilters['date_end'] ?? '') ?>" />
+                      <?php foreach (($occFilters['tipo'] ?? []) as $tipo): ?>
+                        <input type="hidden" name="occ_tipo[]" value="<?= htmlspecialchars($tipo) ?>" />
+                      <?php endforeach; ?>
+                      <?php foreach (($occFilters['status'] ?? []) as $statusOpt): ?>
+                        <input type="hidden" name="occ_status[]" value="<?= htmlspecialchars($statusOpt) ?>" />
+                      <?php endforeach; ?>
+                      <input type="hidden" name="occ_responsavel" value="<?= htmlspecialchars($occFilters['responsavel'] ?? '') ?>" />
+                      <input type="hidden" name="occ_local" value="<?= htmlspecialchars($occFilters['local'] ?? '') ?>" />
+                      <input type="hidden" name="occ_sort" value="<?= htmlspecialchars($occOrder['column'] ?? 'data') ?>" />
+                      <input type="hidden" name="occ_dir" value="<?= htmlspecialchars($occOrder['direction'] ?? 'asc') ?>" />
+                      <input type="hidden" name="escopo" value="serie" />
+
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <input class="border rounded p-2" type="date" name="data" value="<?= htmlspecialchars($ev['data']) ?>" />
+                        <input class="border rounded p-2" type="text" name="topico" list="pilares_options" value="<?= htmlspecialchars($ev['topico']) ?>" placeholder="Pilar" />
+                        <input class="border rounded p-2" type="text" name="unidade" value="<?= htmlspecialchars($ev['unidade'] ?? '') ?>" placeholder="Departamento" />
+                        <input class="border rounded p-2" type="text" name="atividade" value="<?= htmlspecialchars($ev['atividade']) ?>" placeholder="Atividade" />
+                        <input class="border rounded p-2" type="text" name="responsavel" value="<?= htmlspecialchars($ev['responsavel'] ?? '') ?>" placeholder="Responsável" />
+                        <select class="border rounded p-2" name="modelo">
+                          <option value="">—</option>
+                          <option value="Online" <?= ($ev['modelo'] ?? '') === 'Online' ? 'selected' : '' ?>>On-line</option>
+                          <option value="Presencial" <?= ($ev['modelo'] ?? '') === 'Presencial' ? 'selected' : '' ?>>Presencial</option>
+                        </select>
+                        <select class="border rounded p-2" name="periodicidade">
+                          <?php foreach (($periodicidades ?? []) as $value => $label): ?>
+                            <option value="<?= htmlspecialchars($value) ?>" <?= ($ev['periodicidade'] ?? 'unico') === $value ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                          <?php endforeach; ?>
+                        </select>
+                        <select class="border rounded p-2" name="status">
+                          <?php foreach (['Planejado','Pendente','Andamento','Adiado'] as $status): ?>
+                            <option value="<?= $status ?>" <?= ($ev['status'] ?? '') === $status ? 'selected' : '' ?>><?= $status ?></option>
+                          <?php endforeach; ?>
+                          <?php if (!$isReuniao): ?>
+                            <option value="Finalizado" <?= ($ev['status'] ?? '') === 'Finalizado' ? 'selected' : '' ?>>Finalizado</option>
+                          <?php endif; ?>
+                        </select>
+                      </div>
+
+                      <div class="flex flex-wrap items-center gap-2">
+                        <button class="px-3 py-2 rounded bg-brand-red text-white text-xs" type="submit">Salvar série</button>
+                        <button class="px-3 py-2 rounded bg-gray-200 text-brand-brown text-xs" type="button" data-action-toggle="<?= $panelBase ?>_serie">Fechar</button>
+                      </div>
+                      <p class="text-xs text-gray-500">A edição da série pode regenerar datas futuras conforme a periodicidade.</p>
+                    </form>
+                  </div>
+                <?php endif; ?>
+
+                <div id="<?= $panelBase ?>_encerrar" class="hidden mt-3 p-3 border rounded bg-white" data-action-panel="<?= $panelBase ?>">
+                  <div class="text-sm font-medium mb-2">Encerrar evento</div>
+                  <?php if ($isReuniao): ?>
+                    <?php if ($isFinalizado): ?>
+                      <div class="text-xs text-gray-600">Esta reunião já está encerrada.</div>
+                    <?php else: ?>
+                      <form method="post" action="index.php?route=cronograma/updateEvento" enctype="multipart/form-data" class="space-y-2" data-close-form="<?= $eventId ?>" data-anexos-count="<?= $anexosCount ?>">
                         <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
                         <input type="hidden" name="id_evento" value="<?= (int)$ev['id'] ?>" />
                         <input type="hidden" name="id_cronograma" value="<?= (int)$crono['id'] ?>" />
                         <input type="hidden" name="status_filter" value="<?= htmlspecialchars($statusFilter) ?>" />
-                        <input type="hidden" name="encerramento" value="0" data-encerramento="<?= $eventId ?>" />
+                        <input type="hidden" name="occ_date_start" value="<?= htmlspecialchars($occFilters['date_start'] ?? '') ?>" />
+                        <input type="hidden" name="occ_date_end" value="<?= htmlspecialchars($occFilters['date_end'] ?? '') ?>" />
+                        <?php foreach (($occFilters['tipo'] ?? []) as $tipo): ?>
+                          <input type="hidden" name="occ_tipo[]" value="<?= htmlspecialchars($tipo) ?>" />
+                        <?php endforeach; ?>
+                        <?php foreach (($occFilters['status'] ?? []) as $statusOpt): ?>
+                          <input type="hidden" name="occ_status[]" value="<?= htmlspecialchars($statusOpt) ?>" />
+                        <?php endforeach; ?>
+                        <input type="hidden" name="occ_responsavel" value="<?= htmlspecialchars($occFilters['responsavel'] ?? '') ?>" />
+                        <input type="hidden" name="occ_local" value="<?= htmlspecialchars($occFilters['local'] ?? '') ?>" />
+                        <input type="hidden" name="occ_sort" value="<?= htmlspecialchars($occOrder['column'] ?? 'data') ?>" />
+                        <input type="hidden" name="occ_dir" value="<?= htmlspecialchars($occOrder['direction'] ?? 'asc') ?>" />
+                        <input type="hidden" name="escopo" value="evento" />
+                        <input type="hidden" name="data" value="<?= htmlspecialchars($ev['data']) ?>" />
+                        <input type="hidden" name="topico" value="<?= htmlspecialchars($ev['topico']) ?>" />
+                        <input type="hidden" name="unidade" value="<?= htmlspecialchars($ev['unidade'] ?? '') ?>" />
+                        <input type="hidden" name="atividade" value="<?= htmlspecialchars($ev['atividade']) ?>" />
+                        <input type="hidden" name="responsavel" value="<?= htmlspecialchars($ev['responsavel'] ?? '') ?>" />
+                        <input type="hidden" name="modelo" value="<?= htmlspecialchars($ev['modelo'] ?? '') ?>" />
+                        <input type="hidden" name="periodicidade" value="<?= htmlspecialchars($ev['periodicidade'] ?? 'unico') ?>" />
+                        <input type="hidden" name="status" value="Finalizado" />
+
+                        <div class="text-xs text-gray-700">Anexe os documentos da reunião e confirme o encerramento.</div>
                         <input type="hidden" name="MAX_FILE_SIZE" value="<?= 20 * 1024 * 1024 ?>" />
-                        <input
-                          class="hidden"
-                          type="file"
-                          name="anexos[]"
-                          data-anexos-input="<?= (int)$ev['id'] ?>"
-                          multiple
-                          accept=".pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.bmp,.svg,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/rtf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/jpeg,image/png,image/gif,image/bmp,image/svg+xml"
-                        />
-                        <button type="button" class="icon-btn" title="Anexar documentos (encerramento)" aria-label="Anexar documentos (encerramento)" data-anexos-upload="<?= (int)$ev['id'] ?>" <?= $isFinalizado ? 'disabled' : '' ?>><span data-feather="paperclip"></span></button>
+                        <input class="border rounded p-2 w-full" type="file" name="anexos[]" multiple accept=".pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.bmp,.svg,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/rtf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/jpeg,image/png,image/gif,image/bmp,image/svg+xml" />
+                        <div class="text-xs text-gray-600">Limite: 10 arquivos por envio, até 20MB por arquivo.</div>
+
+                        <div class="flex flex-wrap items-center gap-2">
+                          <button class="px-3 py-2 rounded bg-green-600 text-white text-xs" type="submit">Encerrar agora</button>
+                          <button class="px-3 py-2 rounded bg-gray-200 text-brand-brown text-xs" type="button" data-action-toggle="<?= $panelBase ?>_encerrar">Fechar</button>
+                        </div>
                       </form>
-                      <div class="text-xs text-gray-600" data-anexos-summary="<?= $eventId ?>">
-                        <?= $anexosCount > 0 ? ('Documentos anexados: ' . (int)$anexosCount) : 'Nenhum documento anexado' ?>
+
+                      <div class="mt-3">
+                        <div class="text-xs font-medium text-gray-700 mb-1">Documentos atuais</div>
+                        <div class="flex flex-col gap-1">
+                          <?php if ($hasLegacyAta): ?>
+                            <div class="text-xs">
+                              <a class="text-brand-red hover:underline" href="index.php?route=cronograma/ataDownload&id_evento=<?= (int)$ev['id'] ?>">Ata (legado): <?= htmlspecialchars((string)($ev['ata_original_name'] ?? 'arquivo')) ?></a>
+                            </div>
+                          <?php endif; ?>
+                          <?php if (!empty($anexos)): ?>
+                            <?php foreach ($anexos as $a): ?>
+                              <div class="flex items-center gap-2">
+                                <a class="text-xs text-brand-red hover:underline" href="index.php?route=cronograma/anexoDownload&id_anexo=<?= (int)($a['id'] ?? 0) ?>"><?= htmlspecialchars((string)($a['original_name'] ?? 'arquivo')) ?></a>
+                                <form method="post" action="index.php?route=cronograma/anexoDelete" onsubmit="return confirm('Remover este anexo?');">
+                                  <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+                                  <input type="hidden" name="id_anexo" value="<?= (int)($a['id'] ?? 0) ?>" />
+                                  <input type="hidden" name="id_cronograma" value="<?= (int)$crono['id'] ?>" />
+                                  <input type="hidden" name="status_filter" value="<?= htmlspecialchars($statusFilter) ?>" />
+                                  <input type="hidden" name="encerramento" value="1" />
+                                  <button class="icon-btn" type="submit" title="Remover anexo" aria-label="Remover anexo"><span data-feather="trash-2"></span></button>
+                                </form>
+                              </div>
+                            <?php endforeach; ?>
+                          <?php endif; ?>
+                          <?php if ($anexosCount <= 0): ?>
+                            <div class="text-xs text-gray-500">Nenhum documento anexado.</div>
+                          <?php endif; ?>
+                        </div>
                       </div>
-                    </div>
-                    <div class="hidden px-3 py-2 text-xs text-red-700 bg-red-100 rounded" data-anexos-error="<?= $eventId ?>"></div>
-                    <div class="flex flex-col gap-1" data-anexos-list="<?= $eventId ?>">
+                    <?php endif; ?>
+                  <?php else: ?>
+                    <form method="post" action="index.php?route=cronograma/toggleStatus" class="cronograma-quick-close-form" data-quick-close-form="<?= $eventId ?>">
+                      <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+                      <input type="hidden" name="id_evento" value="<?= (int)$ev['id'] ?>" />
+                      <input type="hidden" name="id_cronograma" value="<?= (int)$crono['id'] ?>" />
+                      <input type="hidden" name="status_filter" value="<?= htmlspecialchars($statusFilter) ?>" />
+                      <input type="hidden" name="occ_date_start" value="<?= htmlspecialchars($occFilters['date_start'] ?? '') ?>" />
+                      <input type="hidden" name="occ_date_end" value="<?= htmlspecialchars($occFilters['date_end'] ?? '') ?>" />
+                      <?php foreach (($occFilters['tipo'] ?? []) as $tipo): ?>
+                        <input type="hidden" name="occ_tipo[]" value="<?= htmlspecialchars($tipo) ?>" />
+                      <?php endforeach; ?>
+                      <?php foreach (($occFilters['status'] ?? []) as $statusOpt): ?>
+                        <input type="hidden" name="occ_status[]" value="<?= htmlspecialchars($statusOpt) ?>" />
+                      <?php endforeach; ?>
+                      <input type="hidden" name="occ_responsavel" value="<?= htmlspecialchars($occFilters['responsavel'] ?? '') ?>" />
+                      <input type="hidden" name="occ_local" value="<?= htmlspecialchars($occFilters['local'] ?? '') ?>" />
+                      <input type="hidden" name="occ_sort" value="<?= htmlspecialchars($occOrder['column'] ?? 'data') ?>" />
+                      <input type="hidden" name="occ_dir" value="<?= htmlspecialchars($occOrder['direction'] ?? 'asc') ?>" />
+                      <input type="hidden" name="realizado" value="0" />
+                      <button type="button" class="px-3 py-2 rounded bg-green-600 text-white text-xs <?= $isFinalizado ? 'opacity-50 cursor-not-allowed' : '' ?>" <?= $isFinalizado ? 'disabled' : '' ?> data-quick-close="<?= $eventId ?>" data-serie-id="<?= (int)($ev['serie_id'] ?? $ev['id']) ?>">Marcar como finalizado</button>
+                    </form>
+                  <?php endif; ?>
+                </div>
+
+                <?php if ($isReuniao): ?>
+                  <div id="<?= $panelBase ?>_docs" class="hidden mt-3 p-3 border rounded bg-white" data-action-panel="<?= $panelBase ?>">
+                    <div class="text-sm font-medium mb-2">Documentos</div>
+                    <div class="text-xs text-gray-600 mb-2"><?= $anexosCount > 0 ? ('Documentos anexados: ' . (int)$anexosCount) : 'Nenhum documento anexado' ?></div>
+                    <div class="flex flex-col gap-1">
                       <?php if ($hasLegacyAta): ?>
-                        <div class="flex items-center gap-2">
-                          <a class="text-xs text-brand-red hover:underline" href="index.php?route=cronograma/ataDownload&id_evento=<?= (int)$ev['id'] ?>">Ata (legado): <?= htmlspecialchars((string)($ev['ata_original_name'] ?? 'arquivo')) ?></a>
+                        <div class="text-xs">
+                          <a class="text-brand-red hover:underline" href="index.php?route=cronograma/ataDownload&id_evento=<?= (int)$ev['id'] ?>">Ata (legado): <?= htmlspecialchars((string)($ev['ata_original_name'] ?? 'arquivo')) ?></a>
                         </div>
                       <?php endif; ?>
                       <?php if (!empty($anexos)): ?>
                         <?php foreach ($anexos as $a): ?>
-                          <div class="flex items-center gap-2" data-anexo-item="<?= (int)($a['id'] ?? 0) ?>">
-                            <a class="text-xs text-brand-red hover:underline" href="index.php?route=cronograma/anexoDownload&id_anexo=<?= (int)($a['id'] ?? 0) ?>"><?= htmlspecialchars((string)($a['original_name'] ?? 'arquivo')) ?></a>
-                            <button type="button" class="icon-btn" title="Remover anexo (encerramento)" aria-label="Remover anexo (encerramento)" data-anexo-delete="<?= (int)($a['id'] ?? 0) ?>" data-event-id="<?= $eventId ?>" <?= $isFinalizado ? 'disabled' : '' ?>><span data-feather="trash-2"></span></button>
+                          <div class="text-xs">
+                            <a class="text-brand-red hover:underline" href="index.php?route=cronograma/anexoDownload&id_anexo=<?= (int)($a['id'] ?? 0) ?>"><?= htmlspecialchars((string)($a['original_name'] ?? 'arquivo')) ?></a>
                           </div>
                         <?php endforeach; ?>
                       <?php endif; ?>
                     </div>
+                    <div class="mt-2">
+                      <button class="px-3 py-2 rounded bg-gray-200 text-brand-brown text-xs" type="button" data-action-toggle="<?= $panelBase ?>_docs">Fechar</button>
+                    </div>
                   </div>
                 <?php endif; ?>
-                <form method="post" action="index.php?route=cronograma/updateEvento" class="space-y-2">
-                  <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
-                  <input type="hidden" name="id_evento" value="<?= (int)$ev['id'] ?>" />
-                  <input type="hidden" name="id_cronograma" value="<?= (int)$crono['id'] ?>" />
-                  <input type="hidden" name="status_filter" value="<?= htmlspecialchars($statusFilter) ?>" />
-                  <input type="hidden" name="occ_date_start" value="<?= htmlspecialchars($occFilters['date_start'] ?? '') ?>" />
-                  <input type="hidden" name="occ_date_end" value="<?= htmlspecialchars($occFilters['date_end'] ?? '') ?>" />
-                  <?php foreach (($occFilters['tipo'] ?? []) as $tipo): ?>
-                    <input type="hidden" name="occ_tipo[]" value="<?= htmlspecialchars($tipo) ?>" />
-                  <?php endforeach; ?>
-                  <?php foreach (($occFilters['status'] ?? []) as $statusOpt): ?>
-                    <input type="hidden" name="occ_status[]" value="<?= htmlspecialchars($statusOpt) ?>" />
-                  <?php endforeach; ?>
-                  <input type="hidden" name="occ_responsavel" value="<?= htmlspecialchars($occFilters['responsavel'] ?? '') ?>" />
-                  <input type="hidden" name="occ_local" value="<?= htmlspecialchars($occFilters['local'] ?? '') ?>" />
-                  <input type="hidden" name="occ_sort" value="<?= htmlspecialchars($occOrder['column'] ?? 'data') ?>" />
-                  <input type="hidden" name="occ_dir" value="<?= htmlspecialchars($occOrder['direction'] ?? 'asc') ?>" />
-                  <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
-                    <input class="border rounded p-2" type="date" name="data" value="<?= htmlspecialchars($ev['data']) ?>" />
-                    <input class="border rounded p-2" type="text" name="topico" list="pilares_options" value="<?= htmlspecialchars($ev['topico']) ?>" placeholder="Pilar" />
-                    <input class="border rounded p-2" type="text" name="unidade" value="<?= htmlspecialchars($ev['unidade'] ?? '') ?>" placeholder="Departamento" />
-                    <input class="border rounded p-2" type="text" name="atividade" value="<?= htmlspecialchars($ev['atividade']) ?>" placeholder="Atividade" />
-                    <input class="border rounded p-2" type="text" name="responsavel" value="<?= htmlspecialchars($ev['responsavel'] ?? '') ?>" placeholder="Responsável" />
-                    <select class="border rounded p-2" name="periodicidade">
-                      <?php foreach (($periodicidades ?? []) as $value => $label): ?>
-                        <option value="<?= htmlspecialchars($value) ?>" <?= ($ev['periodicidade'] ?? 'unico') === $value ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
-                      <?php endforeach; ?>
-                    </select>
-                    <select class="border rounded p-2" name="modelo">
-                      <option value="">—</option>
-                      <option value="Online" <?= ($ev['modelo'] ?? '') === 'Online' ? 'selected' : '' ?>>On-line</option>
-                      <option value="Presencial" <?= ($ev['modelo'] ?? '') === 'Presencial' ? 'selected' : '' ?>>Presencial</option>
-                    </select>
-                    <select class="border rounded p-2" name="status">
-                      <?php foreach (['Planejado','Pendente','Andamento','Adiado','Finalizado'] as $status): ?>
-                        <option value="<?= $status ?>" <?= ($ev['status'] ?? '') === $status ? 'selected' : '' ?>><?= $status ?></option>
-                      <?php endforeach; ?>
-                    </select>
-                  </div>
-                  <div class="flex flex-wrap items-center gap-2">
-                    <button class="px-3 py-2 rounded bg-brand-red text-white text-xs" type="submit" name="escopo" value="evento">Salvar este evento</button>
-                    <?php if ($isSeries): ?>
-                      <button class="px-3 py-2 rounded bg-brand-brown text-white text-xs" type="submit" name="escopo" value="serie">Salvar toda a série</button>
-                    <?php endif; ?>
-                  </div>
-                  <?php if ($isSeries): ?>
-                    <p class="text-xs text-gray-500">Para alterar a recorrência ou regenerar as datas futuras, use a ação da série completa.</p>
-                  <?php endif; ?>
-                </form>
                 <div class="flex flex-wrap items-center gap-2 mt-2">
                   <form method="post" action="index.php?route=cronograma/deleteEvento" onsubmit="return confirm('Excluir apenas esta ocorrência?');">
                     <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
@@ -591,105 +752,76 @@
       });
     });
 
-    const setAnexosError = (eventId, message) => {
-      const wrap = document.querySelector(`[data-anexos-wrap="${eventId}"]`);
-      if (!wrap) return;
-      const box = wrap.querySelector(`[data-anexos-error="${eventId}"]`);
-      if (!box) return;
-      box.textContent = message || '';
-      box.classList.toggle('hidden', !message);
-    };
-
-    const updateEventAnexos = (eventId, anexos) => {
-      document.querySelectorAll(`[data-anexos-wrap="${eventId}"]`).forEach((wrap) => {
-        const list = wrap.querySelector(`[data-anexos-list="${eventId}"]`);
-        const summary = wrap.querySelector(`[data-anexos-summary="${eventId}"]`);
-        const legacy = wrap.getAttribute('data-has-legacy-ata') === '1' ? 1 : 0;
-        const count = (Array.isArray(anexos) ? anexos.length : 0) + legacy;
-        wrap.setAttribute('data-anexos-count', String(count));
-        if (summary) {
-          summary.textContent = count > 0 ? `Documentos anexados: ${count}` : 'Nenhum documento anexado';
-        }
-        if (list) {
-          const legacyHtml = legacy ? list.querySelector('a[href*="route=cronograma/ataDownload"]')?.closest('div')?.outerHTML || '' : '';
-          const itemsHtml = (Array.isArray(anexos) ? anexos : []).map((a) => {
-            const id = a.id;
-            const name = a.name || 'arquivo';
-            const url = a.download_url || '#';
-            const safeName = String(name)
-              .replace(/&/g, '&amp;')
-              .replace(/</g, '&lt;')
-              .replace(/>/g, '&gt;')
-              .replace(/"/g, '&quot;')
-              .replace(/'/g, '&#39;');
-            const canDelete = wrap.getAttribute('data-encerramento-enabled') === '1';
-            return `<div class="flex items-center gap-2" data-anexo-item="${id}">
-              <a class="text-xs text-brand-red hover:underline" href="${url}">${safeName}</a>
-              <button type="button" class="icon-btn" title="Remover anexo (encerramento)" aria-label="Remover anexo (encerramento)" data-anexo-delete="${id}" data-event-id="${eventId}" ${canDelete ? '' : 'disabled'}><span data-feather="trash-2"></span></button>
-            </div>`;
-          }).join('');
-          list.innerHTML = legacyHtml + itemsHtml;
-          if (typeof feather !== 'undefined' && feather && typeof feather.replace === 'function') {
-            feather.replace();
-          }
-        }
+    const closePanels = (base) => {
+      document.querySelectorAll(`[data-action-panel="${base}"]`).forEach((panel) => {
+        panel.classList.add('hidden');
       });
     };
 
-    const getEncerramentoEnabled = (wrap) => {
-      if (!wrap) return false;
-      if ((wrap.getAttribute('data-event-status') || '') === 'Finalizado') return false;
-      const td = wrap.closest('td');
-      const form = td ? td.querySelector('form[action*="route=cronograma/updateEvento"]') : null;
-      const select = form ? form.querySelector('select[name="status"]') : null;
-      return !!(select && select.value === 'Finalizado');
+    document.addEventListener('click', (e) => {
+      const toggle = e.target && e.target.closest ? e.target.closest('[data-action-toggle]') : null;
+      if (!toggle) return;
+      const targetId = toggle.getAttribute('data-action-toggle') || '';
+      const panel = document.getElementById(targetId);
+      if (!panel) return;
+      const base = panel.getAttribute('data-action-panel') || '';
+      const willOpen = panel.classList.contains('hidden');
+      if (base) closePanels(base);
+      if (willOpen) panel.classList.remove('hidden');
+    });
+
+    const syncReuniaoAnexosVisibility = (form) => {
+      const eventId = form.getAttribute('data-edit-form');
+      const select = form.querySelector(`[data-status-select="${eventId}"]`);
+      const block = form.querySelector(`[data-reuniao-anexos="${eventId}"]`);
+      if (!select || !block) return;
+      block.classList.toggle('hidden', select.value !== 'Finalizado');
     };
 
-    const syncEncerramentoUi = (wrap) => {
-      if (!wrap) return;
-      const eventId = wrap.getAttribute('data-event-id') || wrap.getAttribute('data-anexos-wrap') || '';
-      if (!eventId) return;
-      const enabled = getEncerramentoEnabled(wrap);
-      wrap.setAttribute('data-encerramento-enabled', enabled ? '1' : '0');
-      const encerramentoInput = wrap.querySelector(`[data-encerramento="${eventId}"]`);
-      if (encerramentoInput) encerramentoInput.value = enabled ? '1' : '0';
-      wrap.querySelectorAll(`[data-anexos-upload="${eventId}"]`).forEach((btn) => {
-        btn.toggleAttribute('disabled', !enabled);
-      });
-      wrap.querySelectorAll('[data-anexo-delete]').forEach((btn) => {
-        btn.toggleAttribute('disabled', !enabled);
-      });
-    };
-
-    document.querySelectorAll('[data-anexos-upload]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const eventId = button.getAttribute('data-anexos-upload');
-        const wrap = document.querySelector(`[data-anexos-wrap="${eventId}"]`);
-        if (wrap) syncEncerramentoUi(wrap);
-        if (wrap && wrap.getAttribute('data-encerramento-enabled') !== '1') {
-          setAnexosError(eventId, 'Para anexar documentos, selecione o status "Finalizado" e salve o evento para encerrar a reunião.');
-          return;
+    document.querySelectorAll('form[data-edit-form]').forEach((form) => {
+      syncReuniaoAnexosVisibility(form);
+      const eventId = form.getAttribute('data-edit-form');
+      const select = form.querySelector(`[data-status-select="${eventId}"]`);
+      if (select) {
+        select.addEventListener('change', () => syncReuniaoAnexosVisibility(form));
+      }
+      form.addEventListener('submit', (ev) => {
+        const eventId = form.getAttribute('data-edit-form');
+        const select = form.querySelector(`[data-status-select="${eventId}"]`);
+        const isFinal = select && select.value === 'Finalizado';
+        const hasBlock = !!form.querySelector(`[data-reuniao-anexos="${eventId}"]`);
+        if (!isFinal || !hasBlock) return;
+        const existing = parseInt(form.getAttribute('data-anexos-count') || '0', 10) || 0;
+        const input = form.querySelector('input[type="file"][name="anexos[]"]');
+        const filesCount = input && input.files ? input.files.length : 0;
+        if (existing <= 0 && filesCount <= 0) {
+          ev.preventDefault();
+          alert('Para encerrar uma reunião, anexe pelo menos um documento.');
         }
-        const input = document.querySelector(`[data-anexos-input="${eventId}"]`);
-        if (input) input.click();
       });
     });
 
-    document.querySelectorAll('[data-anexos-input]').forEach((input) => {
-      input.addEventListener('change', async () => {
-        const eventId = input.getAttribute('data-anexos-input');
-        const form = input.closest('form');
-        if (!form || !eventId) return;
-        if (!input.files || !input.files.length) return;
-        const wrap = form.closest('[data-anexos-wrap]');
-        if (wrap) syncEncerramentoUi(wrap);
-        if (wrap && wrap.getAttribute('data-encerramento-enabled') !== '1') {
-          setAnexosError(eventId, 'Documentos de reuniões só podem ser anexados na etapa de encerramento.');
-          input.value = '';
-          return;
+    document.querySelectorAll('form[data-close-form]').forEach((form) => {
+      form.addEventListener('submit', (ev) => {
+        const existing = parseInt(form.getAttribute('data-anexos-count') || '0', 10) || 0;
+        const input = form.querySelector('input[type="file"][name="anexos[]"]');
+        const filesCount = input && input.files ? input.files.length : 0;
+        if (existing <= 0 && filesCount <= 0) {
+          ev.preventDefault();
+          alert('Para encerrar uma reunião, anexe pelo menos um documento.');
         }
-        setAnexosError(eventId, '');
+      });
+    });
+
+    document.querySelectorAll('[data-quick-close]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        if (button.disabled) return;
+        const form = button.closest('form');
+        if (!form) return;
+        const eventId = button.getAttribute('data-quick-close');
+        const serieId = button.getAttribute('data-serie-id') || '';
         const formData = new FormData(form);
+        formData.set('realizado', '1');
         try {
           const response = await fetch(form.action, {
             method: 'POST',
@@ -698,82 +830,29 @@
           });
           const payload = await response.json();
           if (!response.ok || !payload.ok) {
-            throw new Error(payload.message || 'Não foi possível anexar os documentos.');
+            throw new Error(payload.message || 'Nao foi possivel encerrar o evento.');
           }
-          updateEventAnexos(String(payload.event_id || ''), payload.anexos || []);
-          alert(payload.message || 'Documentos anexados com sucesso.');
+          if (activeFilter !== 'todos') {
+            window.location.reload();
+            return;
+          }
+          const badge = document.querySelector(`[data-event-badge="${eventId}"]`);
+          const row = document.querySelector(`[data-event-row="${eventId}"]`);
+          if (badge && payload.occurrence && payload.occurrence.traffic) {
+            badge.className = `text-xs px-2 py-1 rounded cronograma-traffic-badge ${payload.occurrence.traffic.badge_class}`;
+            badge.textContent = payload.occurrence.traffic.label;
+          }
+          if (row && payload.occurrence && payload.occurrence.traffic) {
+            row.className = `border-b align-top cronograma-traffic-row ${payload.occurrence.traffic.row_class}`;
+          }
+          applySeriesState(serieId, payload.series || null);
+          button.disabled = true;
+          button.classList.add('opacity-50', 'cursor-not-allowed');
+          closePanels(`event_${eventId}`);
         } catch (error) {
-          setAnexosError(eventId, error.message || 'Erro ao anexar os documentos.');
-          alert(error.message || 'Erro ao anexar os documentos.');
-        } finally {
-          input.value = '';
+          alert(error.message || 'Erro ao encerrar o evento.');
         }
       });
-    });
-
-    document.addEventListener('click', async (e) => {
-      const btn = e.target && e.target.closest ? e.target.closest('[data-anexo-delete]') : null;
-      if (!btn) return;
-      const anexoId = btn.getAttribute('data-anexo-delete');
-      const eventId = btn.getAttribute('data-event-id') || '';
-      const wrap = document.querySelector(`[data-anexos-wrap="${eventId}"]`);
-      const form = wrap ? wrap.querySelector('form.cronograma-anexos-form') : null;
-      if (!anexoId || !form) return;
-      syncEncerramentoUi(wrap);
-      if (wrap && wrap.getAttribute('data-encerramento-enabled') !== '1') {
-        setAnexosError(eventId, 'Documentos de reuniões só podem ser gerenciados na etapa de encerramento.');
-        return;
-      }
-      setAnexosError(eventId, '');
-      const formData = new FormData();
-      formData.set('csrf', form.querySelector('input[name="csrf"]')?.value || '');
-      formData.set('id_anexo', anexoId);
-      formData.set('id_cronograma', form.querySelector('input[name="id_cronograma"]')?.value || '');
-      formData.set('status_filter', form.querySelector('input[name="status_filter"]')?.value || 'todos');
-      formData.set('encerramento', '1');
-      try {
-        const response = await fetch('index.php?route=cronograma/anexoDelete', {
-          method: 'POST',
-          headers: { 'X-Requested-With': 'XMLHttpRequest' },
-          body: formData,
-        });
-        const payload = await response.json();
-        if (!response.ok || !payload.ok) {
-          throw new Error(payload.message || 'Não foi possível remover o anexo.');
-        }
-        updateEventAnexos(String(payload.event_id || ''), payload.anexos || []);
-      } catch (error) {
-        setAnexosError(eventId, error.message || 'Erro ao remover o anexo.');
-        alert(error.message || 'Erro ao remover o anexo.');
-      }
-    });
-
-    document.querySelectorAll('form[action*="route=cronograma/updateEvento"]').forEach((form) => {
-      form.addEventListener('submit', (e) => {
-        const td = form.closest('td');
-        const wrap = td ? td.querySelector('[data-anexos-wrap]') : null;
-        if (!wrap) return;
-        const eventId = wrap.getAttribute('data-event-id') || wrap.getAttribute('data-anexos-wrap') || '';
-        const count = parseInt(wrap.getAttribute('data-anexos-count') || '0', 10) || 0;
-        const statusSelect = form.querySelector('select[name="status"]');
-        const target = statusSelect ? statusSelect.value : '';
-        syncEncerramentoUi(wrap);
-        if (target !== 'Finalizado') return;
-        if (count > 0) return;
-        e.preventDefault();
-        setAnexosError(eventId, 'Para encerrar uma reunião, anexe pelo menos um documento.');
-        alert('Para encerrar uma reunião, anexe pelo menos um documento.');
-      });
-    });
-
-    document.querySelectorAll('[data-anexos-wrap]').forEach((wrap) => {
-      syncEncerramentoUi(wrap);
-      const td = wrap.closest('td');
-      const form = td ? td.querySelector('form[action*="route=cronograma/updateEvento"]') : null;
-      const select = form ? form.querySelector('select[name="status"]') : null;
-      if (select) {
-        select.addEventListener('change', () => syncEncerramentoUi(wrap));
-      }
     });
 
     const occForm = document.getElementById('occFiltersForm');

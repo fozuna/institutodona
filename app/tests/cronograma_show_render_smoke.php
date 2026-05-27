@@ -95,9 +95,11 @@ foreach ([
     'Apenas finalizados',
     'Apenas pendentes',
     'Alternar finalizado',
-    'Anexar documentos',
+    'Editar evento',
+    'Encerrar evento',
+    'Documentos',
     'Nenhum documento anexado',
-    'Salvar toda a série',
+    'Editar série',
     'Excluir série',
     'Ocorrências materializadas',
 ] as $needle) {
