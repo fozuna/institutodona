@@ -61,17 +61,9 @@ class ColaboradoresController extends BaseController
         $canAllFuncionarios = false;
         $catalogClienteId = 0;
         if ($cliente > 0 && $selectedCliente) {
-            $matrizId = (int)($selectedCliente['matriz_id'] ?? 0);
-            $isMatriz = $matrizId <= 0 && (int)($selectedCliente['is_matriz'] ?? 1) === 1;
-            $groupRootId = $isMatriz ? $cliente : $matrizId;
-            if ($groupRootId <= 0) {
-                $groupRootId = $cliente;
-            }
-            if ($groupRootId !== $cliente && !$clienteModel->find($groupRootId)) {
-                $groupRootId = $cliente;
-            }
+            $groupRootId = $clienteModel->catalogRootIdFor($cliente);
             $catalogClienteId = $groupRootId;
-            $filiais = $clienteModel->filiaisByMatriz($groupRootId);
+            $filiais = $groupRootId > 0 ? $clienteModel->filiaisByMatriz($groupRootId) : [];
             $scopeClienteIds = array_values(array_unique(array_merge(
                 [$groupRootId],
                 array_map(static fn(array $row): int => (int)$row['id'], $filiais)
@@ -97,9 +89,9 @@ class ColaboradoresController extends BaseController
 
         if (!empty($scopeClienteIds)) {
             $effectiveCatalogId = $catalogClienteId > 0 ? $catalogClienteId : (int)($scopeClienteIds[0] ?? 0);
-            $departamentos = $effectiveCatalogId > 0 ? $this->deps->allByCliente($effectiveCatalogId) : [];
-            $setores = $departamentoId > 0 ? $this->setores->activeByDepartamento($departamentoId) : ($effectiveCatalogId > 0 ? $this->setores->allByCliente($effectiveCatalogId) : []);
-            $funcoes = $setorId > 0 ? $this->funcoes->allBySetor($setorId, [$effectiveCatalogId]) : ($effectiveCatalogId > 0 ? $this->funcoes->allByCliente($effectiveCatalogId) : []);
+            $departamentos = $effectiveCatalogId > 0 ? $this->deps->activeByCliente($effectiveCatalogId) : [];
+            $setores = $departamentoId > 0 ? $this->setores->activeByDepartamento($departamentoId) : ($effectiveCatalogId > 0 ? $this->setores->activeByCliente($effectiveCatalogId) : []);
+            $funcoes = $setorId > 0 ? $this->funcoes->activeBySetor($setorId, [$effectiveCatalogId]) : ($effectiveCatalogId > 0 ? $this->funcoes->activeByCliente($effectiveCatalogId) : []);
         } else {
             $departamentos = $this->deps->all();
             $setores = $this->setores->all();
@@ -166,17 +158,9 @@ class ColaboradoresController extends BaseController
         $canAllFuncionarios = false;
         $catalogClienteId = 0;
         if ($cliente > 0 && $selectedCliente) {
-            $matrizId = (int)($selectedCliente['matriz_id'] ?? 0);
-            $isMatriz = $matrizId <= 0 && (int)($selectedCliente['is_matriz'] ?? 1) === 1;
-            $groupRootId = $isMatriz ? $cliente : $matrizId;
-            if ($groupRootId <= 0) {
-                $groupRootId = $cliente;
-            }
-            if ($groupRootId !== $cliente && !$clienteModel->find($groupRootId)) {
-                $groupRootId = $cliente;
-            }
+            $groupRootId = $clienteModel->catalogRootIdFor($cliente);
             $catalogClienteId = $groupRootId;
-            $filiais = $clienteModel->filiaisByMatriz($groupRootId);
+            $filiais = $groupRootId > 0 ? $clienteModel->filiaisByMatriz($groupRootId) : [];
             $scopeClienteIds = array_values(array_unique(array_merge(
                 [$groupRootId],
                 array_map(static fn(array $row): int => (int)$row['id'], $filiais)
@@ -265,9 +249,9 @@ class ColaboradoresController extends BaseController
             $items = $this->colabs->paginatedByClientesWithFilters($scopeClienteIds, $page, $perPage, $filters);
         }
 
-        $departamentos = $effectiveCatalogId > 0 ? $this->deps->allByCliente($effectiveCatalogId) : [];
-        $setores = $departamentoId > 0 ? $this->setores->activeByDepartamento($departamentoId) : ($effectiveCatalogId > 0 ? $this->setores->allByCliente($effectiveCatalogId) : []);
-        $funcoes = $setorId > 0 ? $this->funcoes->allBySetor($setorId, [$effectiveCatalogId]) : ($effectiveCatalogId > 0 ? $this->funcoes->allByCliente($effectiveCatalogId) : []);
+        $departamentos = $effectiveCatalogId > 0 ? $this->deps->activeByCliente($effectiveCatalogId) : [];
+        $setores = $departamentoId > 0 ? $this->setores->activeByDepartamento($departamentoId) : ($effectiveCatalogId > 0 ? $this->setores->activeByCliente($effectiveCatalogId) : []);
+        $funcoes = $setorId > 0 ? $this->funcoes->activeBySetor($setorId, [$effectiveCatalogId]) : ($effectiveCatalogId > 0 ? $this->funcoes->activeByCliente($effectiveCatalogId) : []);
 
         $statusOptions = $this->colabs->statusOptionsByClientes($scopeClienteIds);
 
@@ -350,9 +334,9 @@ class ColaboradoresController extends BaseController
             $cliente = (int)($this->resolveScopedClienteId($cliente) ?? 0);
         }
         $catalogClienteId = $cliente > 0 ? $this->catalogClienteIdForCliente($cliente) : 0;
-        $departamentos = $catalogClienteId > 0 ? $this->deps->allByCliente($catalogClienteId) : [];
-        $setores = $catalogClienteId > 0 ? $this->setores->allByCliente($catalogClienteId) : [];
-        $funcoes = $catalogClienteId > 0 ? $this->funcoes->allByCliente($catalogClienteId) : [];
+        $departamentos = $catalogClienteId > 0 ? $this->deps->activeByCliente($catalogClienteId) : [];
+        $setores = $catalogClienteId > 0 ? $this->setores->activeByCliente($catalogClienteId) : [];
+        $funcoes = $catalogClienteId > 0 ? $this->funcoes->activeByCliente($catalogClienteId) : [];
         $this->render('colaboradores/create', [
             'departamentos' => $departamentos,
             'setores' => $setores,
@@ -411,9 +395,9 @@ class ColaboradoresController extends BaseController
             $cliente = (int)($this->resolveScopedClienteId($cliente) ?? 0);
         }
         $catalogClienteId = $cliente > 0 ? $this->catalogClienteIdForCliente($cliente) : 0;
-        $departamentos = $catalogClienteId > 0 ? $this->deps->allByCliente($catalogClienteId) : [];
-        $setores = $catalogClienteId > 0 ? $this->setores->allByCliente($catalogClienteId) : [];
-        $funcoes = $catalogClienteId > 0 ? $this->funcoes->allByCliente($catalogClienteId) : [];
+        $departamentos = $catalogClienteId > 0 ? $this->deps->activeByCliente($catalogClienteId) : [];
+        $setores = $catalogClienteId > 0 ? $this->setores->activeByCliente($catalogClienteId) : [];
+        $funcoes = $catalogClienteId > 0 ? $this->funcoes->activeByCliente($catalogClienteId) : [];
         $path = $item ? $this->resolveFuncaoPathIds((int)($item['funcao_id'] ?? 0)) : ['departamento_id' => 0, 'setor_id' => 0];
 
         if ($item && (int)($item['funcao_id'] ?? 0) > 0) {
@@ -524,25 +508,7 @@ class ColaboradoresController extends BaseController
 
     private function catalogClienteIdForCliente(int $clienteId): int
     {
-        $clienteId = (int)$clienteId;
-        if ($clienteId <= 0) {
-            return 0;
-        }
-        $clienteModel = new ClienteModel();
-        $selected = $clienteModel->find($clienteId);
-        if (!$selected) {
-            return 0;
-        }
-        $matrizId = (int)($selected['matriz_id'] ?? 0);
-        $isMatriz = $matrizId <= 0 && (int)($selected['is_matriz'] ?? 1) === 1;
-        $groupRootId = $isMatriz ? $clienteId : $matrizId;
-        if ($groupRootId <= 0) {
-            $groupRootId = $clienteId;
-        }
-        if ($groupRootId !== $clienteId && !$clienteModel->find($groupRootId)) {
-            $groupRootId = $clienteId;
-        }
-        return $groupRootId;
+        return (new ClienteModel())->catalogRootIdFor((int)$clienteId);
     }
 
     private function funcaoBelongsToCatalog(int $funcaoId, int $catalogClienteId): bool
@@ -556,12 +522,21 @@ class ColaboradoresController extends BaseController
         if (!$f) {
             return false;
         }
+        if (isset($f['ativo']) && (int)$f['ativo'] !== 1) {
+            return false;
+        }
         $set = $this->setores->find((int)($f['setor_id'] ?? 0));
         if (!$set) {
             return false;
         }
+        if (isset($set['ativo']) && (int)$set['ativo'] !== 1) {
+            return false;
+        }
         $dep = $this->deps->find((int)($set['departamento_id'] ?? 0));
         if (!$dep) {
+            return false;
+        }
+        if (isset($dep['ativo']) && (int)$dep['ativo'] !== 1) {
             return false;
         }
         return (int)($dep['cliente_id'] ?? 0) === $catalogClienteId;

@@ -2,31 +2,36 @@
 namespace App\Controllers;
 
 use App\Core\BaseController;
+use App\Core\AuditLogger;
 use App\Core\Security;
 use App\Models\FuncaoModel;
 use App\Models\SetorModel;
 use App\Models\DepartamentoModel;
+use App\Models\ClienteModel;
 
 class FuncoesController extends BaseController
 {
     private FuncaoModel $funcoes;
     private SetorModel $setores;
     private DepartamentoModel $deps;
+    private ClienteModel $clientes;
 
     public function __construct()
     {
         $this->funcoes = new FuncaoModel();
         $this->setores = new SetorModel();
         $this->deps = new DepartamentoModel();
+        $this->clientes = new ClienteModel();
     }
 
     public function index(): void
     {
         $this->requireLogin();
         $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
-        $items = $cliente ? $this->funcoes->allByCliente($cliente) : [];
-        $departamentos = $cliente ? $this->deps->allByCliente($cliente) : $this->deps->all();
-        $setores = $cliente ? $this->setores->allByCliente($cliente) : $this->setores->all();
+        $effectiveCliente = $cliente > 0 ? $this->clientes->catalogRootIdFor($cliente) : 0;
+        $items = $effectiveCliente > 0 ? $this->funcoes->allByCliente($effectiveCliente) : [];
+        $departamentos = $effectiveCliente > 0 ? $this->deps->allByCliente($effectiveCliente) : $this->deps->all();
+        $setores = $effectiveCliente > 0 ? $this->setores->allByCliente($effectiveCliente) : $this->setores->all();
         $this->render('funcoes/index', ['items' => $items, 'departamentos' => $departamentos, 'setores' => $setores, 'cliente' => $cliente]);
     }
 
@@ -34,9 +39,16 @@ class FuncoesController extends BaseController
     {
         $this->requireLogin();
         $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
+        if ($cliente > 0 && $this->clientes->isFilial($cliente)) {
+            $_SESSION['flash_error'] = 'Cadastros de Funções são geridos pela Matriz e herdados automaticamente pelas filiais.';
+            $root = $this->clientes->catalogRootIdFor($cliente);
+            header('Location: index.php?route=funcoes/index&cliente=' . (int)$root);
+            return;
+        }
         $selectedSetorId = isset($_GET['setor_id']) ? (int)$_GET['setor_id'] : 0;
-        $setores = $cliente ? $this->setores->allByCliente($cliente) : $this->setores->all();
-        $departamentos = $cliente ? $this->deps->allByCliente($cliente) : $this->deps->all();
+        $effectiveCliente = $cliente > 0 ? $this->clientes->catalogRootIdFor($cliente) : 0;
+        $setores = $effectiveCliente > 0 ? $this->setores->allByCliente($effectiveCliente) : $this->setores->all();
+        $departamentos = $effectiveCliente > 0 ? $this->deps->allByCliente($effectiveCliente) : $this->deps->all();
         $mapDepartamentos = [];
         foreach ($departamentos as $d) {
             $mapDepartamentos[(int)($d['id'] ?? 0)] = (string)($d['nome'] ?? '');
@@ -57,6 +69,13 @@ class FuncoesController extends BaseController
         $nome = trim($_POST['nome'] ?? '');
         $setorId = (int)($_POST['setor_id'] ?? 0);
         $cliente = isset($_POST['cliente']) ? (int)$_POST['cliente'] : 0;
+        if ($cliente > 0 && $this->clientes->isFilial($cliente)) {
+            $_SESSION['flash_error'] = 'Filiais não podem cadastrar Funções. Cadastre na Matriz e a herança será automática.';
+            AuditLogger::log('catalog_write_blocked', 'funcoes', null, ['cliente_id' => $cliente]);
+            $root = $this->clientes->catalogRootIdFor($cliente);
+            header('Location: index.php?route=funcoes/index&cliente=' . (int)$root);
+            return;
+        }
         if ($nome && $setorId) { $this->funcoes->create(['nome' => $nome, 'setor_id' => $setorId]); }
         header('Location: index.php?route=funcoes/index' . ($cliente ? '&cliente=' . $cliente : ''));
     }
@@ -67,8 +86,15 @@ class FuncoesController extends BaseController
         $id = (int)($_GET['id'] ?? 0);
         $item = $this->funcoes->find($id);
         $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
-        $setores = $cliente ? $this->setores->allByCliente($cliente) : $this->setores->all();
-        $departamentos = $cliente ? $this->deps->allByCliente($cliente) : $this->deps->all();
+        if ($cliente > 0 && $this->clientes->isFilial($cliente)) {
+            $_SESSION['flash_error'] = 'Filiais não podem editar Funções. Edite na Matriz.';
+            $root = $this->clientes->catalogRootIdFor($cliente);
+            header('Location: index.php?route=funcoes/index&cliente=' . (int)$root);
+            return;
+        }
+        $effectiveCliente = $cliente > 0 ? $this->clientes->catalogRootIdFor($cliente) : 0;
+        $setores = $effectiveCliente > 0 ? $this->setores->allByCliente($effectiveCliente) : $this->setores->all();
+        $departamentos = $effectiveCliente > 0 ? $this->deps->allByCliente($effectiveCliente) : $this->deps->all();
         $mapDepartamentos = [];
         foreach ($departamentos as $d) {
             $mapDepartamentos[(int)($d['id'] ?? 0)] = (string)($d['nome'] ?? '');
@@ -90,6 +116,13 @@ class FuncoesController extends BaseController
         $nome = trim($_POST['nome'] ?? '');
         $setorId = (int)($_POST['setor_id'] ?? 0);
         $cliente = isset($_POST['cliente']) ? (int)$_POST['cliente'] : 0;
+        if ($cliente > 0 && $this->clientes->isFilial($cliente)) {
+            $_SESSION['flash_error'] = 'Filiais não podem editar Funções. Edite na Matriz.';
+            AuditLogger::log('catalog_write_blocked', 'funcoes', $id ?: null, ['cliente_id' => $cliente]);
+            $root = $this->clientes->catalogRootIdFor($cliente);
+            header('Location: index.php?route=funcoes/index&cliente=' . (int)$root);
+            return;
+        }
         if ($id) { $this->funcoes->update($id, ['nome' => $nome, 'setor_id' => $setorId]); }
         header('Location: index.php?route=funcoes/index' . ($cliente ? '&cliente=' . $cliente : ''));
     }

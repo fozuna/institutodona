@@ -2,6 +2,7 @@
 namespace App\Services;
 
 use App\Core\Auth;
+use App\Core\AuditLogger;
 use App\Database\Database;
 use App\Models\ClienteModel;
 use App\Models\ColaboradorModel;
@@ -34,13 +35,22 @@ class ColaboradorImportService
         $headerMap = $rows['headerMap'];
         $iter = $rows['iter'];
 
-        $clientes = (new ClienteModel())->all();
+        $clienteModel = new ClienteModel();
+        $clientes = $clienteModel->all();
         $clienteByName = [];
+        $clienteMeta = [];
         foreach ($clientes as $c) {
+            $id = (int)($c['id'] ?? 0);
             $name = (string)($c['nome_empresa'] ?? '');
             $key = $this->normalizeName($name);
             if ($key !== '' && !isset($clienteByName[$key])) {
-                $clienteByName[$key] = (int)($c['id'] ?? 0);
+                $clienteByName[$key] = $id;
+            }
+            if ($id > 0) {
+                $clienteMeta[$id] = [
+                    'is_matriz' => (int)($c['is_matriz'] ?? 1),
+                    'matriz_id' => (int)($c['matriz_id'] ?? 0),
+                ];
             }
         }
 
@@ -51,14 +61,15 @@ class ColaboradorImportService
 
         $stmtExistsDoc = $this->pdo->prepare('SELECT 1 FROM colaboradores WHERE documento = :doc LIMIT 1');
         $stmtExistsEmail = $this->pdo->prepare('SELECT 1 FROM colaboradores WHERE email = :email LIMIT 1');
-        $stmtFindDept = $this->pdo->prepare('SELECT id FROM departamentos WHERE cliente_id = :cid AND nome = :nome LIMIT 1');
+        $stmtFindDept = $this->pdo->prepare('SELECT id FROM departamentos WHERE cliente_id = :cid AND nome = :nome AND ativo = 1 LIMIT 1');
         $stmtInsertDept = $this->pdo->prepare('INSERT INTO departamentos (nome, cliente_id) VALUES (:nome, :cid)');
-        $stmtFindSetor = $this->pdo->prepare('SELECT id FROM setores WHERE departamento_id = :dep AND nome = :nome LIMIT 1');
+        $stmtFindSetor = $this->pdo->prepare('SELECT id FROM setores WHERE departamento_id = :dep AND nome = :nome AND ativo = 1 LIMIT 1');
         $stmtInsertSetor = $this->pdo->prepare('INSERT INTO setores (nome, departamento_id) VALUES (:nome, :dep)');
-        $stmtFindFuncao = $this->pdo->prepare('SELECT id FROM funcoes WHERE setor_id = :setor AND nome = :nome LIMIT 1');
+        $stmtFindFuncao = $this->pdo->prepare('SELECT id FROM funcoes WHERE setor_id = :setor AND nome = :nome AND ativo = 1 LIMIT 1');
         $stmtInsertFuncao = $this->pdo->prepare('INSERT INTO funcoes (nome, setor_id) VALUES (:nome, :setor)');
         $stmtInsertCol = $this->pdo->prepare('INSERT INTO colaboradores (nome, email, documento, data_nascimento, celular, funcao_id, lider, cliente_id, ativo) VALUES (:nome, :email, :documento, :data_nascimento, :celular, :funcao_id, :lider, :cliente_id, :ativo)');
 
+        $catalogRootCache = [];
         $this->pdo->beginTransaction();
         try {
             foreach ($iter as $row) {
@@ -81,6 +92,11 @@ class ColaboradorImportService
                     $errors[] = ['line' => $line, 'field' => 'Unidade', 'message' => 'Sem permissão para importar para a unidade informada.', 'value' => $normalized['unidade']];
                     continue;
                 }
+
+                $meta = $clienteMeta[$clienteId] ?? ['is_matriz' => 1, 'matriz_id' => 0];
+                $isFilial = (int)($meta['is_matriz'] ?? 1) !== 1 && (int)($meta['matriz_id'] ?? 0) > 0;
+                $catalogClienteId = $catalogRootCache[$clienteId] ?? ($catalogRootCache[$clienteId] = $this->catalogRootIdForCliente($clienteId, $clienteMeta));
+                $allowCatalogCreate = !$isFilial || $catalogClienteId === $clienteId;
 
                 $doc = $normalized['documento_digits'];
                 $email = $normalized['email_lower'];
@@ -106,21 +122,62 @@ class ColaboradorImportService
                     continue;
                 }
 
-                $departamentoId = $this->getOrCreateDepartamento($clienteId, $normalized['departamento'], $stmtFindDept, $stmtInsertDept);
+                $departamentoId = $this->getOrCreateDepartamento($catalogClienteId, $normalized['departamento'], $allowCatalogCreate, $stmtFindDept, $stmtInsertDept);
                 if ($departamentoId <= 0) {
-                    $errors[] = ['line' => $line, 'field' => 'Departamento', 'message' => 'Falha ao resolver Departamento.', 'value' => $normalized['departamento']];
+                    $errors[] = [
+                        'line' => $line,
+                        'field' => 'Departamento',
+                        'message' => $isFilial ? 'Departamento não encontrado no catálogo da matriz.' : 'Falha ao resolver Departamento.',
+                        'value' => $normalized['departamento'],
+                    ];
+                    if ($isFilial) {
+                        AuditLogger::log('colab_import_catalog_violation', 'departamentos', null, [
+                            'cliente_id' => $clienteId,
+                            'catalog_cliente_id' => $catalogClienteId,
+                            'departamento' => $normalized['departamento'],
+                            'line' => $line,
+                        ]);
+                    }
                     continue;
                 }
 
-                $setorId = $this->getOrCreateSetor($clienteId, $departamentoId, $normalized['setor'], $stmtFindSetor, $stmtInsertSetor);
+                $setorId = $this->getOrCreateSetor($departamentoId, $normalized['setor'], $allowCatalogCreate, $stmtFindSetor, $stmtInsertSetor);
                 if ($setorId <= 0) {
-                    $errors[] = ['line' => $line, 'field' => 'Setor', 'message' => 'Falha ao resolver Setor.', 'value' => $normalized['setor']];
+                    $errors[] = [
+                        'line' => $line,
+                        'field' => 'Setor',
+                        'message' => $isFilial ? 'Setor não encontrado no catálogo da matriz.' : 'Falha ao resolver Setor.',
+                        'value' => $normalized['setor'],
+                    ];
+                    if ($isFilial) {
+                        AuditLogger::log('colab_import_catalog_violation', 'setores', null, [
+                            'cliente_id' => $clienteId,
+                            'catalog_cliente_id' => $catalogClienteId,
+                            'departamento_id' => $departamentoId,
+                            'setor' => $normalized['setor'],
+                            'line' => $line,
+                        ]);
+                    }
                     continue;
                 }
 
-                $funcaoId = $this->getOrCreateFuncao($clienteId, $setorId, $normalized['funcao'], $stmtFindFuncao, $stmtInsertFuncao);
+                $funcaoId = $this->getOrCreateFuncao($setorId, $normalized['funcao'], $allowCatalogCreate, $stmtFindFuncao, $stmtInsertFuncao);
                 if ($funcaoId <= 0) {
-                    $errors[] = ['line' => $line, 'field' => 'Função', 'message' => 'Falha ao resolver Função.', 'value' => $normalized['funcao']];
+                    $errors[] = [
+                        'line' => $line,
+                        'field' => 'Função',
+                        'message' => $isFilial ? 'Função não encontrada no catálogo da matriz.' : 'Falha ao resolver Função.',
+                        'value' => $normalized['funcao'],
+                    ];
+                    if ($isFilial) {
+                        AuditLogger::log('colab_import_catalog_violation', 'funcoes', null, [
+                            'cliente_id' => $clienteId,
+                            'catalog_cliente_id' => $catalogClienteId,
+                            'setor_id' => $setorId,
+                            'funcao' => $normalized['funcao'],
+                            'line' => $line,
+                        ]);
+                    }
                     continue;
                 }
 
@@ -148,6 +205,10 @@ class ColaboradorImportService
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
             }
+            AuditLogger::log('colab_import_error', 'colaboradores', null, [
+                'error' => $e->getMessage(),
+                'file' => $clientFilename,
+            ]);
             return [
                 'ok' => false,
                 'inserted' => 0,
@@ -158,12 +219,15 @@ class ColaboradorImportService
         }
     }
 
-    private function getOrCreateDepartamento(int $clienteId, string $nome, \PDOStatement $find, \PDOStatement $insert): int
+    private function getOrCreateDepartamento(int $clienteId, string $nome, bool $allowCreate, \PDOStatement $find, \PDOStatement $insert): int
     {
         $find->execute(['cid' => $clienteId, 'nome' => $nome]);
         $id = (int)$find->fetchColumn();
         if ($id > 0) {
             return $id;
+        }
+        if (!$allowCreate) {
+            return 0;
         }
         try {
             $insert->execute(['nome' => $nome, 'cid' => $clienteId]);
@@ -172,12 +236,15 @@ class ColaboradorImportService
         return (int)$find->fetchColumn();
     }
 
-    private function getOrCreateSetor(int $clienteId, int $departamentoId, string $nome, \PDOStatement $find, \PDOStatement $insert): int
+    private function getOrCreateSetor(int $departamentoId, string $nome, bool $allowCreate, \PDOStatement $find, \PDOStatement $insert): int
     {
         $find->execute(['dep' => $departamentoId, 'nome' => $nome]);
         $id = (int)$find->fetchColumn();
         if ($id > 0) {
             return $id;
+        }
+        if (!$allowCreate) {
+            return 0;
         }
         try {
             $insert->execute(['nome' => $nome, 'dep' => $departamentoId]);
@@ -186,18 +253,43 @@ class ColaboradorImportService
         return (int)$find->fetchColumn();
     }
 
-    private function getOrCreateFuncao(int $clienteId, int $setorId, string $nome, \PDOStatement $find, \PDOStatement $insert): int
+    private function getOrCreateFuncao(int $setorId, string $nome, bool $allowCreate, \PDOStatement $find, \PDOStatement $insert): int
     {
         $find->execute(['setor' => $setorId, 'nome' => $nome]);
         $id = (int)$find->fetchColumn();
         if ($id > 0) {
             return $id;
         }
+        if (!$allowCreate) {
+            return 0;
+        }
         try {
             $insert->execute(['nome' => $nome, 'setor' => $setorId]);
         } catch (\PDOException $e) {}
         $find->execute(['setor' => $setorId, 'nome' => $nome]);
         return (int)$find->fetchColumn();
+    }
+
+    private function catalogRootIdForCliente(int $clienteId, array $clienteMeta): int
+    {
+        $clienteId = (int)$clienteId;
+        if ($clienteId <= 0) {
+            return 0;
+        }
+        $meta = $clienteMeta[$clienteId] ?? null;
+        if (!$meta) {
+            return $clienteId;
+        }
+        $matrizId = (int)($meta['matriz_id'] ?? 0);
+        $isMatriz = $matrizId <= 0 && (int)($meta['is_matriz'] ?? 1) === 1;
+        $rootId = $isMatriz ? $clienteId : $matrizId;
+        if ($rootId <= 0) {
+            $rootId = $clienteId;
+        }
+        if ($rootId !== $clienteId && !isset($clienteMeta[$rootId])) {
+            $rootId = $clienteId;
+        }
+        return $rootId;
     }
 
     private function validateRow(array $row, int $line): array

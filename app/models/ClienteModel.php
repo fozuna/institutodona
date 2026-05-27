@@ -257,6 +257,41 @@ class ClienteModel extends BaseModel
         }
     }
 
+    public function catalogRootIdFor(int $clienteId): int
+    {
+        $clienteId = (int)$clienteId;
+        if ($clienteId <= 0) {
+            return 0;
+        }
+        $selected = $this->find($clienteId);
+        if (!$selected) {
+            return 0;
+        }
+        $matrizId = (int)($selected['matriz_id'] ?? 0);
+        $isMatriz = $matrizId <= 0 && (int)($selected['is_matriz'] ?? 1) === 1;
+        $rootId = $isMatriz ? $clienteId : $matrizId;
+        if ($rootId <= 0) {
+            $rootId = $clienteId;
+        }
+        if ($rootId !== $clienteId && !$this->find($rootId)) {
+            $rootId = $clienteId;
+        }
+        return $rootId;
+    }
+
+    public function isFilial(int $clienteId): bool
+    {
+        $clienteId = (int)$clienteId;
+        if ($clienteId <= 0) {
+            return false;
+        }
+        $selected = $this->find($clienteId);
+        if (!$selected) {
+            return false;
+        }
+        return (int)($selected['is_matriz'] ?? 1) !== 1 && (int)($selected['matriz_id'] ?? 0) > 0;
+    }
+
     public function byIds(array $ids): array
     {
         $this->ensureColumns();

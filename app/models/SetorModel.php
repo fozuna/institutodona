@@ -81,7 +81,11 @@ class SetorModel extends BaseModel
         $this->ensureTable();
         $params = ['id' => $id];
         $scope = $this->tenantInCondition('d.cliente_id', $params, 'sf');
-        $stmt = $this->db->prepare("SELECT s.id, s.nome, s.departamento_id FROM setores s JOIN departamentos d ON d.id = s.departamento_id WHERE s.id = :id AND $scope");
+        $cols = ['s.id', 's.nome', 's.departamento_id'];
+        if (\App\Database\Database::columnExists('setores', 'ativo')) {
+            $cols[] = 's.ativo';
+        }
+        $stmt = $this->db->prepare("SELECT " . implode(', ', $cols) . " FROM setores s JOIN departamentos d ON d.id = s.departamento_id WHERE s.id = :id AND $scope");
         $stmt->execute($params);
         $row = $stmt->fetch();
         return $row ?: null;
@@ -98,6 +102,26 @@ class SetorModel extends BaseModel
              JOIN departamentos d ON d.id = s.departamento_id
              WHERE s.departamento_id = :dep AND s.ativo = 1 AND $scope
              ORDER BY s.nome"
+        );
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    public function activeByCliente(int $clienteId): array
+    {
+        $this->ensureTable();
+        $clienteId = (int)$clienteId;
+        if ($clienteId <= 0) {
+            return [];
+        }
+        $params = ['cid' => $clienteId];
+        $scope = $this->tenantInCondition('d.cliente_id', $params, 'sbcact');
+        $stmt = $this->db->prepare(
+            "SELECT s.id, s.nome, s.departamento_id, d.nome AS departamento
+             FROM setores s
+             JOIN departamentos d ON d.id = s.departamento_id
+             WHERE d.cliente_id = :cid AND s.ativo = 1 AND d.ativo = 1 AND $scope
+             ORDER BY d.nome, s.nome"
         );
         $stmt->execute($params);
         return $stmt->fetchAll();

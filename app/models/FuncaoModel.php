@@ -23,6 +23,9 @@ class FuncaoModel extends BaseModel
                 setor_id INT NOT NULL,
                 UNIQUE KEY func_unique (setor_id, nome)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+            if (!\App\Database\Database::columnExists('funcoes', 'ativo')) {
+                $this->db->exec('ALTER TABLE funcoes ADD COLUMN ativo TINYINT(1) NOT NULL DEFAULT 1');
+            }
         } catch (\PDOException $e) {}
     }
 
@@ -117,12 +120,63 @@ class FuncaoModel extends BaseModel
         return $stmt->fetchAll();
     }
 
+    public function activeByCliente(int $clienteId): array
+    {
+        $this->ensureTable();
+        $clienteId = (int)$clienteId;
+        if ($clienteId <= 0) {
+            return [];
+        }
+        $params = ['cid' => $clienteId];
+        $scope = $this->tenantInCondition('d.cliente_id', $params, 'fabcact');
+        $stmt = $this->db->prepare(
+            "SELECT f.id, f.nome, f.setor_id, s.nome AS setor, d.nome AS departamento
+             FROM funcoes f
+             JOIN setores s ON s.id = f.setor_id
+             JOIN departamentos d ON d.id = s.departamento_id
+             WHERE d.cliente_id = :cid AND f.ativo = 1 AND s.ativo = 1 AND d.ativo = 1 AND $scope
+             ORDER BY d.nome, s.nome, f.nome"
+        );
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    public function activeBySetor(int $setorId, array $clienteIds = []): array
+    {
+        $this->ensureTable();
+        $setorId = (int)$setorId;
+        if ($setorId <= 0) {
+            return [];
+        }
+        $clienteIds = array_values(array_unique(array_filter(array_map('intval', $clienteIds))));
+        $params = ['sid' => $setorId];
+        $where = ['s.id = :sid', 'f.ativo = 1', 's.ativo = 1', 'd.ativo = 1'];
+        if (!empty($clienteIds)) {
+            $where[] = $this->buildClienteScopeClause('d.cliente_id', $clienteIds, $params, 'fbsact_scope');
+        }
+        $where[] = $this->tenantInCondition('d.cliente_id', $params, 'fbsact_tenant');
+        $stmt = $this->db->prepare(
+            "SELECT f.id, f.nome, f.setor_id, s.nome AS setor, d.nome AS departamento
+             FROM funcoes f
+             JOIN setores s ON s.id = f.setor_id
+             JOIN departamentos d ON d.id = s.departamento_id
+             WHERE " . implode(' AND ', $where) . "
+             ORDER BY f.nome"
+        );
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
     public function find(int $id): ?array
     {
         $this->ensureTable();
         $params = ['id' => $id];
         $scope = $this->tenantInCondition('d.cliente_id', $params, 'ff');
-        $stmt = $this->db->prepare("SELECT f.id, f.nome, f.setor_id FROM funcoes f JOIN setores s ON s.id = f.setor_id JOIN departamentos d ON d.id = s.departamento_id WHERE f.id = :id AND $scope");
+        $cols = ['f.id', 'f.nome', 'f.setor_id'];
+        if (\App\Database\Database::columnExists('funcoes', 'ativo')) {
+            $cols[] = 'f.ativo';
+        }
+        $stmt = $this->db->prepare("SELECT " . implode(', ', $cols) . " FROM funcoes f JOIN setores s ON s.id = f.setor_id JOIN departamentos d ON d.id = s.departamento_id WHERE f.id = :id AND $scope");
         $stmt->execute($params);
         $row = $stmt->fetch();
         return $row ?: null;

@@ -86,7 +86,11 @@ class DepartamentoModel extends BaseModel
         $this->ensureTable();
         $params = ['id' => $id];
         $scope = $this->tenantInCondition('cliente_id', $params, 'df');
-        $stmt = $this->db->prepare("SELECT id, nome, cliente_id FROM departamentos WHERE id = :id AND $scope");
+        $cols = ['id', 'nome', 'cliente_id'];
+        if (\App\Database\Database::columnExists('departamentos', 'ativo')) {
+            $cols[] = 'ativo';
+        }
+        $stmt = $this->db->prepare("SELECT " . implode(', ', $cols) . " FROM departamentos WHERE id = :id AND $scope");
         $stmt->execute($params);
         $row = $stmt->fetch();
         return $row ?: null;
