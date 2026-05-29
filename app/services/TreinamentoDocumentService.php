@@ -76,8 +76,12 @@ class TreinamentoDocumentService
         $startDate = $startDateTime !== '' ? substr($startDateTime, 0, 10) : '';
         $startTime = $startDateTime !== '' ? substr($startDateTime, 11, 5) : '';
         $endTime = '';
+        $endDateTime = (string)($agenda['data_fim'] ?? '');
+        if ($endDateTime !== '') {
+            $endTime = substr($endDateTime, 11, 5);
+        }
         $carga = trim((string)($agenda['carga_horaria'] ?? ''));
-        if ($startDateTime !== '' && $carga !== '' && is_numeric($carga)) {
+        if ($endTime === '' && $startDateTime !== '' && $carga !== '' && is_numeric($carga)) {
             try {
                 $dt = new \DateTimeImmutable($startDateTime);
                 $minutes = (int)round(((float)$carga) * 60);
@@ -87,6 +91,9 @@ class TreinamentoDocumentService
             }
         }
         $dataExecucao = $startDateTime !== '' ? DateHelper::formatDateTime($startDateTime) : '';
+        if ($startDateTime !== '' && $endDateTime !== '') {
+            $dataExecucao .= ' até ' . DateHelper::formatDateTime($endDateTime);
+        }
         $instrutor = (string)($agenda['instrutor'] ?: ($agenda['responsavel_nome'] ?? ''));
         $local = (string)($agenda['local'] ?? '');
 
@@ -257,27 +264,55 @@ class TreinamentoDocumentService
     {
         $numero = (string)($participant['certificado_numero'] ?? '');
         $codigo = (string)($participant['certificado_codigo'] ?? '');
-        $html = $this->wrapHtml('Certificado de Participacao', '
-            <div class="certificate">
-                <div class="certificate-title">Certificado</div>
-                <div class="certificate-subtitle">Certificamos que</div>
-                <div class="certificate-name">' . $this->e((string)($participant['colaborador_nome'] ?? '')) . '</div>
-                <div class="certificate-body">
-                    participou do treinamento <strong>' . $this->e((string)($agenda['treinamento_nome'] ?? '')) . '</strong>,
-                    com carga horaria de <strong>' . $this->e((string)($agenda['carga_horaria'] ?? '0')) . ' hora(s)</strong>,
-                    previsto para <strong>' . $this->e(DateHelper::formatDateTime((string)($agenda['data'] ?? ''))) . '</strong>.
-                </div>
-                <div class="certificate-meta">
-                    <div><strong>Instrutor/Responsavel:</strong> ' . $this->e((string)($agenda['instrutor'] ?: ($treinamento['assinatura_responsavel'] ?? $agenda['responsavel_nome'] ?? ''))) . '</div>
-                    <div><strong>Numero:</strong> ' . $this->e($numero) . '</div>
-                    <div><strong>Codigo de Autenticacao:</strong> ' . $this->e($codigo) . '</div>
-                </div>
-                <div class="signature-line">' . $this->e((string)($treinamento['assinatura_responsavel'] ?? $agenda['responsavel_nome'] ?? 'Responsavel')) . '</div>
-            </div>
-        ', [
-            'header_subtitle' => (string)($treinamento['template_certificado'] ?: 'Template padrao de certificado'),
-            'orientation' => 'landscape',
+        $branding = ReportBranding::aplicarBrandingRelatorio('pdf', [
+            'report_title' => 'Certificado de Participacao',
+            'header_title' => 'Certificado',
+            'header_subtitle' => (string)($treinamento['template_certificado'] ?? ''),
+            'generated_at' => DateHelper::now(),
         ]);
+        $logoUri = (string)($branding['logo_uri'] ?? '');
+        $logo = $logoUri !== '' ? '<img src="' . $this->e($logoUri) . '" class="cert-logo" alt="Logo" />' : '';
+
+        $quando = DateHelper::formatDateTime((string)($agenda['data'] ?? ''));
+        if (!empty($agenda['data_fim'])) {
+            $quando .= ' até ' . DateHelper::formatDateTime((string)($agenda['data_fim'] ?? ''));
+        }
+        $instrutor = (string)($agenda['instrutor'] ?: ($treinamento['assinatura_responsavel'] ?? $agenda['responsavel_nome'] ?? ''));
+        $assinatura = (string)($treinamento['assinatura_responsavel'] ?? $agenda['responsavel_nome'] ?? 'Responsável');
+
+        $html = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>'
+            . '@page { margin: 0mm; }'
+            . 'html,body{margin:0;padding:0;font-family:DejaVu Sans, Arial, sans-serif;color:#111827;}'
+            . '.page{box-sizing:border-box;width:100%;height:100%;padding:14mm;}'
+            . '.certificate{box-sizing:border-box;width:100%;height:100%;border:6px solid #7f1d1d;border-radius:18px;padding:14mm;text-align:center;background:#fff;page-break-inside:avoid;}'
+            . '.top{display:flex;align-items:center;justify-content:center;gap:10mm;margin-bottom:6mm;}'
+            . '.cert-logo{height:18mm;max-width:60mm;object-fit:contain;}'
+            . '.certificate-title{font-size:34px;font-weight:bold;color:#7f1d1d;line-height:1.1;}'
+            . '.certificate-subtitle{font-size:16px;margin-top:10mm;}'
+            . '.certificate-name{font-size:26px;font-weight:bold;margin:10mm 0 8mm;color:#111827;}'
+            . '.certificate-body{font-size:16px;line-height:1.6;margin:0 8mm;}'
+            . '.certificate-meta{margin-top:8mm;font-size:12px;line-height:1.7;text-align:left;display:grid;grid-template-columns:repeat(2,1fr);gap:4mm 10mm;}'
+            . '.signature{margin-top:10mm;display:flex;justify-content:center;}'
+            . '.signature-line{border-top:1px solid #111827;width:90mm;padding-top:3mm;text-align:center;font-size:12px;}'
+            . '</style></head><body>'
+            . '<div class="page"><div class="certificate">'
+            . '<div class="top">' . $logo . '<div class="certificate-title">Certificado</div></div>'
+            . '<div class="certificate-subtitle">Certificamos que</div>'
+            . '<div class="certificate-name">' . $this->e((string)($participant['colaborador_nome'] ?? '')) . '</div>'
+            . '<div class="certificate-body">'
+            . 'participou do treinamento <strong>' . $this->e((string)($agenda['treinamento_nome'] ?? '')) . '</strong>, '
+            . 'com carga horária de <strong>' . $this->e((string)($agenda['carga_horaria'] ?? '0')) . ' hora(s)</strong>, '
+            . 'previsto para <strong>' . $this->e($quando) . '</strong>.'
+            . '</div>'
+            . '<div class="certificate-meta">'
+            . '<div><strong>Instrutor/Responsável:</strong> ' . $this->e($instrutor) . '</div>'
+            . '<div><strong>Número:</strong> ' . $this->e($numero) . '</div>'
+            . '<div><strong>Código de autenticação:</strong> ' . $this->e($codigo) . '</div>'
+            . '<div><strong>Gerado em:</strong> ' . $this->e((string)($branding['generated_at'] ?? '')) . '</div>'
+            . '</div>'
+            . '<div class="signature"><div class="signature-line">' . $this->e($assinatura) . '</div></div>'
+            . '</div></div>'
+            . '</body></html>';
 
         return $this->renderPdf($html, 'A4', 'landscape');
     }

@@ -53,6 +53,11 @@
           Tipos permitidos: PDF, DOC, DOCX, TXT, RTF, XLS, XLSX, PPT, PPTX, JPG, JPEG, PNG, GIF, BMP, SVG. Tamanho máximo: 50MB.
         </div>
       </div>
+      <div class="md:col-span-12 hidden" id="manualFiliaisWrap">
+        <label class="block text-sm">Vincular às filiais</label>
+        <div class="text-xs text-gray-500 mt-1">Selecione as unidades filiais que terão acesso ao manual da matriz.</div>
+        <div id="manualFiliaisList" class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2"></div>
+      </div>
     </div>
     <div id="manualUploadError" class="hidden rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700"></div>
     <div id="manualPreview" class="hidden rounded border border-gray-200 bg-gray-50 p-4">
@@ -96,6 +101,59 @@
     const progressText = document.getElementById('manualUploadProgressText');
     const submitBtn = document.getElementById('manualSubmitBtn');
     const form = submitBtn ? submitBtn.closest('form') : null;
+    const filiaisWrap = document.getElementById('manualFiliaisWrap');
+    const filiaisList = document.getElementById('manualFiliaisList');
+    const clientesMap = <?= json_encode(array_values($clientes), JSON_UNESCAPED_UNICODE) ?>;
+    const byId = {};
+    (clientesMap || []).forEach(function(c) { byId[String(c.id)] = c; });
+
+    function fetchJson(url) {
+      return fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+        .then(function(r) { return r.json(); });
+    }
+
+    function renderFiliais(items) {
+      if (!filiaisList) return;
+      filiaisList.innerHTML = '';
+      (items || []).forEach(function(f) {
+        const id = String(f.id || '');
+        const label = String(f.nome_empresa || f.nome || ('Filial ' + id));
+        const row = document.createElement('label');
+        row.className = 'flex items-center gap-2 p-2 rounded border bg-white';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.name = 'filiais_ids[]';
+        cb.value = id;
+        const span = document.createElement('span');
+        span.className = 'text-sm text-gray-800';
+        span.textContent = label;
+        row.appendChild(cb);
+        row.appendChild(span);
+        filiaisList.appendChild(row);
+      });
+    }
+
+    function syncFiliais() {
+      if (!empresa || !filiaisWrap || !filiaisList) return;
+      const empresaId = String(empresa.value || '');
+      const info = empresaId ? byId[String(empresaId)] : null;
+      const isMatriz = info && Number(info.is_matriz || 0) === 1;
+      if (!empresaId || !isMatriz) {
+        filiaisWrap.classList.add('hidden');
+        renderFiliais([]);
+        return;
+      }
+      fetchJson('index.php?route=manuais/apiFiliais&matriz_id=' + encodeURIComponent(empresaId))
+        .then(function(payload) {
+          const items = payload && payload.success ? (payload.items || []) : [];
+          renderFiliais(items);
+          filiaisWrap.classList.toggle('hidden', items.length === 0);
+        })
+        .catch(function() {
+          renderFiliais([]);
+          filiaisWrap.classList.add('hidden');
+        });
+    }
 
     function humanSize(bytes) {
       const n = Number(bytes || 0);
@@ -144,6 +202,8 @@
       };
       empresa.addEventListener('change', sync);
       sync();
+      empresa.addEventListener('change', syncFiliais);
+      syncFiliais();
     }
 
     function renderPreview(file) {

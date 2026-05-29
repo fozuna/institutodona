@@ -1,6 +1,7 @@
 <?php /** @var array|null $empresa */ /** @var array $items */ /** @var array $departamentos */ ?>
 <?php /** @var int $selectedDepartamento */ /** @var string $q */ /** @var string $dataDe */ /** @var string $dataAte */ ?>
 <?php /** @var int $page */ /** @var int $totalPages */ /** @var int $total */ ?>
+<?php /** @var bool $lockedFilters */ /** @var string $linkError */ /** @var string $portalToken */ ?>
 <!doctype html>
 <html lang="pt-BR">
 <head>
@@ -20,12 +21,19 @@
       <p class="text-sm text-gray-600">Acesso restrito aos itens autorizados para esta empresa.</p>
     </div>
 
+    <?php if (!empty($linkError)): ?>
+      <div class="bg-red-50 border border-red-200 text-red-800 rounded p-4 mb-4 text-sm">
+        <?= htmlspecialchars($linkError) ?>
+      </div>
+    <?php endif; ?>
+
     <form method="get" action="index.php" class="bg-white shadow rounded p-4 mb-4">
       <input type="hidden" name="route" value="manuais/portal" />
+      <input type="hidden" name="token" value="<?= htmlspecialchars((string)$portalToken) ?>" />
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div>
           <label class="block text-sm mb-1">Departamento</label>
-          <select name="departamento_id" class="border rounded p-2 w-full">
+          <select name="departamento_id" class="border rounded p-2 w-full" <?= !empty($lockedFilters) ? 'disabled' : '' ?>>
             <option value="">Todos</option>
             <?php foreach ($departamentos as $dep): ?>
               <option value="<?= (int)$dep['id'] ?>" <?= $selectedDepartamento === (int)$dep['id'] ? 'selected' : '' ?>>
@@ -36,20 +44,22 @@
         </div>
         <div>
           <label class="block text-sm mb-1">Palavra-chave</label>
-          <input type="text" name="q" value="<?= htmlspecialchars($q) ?>" class="border rounded p-2 w-full" />
+          <input type="text" name="q" value="<?= htmlspecialchars($q) ?>" class="border rounded p-2 w-full" <?= !empty($lockedFilters) ? 'readonly' : '' ?> />
         </div>
         <div>
           <label class="block text-sm mb-1">Data inicial</label>
-          <input type="date" name="data_de" value="<?= htmlspecialchars($dataDe) ?>" class="border rounded p-2 w-full" />
+          <input type="date" name="data_de" value="<?= htmlspecialchars($dataDe) ?>" class="border rounded p-2 w-full" <?= !empty($lockedFilters) ? 'readonly' : '' ?> />
         </div>
         <div>
           <label class="block text-sm mb-1">Data final</label>
-          <input type="date" name="data_ate" value="<?= htmlspecialchars($dataAte) ?>" class="border rounded p-2 w-full" />
+          <input type="date" name="data_ate" value="<?= htmlspecialchars($dataAte) ?>" class="border rounded p-2 w-full" <?= !empty($lockedFilters) ? 'readonly' : '' ?> />
         </div>
       </div>
       <div class="mt-4 flex justify-end gap-2">
-        <button type="submit" class="px-4 py-2 rounded bg-red-600 text-white">Filtrar</button>
-        <a href="index.php?route=manuais/portal" class="px-4 py-2 rounded bg-gray-200 text-gray-800">Limpar</a>
+        <?php if (empty($lockedFilters)): ?>
+          <button type="submit" class="px-4 py-2 rounded bg-red-600 text-white">Filtrar</button>
+          <a href="index.php?route=manuais/portal&token=<?= urlencode((string)$portalToken) ?>" class="px-4 py-2 rounded bg-gray-200 text-gray-800">Limpar</a>
+        <?php endif; ?>
       </div>
     </form>
 
@@ -68,7 +78,7 @@
         </thead>
         <tbody>
           <?php if (empty($items)): ?>
-            <tr><td colspan="6" class="p-4 text-sm text-gray-600">Nenhum item encontrado.</td></tr>
+            <tr><td colspan="6" class="p-4 text-sm text-gray-600"><?= !empty($lockedFilters) ? 'Nenhum item corresponde aos filtros do link.' : 'Nenhum item encontrado.' ?></td></tr>
           <?php else: ?>
             <?php foreach ($items as $manual): ?>
               <tr class="border-b">
@@ -93,6 +103,7 @@
           <?php
             $query = http_build_query([
               'route' => 'manuais/portal',
+              'token' => $portalToken,
               'page' => $p,
               'departamento_id' => $selectedDepartamento ?: null,
               'q' => $q !== '' ? $q : null,

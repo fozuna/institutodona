@@ -56,6 +56,25 @@ class ManualModel extends BaseModel
         }
     }
 
+    private function ensureLinkTable(): void
+    {
+        $this->ensureTable();
+        try {
+            $this->db->exec("CREATE TABLE IF NOT EXISTS manual_filial_links (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                manual_id INT NOT NULL,
+                filial_id INT NOT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_manual_filial (manual_id, filial_id),
+                INDEX idx_mfl_manual (manual_id),
+                INDEX idx_mfl_filial (filial_id),
+                CONSTRAINT fk_mfl_manual FOREIGN KEY (manual_id) REFERENCES manuais(id) ON DELETE CASCADE,
+                CONSTRAINT fk_mfl_filial FOREIGN KEY (filial_id) REFERENCES clientes(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        } catch (\PDOException $e) {
+        }
+    }
+
     public function list(array $filters = []): array
     {
         $this->ensureTable();
@@ -88,6 +107,44 @@ class ManualModel extends BaseModel
         return $stmt->fetchAll();
     }
 
+    public function listBiblioteca(int $empresaId, int $matrizId, array $filters = []): array
+    {
+        $this->ensureLinkTable();
+        $empresaId = (int)$empresaId;
+        $matrizId = (int)$matrizId;
+        if ($empresaId <= 0) {
+            return $this->list($filters);
+        }
+        $params = [
+            'empresa_id' => $empresaId,
+            'matriz_id' => $matrizId,
+        ];
+        $sql = "SELECT m.id, m.empresa_id, m.departamento_id, m.nome, m.descricao, m.arquivo, m.tipo_arquivo, m.tamanho, m.usuario_id, m.created_at,
+                       c.nome_empresa AS empresa_nome, d.nome AS departamento_nome, u.nome AS usuario_nome,
+                       CASE WHEN m.empresa_id = :matriz_id THEN 1 ELSE 0 END AS is_linked_from_matriz
+                FROM manuais m
+                JOIN clientes c ON c.id = m.empresa_id
+                JOIN departamentos d ON d.id = m.departamento_id
+                LEFT JOIN usuarios u ON u.id = m.usuario_id
+                WHERE (m.empresa_id = :empresa_id OR (m.empresa_id = :matriz_id AND EXISTS (
+                    SELECT 1 FROM manual_filial_links l WHERE l.manual_id = m.id AND l.filial_id = :empresa_id
+                )))";
+
+        if (!empty($filters['departamento_id'])) {
+            $sql .= ' AND m.departamento_id = :departamento_id';
+            $params['departamento_id'] = (int)$filters['departamento_id'];
+        }
+        if (!empty($filters['nome'])) {
+            $sql .= ' AND m.nome LIKE :nome';
+            $params['nome'] = '%' . trim((string)$filters['nome']) . '%';
+        }
+
+        $sql .= ' ORDER BY m.created_at DESC, m.id DESC';
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
     public function find(int $id): ?array
     {
         $this->ensureTable();
@@ -104,6 +161,54 @@ class ManualModel extends BaseModel
         return $row ?: null;
     }
 
+    public function update(int $id, array $data): bool
+    {
+        $this->ensureTable();
+        $id = (int)$id;
+        if ($id <= 0) {
+            return false;
+        }
+        $params = [
+            'id' => $id,
+            'empresa_id' => (int)$this->normalizeScopedClienteId(isset($data['empresa_id']) ? (int)$data['empresa_id'] : null),
+            'departamento_id' => (int)($data['departamento_id'] ?? 0),
+            'nome' => trim((string)($data['nome'] ?? '')),
+            'descricao' => array_key_exists('descricao', $data) ? ($data['descricao'] !== null ? trim((string)$data['descricao']) : null) : null,
+            'arquivo' => (string)($data['arquivo'] ?? ''),
+            'tipo_arquivo' => (string)($data['tipo_arquivo'] ?? ''),
+            'tamanho' => (int)($data['tamanho'] ?? 0),
+        ];
+        if ($params['empresa_id'] <= 0 || !$this->canAccessClienteId($params['empresa_id'])) {
+            return false;
+        }
+        $scope = $this->tenantInCondition('empresa_id', $params, 'mu');
+        $stmt = $this->db->prepare("UPDATE manuais
+            SET empresa_id = :empresa_id,
+                departamento_id = :departamento_id,
+                nome = :nome,
+                descricao = :descricao,
+                arquivo = :arquivo,
+                tipo_arquivo = :tipo_arquivo,
+                tamanho = :tamanho
+            WHERE id = :id AND $scope");
+        $stmt->execute($params);
+        return $stmt->rowCount() > 0;
+    }
+
+    public function delete(int $id): bool
+    {
+        $this->ensureTable();
+        $id = (int)$id;
+        if ($id <= 0) {
+            return false;
+        }
+        $params = ['id' => $id];
+        $scope = $this->tenantInCondition('empresa_id', $params, 'mdel');
+        $stmt = $this->db->prepare("DELETE FROM manuais WHERE id = :id AND $scope");
+        $stmt->execute($params);
+        return $stmt->rowCount() > 0;
+    }
+
     public function findAny(int $id): ?array
     {
         $this->ensureTable();
@@ -116,6 +221,49 @@ class ManualModel extends BaseModel
         $stmt->execute(['id' => $id]);
         $row = $stmt->fetch();
         return $row ?: null;
+    }
+
+    public function linkedFilialIds(int $manualId): array
+    {
+        $this->ensureLinkTable();
+        $manualId = (int)$manualId;
+        if ($manualId <= 0) {
+            return [];
+        }
+        $stmt = $this->db->prepare('SELECT filial_id FROM manual_filial_links WHERE manual_id = :mid ORDER BY filial_id');
+        $stmt->execute(['mid' => $manualId]);
+        return array_values(array_unique(array_map('intval', array_column($stmt->fetchAll() ?: [], 'filial_id'))));
+    }
+
+    public function replaceFilialLinks(int $manualId, array $filialIds): void
+    {
+        $this->ensureLinkTable();
+        $manualId = (int)$manualId;
+        if ($manualId <= 0) {
+            return;
+        }
+        $this->db->prepare('DELETE FROM manual_filial_links WHERE manual_id = :mid')->execute(['mid' => $manualId]);
+        $filialIds = array_values(array_unique(array_filter(array_map('intval', $filialIds))));
+        if (empty($filialIds)) {
+            return;
+        }
+        $stmt = $this->db->prepare('INSERT INTO manual_filial_links (manual_id, filial_id) VALUES (:mid, :fid)');
+        foreach ($filialIds as $fid) {
+            $stmt->execute(['mid' => $manualId, 'fid' => $fid]);
+        }
+    }
+
+    public function isLinkedToFilial(int $manualId, int $filialId): bool
+    {
+        $this->ensureLinkTable();
+        $manualId = (int)$manualId;
+        $filialId = (int)$filialId;
+        if ($manualId <= 0 || $filialId <= 0) {
+            return false;
+        }
+        $stmt = $this->db->prepare('SELECT 1 FROM manual_filial_links WHERE manual_id = :mid AND filial_id = :fid LIMIT 1');
+        $stmt->execute(['mid' => $manualId, 'fid' => $filialId]);
+        return (bool)$stmt->fetchColumn();
     }
 
     public function create(array $data): int
@@ -242,6 +390,21 @@ class ManualModel extends BaseModel
         return $stmt->fetchAll();
     }
 
+    public function portalAllowsManual(int $manualId, array $empresaIds, array $filters = []): bool
+    {
+        $this->ensureTable();
+        $manualId = (int)$manualId;
+        if ($manualId <= 0 || empty($empresaIds)) {
+            return false;
+        }
+        $params = ['id' => $manualId];
+        $sql = 'SELECT COUNT(*) FROM manuais m WHERE m.id = :id AND ' . $this->companyScopeClause($empresaIds, $params, 'pmx');
+        $sql .= $this->portalFilterClause($filters, $params, 'pmxf');
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return (int)$stmt->fetchColumn() > 0;
+    }
+
     private function companyScopeClause(array $empresaIds, array &$params, string $prefix): string
     {
         $placeholders = [];
@@ -279,5 +442,11 @@ class ManualModel extends BaseModel
     {
         $role = (string)(Auth::user()['tipo_acesso'] ?? '');
         return $role === 'instituto' || $role === 'cliente_admin';
+    }
+
+    public static function canDelete(): bool
+    {
+        $role = (string)(Auth::user()['tipo_acesso'] ?? '');
+        return $role === 'instituto';
     }
 }

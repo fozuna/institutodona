@@ -634,9 +634,9 @@ class TreinamentoModel extends BaseModel
                     th.ultima_conclusao,
                     th.total_conclusoes
                 FROM colaboradores col
-                LEFT JOIN funcoes f ON f.id = col.funcao_id
-                LEFT JOIN setores s ON s.id = f.setor_id
-                LEFT JOIN departamentos d ON d.id = s.departamento_id
+                JOIN funcoes f ON f.id = col.funcao_id
+                JOIN setores s ON s.id = f.setor_id
+                JOIN departamentos d ON d.id = s.departamento_id
                 LEFT JOIN treinamento_colaboradores tc
                     ON tc.treinamento_id = :treinamento_id
                    AND tc.colaborador_id = col.id
@@ -670,7 +670,11 @@ class TreinamentoModel extends BaseModel
                 $holders[] = ':' . $k;
                 $params[$k] = (int)$id;
             }
-            $sql .= " AND d.id IN (" . implode(',', $holders) . ")";
+            if (Database::columnExists('colaboradores', 'departamento_id')) {
+                $sql .= " AND col.departamento_id IN (" . implode(',', $holders) . ")";
+            } else {
+                $sql .= " AND d.id IN (" . implode(',', $holders) . ")";
+            }
         }
         if (!empty($setorIds)) {
             $holders = [];

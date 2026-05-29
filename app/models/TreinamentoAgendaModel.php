@@ -21,11 +21,12 @@ class TreinamentoAgendaModel extends BaseModel
             return 0;
         }
         $stmt = $this->db->prepare("INSERT INTO treinamentos_agenda
-            (treinamento_id, data, unidade_id, responsavel_id, instrutor, local, observacoes)
-            VALUES (:treinamento_id,:data,:unidade_id,:responsavel_id,:instrutor,:local,:observacoes)");
+            (treinamento_id, data, data_fim, unidade_id, responsavel_id, instrutor, local, observacoes)
+            VALUES (:treinamento_id,:data,:data_fim,:unidade_id,:responsavel_id,:instrutor,:local,:observacoes)");
         $stmt->execute([
             'treinamento_id' => (int)$data['treinamento_id'],
             'data' => (string)$data['data'],
+            'data_fim' => !empty($data['data_fim']) ? (string)$data['data_fim'] : null,
             'unidade_id' => (int)$data['unidade_id'],
             'responsavel_id' => !empty($data['responsavel_id']) ? (int)$data['responsavel_id'] : null,
             'instrutor' => trim((string)($data['instrutor'] ?? '')),
@@ -33,6 +34,49 @@ class TreinamentoAgendaModel extends BaseModel
             'observacoes' => trim((string)($data['observacoes'] ?? '')),
         ]);
         return (int)$this->db->lastInsertId();
+    }
+
+    public function update(int $agendaId, array $data): bool
+    {
+        $this->ensureSchema();
+        $agendaId = (int)$agendaId;
+        $existing = $this->find($agendaId);
+        if (!$existing) {
+            return false;
+        }
+        $stmt = $this->db->prepare("UPDATE treinamentos_agenda
+            SET data = :data,
+                data_fim = :data_fim,
+                unidade_id = :unidade_id,
+                responsavel_id = :responsavel_id,
+                instrutor = :instrutor,
+                local = :local,
+                observacoes = :observacoes
+            WHERE id = :id");
+        $stmt->execute([
+            'id' => $agendaId,
+            'data' => (string)$data['data'],
+            'data_fim' => !empty($data['data_fim']) ? (string)$data['data_fim'] : null,
+            'unidade_id' => (int)$data['unidade_id'],
+            'responsavel_id' => !empty($data['responsavel_id']) ? (int)$data['responsavel_id'] : null,
+            'instrutor' => trim((string)($data['instrutor'] ?? '')),
+            'local' => trim((string)($data['local'] ?? '')),
+            'observacoes' => trim((string)($data['observacoes'] ?? '')),
+        ]);
+        return $stmt->rowCount() > 0;
+    }
+
+    public function delete(int $agendaId): bool
+    {
+        $this->ensureSchema();
+        $agendaId = (int)$agendaId;
+        $existing = $this->find($agendaId);
+        if (!$existing) {
+            return false;
+        }
+        $stmt = $this->db->prepare('DELETE FROM treinamentos_agenda WHERE id = :id');
+        $stmt->execute(['id' => $agendaId]);
+        return $stmt->rowCount() > 0;
     }
 
     public function listByTreinamento(int $treinamentoId): array

@@ -465,8 +465,12 @@
           <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
           <input type="hidden" name="treinamento_id" value="<?= (int)$item['id'] ?>" />
           <div>
-            <label class="block text-sm">Data / Hora</label>
+            <label class="block text-sm">Data / Hora Inicial</label>
             <input type="datetime-local" name="data" class="border rounded p-2 w-full" required />
+          </div>
+          <div>
+            <label class="block text-sm">Data / Hora Final</label>
+            <input type="datetime-local" name="data_fim" class="border rounded p-2 w-full" required />
           </div>
           <div>
             <label class="block text-sm">Unidade</label>
@@ -526,7 +530,12 @@
             <tbody>
               <?php foreach ($agendas as $agenda): ?>
                 <tr class="border-b">
-                  <td class="p-2"><?= htmlspecialchars(\App\Core\DateHelper::formatDateTime((string)$agenda['data'])) ?></td>
+                  <td class="p-2">
+                    <div><?= htmlspecialchars(\App\Core\DateHelper::formatDateTime((string)$agenda['data'])) ?></div>
+                    <?php if (!empty($agenda['data_fim'])): ?>
+                      <div class="text-xs text-gray-500">até <?= htmlspecialchars(\App\Core\DateHelper::formatDateTime((string)$agenda['data_fim'])) ?></div>
+                    <?php endif; ?>
+                  </td>
                   <td class="p-2"><?= htmlspecialchars((string)$agenda['unidade_nome']) ?></td>
                   <td class="p-2"><?= htmlspecialchars((string)($agenda['instrutor'] ?: ($agenda['responsavel_nome'] ?? '—'))) ?></td>
                   <td class="p-2"><?= (int)($agenda['total_participantes'] ?? 0) ?></td>
@@ -536,6 +545,28 @@
                     <div class="flex flex-wrap gap-2">
                       <a class="px-3 py-1 rounded bg-gray-200 text-brand-brown" href="index.php?route=treinamentos/presenca&agenda_id=<?= (int)$agenda['id'] ?>">Operar Lista</a>
                       <a class="px-3 py-1 rounded bg-red-100 text-red-700" href="index.php?route=treinamentos/presenca_pdf&agenda_id=<?= (int)$agenda['id'] ?>">PDF Presença</a>
+                      <?php if (\App\Core\Auth::isInstituto()): ?>
+                        <button type="button"
+                                class="px-3 py-1 rounded bg-blue-100 text-blue-700"
+                                data-agenda-edit
+                                data-id="<?= (int)$agenda['id'] ?>"
+                                data-data="<?= htmlspecialchars((string)($agenda['data'] ?? '')) ?>"
+                                data-data-fim="<?= htmlspecialchars((string)($agenda['data_fim'] ?? '')) ?>"
+                                data-unidade-id="<?= (int)($agenda['unidade_id'] ?? 0) ?>"
+                                data-responsavel-id="<?= (int)($agenda['responsavel_id'] ?? 0) ?>"
+                                data-instrutor="<?= htmlspecialchars((string)($agenda['instrutor'] ?? '')) ?>"
+                                data-local="<?= htmlspecialchars((string)($agenda['local'] ?? '')) ?>"
+                                data-observacoes="<?= htmlspecialchars((string)($agenda['observacoes'] ?? '')) ?>">
+                          Editar
+                        </button>
+                        <button type="button"
+                                class="px-3 py-1 rounded bg-white border border-red-300 text-red-700"
+                                data-agenda-delete
+                                data-id="<?= (int)$agenda['id'] ?>"
+                                data-data="<?= htmlspecialchars(\App\Core\DateHelper::formatDateTime((string)($agenda['data'] ?? ''))) ?>">
+                          Excluir
+                        </button>
+                      <?php endif; ?>
                     </div>
                   </td>
                 </tr>
@@ -606,3 +637,132 @@
     </div>
   </div>
 </div>
+
+<?php if (\App\Core\Auth::isInstituto()): ?>
+  <div id="agendaEditModal" class="fixed inset-0 hidden items-center justify-center bg-black/50 p-4">
+    <div class="bg-white rounded shadow max-w-2xl w-full p-5">
+      <div class="text-lg font-semibold text-brand-black">Editar agendamento</div>
+      <form method="post" action="index.php?route=treinamentos/update_agenda" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4" id="agendaEditForm">
+        <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+        <input type="hidden" name="agenda_id" id="agendaEditId" value="" />
+        <div>
+          <label class="block text-sm">Data / Hora Inicial</label>
+          <input type="datetime-local" name="data" id="agendaEditData" class="border rounded p-2 w-full" required />
+        </div>
+        <div>
+          <label class="block text-sm">Data / Hora Final</label>
+          <input type="datetime-local" name="data_fim" id="agendaEditDataFim" class="border rounded p-2 w-full" required />
+        </div>
+        <div>
+          <label class="block text-sm">Unidade</label>
+          <select name="unidade_id" id="agendaEditUnidade" class="border rounded p-2 w-full" required>
+            <?php foreach ($unidades as $unidade): ?>
+              <option value="<?= (int)$unidade['id'] ?>"><?= htmlspecialchars($unidade['nome_empresa']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Responsável</label>
+          <select name="responsavel_id" id="agendaEditResponsavel" class="border rounded p-2 w-full">
+            <option value="0">—</option>
+            <?php foreach ($usuarios as $usuario): ?>
+              <option value="<?= (int)$usuario['id'] ?>"><?= htmlspecialchars($usuario['nome']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Instrutor</label>
+          <input type="text" name="instrutor" id="agendaEditInstrutor" class="border rounded p-2 w-full" />
+        </div>
+        <div>
+          <label class="block text-sm">Local</label>
+          <input type="text" name="local" id="agendaEditLocal" class="border rounded p-2 w-full" />
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm">Observações</label>
+          <textarea name="observacoes" id="agendaEditObservacoes" class="border rounded p-2 w-full" rows="3"></textarea>
+        </div>
+        <div class="md:col-span-2 flex items-center justify-end gap-2">
+          <button type="button" class="px-4 py-2 rounded bg-gray-200 text-brand-brown" id="agendaEditCancel">Cancelar</button>
+          <button type="submit" class="px-4 py-2 rounded bg-brand-red text-white">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="agendaDeleteModal" class="fixed inset-0 hidden items-center justify-center bg-black/50 p-4">
+    <div class="bg-white rounded shadow max-w-lg w-full p-5">
+      <div class="text-lg font-semibold text-brand-black">Confirmar exclusão</div>
+      <div class="text-sm text-gray-700 mt-2">Excluir permanentemente o agendamento de <span class="font-semibold" id="agendaDeleteWhen"></span>?</div>
+      <form method="post" action="index.php?route=treinamentos/delete_agenda" class="mt-4 flex items-center justify-end gap-2">
+        <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+        <input type="hidden" name="agenda_id" id="agendaDeleteId" value="" />
+        <button type="button" class="px-4 py-2 rounded bg-gray-200 text-brand-brown" id="agendaDeleteCancel">Cancelar</button>
+        <button type="submit" class="px-4 py-2 rounded bg-brand-red text-white">Excluir</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      const editModal = document.getElementById('agendaEditModal');
+      const deleteModal = document.getElementById('agendaDeleteModal');
+      const editId = document.getElementById('agendaEditId');
+      const editData = document.getElementById('agendaEditData');
+      const editDataFim = document.getElementById('agendaEditDataFim');
+      const editUnidade = document.getElementById('agendaEditUnidade');
+      const editResponsavel = document.getElementById('agendaEditResponsavel');
+      const editInstrutor = document.getElementById('agendaEditInstrutor');
+      const editLocal = document.getElementById('agendaEditLocal');
+      const editObs = document.getElementById('agendaEditObservacoes');
+      const editCancel = document.getElementById('agendaEditCancel');
+      const delId = document.getElementById('agendaDeleteId');
+      const delWhen = document.getElementById('agendaDeleteWhen');
+      const delCancel = document.getElementById('agendaDeleteCancel');
+
+      function toLocalValue(db) {
+        const s = String(db || '').trim();
+        if (!s) return '';
+        if (s.indexOf('T') !== -1) return s.slice(0, 16);
+        return s.replace(' ', 'T').slice(0, 16);
+      }
+
+      function openModal(modal) {
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+      function closeModal(modal) {
+        if (!modal) return;
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+
+      document.querySelectorAll('[data-agenda-edit]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          if (!editId) return;
+          editId.value = btn.getAttribute('data-id') || '';
+          if (editData) editData.value = toLocalValue(btn.getAttribute('data-data'));
+          if (editDataFim) editDataFim.value = toLocalValue(btn.getAttribute('data-data-fim'));
+          if (editUnidade) editUnidade.value = btn.getAttribute('data-unidade-id') || '';
+          if (editResponsavel) editResponsavel.value = btn.getAttribute('data-responsavel-id') || '0';
+          if (editInstrutor) editInstrutor.value = btn.getAttribute('data-instrutor') || '';
+          if (editLocal) editLocal.value = btn.getAttribute('data-local') || '';
+          if (editObs) editObs.value = btn.getAttribute('data-observacoes') || '';
+          openModal(editModal);
+        });
+      });
+      document.querySelectorAll('[data-agenda-delete]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          if (delId) delId.value = btn.getAttribute('data-id') || '';
+          if (delWhen) delWhen.textContent = btn.getAttribute('data-data') || '';
+          openModal(deleteModal);
+        });
+      });
+      if (editCancel) editCancel.addEventListener('click', function() { closeModal(editModal); });
+      if (delCancel) delCancel.addEventListener('click', function() { closeModal(deleteModal); });
+      if (editModal) editModal.addEventListener('click', function(e) { if (e.target === editModal) closeModal(editModal); });
+      if (deleteModal) deleteModal.addEventListener('click', function(e) { if (e.target === deleteModal) closeModal(deleteModal); });
+    })();
+  </script>
+<?php endif; ?>

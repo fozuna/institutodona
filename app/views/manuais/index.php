@@ -1,6 +1,7 @@
 <?php /** @var array $items */ /** @var array $clientes */ /** @var array $departamentos */ ?>
 <?php /** @var int $selectedEmpresa */ /** @var int $selectedDepartamento */ /** @var string $searchNome */ ?>
 <?php /** @var bool $canManageManuais */ ?>
+<?php /** @var bool $canDeleteManuais */ ?>
 <?php /** @var string $portalLink */ ?>
 <?php $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/\\'); if ($basePath === '.' || $basePath === '/' || $basePath === '\\') { $basePath = ''; } ?>
 <div class="p-6">
@@ -24,6 +25,8 @@
         <form method="post" action="index.php?route=manuais/generatePortalLink">
           <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
           <input type="hidden" name="empresa_id" value="<?= (int)$selectedEmpresa ?>" />
+          <input type="hidden" name="departamento_id" value="<?= (int)$selectedDepartamento ?>" />
+          <input type="hidden" name="q" value="<?= htmlspecialchars($searchNome) ?>" />
           <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">Gerar link</button>
         </form>
       </div>
@@ -66,7 +69,7 @@
       </div>
       <div class="md:col-span-4">
         <label class="block text-sm">Nome</label>
-        <input type="text" name="nome" value="<?= htmlspecialchars($searchNome) ?>" maxlength="255" />
+        <input type="text" name="nome" value="<?= htmlspecialchars($searchNome) ?>" maxlength="255" class="border rounded p-2 w-full" />
       </div>
     </div>
     <div class="mt-4 flex items-center gap-2 justify-end">
@@ -84,7 +87,7 @@
           <th class="p-3">Empresa</th>
           <th class="p-3">Departamento</th>
           <th class="p-3">Data</th>
-          <th class="p-3">Download</th>
+          <th class="p-3">Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -101,10 +104,28 @@
               <td class="p-3"><?= htmlspecialchars($manual['departamento_nome']) ?></td>
               <td class="p-3"><?= htmlspecialchars(date('d/m/Y H:i', strtotime((string)$manual['created_at']))) ?></td>
               <td class="p-3">
-                <a class="px-3 py-2 rounded bg-brand-red text-white inline-flex items-center gap-2" href="<?= $basePath ?>/biblioteca/download/<?= (int)$manual['id'] ?>">
-                  <span data-feather="download"></span>
-                  <span>Baixar</span>
-                </a>
+                <div class="flex flex-wrap items-center gap-2">
+                  <a class="px-3 py-2 rounded bg-brand-red text-white inline-flex items-center gap-2" href="<?= $basePath ?>/biblioteca/download/<?= (int)$manual['id'] ?>">
+                    <span data-feather="download"></span>
+                    <span>Baixar</span>
+                  </a>
+                  <?php if ($canManageManuais): ?>
+                    <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown inline-flex items-center gap-2" href="index.php?route=manuais/edit&id=<?= (int)$manual['id'] ?>">
+                      <span data-feather="edit-2"></span>
+                      <span>Editar</span>
+                    </a>
+                  <?php endif; ?>
+                  <?php if ($canDeleteManuais): ?>
+                    <button type="button"
+                            class="px-3 py-2 rounded bg-white border border-red-300 text-red-700 inline-flex items-center gap-2"
+                            data-manual-delete
+                            data-id="<?= (int)$manual['id'] ?>"
+                            data-nome="<?= htmlspecialchars($manual['nome']) ?>">
+                      <span data-feather="trash-2"></span>
+                      <span>Excluir</span>
+                    </button>
+                  <?php endif; ?>
+                </div>
               </td>
             </tr>
           <?php endforeach; ?>
@@ -113,8 +134,28 @@
     </table>
   </div>
 </div>
+<?php if ($canDeleteManuais): ?>
+  <div id="manualDeleteModal" class="fixed inset-0 hidden items-center justify-center bg-black/50 p-4">
+    <div class="bg-white rounded shadow max-w-lg w-full p-5">
+      <div class="text-lg font-semibold text-brand-black">Confirmar exclusão</div>
+      <div class="text-sm text-gray-700 mt-2">
+        Você tem certeza que deseja excluir permanentemente o manual <span class="font-semibold" id="manualDeleteName"></span>?
+      </div>
+      <form method="post" action="index.php?route=manuais/delete" class="mt-4 flex items-center justify-end gap-2">
+        <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+        <input type="hidden" name="id" id="manualDeleteId" value="" />
+        <button type="button" class="px-4 py-2 rounded bg-gray-200 text-brand-brown" id="manualDeleteCancel">Cancelar</button>
+        <button type="submit" class="px-4 py-2 rounded bg-brand-red text-white">Excluir</button>
+      </form>
+    </div>
+  </div>
+<?php endif; ?>
 <script>
   (function() {
+    const clientesMap = <?= json_encode(array_values($clientes), JSON_UNESCAPED_UNICODE) ?>;
+    const byId = {};
+    (clientesMap || []).forEach(function(c) { byId[String(c.id)] = c; });
+
     var copyBtn = document.getElementById('copyPortalLinkBtn');
     var linkInput = document.getElementById('portalLinkInput');
     if (copyBtn && linkInput && navigator && navigator.clipboard) {
@@ -133,9 +174,16 @@
     if (!empresa || !departamento) return;
     const sync = function() {
       const empresaId = empresa.value;
+      const info = empresaId ? byId[String(empresaId)] : null;
+      const allowed = {};
+      if (empresaId) allowed[String(empresaId)] = true;
+      if (info && Number(info.is_matriz || 0) !== 1 && Number(info.matriz_id || 0) > 0) {
+        allowed[String(info.matriz_id)] = true;
+      }
       Array.from(departamento.options).forEach(function(option, idx) {
         if (idx === 0) return;
-        const matches = !empresaId || option.getAttribute('data-empresa') === empresaId;
+        const depEmpresa = option.getAttribute('data-empresa');
+        const matches = !empresaId || !!allowed[String(depEmpresa)];
         option.hidden = !matches;
         if (!matches && option.selected) {
           departamento.value = '';
@@ -144,5 +192,31 @@
     };
     empresa.addEventListener('change', sync);
     sync();
+
+    const modal = document.getElementById('manualDeleteModal');
+    const nameEl = document.getElementById('manualDeleteName');
+    const idEl = document.getElementById('manualDeleteId');
+    const cancelBtn = document.getElementById('manualDeleteCancel');
+    if (modal && nameEl && idEl) {
+      const open = function(id, nome) {
+        idEl.value = String(id || '');
+        nameEl.textContent = String(nome || '');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      };
+      const close = function() {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      };
+      document.querySelectorAll('[data-manual-delete]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          open(btn.getAttribute('data-id'), btn.getAttribute('data-nome'));
+        });
+      });
+      if (cancelBtn) cancelBtn.addEventListener('click', close);
+      modal.addEventListener('click', function(e) {
+        if (e.target === modal) close();
+      });
+    }
   })();
 </script>

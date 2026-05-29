@@ -349,8 +349,20 @@ switch ($route) {
     case 'manuais/create':
         (new ManuaisController())->create();
         break;
+    case 'manuais/apiFiliais':
+        (new ManuaisController())->apiFiliais();
+        break;
     case 'manuais/store':
         (new ManuaisController())->store();
+        break;
+    case 'manuais/edit':
+        (new ManuaisController())->edit();
+        break;
+    case 'manuais/update':
+        (new ManuaisController())->update();
+        break;
+    case 'manuais/delete':
+        (new ManuaisController())->delete();
         break;
     case 'manuais/download':
         (new ManuaisController())->download();
@@ -507,6 +519,12 @@ switch ($route) {
         break;
     case 'treinamentos/store_agenda':
         (new TreinamentosController())->storeAgenda();
+        break;
+    case 'treinamentos/update_agenda':
+        (new TreinamentosController())->updateAgenda();
+        break;
+    case 'treinamentos/delete_agenda':
+        (new TreinamentosController())->deleteAgenda();
         break;
     case 'treinamentos/presenca':
         (new TreinamentosController())->presenca();

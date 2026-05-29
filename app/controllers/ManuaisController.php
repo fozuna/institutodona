@@ -3,6 +3,7 @@ namespace App\Controllers;
 
 use App\Core\AuditLogger;
 use App\Core\BaseController;
+use App\Core\Auth;
 use App\Core\PublicRateLimiter;
 use App\Core\Security;
 use App\Models\ClienteModel;
@@ -35,11 +36,20 @@ class ManuaisController extends BaseController
 
         $clientes = $this->clientes->all();
         $departamentos = $empresaId > 0 ? $this->departamentos->allByCliente($empresaId) : $this->departamentos->all();
-        $items = $this->manuais->list([
+        $filters = [
             'empresa_id' => $empresaId > 0 ? $empresaId : null,
             'departamento_id' => $departamentoId > 0 ? $departamentoId : null,
             'nome' => $nome,
-        ]);
+        ];
+        $items = $this->manuais->list($filters);
+        $isFilial = $empresaId > 0 ? $this->clientes->isFilial($empresaId) : false;
+        if ($empresaId > 0 && $isFilial) {
+            $matrizId = $this->clientes->catalogRootIdFor($empresaId);
+            if ($matrizId > 0 && $matrizId !== $empresaId) {
+                $departamentos = array_merge($this->departamentos->allByCliente($empresaId), $this->departamentos->allByCliente($matrizId));
+                $items = $this->manuais->listBiblioteca($empresaId, $matrizId, $filters);
+            }
+        }
 
         $this->render('manuais/index', [
             'items' => $items,
@@ -49,8 +59,12 @@ class ManuaisController extends BaseController
             'selectedDepartamento' => $departamentoId,
             'searchNome' => $nome,
             'canManageManuais' => ManualModel::canManage(),
+            'canDeleteManuais' => ManualModel::canDelete(),
             'portalLink' => $empresaId > 0 && ManualModel::canManage() && !empty($_GET['portal_token'])
-                ? $this->buildPortalLink((string)$_GET['portal_token'])
+                ? $this->buildPortalLink((string)$_GET['portal_token'], [
+                    'departamento_id' => $departamentoId > 0 ? $departamentoId : null,
+                    'q' => $nome !== '' ? $nome : null,
+                ])
                 : '',
         ]);
     }
@@ -79,6 +93,212 @@ class ManuaisController extends BaseController
             'selectedEmpresa' => $empresa,
             'canManageManuais' => true,
         ]);
+    }
+
+    public function edit(): void
+    {
+        $this->requireLogin();
+        if (!ManualModel::canManage()) {
+            http_response_code(403);
+            echo 'Sem permissão para editar manuais.';
+            return;
+        }
+        $id = (int)($_GET['id'] ?? 0);
+        $item = $this->manuais->find($id);
+        if (!$item) {
+            $_SESSION['flash_error'] = 'Manual não encontrado.';
+            $this->redirect('index.php?route=manuais/index');
+            return;
+        }
+        $empresaId = (int)($item['empresa_id'] ?? 0);
+        $clientes = $this->clientes->all();
+        $allDepartamentos = [];
+        foreach ($clientes as $cliente) {
+            $clienteId = (int)($cliente['id'] ?? 0);
+            foreach ($this->departamentos->allByCliente($clienteId) as $dep) {
+                $allDepartamentos[] = $dep;
+            }
+        }
+        $filiais = [];
+        $linkedFiliais = [];
+        $empresa = $this->clientes->find($empresaId);
+        if ($empresa && (int)($empresa['is_matriz'] ?? 1) === 1) {
+            $filiais = $this->clientes->filiaisByMatriz($empresaId);
+            $linkedFiliais = $this->manuais->linkedFilialIds($id);
+        }
+        $this->render('manuais/edit', [
+            'item' => $item,
+            'clientes' => $clientes,
+            'departamentos' => $allDepartamentos,
+            'filiais' => $filiais,
+            'linkedFiliais' => $linkedFiliais,
+            'canManageManuais' => true,
+        ]);
+    }
+
+    public function update(): void
+    {
+        $this->requireLogin();
+        if (!ManualModel::canManage()) {
+            http_response_code(403);
+            echo 'Sem permissão para editar manuais.';
+            return;
+        }
+        if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST' || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        $current = $this->manuais->find($id);
+        if (!$current) {
+            http_response_code(404);
+            echo 'Manual não encontrado.';
+            return;
+        }
+        $empresaId = (int)($this->resolveScopedClienteId((int)($_POST['empresa_id'] ?? 0) ?: null) ?? 0);
+        $departamentoId = (int)($_POST['departamento_id'] ?? 0);
+        $nome = trim((string)($_POST['nome'] ?? ''));
+        $descricao = trim((string)($_POST['descricao'] ?? ''));
+        if ($empresaId <= 0 || $departamentoId <= 0 || $nome === '') {
+            http_response_code(400);
+            echo 'Campos obrigatórios faltando.';
+            return;
+        }
+        if (mb_strlen($descricao) > 500) {
+            http_response_code(400);
+            echo 'Descrição deve ter no máximo 500 caracteres.';
+            return;
+        }
+        $departamento = $this->departamentos->find($departamentoId);
+        if (!$departamento || (int)($departamento['cliente_id'] ?? 0) !== $empresaId) {
+            http_response_code(400);
+            echo 'Departamento inválido para a empresa selecionada.';
+            return;
+        }
+
+        $arquivoRel = (string)($current['arquivo'] ?? '');
+        $tipoArquivo = (string)($current['tipo_arquivo'] ?? '');
+        $tamanho = (int)($current['tamanho'] ?? 0);
+        $oldAbsPath = dirname(__DIR__, 2) . '/' . ltrim($arquivoRel, '/');
+
+        $file = $_FILES['arquivo'] ?? null;
+        $newAbsPath = null;
+        if (is_array($file) && !empty($file['name'])) {
+            $err = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+            if ($err !== UPLOAD_ERR_OK || !is_uploaded_file((string)($file['tmp_name'] ?? ''))) {
+                http_response_code(400);
+                echo 'Falha no upload do arquivo.';
+                return;
+            }
+            $sizeBytes = (int)($file['size'] ?? 0);
+            $finfo = function_exists('finfo_open') ? finfo_open(FILEINFO_MIME_TYPE) : false;
+            $mime = $finfo ? (string)finfo_file($finfo, (string)$file['tmp_name']) : (string)($file['type'] ?? '');
+            if ($finfo) { finfo_close($finfo); }
+            $validated = ManualModel::validateUpload((string)$file['name'], $sizeBytes, $mime, 50 * 1024 * 1024);
+            if (empty($validated['ok'])) {
+                http_response_code(400);
+                echo (string)($validated['message'] ?? 'Arquivo inválido.');
+                return;
+            }
+            $ext = (string)$validated['ext'];
+            $category = (string)$validated['category'];
+            $dir = ManualModel::storageDirFor($empresaId, $departamentoId, $category);
+            if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+                http_response_code(500);
+                echo 'Não foi possível criar diretório de armazenamento.';
+                return;
+            }
+            $storedName = bin2hex(random_bytes(16)) . '.' . $ext;
+            $newAbsPath = $dir . '/' . $storedName;
+            if (!@move_uploaded_file((string)$file['tmp_name'], $newAbsPath)) {
+                http_response_code(500);
+                echo 'Falha ao salvar arquivo.';
+                return;
+            }
+            $arquivoRel = 'storage/manuais/' . $empresaId . '/' . $departamentoId . '/' . rawurlencode($category) . '/' . $storedName;
+            $tipoArquivo = $ext;
+            $tamanho = $sizeBytes;
+        }
+
+        $ok = $this->manuais->update($id, [
+            'empresa_id' => $empresaId,
+            'departamento_id' => $departamentoId,
+            'nome' => $nome,
+            'descricao' => $descricao !== '' ? $descricao : null,
+            'arquivo' => $arquivoRel,
+            'tipo_arquivo' => $tipoArquivo,
+            'tamanho' => $tamanho,
+        ]);
+        if (!$ok) {
+            if ($newAbsPath && is_file($newAbsPath)) {
+                @unlink($newAbsPath);
+            }
+            http_response_code(500);
+            echo 'Falha ao atualizar manual.';
+            return;
+        }
+        if ($newAbsPath && is_file($oldAbsPath)) {
+            @unlink($oldAbsPath);
+        }
+
+        $empresa = $this->clientes->find($empresaId);
+        $filiaisIds = $_POST['filiais_ids'] ?? [];
+        if ($empresa && (int)($empresa['is_matriz'] ?? 1) === 1 && is_array($filiaisIds)) {
+            $allowed = array_values(array_map('intval', array_column($this->clientes->filiaisByMatriz($empresaId), 'id')));
+            $selected = array_values(array_unique(array_filter(array_map('intval', $filiaisIds))));
+            $selected = array_values(array_intersect($selected, $allowed));
+            $this->manuais->replaceFilialLinks($id, $selected);
+        } else {
+            $this->manuais->replaceFilialLinks($id, []);
+        }
+
+        AuditLogger::log('manual_update', 'manual', $id, [
+            'empresa_id' => $empresaId,
+            'departamento_id' => $departamentoId,
+            'usuario_id' => (int)($_SESSION['user']['id'] ?? 0),
+        ]);
+        $_SESSION['flash_success'] = 'Manual atualizado com sucesso.';
+        $this->redirect('index.php?route=manuais/index&empresa_id=' . $empresaId);
+    }
+
+    public function delete(): void
+    {
+        $this->requireLogin();
+        if (!ManualModel::canDelete()) {
+            http_response_code(403);
+            echo 'Sem permissão para excluir manuais.';
+            return;
+        }
+        if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST' || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        $manual = $this->manuais->find($id);
+        if (!$manual) {
+            http_response_code(404);
+            echo 'Manual não encontrado.';
+            return;
+        }
+        $absPath = dirname(__DIR__, 2) . '/' . ltrim((string)($manual['arquivo'] ?? ''), '/');
+        $empresaId = (int)($manual['empresa_id'] ?? 0);
+        $ok = $this->manuais->delete($id);
+        if (!$ok) {
+            http_response_code(500);
+            echo 'Falha ao excluir manual.';
+            return;
+        }
+        if (is_file($absPath)) {
+            @unlink($absPath);
+        }
+        AuditLogger::log('manual_delete', 'manual', $id, [
+            'empresa_id' => $empresaId,
+            'usuario_id' => (int)($_SESSION['user']['id'] ?? 0),
+        ]);
+        $_SESSION['flash_success'] = 'Manual excluído com sucesso.';
+        $this->redirect('index.php?route=manuais/index&empresa_id=' . $empresaId);
     }
 
     public function store(): void
@@ -257,6 +477,15 @@ class ManuaisController extends BaseController
             return;
         }
 
+        $empresa = $this->clientes->find($empresaId);
+        $filiaisIds = $_POST['filiais_ids'] ?? [];
+        if ($empresa && (int)($empresa['is_matriz'] ?? 1) === 1 && is_array($filiaisIds)) {
+            $allowed = array_values(array_map('intval', array_column($this->clientes->filiaisByMatriz($empresaId), 'id')));
+            $selected = array_values(array_unique(array_filter(array_map('intval', $filiaisIds))));
+            $selected = array_values(array_intersect($selected, $allowed));
+            $this->manuais->replaceFilialLinks($manualId, $selected);
+        }
+
         AuditLogger::log('manual_upload', 'manual', $manualId, [
             'empresa_id' => $empresaId,
             'departamento_id' => $departamentoId,
@@ -277,6 +506,28 @@ class ManuaisController extends BaseController
         header('Location: ' . $redirect);
     }
 
+    public function apiFiliais(): void
+    {
+        $this->requireLogin();
+        header('Content-Type: application/json; charset=utf-8');
+        if (!ManualModel::canManage()) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'items' => [], 'message' => 'Sem permissão.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $matrizId = (int)($this->resolveScopedClienteId((int)($_GET['matriz_id'] ?? 0) ?: null) ?? 0);
+        if ($matrizId <= 0) {
+            echo json_encode(['success' => true, 'items' => []], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $matriz = $this->clientes->find($matrizId);
+        if (!$matriz || (int)($matriz['is_matriz'] ?? 1) !== 1) {
+            echo json_encode(['success' => true, 'items' => []], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        echo json_encode(['success' => true, 'items' => $this->clientes->filiaisByMatriz($matrizId)], JSON_UNESCAPED_UNICODE);
+    }
+
     public function download(): void
     {
         $id = (int)($_GET['id'] ?? 0);
@@ -290,12 +541,28 @@ class ManuaisController extends BaseController
         if (isset($_SESSION['user'])) {
             $this->requireLogin();
             if (!$this->canAccessCliente((int)$manual['empresa_id'])) {
+                $allowed = Auth::allowedClientIds();
+                $linked = false;
+                foreach ($allowed as $cid) {
+                    if ($this->manuais->isLinkedToFilial((int)$manual['id'], (int)$cid)) {
+                        $linked = true;
+                        break;
+                    }
+                }
+                if (!$linked) {
+                    http_response_code(403);
+                    echo 'Sem permissão.';
+                    return;
+                }
+            }
+        } elseif ($portal !== null) {
+            if (!in_array((int)$manual['empresa_id'], $portal['empresa_ids'], true)) {
                 http_response_code(403);
                 echo 'Sem permissão.';
                 return;
             }
-        } elseif ($portal !== null) {
-            if (!in_array((int)$manual['empresa_id'], $portal['empresa_ids'], true)) {
+            $filters = $portal['filters'] ?? null;
+            if (is_array($filters) && !$this->manuais->portalAllowsManual((int)$manual['id'], $portal['empresa_ids'], $filters)) {
                 http_response_code(403);
                 echo 'Sem permissão.';
                 return;
@@ -364,19 +631,47 @@ class ManuaisController extends BaseController
 
         $page = max(1, (int)($_GET['page'] ?? 1));
         $perPage = 10;
-        $departamentoId = (int)($_GET['departamento_id'] ?? 0);
-        $q = trim((string)($_GET['q'] ?? ''));
-        $dataDe = trim((string)($_GET['data_de'] ?? ''));
-        $dataAte = trim((string)($_GET['data_ate'] ?? ''));
-        $filters = [
-            'departamento_id' => $departamentoId > 0 ? $departamentoId : null,
-            'q' => $q,
-            'data_de' => $dataDe,
-            'data_ate' => $dataAte,
-        ];
-        $total = $this->manuais->portalCount($session['empresa_ids'], $filters);
-        $items = $this->manuais->portalList($session['empresa_ids'], $filters, $page, $perPage);
-        $totalPages = max(1, (int)ceil($total / $perPage));
+        $requestedDepartamentoId = (int)($_GET['departamento_id'] ?? 0);
+        $requestedQ = trim((string)($_GET['q'] ?? ''));
+        $requestedDataDe = trim((string)($_GET['data_de'] ?? ''));
+        $requestedDataAte = trim((string)($_GET['data_ate'] ?? ''));
+        $linkError = '';
+        $locked = !empty($session['locked']);
+        $filters = [];
+        if ($locked && isset($session['filters']) && is_array($session['filters'])) {
+            $lock = $this->normalizePortalFilters($session['filters']);
+            $req = $this->normalizePortalFilters([
+                'departamento_id' => $requestedDepartamentoId > 0 ? $requestedDepartamentoId : null,
+                'q' => $requestedQ,
+                'data_de' => $requestedDataDe,
+                'data_ate' => $requestedDataAte,
+            ]);
+            if ($lock !== $req) {
+                $linkError = 'Link inválido: os filtros do endereço não correspondem ao link gerado.';
+                $filters = $lock;
+            } else {
+                $filters = $lock;
+            }
+        } else {
+            $filters = $this->normalizePortalFilters([
+                'departamento_id' => $requestedDepartamentoId > 0 ? $requestedDepartamentoId : null,
+                'q' => $requestedQ,
+                'data_de' => $requestedDataDe,
+                'data_ate' => $requestedDataAte,
+            ]);
+        }
+        $departamentoId = (int)($filters['departamento_id'] ?? 0);
+        $q = (string)($filters['q'] ?? '');
+        $dataDe = (string)($filters['data_de'] ?? '');
+        $dataAte = (string)($filters['data_ate'] ?? '');
+        $total = 0;
+        $items = [];
+        $totalPages = 1;
+        if ($linkError === '') {
+            $total = $this->manuais->portalCount($session['empresa_ids'], $filters);
+            $items = $this->manuais->portalList($session['empresa_ids'], $filters, $page, $perPage);
+            $totalPages = max(1, (int)ceil($total / $perPage));
+        }
 
         $departamentos = [];
         foreach ($session['empresa_ids'] as $empresaId) {
@@ -403,6 +698,9 @@ class ManuaisController extends BaseController
             'page' => $page,
             'totalPages' => $totalPages,
             'total' => $total,
+            'lockedFilters' => $locked,
+            'linkError' => $linkError,
+            'portalToken' => (string)($session['token'] ?? ''),
         ];
         extract($params, EXTR_SKIP);
         require __DIR__ . '/../views/manuais/portal.php';
@@ -428,8 +726,15 @@ class ManuaisController extends BaseController
             echo 'Empresa inválida.';
             return;
         }
+        $departamentoId = (int)($_POST['departamento_id'] ?? 0);
+        $q = trim((string)($_POST['q'] ?? $_POST['nome'] ?? ''));
+        $filters = $this->normalizePortalFilters([
+            'departamento_id' => $departamentoId > 0 ? $departamentoId : null,
+            'q' => $q,
+        ]);
+        $scopeIds = [$empresaId];
         $expiraEm = date('Y-m-d H:i:s', strtotime('+30 days'));
-        $token = $this->portalTokens->issue($empresaId, $expiraEm);
+        $token = $this->portalTokens->issue($empresaId, $expiraEm, $scopeIds, $filters);
         AuditLogger::log('manual_portal_token_issue', 'manual_portal', null, [
             'empresa_id' => $empresaId,
             'expira_em' => $expiraEm,
@@ -445,14 +750,35 @@ class ManuaisController extends BaseController
         if (!$record) {
             return null;
         }
-        $empresaIds = $this->clientes->manualPortalScopeIds((int)$record['empresa_id']);
+        $empresaIds = [];
+        $locked = false;
+        if (!empty($record['scope_ids_json'])) {
+            $decoded = json_decode((string)$record['scope_ids_json'], true);
+            if (is_array($decoded)) {
+                $empresaIds = array_values(array_unique(array_filter(array_map('intval', $decoded))));
+                $locked = true;
+            }
+        }
+        if (empty($empresaIds)) {
+            $empresaIds = $this->clientes->manualPortalScopeIds((int)$record['empresa_id']);
+        }
         if (empty($empresaIds)) {
             return null;
+        }
+        $filters = [];
+        if (!empty($record['filters_json'])) {
+            $decoded = json_decode((string)$record['filters_json'], true);
+            if (is_array($decoded)) {
+                $filters = $this->normalizePortalFilters($decoded);
+                $locked = true;
+            }
         }
         $_SESSION['manual_portal'] = [
             'token' => $record['token'],
             'empresa_id' => (int)$record['empresa_id'],
             'empresa_ids' => $empresaIds,
+            'filters' => $filters,
+            'locked' => $locked,
             'expires_at' => time() + 1800,
         ];
         return $_SESSION['manual_portal'];
@@ -473,13 +799,35 @@ class ManuaisController extends BaseController
             unset($_SESSION['manual_portal']);
             return null;
         }
-        $session['empresa_ids'] = $this->clientes->manualPortalScopeIds((int)$record['empresa_id']);
+        $empresaIds = [];
+        $locked = false;
+        if (!empty($record['scope_ids_json'])) {
+            $decoded = json_decode((string)$record['scope_ids_json'], true);
+            if (is_array($decoded)) {
+                $empresaIds = array_values(array_unique(array_filter(array_map('intval', $decoded))));
+                $locked = true;
+            }
+        }
+        if (empty($empresaIds)) {
+            $empresaIds = $this->clientes->manualPortalScopeIds((int)$record['empresa_id']);
+        }
+        $filters = [];
+        if (!empty($record['filters_json'])) {
+            $decoded = json_decode((string)$record['filters_json'], true);
+            if (is_array($decoded)) {
+                $filters = $this->normalizePortalFilters($decoded);
+                $locked = true;
+            }
+        }
+        $session['empresa_ids'] = $empresaIds;
+        $session['filters'] = $filters;
+        $session['locked'] = $locked;
         $session['expires_at'] = time() + 1800;
         $_SESSION['manual_portal'] = $session;
         return $session;
     }
 
-    private function buildPortalLink(string $token): string
+    private function buildPortalLink(string $token, array $query = []): string
     {
         $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/\\');
         if ($basePath === '.' || $basePath === '/' || $basePath === '\\') {
@@ -487,6 +835,35 @@ class ManuaisController extends BaseController
         }
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-        return $scheme . '://' . $host . $basePath . '/biblioteca/portal/' . rawurlencode($token);
+        $url = $scheme . '://' . $host . $basePath . '/biblioteca/portal/' . rawurlencode($token);
+        $query = array_filter($query, static fn($v): bool => $v !== null && $v !== '');
+        if (!empty($query)) {
+            $url .= '?' . http_build_query($query);
+        }
+        return $url;
+    }
+
+    private function normalizePortalFilters(array $filters): array
+    {
+        $departamentoId = isset($filters['departamento_id']) ? (int)$filters['departamento_id'] : 0;
+        $q = isset($filters['q']) ? trim((string)$filters['q']) : '';
+        $dataDe = isset($filters['data_de']) ? trim((string)$filters['data_de']) : '';
+        $dataAte = isset($filters['data_ate']) ? trim((string)$filters['data_ate']) : '';
+        $out = [
+            'departamento_id' => $departamentoId > 0 ? $departamentoId : null,
+            'q' => $q,
+            'data_de' => $dataDe,
+            'data_ate' => $dataAte,
+        ];
+        if ($out['data_de'] !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $out['data_de'])) {
+            $out['data_de'] = '';
+        }
+        if ($out['data_ate'] !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $out['data_ate'])) {
+            $out['data_ate'] = '';
+        }
+        if ($out['q'] !== '' && mb_strlen($out['q']) > 255) {
+            $out['q'] = mb_substr($out['q'], 0, 255);
+        }
+        return $out;
     }
 }

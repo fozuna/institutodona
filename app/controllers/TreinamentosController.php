@@ -397,19 +397,107 @@ class TreinamentosController extends BaseController
             return;
         }
         $treinamentoId = (int)($_POST['treinamento_id'] ?? 0);
+        $dataInicio = $this->normalizeDateTimeLocal((string)($_POST['data'] ?? ''));
+        $dataFim = $this->normalizeDateTimeLocal((string)($_POST['data_fim'] ?? ''));
+        if ($dataInicio === '' || $dataFim === '') {
+            http_response_code(400);
+            echo 'Data/hora inicial e final são obrigatórias.';
+            return;
+        }
+        if (strtotime($dataFim) !== false && strtotime($dataInicio) !== false && strtotime($dataFim) <= strtotime($dataInicio)) {
+            http_response_code(400);
+            echo 'Data/hora final deve ser maior que a inicial.';
+            return;
+        }
         $agendaId = $this->agendaModel->create([
             'treinamento_id' => $treinamentoId,
-            'data' => (string)($_POST['data'] ?? ''),
+            'data' => $dataInicio,
+            'data_fim' => $dataFim,
             'unidade_id' => (int)($_POST['unidade_id'] ?? 0),
             'responsavel_id' => (int)($_POST['responsavel_id'] ?? 0),
             'instrutor' => (string)($_POST['instrutor'] ?? ''),
             'local' => (string)($_POST['local'] ?? ''),
             'observacoes' => (string)($_POST['observacoes'] ?? ''),
         ]);
+        if ($agendaId <= 0) {
+            http_response_code(500);
+            echo 'Falha ao criar agendamento.';
+            return;
+        }
         $participantIds = $_POST['participante_ids'] ?? [];
         $this->agendaModel->syncParticipants($agendaId, is_array($participantIds) ? $participantIds : [$participantIds]);
         $_SESSION['flash_success'] = 'Agendamento criado com participantes iniciais.';
         $this->redirect('index.php?route=treinamentos/presenca&agenda_id=' . $agendaId);
+    }
+
+    public function updateAgenda(): void
+    {
+        $this->requireManagePermission();
+        if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+        $agendaId = (int)($_POST['agenda_id'] ?? 0);
+        $agenda = $this->agendaModel->find($agendaId);
+        if (!$agenda) {
+            http_response_code(404);
+            echo 'Agendamento não encontrado.';
+            return;
+        }
+        $dataInicio = $this->normalizeDateTimeLocal((string)($_POST['data'] ?? ''));
+        $dataFim = $this->normalizeDateTimeLocal((string)($_POST['data_fim'] ?? ''));
+        if ($dataInicio === '' || $dataFim === '') {
+            http_response_code(400);
+            echo 'Data/hora inicial e final são obrigatórias.';
+            return;
+        }
+        if (strtotime($dataFim) !== false && strtotime($dataInicio) !== false && strtotime($dataFim) <= strtotime($dataInicio)) {
+            http_response_code(400);
+            echo 'Data/hora final deve ser maior que a inicial.';
+            return;
+        }
+        $ok = $this->agendaModel->update($agendaId, [
+            'data' => $dataInicio,
+            'data_fim' => $dataFim,
+            'unidade_id' => (int)($_POST['unidade_id'] ?? 0),
+            'responsavel_id' => (int)($_POST['responsavel_id'] ?? 0),
+            'instrutor' => (string)($_POST['instrutor'] ?? ''),
+            'local' => (string)($_POST['local'] ?? ''),
+            'observacoes' => (string)($_POST['observacoes'] ?? ''),
+        ]);
+        if (!$ok) {
+            http_response_code(500);
+            echo 'Falha ao atualizar agendamento.';
+            return;
+        }
+        $_SESSION['flash_success'] = 'Agendamento atualizado com sucesso.';
+        $this->redirect('index.php?route=treinamentos/show&id=' . (int)($agenda['treinamento_id'] ?? 0));
+    }
+
+    public function deleteAgenda(): void
+    {
+        $this->requireManagePermission();
+        if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+        $agendaId = (int)($_POST['agenda_id'] ?? 0);
+        $agenda = $this->agendaModel->find($agendaId);
+        if (!$agenda) {
+            http_response_code(404);
+            echo 'Agendamento não encontrado.';
+            return;
+        }
+        $ok = $this->agendaModel->delete($agendaId);
+        if (!$ok) {
+            http_response_code(500);
+            echo 'Falha ao excluir agendamento.';
+            return;
+        }
+        $_SESSION['flash_success'] = 'Agendamento excluído com sucesso.';
+        $this->redirect('index.php?route=treinamentos/show&id=' . (int)($agenda['treinamento_id'] ?? 0));
     }
 
     public function presenca(): void
@@ -555,6 +643,7 @@ class TreinamentosController extends BaseController
         }
 
         $emitidos = 0;
+        $files = [];
         foreach ($participantIds as $colaboradorId) {
             $issued = $this->agendaModel->issueCertificate($agendaId, $colaboradorId);
             if (!$issued) {
@@ -562,10 +651,28 @@ class TreinamentosController extends BaseController
             }
             $path = $this->documents->generateCertificateFile($treinamento, $agenda, $issued);
             $this->agendaModel->updateCertificateFile($agendaId, $colaboradorId, $path);
+            if (is_file($path)) {
+                $files[] = $path;
+            }
             $emitidos++;
         }
+        if ($emitidos <= 0 || empty($files)) {
+            $_SESSION['flash_error'] = 'Nenhum certificado pôde ser emitido.';
+            $this->redirect('index.php?route=treinamentos/presenca&agenda_id=' . $agendaId);
+            return;
+        }
         $_SESSION['flash_success'] = $emitidos . ' certificado(s) emitido(s) em lote.';
-        $this->redirect('index.php?route=treinamentos/presenca&agenda_id=' . $agendaId);
+        try {
+            $zipPath = $this->buildCertificatesZip($agendaId, $files);
+            $this->sendFile($zipPath, 'application/zip', 'certificados-agenda-' . $agendaId . '.zip');
+        } catch (\Throwable $e) {
+            $first = $files[0] ?? '';
+            if ($first !== '' && is_file($first)) {
+                $this->sendFile($first, 'application/pdf', 'certificado-agenda-' . $agendaId . '.pdf');
+            }
+            http_response_code(500);
+            echo 'Falha ao preparar arquivo em lote.';
+        }
     }
 
     public function exportElegiveis(): void
@@ -1243,6 +1350,46 @@ class TreinamentosController extends BaseController
         header('Content-Disposition: attachment; filename="' . $filename . '"');
         readfile($path);
         exit;
+    }
+
+    private function normalizeDateTimeLocal(string $value): string
+    {
+        $v = trim($value);
+        if ($v === '') {
+            return '';
+        }
+        $v = str_replace('T', ' ', $v);
+        if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $v)) {
+            $v .= ':00';
+        }
+        return $v;
+    }
+
+    private function buildCertificatesZip(int $agendaId, array $paths): string
+    {
+        if (!class_exists(\ZipArchive::class)) {
+            throw new \RuntimeException('Extensão ZipArchive indisponível para gerar o arquivo em lote.');
+        }
+        $agendaId = (int)$agendaId;
+        $paths = array_values(array_unique(array_filter(array_map('strval', $paths))));
+        $baseDir = dirname(__DIR__, 2) . '/storage/pdfs/treinamentos/certificados/lote';
+        if (!is_dir($baseDir)) {
+            @mkdir($baseDir, 0775, true);
+        }
+        $zipPath = $baseDir . '/certificados-agenda-' . $agendaId . '-' . date('Ymd_His') . '.zip';
+        $zip = new \ZipArchive();
+        if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            throw new \RuntimeException('Falha ao criar ZIP de certificados.');
+        }
+        foreach ($paths as $path) {
+            if (!is_file($path)) {
+                continue;
+            }
+            $name = basename($path);
+            $zip->addFile($path, $name);
+        }
+        $zip->close();
+        return $zipPath;
     }
 
     private function isPost(): bool

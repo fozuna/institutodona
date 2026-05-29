@@ -2,6 +2,7 @@
 require __DIR__ . '/../autoload.php';
 
 use App\Database\Database;
+use App\Controllers\ManuaisController;
 use App\Models\ClienteModel;
 use App\Models\DepartamentoModel;
 use App\Models\ManualModel;
@@ -71,6 +72,33 @@ $scopeFilial = $clientes->manualPortalScopeIds($filialId);
 $countMatriz = $manuais->portalCount($scopeMatriz);
 $countFilial = $manuais->portalCount($scopeFilial);
 
+$tokenLocked = $tokens->issue($matrizId, date('Y-m-d H:i:s', strtotime('+1 day')), [$matrizId], [
+    'departamento_id' => $depMatrizId,
+    'q' => 'Manual Matriz ' . $suffix,
+]);
+$lockedRecord = $tokens->findValid($tokenLocked);
+$lockedScope = [];
+$lockedFilters = [];
+if (!empty($lockedRecord['scope_ids_json'])) {
+    $decoded = json_decode((string)$lockedRecord['scope_ids_json'], true);
+    $lockedScope = is_array($decoded) ? array_values(array_unique(array_map('intval', $decoded))) : [];
+}
+if (!empty($lockedRecord['filters_json'])) {
+    $decoded = json_decode((string)$lockedRecord['filters_json'], true);
+    $lockedFilters = is_array($decoded) ? $decoded : [];
+}
+$countLocked = $manuais->portalCount($lockedScope, $lockedFilters);
+
+$_GET = [
+    'token' => $tokenLocked,
+    'q' => 'alterado',
+];
+http_response_code(200);
+ob_start();
+(new ManuaisController())->portal();
+$portalHtml = (string)ob_get_clean();
+$portalMismatchBlocked = str_contains($portalHtml, 'Link inválido');
+
 $pdo->prepare('DELETE FROM manual_portal_tokens WHERE empresa_id = :id')->execute(['id' => $matrizId]);
 $pdo->prepare('DELETE FROM manual_portal_tokens WHERE empresa_id = :id')->execute(['id' => $filialId]);
 $pdo->prepare('DELETE FROM manuais WHERE id = :id')->execute(['id' => $manualMatriz]);
@@ -82,12 +110,18 @@ $pdo->prepare('DELETE FROM clientes WHERE id = :id')->execute(['id' => $matrizId
 
 echo json_encode([
     'valid_token_found' => !empty($validToken),
+    'locked_token_found' => !empty($lockedRecord),
+    'locked_scope_is_only_matriz' => $lockedScope === [$matrizId],
+    'locked_filters_have_dep' => (int)($lockedFilters['departamento_id'] ?? 0) === $depMatrizId,
+    'locked_filters_have_q' => (string)($lockedFilters['q'] ?? '') === ('Manual Matriz ' . $suffix),
     'matriz_scope_has_filial' => in_array($filialId, $scopeMatriz, true),
     'filial_scope_only_self' => $scopeFilial === [$filialId],
     'matriz_sees_both' => $countMatriz === 2,
     'filial_sees_one' => $countFilial === 1,
+    'locked_count_is_one' => $countLocked === 1,
+    'portal_mismatch_blocked' => $portalMismatchBlocked,
 ], JSON_UNESCAPED_UNICODE);
 
-if (empty($validToken) || !in_array($filialId, $scopeMatriz, true) || $scopeFilial !== [$filialId] || $countMatriz !== 2 || $countFilial !== 1) {
+if (empty($validToken) || empty($lockedRecord) || $lockedScope !== [$matrizId] || (int)($lockedFilters['departamento_id'] ?? 0) !== $depMatrizId || (string)($lockedFilters['q'] ?? '') !== ('Manual Matriz ' . $suffix) || !in_array($filialId, $scopeMatriz, true) || $scopeFilial !== [$filialId] || $countMatriz !== 2 || $countFilial !== 1 || $countLocked !== 1 || !$portalMismatchBlocked) {
     exit(1);
 }

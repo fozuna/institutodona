@@ -24,7 +24,7 @@
         <h2 class="text-lg font-semibold">Adicionar Participantes Pendentes</h2>
         <p class="text-sm text-gray-500">A lista pré-cadastrada controla quem pode receber certificado antecipado.</p>
       </div>
-      <form method="post" action="index.php?route=treinamentos/certificado_lote" class="flex items-center gap-2">
+      <form method="post" action="index.php?route=treinamentos/certificado_lote" class="flex items-center gap-2" target="_blank">
         <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
         <input type="hidden" name="agenda_id" value="<?= (int)$agenda['id'] ?>" />
         <button class="px-4 py-2 rounded bg-emerald-100 text-emerald-700" type="submit">Emitir Certificados em Lote</button>
