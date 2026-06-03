@@ -134,7 +134,9 @@ $indicadores = is_array($indicadores ?? null) ? $indicadores : [];
               <div class="font-semibold text-base"><?= htmlspecialchars($atingidoAtual) ?></div>
             </div>
           </div>
-          <canvas width="600" height="240" data-indicador-chart='<?= htmlspecialchars(json_encode($payload, JSON_UNESCAPED_UNICODE)) ?>'></canvas>
+          <div class="w-full overflow-hidden">
+            <canvas class="block w-full" data-indicador-chart='<?= htmlspecialchars(json_encode($payload, JSON_UNESCAPED_UNICODE)) ?>'></canvas>
+          </div>
         </div>
       <?php endforeach; ?>
     </div>
@@ -142,10 +144,28 @@ $indicadores = is_array($indicadores ?? null) ? $indicadores : [];
       (function () {
         const nf = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-        function draw(canvas, points) {
+        function prepareCanvas(canvas, logicalHeight) {
+          if (!canvas) return null;
+          const ratio = window.devicePixelRatio || 1;
+          const parent = canvas.parentElement;
+          const parentWidth = parent ? parent.clientWidth : 0;
+          const logicalWidth = Math.max(280, parentWidth || 600);
+          canvas.style.width = '100%';
+          canvas.style.height = String(logicalHeight) + 'px';
+          canvas.width = Math.round(logicalWidth * ratio);
+          canvas.height = Math.round(logicalHeight * ratio);
           const ctx = canvas.getContext('2d');
-          const width = canvas.width;
-          const height = canvas.height;
+          if (!ctx) return null;
+          ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+          return { ctx, width: logicalWidth, height: logicalHeight };
+        }
+
+        function draw(canvas, points) {
+          const prepared = prepareCanvas(canvas, 240);
+          if (!prepared) return;
+          const ctx = prepared.ctx;
+          const width = prepared.width;
+          const height = prepared.height;
           const pad = 34;
           const metas = points.map((point) => Number(point.meta || 0));
           const realizados = points.map((point) => point.achieved === null ? null : Number(point.achieved));
@@ -204,22 +224,35 @@ $indicadores = is_array($indicadores ?? null) ? $indicadores : [];
             }
           });
 
+          const legendWidth = 120;
+          const legendX = Math.max(pad + 4, width - pad - legendWidth);
+          const legendY = pad + 2;
           ctx.fillStyle = '#6b7280';
-          ctx.fillText('Meta', width - 88, pad);
+          ctx.fillText('Meta', legendX + 28, legendY);
           ctx.fillStyle = '#2563eb';
-          ctx.fillRect(width - 116, pad - 8, 18, 2);
+          ctx.fillRect(legendX, legendY - 8, 18, 2);
           ctx.fillStyle = '#6b7280';
-          ctx.fillText('Atingido', width - 88, pad + 16);
+          ctx.fillText('Atingido', legendX + 28, legendY + 16);
           ctx.fillStyle = '#dc2626';
-          ctx.fillRect(width - 116, pad + 8, 18, 2);
+          ctx.fillRect(legendX, legendY + 8, 18, 2);
         }
 
-        document.querySelectorAll('canvas[data-indicador-chart]').forEach((canvas) => {
-          try {
-            draw(canvas, JSON.parse(canvas.getAttribute('data-indicador-chart') || '[]'));
-          } catch (error) {
-            // no-op
-          }
+        function redrawVisibleCharts() {
+          document.querySelectorAll('canvas[data-indicador-chart]').forEach((canvas) => {
+            const card = canvas.closest('[data-indicador-card]');
+            if (card && card.style.display === 'none') return;
+            try {
+              draw(canvas, JSON.parse(canvas.getAttribute('data-indicador-chart') || '[]'));
+            } catch (error) {
+            }
+          });
+        }
+
+        redrawVisibleCharts();
+        let resizeTimer = null;
+        window.addEventListener('resize', () => {
+          if (resizeTimer) clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(redrawVisibleCharts, 120);
         });
 
         const wrap = document.getElementById('indicadoresChartsMultiSelect');
@@ -273,6 +306,7 @@ $indicadores = is_array($indicadores ?? null) ? $indicadores : [];
             pdfBtn.classList.toggle('opacity-75', visible === 0);
             pdfBtn.classList.toggle('cursor-not-allowed', visible === 0);
           }
+          redrawVisibleCharts();
         }
 
         if (wrap) {

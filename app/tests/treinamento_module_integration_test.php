@@ -215,10 +215,10 @@ try {
     ok('Agendamento e seleção de participantes');
 
     $issued = $agendaModel->issueCertificate($agendaId, $colaboradorId);
-    if (!$issued || empty($issued['certificado_emitido'])) {
-        failFast('Certificado deveria poder ser emitido sem confirmação prévia de presença');
+    if ($issued) {
+        failFast('Certificado não deveria ser emitido antes de concluir o treinamento');
     }
-    ok('Certificado antecipado independente da presença');
+    ok('Certificado bloqueado antes da conclusão');
 
     Auth::login([
         'id' => 9012,
@@ -229,8 +229,8 @@ try {
         'allowed_client_ids' => [$clienteBId],
     ]);
     $issuedB = $agendaModel->issueCertificate($agendaBId, $colaboradorBId);
-    if (!$issuedB || empty($issuedB['certificado_emitido'])) {
-        failFast('Certificado B deveria poder ser emitido');
+    if ($issuedB) {
+        failFast('Certificado B não deveria ser emitido antes de concluir o treinamento');
     }
     Auth::login([
         'id' => 9010,
@@ -240,12 +240,16 @@ try {
         'id_cliente' => $clienteId,
     ]);
 
-    $agendaModel->savePresence($agendaId, [$colaboradorId => 1], [$colaboradorId => '08:00'], [$colaboradorId => '12:00'], [$colaboradorId => 'Presença registrada em teste']);
+    $agendaModel->savePresence($agendaId, [$colaboradorId => 1], [$colaboradorId => '08:00'], [$colaboradorId => '16:00'], [$colaboradorId => 'Presença registrada em teste']);
     $linkedAfterPresence = $treinamentoModel->linkedColaboradores($treinamentoId, 'concluido');
     if (count($linkedAfterPresence) < 1) {
-        failFast('Presença e certificado independentes ainda deveriam concluir o vínculo');
+        failFast('Treinamento deveria ser marcado como concluído após presença e carga horária cumprida');
     }
-    ok('Presença e conclusão desacopladas');
+    $issuedAfter = $agendaModel->issueCertificate($agendaId, $colaboradorId);
+    if (!$issuedAfter || empty($issuedAfter['certificado_emitido'])) {
+        failFast('Certificado deveria ser emitido após conclusão do treinamento');
+    }
+    ok('Conclusão e emissão de certificado com requisitos');
 
     Auth::login([
         'id' => 9011,

@@ -53,6 +53,7 @@ final class TreinamentoSchema
             treinamento_id INT NOT NULL,
             colaborador_id INT NOT NULL,
             status ENUM('pendente','concluido') NOT NULL DEFAULT 'pendente',
+            status_detalhe VARCHAR(30) NULL,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             UNIQUE KEY uq_treinamento_colaborador (treinamento_id, colaborador_id),
             INDEX idx_treinamento_colaboradores_colaborador (colaborador_id),
@@ -146,6 +147,7 @@ final class TreinamentoSchema
         self::ensureColumn($db, 'treinamento_participantes', 'hora_saida', "ALTER TABLE treinamento_participantes ADD COLUMN hora_saida TIME NULL AFTER hora_entrada");
         self::ensureColumn($db, 'treinamento_participantes', 'observacao', "ALTER TABLE treinamento_participantes ADD COLUMN observacao TEXT NULL AFTER hora_saida");
         self::ensureColumn($db, 'treinamentos_agenda', 'data_fim', "ALTER TABLE treinamentos_agenda ADD COLUMN data_fim DATETIME NULL AFTER data");
+        self::ensureColumn($db, 'treinamento_colaboradores', 'status_detalhe', "ALTER TABLE treinamento_colaboradores ADD COLUMN status_detalhe VARCHAR(30) NULL AFTER status");
         self::ensureIndex($db, 'treinamentos_agenda', 'idx_treinamentos_agenda_data_fim', "ALTER TABLE treinamentos_agenda ADD INDEX idx_treinamentos_agenda_data_fim (data_fim)");
 
         self::ensureIndex($db, 'colaboradores', 'idx_colaboradores_matricula', "ALTER TABLE colaboradores ADD INDEX idx_colaboradores_matricula (matricula)");

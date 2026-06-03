@@ -246,9 +246,6 @@ class TreinamentoAgendaModel extends BaseModel
                 hora_saida = :hora_saida,
                 observacao = :observacao
             WHERE agenda_id = :agenda_id AND colaborador_id = :colaborador_id");
-        $statusUpdate = $this->db->prepare("UPDATE treinamento_colaboradores
-            SET status = :status
-            WHERE treinamento_id = :treinamento_id AND colaborador_id = :colaborador_id");
 
         foreach ($this->participants($agendaId) as $participant) {
             $colaboradorId = (int)$participant['colaborador_id'];
@@ -264,11 +261,6 @@ class TreinamentoAgendaModel extends BaseModel
                 'hora_saida' => $presenca ? $saida : null,
                 'observacao' => $observacao !== '' ? $observacao : null,
                 'agenda_id' => $agendaId,
-                'colaborador_id' => $colaboradorId,
-            ]);
-            $statusUpdate->execute([
-                'status' => ($presenca || !empty($participant['certificado_emitido'])) ? 'concluido' : 'pendente',
-                'treinamento_id' => (int)$agenda['treinamento_id'],
                 'colaborador_id' => $colaboradorId,
             ]);
             $this->audit('presenca_atualizada', [
@@ -289,6 +281,23 @@ class TreinamentoAgendaModel extends BaseModel
         $this->ensureSchema();
         $agenda = $this->find($agendaId);
         if (!$agenda) {
+            return null;
+        }
+        $treinamentoId = (int)($agenda['treinamento_id'] ?? 0);
+        if ($treinamentoId <= 0) {
+            return null;
+        }
+        $treinamentoModel = new TreinamentoModel();
+        $treinamentoModel->refreshStatuses($treinamentoId);
+        $statusRow = $this->db->prepare("SELECT status FROM treinamento_colaboradores WHERE treinamento_id = :t AND colaborador_id = :c LIMIT 1");
+        $statusRow->execute(['t' => $treinamentoId, 'c' => $colaboradorId]);
+        if ((string)($statusRow->fetchColumn() ?: '') !== 'concluido') {
+            $this->audit('certificado_bloqueado', [
+                'treinamento_id' => $treinamentoId,
+                'agenda_id' => $agendaId,
+                'colaborador_id' => $colaboradorId,
+                'motivo' => 'Treinamento não está elegível para conclusão.',
+            ]);
             return null;
         }
         $participant = $this->findParticipant($agendaId, $colaboradorId);
@@ -323,16 +332,9 @@ class TreinamentoAgendaModel extends BaseModel
         if (!$ok) {
             return null;
         }
-        $this->db->prepare("UPDATE treinamento_colaboradores
-            SET status = 'concluido'
-            WHERE treinamento_id = :treinamento_id AND colaborador_id = :colaborador_id")
-            ->execute([
-                'treinamento_id' => (int)$agenda['treinamento_id'],
-                'colaborador_id' => $colaboradorId,
-            ]);
         $participantId = (int)($participant['id'] ?? 0);
         $this->audit('certificado_emitido', [
-            'treinamento_id' => (int)$agenda['treinamento_id'],
+            'treinamento_id' => $treinamentoId,
             'agenda_id' => $agendaId,
             'participante_id' => $participantId,
             'colaborador_id' => $colaboradorId,
@@ -340,7 +342,7 @@ class TreinamentoAgendaModel extends BaseModel
             'certificado_codigo' => $codigo,
             'certificado_arquivo' => $arquivo,
         ]);
-        (new TreinamentoModel())->refreshStatuses((int)$agenda['treinamento_id']);
+        $treinamentoModel->refreshStatuses($treinamentoId);
         return $this->findParticipant($agendaId, $colaboradorId);
     }
 

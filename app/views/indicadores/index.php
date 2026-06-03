@@ -9,6 +9,7 @@ $formatValue = static function ($value, array $item): string {
 $q = $q ?? '';
 $dateStart = $dateStart ?? '';
 $dateEnd = $dateEnd ?? '';
+$viewMode = $viewMode ?? 'cards';
 ?>
 <div class="p-4 md:p-6 space-y-6" data-disable-icon-only="1">
   <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
@@ -21,6 +22,17 @@ $dateEnd = $dateEnd ?? '';
         <span data-feather="plus"></span>
         <?= htmlspecialchars($t('indicadores.action.new')) ?>
       </a>
+      <button
+        type="button"
+        id="indicadoresViewToggle"
+        class="px-4 py-3 rounded-lg bg-white border border-gray-200 text-brand-brown text-center btn-with-icon"
+        aria-label="Alternar visualização"
+        title="Alternar visualização"
+      >
+        <span data-feather="list" data-view-icon="list" class="<?= $viewMode === 'list' ? 'hidden' : '' ?>"></span>
+        <span data-feather="grid" data-view-icon="cards" class="<?= $viewMode === 'cards' ? 'hidden' : '' ?>"></span>
+        <span class="hidden sm:inline">Visualização</span>
+      </button>
       <a class="px-4 py-3 rounded-lg bg-gray-200 text-brand-brown text-center btn-with-icon" href="javascript:history.back()" aria-label="<?= htmlspecialchars($t('indicadores.action.back')) ?>" title="<?= htmlspecialchars($t('indicadores.action.back')) ?>">
         <span data-feather="arrow-left"></span>
         <?= htmlspecialchars($t('indicadores.action.back')) ?>
@@ -33,6 +45,7 @@ $dateEnd = $dateEnd ?? '';
     <input type="hidden" id="indicadoresInlineCsrf" value="<?= \App\Core\Security::csrfToken() ?>" />
     <form method="get" action="index.php" class="grid grid-cols-1 xl:grid-cols-12 gap-4" id="indicadoresFiltersForm">
       <input type="hidden" name="route" value="indicadores/index" />
+      <input type="hidden" name="view" value="<?= htmlspecialchars($viewMode) ?>" id="indicadoresViewInput" />
       <div class="xl:col-span-5">
         <label class="block text-sm font-medium text-gray-700 mb-1"><?= htmlspecialchars($t('indicadores.label.cliente')) ?></label>
         <select name="cliente" class="border border-gray-300 rounded-lg p-3 w-full" id="indicadoresClienteSelect">
@@ -111,6 +124,8 @@ $dateEnd = $dateEnd ?? '';
     const errBox = document.getElementById('indicadoresFilterError');
     const loading = document.getElementById('indicadoresLoading');
     const csrf = document.getElementById('indicadoresInlineCsrf');
+    const viewInput = document.getElementById('indicadoresViewInput');
+    const viewToggle = document.getElementById('indicadoresViewToggle');
     const clienteSelect = document.getElementById('indicadoresClienteSelect');
     const nameInput = document.getElementById('indicadoresNameInput');
     const dateStart = document.getElementById('indicadoresDateStart');
@@ -150,6 +165,27 @@ $dateEnd = $dateEnd ?? '';
       const url = new URL(window.location.href);
       url.search = params.toString();
       window.history.replaceState({}, '', url.toString());
+    };
+
+    const getViewMode = () => {
+      const raw = viewInput ? String(viewInput.value || '').toLowerCase() : '';
+      return (raw === 'list' || raw === 'cards') ? raw : 'cards';
+    };
+    const setViewMode = (mode) => {
+      if (!viewInput) return;
+      const next = (mode === 'list') ? 'list' : 'cards';
+      viewInput.value = next;
+      try { window.localStorage.setItem('indicadores_view_mode', next); } catch (e) {}
+      if (viewToggle) {
+        const iconList = viewToggle.querySelector('[data-view-icon="list"]');
+        const iconCards = viewToggle.querySelector('[data-view-icon="cards"]');
+        if (iconList) iconList.classList.toggle('hidden', next === 'list');
+        if (iconCards) iconCards.classList.toggle('hidden', next === 'cards');
+        viewToggle.setAttribute('aria-pressed', next === 'list' ? 'true' : 'false');
+      }
+      if (window.feather && typeof window.feather.replace === 'function') {
+        window.feather.replace();
+      }
     };
 
     const doSearch = async () => {
@@ -222,6 +258,13 @@ $dateEnd = $dateEnd ?? '';
     if (form) {
       form.addEventListener('submit', (e) => {
         e.preventDefault();
+        doSearch();
+      });
+    }
+    if (viewToggle) {
+      viewToggle.addEventListener('click', () => {
+        const cur = getViewMode();
+        setViewMode(cur === 'list' ? 'cards' : 'list');
         doSearch();
       });
     }
@@ -450,6 +493,17 @@ $dateEnd = $dateEnd ?? '';
         if (!input) return;
         input.value = normalizeDecimal(input.value);
       }, true);
+    }
+
+    if (viewInput && !viewInput.value) {
+      try {
+        const stored = String(window.localStorage.getItem('indicadores_view_mode') || '').toLowerCase();
+        if (stored === 'list' || stored === 'cards') {
+          setViewMode(stored);
+        }
+      } catch (e) {}
+    } else {
+      setViewMode(getViewMode());
     }
   })();
 </script>

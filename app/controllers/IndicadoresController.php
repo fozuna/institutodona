@@ -46,6 +46,8 @@ class IndicadoresController extends BaseController
         $q = trim((string)($_GET['q'] ?? ''));
         $dateStart = trim((string)($_GET['date_start'] ?? ''));
         $dateEnd = trim((string)($_GET['date_end'] ?? ''));
+        $view = strtolower(trim((string)($_GET['view'] ?? '')));
+        $viewMode = in_array($view, ['cards', 'list'], true) ? $view : 'cards';
 
         if ($dateStart !== '' && $dateEnd !== '' && $dateEnd < $dateStart) {
             if ($this->isAjaxRequest()) {
@@ -87,6 +89,7 @@ class IndicadoresController extends BaseController
             'q' => $q,
             'dateStart' => $dateStart,
             'dateEnd' => $dateEnd,
+            'viewMode' => $viewMode,
             'i18n' => I18n::class,
         ]);
     }
@@ -516,7 +519,12 @@ class IndicadoresController extends BaseController
 
     public function updateRealizado(): void
     {
-        $this->requireRole('instituto');
+        $this->requireLogin();
+        if (!(Auth::isInstituto() || Auth::isClienteAdmin())) {
+            http_response_code(403);
+            $_SESSION['flash_error'] = 'Sem permissão para lançar valores.';
+            $this->redirect('index.php?route=indicadores/index');
+        }
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) {
             http_response_code(400);
@@ -531,6 +539,11 @@ class IndicadoresController extends BaseController
         if (($periodoInicio === '') xor ($periodoFim === '')) {
             $periodoInicio = '';
             $periodoFim = '';
+        }
+        if ($cliente > 0 && !Auth::canAccessCliente($cliente)) {
+            http_response_code(403);
+            $_SESSION['flash_error'] = 'Sem permissão para este cliente.';
+            $this->redirect('index.php?route=indicadores/index');
         }
         $redirect = 'index.php?route=indicadores/realizado&cliente=' . $cliente
             . ($indicadorId > 0 ? '&indicador_id=' . $indicadorId : '')
@@ -725,6 +738,18 @@ class IndicadoresController extends BaseController
             echo json_encode(['ok' => false, 'message' => PdfSupport::missingDompdfMessage(), 'code' => $errorId], JSON_UNESCAPED_UNICODE);
             return;
         }
+        if (!extension_loaded('gd')) {
+            $errorId = PdfSupport::newErrorId();
+            AuditLogger::log('pdf_unavailable', 'indicadores', null, [
+                'error_id' => $errorId,
+                'route' => 'indicadores/chartsPdf',
+                'reason' => 'gd_missing',
+            ]);
+            http_response_code(503);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => 'O servidor não possui a extensão GD habilitada para gerar PDFs com gráficos. Contate o suporte.', 'code' => $errorId], JSON_UNESCAPED_UNICODE);
+            return;
+        }
 
         $clienteId = (int)($this->resolveScopedClienteId((int)($_POST['cliente_id'] ?? 0)) ?? 0);
         $clienteNome = trim((string)($_POST['cliente_nome'] ?? ''));
@@ -733,12 +758,6 @@ class IndicadoresController extends BaseController
             http_response_code(422);
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode(['ok' => false, 'message' => 'Nenhum gráfico selecionado para exportação.'], JSON_UNESCAPED_UNICODE);
-            return;
-        }
-        if (count($payload) > 12) {
-            http_response_code(422);
-            header('Content-Type: application/json; charset=utf-8');
-            echo json_encode(['ok' => false, 'message' => 'Selecione no máximo 12 gráficos para exportação.'], JSON_UNESCAPED_UNICODE);
             return;
         }
 
@@ -760,10 +779,10 @@ class IndicadoresController extends BaseController
                 return;
             }
             $totalBytes += strlen($decoded);
-            if ($totalBytes > (8 * 1024 * 1024)) {
+            if ($totalBytes > (64 * 1024 * 1024)) {
                 http_response_code(422);
                 header('Content-Type: application/json; charset=utf-8');
-                echo json_encode(['ok' => false, 'message' => 'Exportação muito grande. Reduza a quantidade de gráficos.'], JSON_UNESCAPED_UNICODE);
+                echo json_encode(['ok' => false, 'message' => 'Exportação muito grande. Reduza a quantidade de gráficos ou exporte em etapas.'], JSON_UNESCAPED_UNICODE);
                 return;
             }
         }
@@ -773,12 +792,16 @@ class IndicadoresController extends BaseController
 
         $html = '<!doctype html><html><head><meta charset="utf-8" />'
             . '<style>
+              @page { size: A4 landscape; margin: 12mm; }
+              * { box-sizing: border-box; }
               body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 12px; color: #111827; }
-              .header { margin-bottom: 14px; }
+              .page-break { page-break-after: always; }
+              .header { margin-bottom: 12px; }
               .title { font-size: 18px; font-weight: 700; margin: 0 0 4px 0; }
               .subtitle { font-size: 12px; color: #6b7280; margin: 0; }
-              .grid { width: 100%; }
-              .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; margin: 0 0 12px 0; }
+              table.grid { width: 100%; border-collapse: separate; border-spacing: 10px; }
+              table.grid td { width: 50%; vertical-align: top; }
+              .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; page-break-inside: avoid; }
               .card h2 { font-size: 14px; margin: 0 0 6px 0; }
               .meta { color: #374151; font-size: 11px; margin: 0 0 8px 0; }
               .kv { font-size: 11px; color: #374151; margin: 0 0 6px 0; }
@@ -786,24 +809,64 @@ class IndicadoresController extends BaseController
               img { width: 100%; height: auto; }
             </style></head><body>';
 
-        $html .= '<div class="header">'
-            . '<div class="title">Gráficos de Indicadores</div>'
-            . '<p class="subtitle">Cliente: ' . ($safeCliente !== '' ? $safeCliente : '—') . ' · Gerado em: ' . htmlspecialchars($generatedAt) . '</p>'
-            . '</div>';
-
-        foreach ($payload as $chart) {
-            $titulo = htmlspecialchars((string)($chart['title'] ?? 'Indicador'));
-            $trend = htmlspecialchars((string)($chart['trend'] ?? ''));
-            $meta = htmlspecialchars((string)($chart['meta'] ?? '—'));
-            $ach = htmlspecialchars((string)($chart['achieved'] ?? '—'));
-            $img = (string)($chart['image'] ?? '');
-
-            $html .= '<div class="card">'
-                . '<h2>' . $titulo . '</h2>'
-                . ($trend !== '' ? '<div class="meta">' . $trend . '</div>' : '')
-                . '<div class="kv"><strong>Meta:</strong> ' . $meta . ' &nbsp;&nbsp; <strong>Atingido:</strong> ' . $ach . '</div>'
-                . '<img src="' . $img . '" alt="" />'
+        $perPage = 4;
+        $pages = array_chunk($payload, $perPage);
+        $totalPages = max(1, count($pages));
+        foreach ($pages as $pageIndex => $pageCharts) {
+            if ($pageIndex > 0) {
+                $html .= '<div class="page-break"></div>';
+            }
+            $html .= '<div class="header">'
+                . '<div class="title">Gráficos de Indicadores</div>'
+                . '<p class="subtitle">Cliente: ' . ($safeCliente !== '' ? $safeCliente : '—')
+                . ' · Gerado em: ' . htmlspecialchars($generatedAt)
+                . ' · Página ' . ($pageIndex + 1) . ' de ' . $totalPages
+                . '</p>'
                 . '</div>';
+
+            $html .= '<table class="grid"><tbody>';
+            $row = [];
+            foreach ($pageCharts as $chart) {
+                $row[] = $chart;
+                if (count($row) === 2) {
+                    $html .= '<tr>';
+                    foreach ($row as $cell) {
+                        $titulo = htmlspecialchars((string)($cell['title'] ?? 'Indicador'));
+                        $trend = htmlspecialchars((string)($cell['trend'] ?? ''));
+                        $meta = htmlspecialchars((string)($cell['meta'] ?? '—'));
+                        $ach = htmlspecialchars((string)($cell['achieved'] ?? '—'));
+                        $img = (string)($cell['image'] ?? '');
+
+                        $html .= '<td><div class="card">'
+                            . '<h2>' . $titulo . '</h2>'
+                            . ($trend !== '' ? '<div class="meta">' . $trend . '</div>' : '')
+                            . '<div class="kv"><strong>Meta:</strong> ' . $meta . ' &nbsp;&nbsp; <strong>Atingido:</strong> ' . $ach . '</div>'
+                            . '<img src="' . $img . '" alt="" />'
+                            . '</div></td>';
+                    }
+                    $html .= '</tr>';
+                    $row = [];
+                }
+            }
+            if (!empty($row)) {
+                $html .= '<tr>';
+                foreach ($row as $cell) {
+                    $titulo = htmlspecialchars((string)($cell['title'] ?? 'Indicador'));
+                    $trend = htmlspecialchars((string)($cell['trend'] ?? ''));
+                    $meta = htmlspecialchars((string)($cell['meta'] ?? '—'));
+                    $ach = htmlspecialchars((string)($cell['achieved'] ?? '—'));
+                    $img = (string)($cell['image'] ?? '');
+
+                    $html .= '<td><div class="card">'
+                        . '<h2>' . $titulo . '</h2>'
+                        . ($trend !== '' ? '<div class="meta">' . $trend . '</div>' : '')
+                        . '<div class="kv"><strong>Meta:</strong> ' . $meta . ' &nbsp;&nbsp; <strong>Atingido:</strong> ' . $ach . '</div>'
+                        . '<img src="' . $img . '" alt="" />'
+                        . '</div></td>';
+                }
+                $html .= '<td></td></tr>';
+            }
+            $html .= '</tbody></table>';
         }
         $html .= '</body></html>';
 
@@ -812,8 +875,22 @@ class IndicadoresController extends BaseController
         $options->set('isPhpEnabled', false);
         $dompdf = new \Dompdf\Dompdf($options);
         $dompdf->setPaper('A4', 'landscape');
-        $dompdf->loadHtml($html, 'UTF-8');
-        $dompdf->render();
+        try {
+            $dompdf->loadHtml($html, 'UTF-8');
+            $dompdf->render();
+        } catch (\Throwable $e) {
+            $errorId = PdfSupport::newErrorId();
+            AuditLogger::log('pdf_export_failed', 'indicadores', null, [
+                'error_id' => $errorId,
+                'route' => 'indicadores/chartsPdf',
+                'reason' => 'render_exception',
+                'message' => $e->getMessage(),
+            ]);
+            http_response_code(500);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => 'Não foi possível gerar o PDF agora. Código: ' . $errorId], JSON_UNESCAPED_UNICODE);
+            return;
+        }
 
         AuditLogger::log('pdf_export', 'indicadores', null, [
             'via' => 'charts',

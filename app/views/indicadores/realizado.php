@@ -11,8 +11,9 @@ $periodoInicio = (string)($periodoInicio ?? '');
 $periodoFim = (string)($periodoFim ?? '');
 $indicadores = is_array($indicadores ?? null) ? $indicadores : [];
 $renderOnlyTable = (bool)($renderOnlyTable ?? false);
+$canEdit = \App\Core\Auth::isInstituto() || \App\Core\Auth::isClienteAdmin();
 
-$renderTable = static function (array $items, int $cliente, int $indicadorId, string $periodoInicio, string $periodoFim, callable $t, callable $formatValue): void {
+$renderTable = static function (array $items, int $cliente, int $indicadorId, string $periodoInicio, string $periodoFim, bool $canEdit, callable $t, callable $formatValue): void {
     if (empty($items)) {
         echo '<div class="bg-white shadow rounded-xl p-6 text-sm text-gray-600">' . htmlspecialchars($t('indicadores.empty.value')) . '</div>';
         return;
@@ -45,23 +46,30 @@ $renderTable = static function (array $items, int $cliente, int $indicadorId, st
                 </td>
                 <td class="p-3 align-top"><?= htmlspecialchars($formatValue($item['valor_meta'], $item)) ?></td>
                 <td class="p-3 align-top">
-                  <form method="post" action="index.php?route=indicadores/updateRealizado" class="flex flex-col gap-2 max-w-xs">
-                    <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
-                    <input type="hidden" name="evento_id" value="<?= (int)$item['id'] ?>" />
-                    <input type="hidden" name="cliente" value="<?= (int)$cliente ?>" />
-                    <input type="hidden" name="indicador_id" value="<?= (int)$indicadorId ?>" />
-                    <input type="hidden" name="periodo_inicio" value="<?= htmlspecialchars($periodoInicio) ?>" />
-                    <input type="hidden" name="periodo_fim" value="<?= htmlspecialchars($periodoFim) ?>" />
-                    <input type="text"
-                           inputmode="decimal"
-                           pattern="^-?(?:\\d+|\\d{1,3}(?:\\.\\d{3})+)(?:,\\d{1,4})?$"
-                           name="valor"
-                           data-indicador-decimal
-                           class="border border-gray-300 rounded-lg p-2 w-full"
-                           value="<?= $item['valor_atingido'] !== null ? htmlspecialchars(\App\Core\ValueFormatter::decimal($item['valor_atingido'], 2)) : '' ?>"
-                           required />
-                    <button class="px-4 py-2 rounded-lg bg-brand-red text-white" type="submit"><?= htmlspecialchars($t('indicadores.action.save')) ?></button>
-                  </form>
+                  <?php if ($canEdit): ?>
+                    <form method="post" action="index.php?route=indicadores/updateRealizado" class="flex flex-col gap-2 max-w-xs">
+                      <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+                      <input type="hidden" name="evento_id" value="<?= (int)$item['id'] ?>" />
+                      <input type="hidden" name="cliente" value="<?= (int)$cliente ?>" />
+                      <input type="hidden" name="indicador_id" value="<?= (int)$indicadorId ?>" />
+                      <input type="hidden" name="periodo_inicio" value="<?= htmlspecialchars($periodoInicio) ?>" />
+                      <input type="hidden" name="periodo_fim" value="<?= htmlspecialchars($periodoFim) ?>" />
+                      <input type="text"
+                             inputmode="decimal"
+                             pattern="^-?(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d{1,4})?$"
+                             name="valor"
+                             data-indicador-decimal
+                             data-unidade-tipo="<?= htmlspecialchars((string)($item['unidade_tipo'] ?? '')) ?>"
+                             class="border border-gray-300 rounded-lg p-2 w-full"
+                             value="<?= $item['valor_atingido'] !== null ? htmlspecialchars(\App\Core\ValueFormatter::decimal($item['valor_atingido'], 2)) : '' ?>"
+                             required />
+                      <button class="px-4 py-2 rounded-lg bg-brand-red text-white" type="submit"><?= htmlspecialchars($t('indicadores.action.save')) ?></button>
+                    </form>
+                  <?php else: ?>
+                    <div class="text-sm text-gray-600 select-text">
+                      <?= $item['valor_atingido'] !== null ? htmlspecialchars($formatValue($item['valor_atingido'], $item)) : '—' ?>
+                    </div>
+                  <?php endif; ?>
                 </td>
                 <td class="p-3 align-top"><?= $item['percentual_cumprimento'] !== null ? htmlspecialchars(\App\Core\ValueFormatter::percent($item['percentual_cumprimento'])) : '—' ?></td>
                 <td class="p-3 align-top">
@@ -85,7 +93,7 @@ $renderTable = static function (array $items, int $cliente, int $indicadorId, st
 ?>
 
 <?php if ($renderOnlyTable): ?>
-  <?php $renderTable($items, (int)$cliente, $indicadorId, $periodoInicio, $periodoFim, $t, $formatValue); ?>
+  <?php $renderTable($items, (int)$cliente, $indicadorId, $periodoInicio, $periodoFim, $canEdit, $t, $formatValue); ?>
   <?php return; ?>
 <?php endif; ?>
 
@@ -150,7 +158,7 @@ $renderTable = static function (array $items, int $cliente, int $indicadorId, st
     <div class="bg-white shadow rounded-xl p-6 text-sm text-gray-600"><?= htmlspecialchars($t('indicadores.empty.client')) ?></div>
   <?php else: ?>
     <div id="indicadoresRealizadoList">
-      <?php $renderTable($items, (int)$cliente, $indicadorId, $periodoInicio, $periodoFim, $t, $formatValue); ?>
+      <?php $renderTable($items, (int)$cliente, $indicadorId, $periodoInicio, $periodoFim, $canEdit, $t, $formatValue); ?>
     </div>
   <?php endif; ?>
 </div>
@@ -189,10 +197,31 @@ $renderTable = static function (array $items, int $cliente, int $indicadorId, st
         const parts = raw.split(',');
         this.value = parts.length > 2 ? (parts[0] + ',' + parts.slice(1).join('')) : raw;
       });
-      input.form?.addEventListener('submit', function () {
+      input.form?.addEventListener('submit', function (e) {
         const normalized = normalizeDecimal(input.value);
         if (!normalized) {
+          if (e && typeof e.preventDefault === 'function') e.preventDefault();
           alert('Informe um valor válido. Use apenas números e, se necessário, uma vírgula para decimais.');
+          input.focus();
+          return;
+        }
+        const tipo = String(input.getAttribute('data-unidade-tipo') || '').toLowerCase();
+        const numeric = Number(normalized.replace(',', '.'));
+        if (!Number.isFinite(numeric)) {
+          if (e && typeof e.preventDefault === 'function') e.preventDefault();
+          alert('Informe um valor válido.');
+          input.focus();
+          return;
+        }
+        if (tipo === 'inteiro' && Math.floor(numeric) !== numeric) {
+          if (e && typeof e.preventDefault === 'function') e.preventDefault();
+          alert('Este indicador aceita apenas números inteiros.');
+          input.focus();
+          return;
+        }
+        if (tipo === 'percentual' && (numeric < 0 || numeric > 100)) {
+          if (e && typeof e.preventDefault === 'function') e.preventDefault();
+          alert('Percentual deve estar entre 0 e 100.');
           input.focus();
           return;
         }

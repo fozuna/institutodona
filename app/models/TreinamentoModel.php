@@ -399,38 +399,300 @@ class TreinamentoModel extends BaseModel
     {
         $this->ensureSchema();
         $params = [];
-        $sql = "SELECT tc.id, tc.treinamento_id, t.periodicidade,
-                       (
-                           SELECT MAX(ta.data)
-                           FROM treinamento_participantes tp
-                           JOIN treinamentos_agenda ta ON ta.id = tp.agenda_id
-                           WHERE tp.colaborador_id = tc.colaborador_id
-                             AND ta.treinamento_id = tc.treinamento_id
-                             AND (tp.presenca = 1 OR tp.certificado_emitido = 1)
-                       ) AS ultima_conclusao
+        $sql = "SELECT
+                    tc.id,
+                    tc.treinamento_id,
+                    tc.colaborador_id,
+                    tc.status AS status_atual,
+                    tc.status_detalhe AS status_detalhe_atual,
+                    t.periodicidade,
+                    t.carga_horaria,
+                    COUNT(ta.id) AS total_agendas_unidade,
+                    SUM(CASE WHEN ta.id IS NOT NULL AND COALESCE(ta.data_fim, ta.data) <= NOW() THEN 1 ELSE 0 END) AS total_agendas_encerradas,
+                    SUM(CASE WHEN ta.id IS NOT NULL AND COALESCE(ta.data_fim, ta.data) > NOW() THEN 1 ELSE 0 END) AS total_agendas_futuras,
+                    SUM(CASE WHEN ta.id IS NOT NULL AND COALESCE(ta.data_fim, ta.data) <= NOW()
+                              AND (tp.presenca = 0 AND tp.certificado_emitido = 0)
+                             THEN 1 ELSE 0 END) AS pendencias_encerradas,
+                    SUM(CASE WHEN ta.id IS NOT NULL
+                              AND (tp.presenca = 1 OR tp.certificado_emitido = 1)
+                              AND COALESCE(ta.data_fim, ta.data) <= NOW()
+                             THEN 1 ELSE 0 END) AS agendas_com_presenca,
+                    MAX(CASE WHEN ta.id IS NOT NULL AND (tp.presenca = 1 OR tp.certificado_emitido = 1) THEN ta.data ELSE NULL END) AS ultima_conclusao,
+                    COALESCE(SUM(CASE
+                        WHEN ta.id IS NOT NULL
+                         AND tp.presenca = 1
+                         AND tp.hora_entrada IS NOT NULL
+                         AND tp.hora_saida IS NOT NULL
+                        THEN GREATEST(0, TIMESTAMPDIFF(
+                            MINUTE,
+                            CONCAT(DATE(ta.data), ' ', tp.hora_entrada),
+                            CONCAT(DATE(COALESCE(ta.data_fim, ta.data)), ' ', tp.hora_saida)
+                        ))
+                        WHEN ta.id IS NOT NULL
+                         AND tp.presenca = 1
+                         AND ta.data_fim IS NOT NULL
+                        THEN GREATEST(0, TIMESTAMPDIFF(MINUTE, ta.data, ta.data_fim))
+                        ELSE 0 END), 0) AS minutos_presenca,
+                    SUM(CASE
+                        WHEN ta.id IS NOT NULL
+                         AND tp.presenca = 1
+                         AND tp.hora_entrada IS NULL
+                         AND tp.hora_saida IS NULL
+                         AND ta.data_fim IS NULL
+                        THEN 1 ELSE 0 END) AS minutos_desconhecidos
                 FROM treinamento_colaboradores tc
                 JOIN treinamentos t ON t.id = tc.treinamento_id
+                JOIN colaboradores col ON col.id = tc.colaborador_id
+                LEFT JOIN treinamento_participantes tp
+                  ON tp.colaborador_id = tc.colaborador_id
+                LEFT JOIN treinamentos_agenda ta
+                  ON ta.id = tp.agenda_id
+                 AND ta.treinamento_id = tc.treinamento_id
                 WHERE 1=1";
         if ($treinamentoId) {
             $sql .= " AND tc.treinamento_id = :treinamento_id";
             $params['treinamento_id'] = $treinamentoId;
         }
+        $sql .= " GROUP BY tc.id, tc.treinamento_id, tc.colaborador_id, tc.status, tc.status_detalhe, t.periodicidade, t.carga_horaria";
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll() ?: [];
-        $update = $this->db->prepare("UPDATE treinamento_colaboradores SET status = :status WHERE id = :id");
+
+        $update = $this->db->prepare("UPDATE treinamento_colaboradores
+            SET status = :status,
+                status_detalhe = :status_detalhe
+            WHERE id = :id");
+
         $today = strtotime(date('Y-m-d'));
         foreach ($rows as $row) {
-            $status = 'pendente';
+            $computed = $this->computeStatusFromSummaryRow($row, $today);
+            $currentStatus = (string)($row['status_atual'] ?? '');
+            $currentDetail = (string)($row['status_detalhe_atual'] ?? '');
+            if ($currentStatus === $computed['status'] && $currentDetail === $computed['status_detalhe']) {
+                continue;
+            }
+            $update->execute([
+                'id' => (int)$row['id'],
+                'status' => $computed['status'],
+                'status_detalhe' => $computed['status_detalhe'] !== '' ? $computed['status_detalhe'] : null,
+            ]);
+        }
+    }
+
+    private function computeStatusFromSummaryRow(array $row, int $todayTs): array
+    {
+        $totalAgendas = (int)($row['total_agendas_unidade'] ?? 0);
+        $future = (int)($row['total_agendas_futuras'] ?? 0);
+        $pendingPast = (int)($row['pendencias_encerradas'] ?? 0);
+        $attended = (int)($row['agendas_com_presenca'] ?? 0);
+        $minutes = (int)($row['minutos_presenca'] ?? 0);
+        $unknownMinutes = (int)($row['minutos_desconhecidos'] ?? 0);
+        $carga = $row['carga_horaria'] !== null ? (float)$row['carga_horaria'] : 0.0;
+        $requiredMinutes = $carga > 0 ? (int)round($carga * 60) : 0;
+
+        $detail = 'pendente_inicio';
+        if ($totalAgendas > 0) {
+            if ($attended > 0) {
+                $detail = 'em_andamento';
+            }
+            if ($pendingPast > 0) {
+                $detail = 'interrompido';
+            }
+        }
+
+        $eligibleByAgenda = $totalAgendas > 0 && $future === 0 && $pendingPast === 0 && $attended > 0;
+        $eligibleByHours = true;
+        if ($requiredMinutes > 0) {
+            $eligibleByHours = $unknownMinutes === 0 && $minutes >= $requiredMinutes;
+        }
+        $eligible = $eligibleByAgenda && $eligibleByHours;
+
+        if ($eligible) {
             $last = !empty($row['ultima_conclusao']) ? strtotime((string)$row['ultima_conclusao']) : null;
-            if ($last) {
-                $days = self::periodicidadeDias($row['periodicidade'] ?? null);
-                if ($days === null || strtotime('+' . $days . ' days', $last) >= $today) {
-                    $status = 'concluido';
+            $days = self::periodicidadeDias($row['periodicidade'] ?? null);
+            if ($days !== null && $last) {
+                if (strtotime('+' . $days . ' days', $last) < $todayTs) {
+                    return ['status' => 'pendente', 'status_detalhe' => 'interrompido'];
                 }
             }
-            $update->execute(['status' => $status, 'id' => (int)$row['id']]);
+            return ['status' => 'concluido', 'status_detalhe' => 'concluido'];
         }
+        return ['status' => 'pendente', 'status_detalhe' => $detail];
+    }
+
+    public function reconcileStatuses(bool $apply = true, ?int $treinamentoId = null): array
+    {
+        $this->ensureSchema();
+        $params = [];
+        $sql = "SELECT
+                    tc.id,
+                    tc.treinamento_id,
+                    tc.colaborador_id,
+                    tc.status AS status_atual,
+                    tc.status_detalhe AS status_detalhe_atual,
+                    t.nome AS treinamento_nome,
+                    t.periodicidade,
+                    t.carga_horaria,
+                    col.nome AS colaborador_nome,
+                    col.email AS colaborador_email,
+                    COUNT(ta.id) AS total_agendas_unidade,
+                    SUM(CASE WHEN ta.id IS NOT NULL AND COALESCE(ta.data_fim, ta.data) <= NOW() THEN 1 ELSE 0 END) AS total_agendas_encerradas,
+                    SUM(CASE WHEN ta.id IS NOT NULL AND COALESCE(ta.data_fim, ta.data) > NOW() THEN 1 ELSE 0 END) AS total_agendas_futuras,
+                    SUM(CASE WHEN ta.id IS NOT NULL AND COALESCE(ta.data_fim, ta.data) <= NOW()
+                              AND (tp.presenca = 0 AND tp.certificado_emitido = 0)
+                             THEN 1 ELSE 0 END) AS pendencias_encerradas,
+                    SUM(CASE WHEN ta.id IS NOT NULL
+                              AND (tp.presenca = 1 OR tp.certificado_emitido = 1)
+                              AND COALESCE(ta.data_fim, ta.data) <= NOW()
+                             THEN 1 ELSE 0 END) AS agendas_com_presenca,
+                    MAX(CASE WHEN ta.id IS NOT NULL AND (tp.presenca = 1 OR tp.certificado_emitido = 1) THEN ta.data ELSE NULL END) AS ultima_conclusao,
+                    COALESCE(SUM(CASE
+                        WHEN ta.id IS NOT NULL
+                         AND tp.presenca = 1
+                         AND tp.hora_entrada IS NOT NULL
+                         AND tp.hora_saida IS NOT NULL
+                        THEN GREATEST(0, TIMESTAMPDIFF(
+                            MINUTE,
+                            CONCAT(DATE(ta.data), ' ', tp.hora_entrada),
+                            CONCAT(DATE(COALESCE(ta.data_fim, ta.data)), ' ', tp.hora_saida)
+                        ))
+                        WHEN ta.id IS NOT NULL
+                         AND tp.presenca = 1
+                         AND ta.data_fim IS NOT NULL
+                        THEN GREATEST(0, TIMESTAMPDIFF(MINUTE, ta.data, ta.data_fim))
+                        ELSE 0 END), 0) AS minutos_presenca,
+                    SUM(CASE
+                        WHEN ta.id IS NOT NULL
+                         AND tp.presenca = 1
+                         AND tp.hora_entrada IS NULL
+                         AND tp.hora_saida IS NULL
+                         AND ta.data_fim IS NULL
+                        THEN 1 ELSE 0 END) AS minutos_desconhecidos
+                FROM treinamento_colaboradores tc
+                JOIN treinamentos t ON t.id = tc.treinamento_id
+                JOIN colaboradores col ON col.id = tc.colaborador_id
+                LEFT JOIN treinamento_participantes tp
+                  ON tp.colaborador_id = tc.colaborador_id
+                LEFT JOIN treinamentos_agenda ta
+                  ON ta.id = tp.agenda_id
+                 AND ta.treinamento_id = tc.treinamento_id
+                WHERE 1=1";
+        if ($treinamentoId) {
+            $sql .= " AND tc.treinamento_id = :treinamento_id";
+            $params['treinamento_id'] = $treinamentoId;
+        }
+        $scope = $this->tenantInCondition('col.cliente_id', $params, 'trrecon');
+        if ($scope !== '1=1') {
+            $sql .= " AND {$scope}";
+        }
+        $sql .= " GROUP BY
+                    tc.id, tc.treinamento_id, tc.colaborador_id, tc.status, tc.status_detalhe,
+                    t.nome, t.periodicidade, t.carga_horaria,
+                    col.nome, col.email
+                  ORDER BY tc.treinamento_id, tc.colaborador_id";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll() ?: [];
+
+        $today = strtotime(date('Y-m-d'));
+        $changes = [];
+        foreach ($rows as $row) {
+            $computed = $this->computeStatusFromSummaryRow($row, $today);
+            $currentStatus = (string)($row['status_atual'] ?? '');
+            $currentDetail = (string)($row['status_detalhe_atual'] ?? '');
+            if ($currentStatus === $computed['status'] && $currentDetail === $computed['status_detalhe']) {
+                continue;
+            }
+            $carga = $row['carga_horaria'] !== null ? (float)$row['carga_horaria'] : 0.0;
+            $requiredMinutes = $carga > 0 ? (int)round($carga * 60) : 0;
+            $changes[] = [
+                'tc_id' => (int)$row['id'],
+                'treinamento_id' => (int)$row['treinamento_id'],
+                'treinamento_nome' => (string)($row['treinamento_nome'] ?? ''),
+                'colaborador_id' => (int)$row['colaborador_id'],
+                'colaborador_nome' => (string)($row['colaborador_nome'] ?? ''),
+                'colaborador_email' => (string)($row['colaborador_email'] ?? ''),
+                'status_atual' => $currentStatus,
+                'status_detalhe_atual' => $currentDetail,
+                'status_esperado' => $computed['status'],
+                'status_detalhe_esperado' => $computed['status_detalhe'],
+                'evidencias' => [
+                    'total_agendas_unidade' => (int)($row['total_agendas_unidade'] ?? 0),
+                    'agendas_encerradas' => (int)($row['total_agendas_encerradas'] ?? 0),
+                    'agendas_futuras' => (int)($row['total_agendas_futuras'] ?? 0),
+                    'pendencias_encerradas' => (int)($row['pendencias_encerradas'] ?? 0),
+                    'agendas_com_presenca' => (int)($row['agendas_com_presenca'] ?? 0),
+                    'minutos_presenca' => (int)($row['minutos_presenca'] ?? 0),
+                    'minutos_desconhecidos' => (int)($row['minutos_desconhecidos'] ?? 0),
+                    'carga_horaria_horas' => $carga > 0 ? $carga : null,
+                    'carga_horaria_minutos' => $requiredMinutes > 0 ? $requiredMinutes : null,
+                    'ultima_conclusao' => (string)($row['ultima_conclusao'] ?? ''),
+                    'periodicidade' => (string)($row['periodicidade'] ?? ''),
+                ],
+            ];
+        }
+
+        if (!$apply || empty($changes)) {
+            return [
+                'apply' => $apply,
+                'total_lidos' => count($rows),
+                'total_inconsistencias' => count($changes),
+                'alteracoes' => $changes,
+            ];
+        }
+
+        $this->db->beginTransaction();
+        try {
+            $update = $this->db->prepare("UPDATE treinamento_colaboradores
+                SET status = :status,
+                    status_detalhe = :status_detalhe
+                WHERE id = :id");
+            foreach ($changes as $change) {
+                $update->execute([
+                    'id' => (int)$change['tc_id'],
+                    'status' => $change['status_esperado'],
+                    'status_detalhe' => $change['status_detalhe_esperado'] !== '' ? $change['status_detalhe_esperado'] : null,
+                ]);
+                $this->audit('status_reconcile', [
+                    'treinamento_id' => (int)$change['treinamento_id'],
+                    'colaborador_id' => (int)$change['colaborador_id'],
+                    'status_from' => $change['status_atual'],
+                    'status_to' => $change['status_esperado'],
+                    'detail_from' => $change['status_detalhe_atual'],
+                    'detail_to' => $change['status_detalhe_esperado'],
+                    'evidencias' => $change['evidencias'],
+                ]);
+            }
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+
+        return [
+            'apply' => $apply,
+            'total_lidos' => count($rows),
+            'total_inconsistencias' => count($changes),
+            'alteracoes' => $changes,
+        ];
+    }
+
+    private function audit(string $acao, array $payload): void
+    {
+        $stmt = $this->db->prepare("INSERT INTO treinamento_auditoria_logs
+            (treinamento_id, agenda_id, participante_id, colaborador_id, acao, detalhes_json, created_by)
+            VALUES (:treinamento_id, :agenda_id, :participante_id, :colaborador_id, :acao, :detalhes_json, :created_by)");
+        $stmt->execute([
+            'treinamento_id' => $payload['treinamento_id'] ?? null,
+            'agenda_id' => $payload['agenda_id'] ?? null,
+            'participante_id' => $payload['participante_id'] ?? null,
+            'colaborador_id' => $payload['colaborador_id'] ?? null,
+            'acao' => $acao,
+            'detalhes_json' => json_encode($payload, JSON_UNESCAPED_UNICODE),
+            'created_by' => (int)(Auth::user()['id'] ?? 0) ?: null,
+        ]);
     }
 
     private function dashboardBy(array $filters, string $groupExpr, string $labelExpr): array

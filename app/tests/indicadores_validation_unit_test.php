@@ -199,8 +199,35 @@ assert_true($indicadorEventos->updateAchievedValue((int)$createdEvents[2]['id'],
 $updatedEventComma = $indicadorEventos->find((int)$createdEvents[2]['id']);
 assert_true($updatedEventComma !== null && abs((float)($updatedEventComma['valor_atingido'] ?? 0) - 68.5) < 0.0001, 'Persistiu valor com vírgula corretamente');
 assert_true(!$indicadorEventos->updateAchievedValue((int)$createdEvents[3]['id'], '10,0,0', 1, 'Inválido'), 'Rejeita formato com múltiplas vírgulas');
+assert_true(!$indicadorEventos->updateAchievedValue((int)$createdEvents[4]['id'], '110', 1, 'Percentual inválido'), 'Rejeita percentual acima de 100 no evento');
 assert_true($indicadorEventos->updateAchievedValue((int)$createdEvents[1]['id'], '85', 1, 'Meta atendida'), 'Atualiza evento com meta atingida');
 assert_true(($indicadorEventos->find((int)$createdEvents[1]['id'])['meta_status_key'] ?? '') === 'atingida', 'Marca meta atingida quando valor supera 100%');
+
+$integerIndicadorId = $indicadores->create(array_merge($baseData, [
+    'indicador' => 'Indicador Evento Inteiro ' . $suffix,
+    'unidade_medida_id' => $unitInteger,
+    'valor' => '10',
+    'valor_minimo' => null,
+    'valor_maximo' => null,
+]), 1);
+assert_true($integerIndicadorId > 0, 'Criou indicador inteiro para validar evento');
+$integerEvents = $indicadorEventos->byIndicador($integerIndicadorId);
+assert_true(count($integerEvents) === 12, 'Gerou eventos para indicador inteiro');
+assert_true(!$indicadorEventos->updateAchievedValue((int)$integerEvents[0]['id'], '10,50', 1, 'Inteiro com decimal'), 'Rejeita evento com decimal quando unidade é inteira');
+assert_true($indicadorEventos->updateAchievedValue((int)$integerEvents[0]['id'], '10', 1, 'Inteiro válido'), 'Aceita evento com inteiro quando unidade é inteira');
+
+$moneyIndicadorId = $indicadores->create(array_merge($baseData, [
+    'indicador' => 'Indicador Evento Monetário ' . $suffix,
+    'unidade_medida_id' => $unitMoney,
+    'valor' => '1000',
+    'valor_minimo' => null,
+    'valor_maximo' => null,
+]), 1);
+assert_true($moneyIndicadorId > 0, 'Criou indicador monetário para validar evento');
+$moneyEvents = $indicadorEventos->byIndicador($moneyIndicadorId);
+assert_true(!empty($moneyEvents), 'Gerou eventos para indicador monetário');
+assert_true($indicadorEventos->updateAchievedValue((int)$moneyEvents[0]['id'], '6495', 1, 'Valor monetário sem separador'), 'Aceita evento monetário com número simples');
+assert_true(abs((float)($indicadorEventos->find((int)$moneyEvents[0]['id'])['valor_atingido'] ?? 0) - 6495.0) < 0.0001, 'Persistiu valor monetário corretamente');
 
 $deleted = $indicadores->softDelete($indicadorId, 1);
 assert_true($deleted, 'Aplica soft delete no indicador');

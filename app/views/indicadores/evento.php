@@ -63,9 +63,10 @@ $formatValue = static function ($value) use ($evento): string {
         <label class="block text-sm font-medium text-gray-700 mb-1"><?= htmlspecialchars($t('indicadores.label.valor_atingido')) ?></label>
         <input type="text"
                inputmode="decimal"
-               pattern="^-?(?:\\d+|\\d{1,3}(?:\\.\\d{3})+)(?:,\\d{1,4})?$"
+               pattern="^-?(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d{1,4})?$"
                name="valor"
                data-indicador-decimal
+               data-unidade-tipo="<?= htmlspecialchars((string)($evento['unidade_tipo'] ?? '')) ?>"
                class="border border-gray-300 rounded-lg p-3 w-full"
                value="<?= $evento['valor_atingido'] !== null ? htmlspecialchars(\App\Core\ValueFormatter::decimal($evento['valor_atingido'], 2)) : '' ?>"
                required />
@@ -161,10 +162,31 @@ $formatValue = static function ($value) use ($evento): string {
         const parts = raw.split(',');
         this.value = parts.length > 2 ? (parts[0] + ',' + parts.slice(1).join('')) : raw;
       });
-      input.form?.addEventListener('submit', function () {
+      input.form?.addEventListener('submit', function (e) {
         const normalized = normalizeDecimal(input.value);
         if (!normalized) {
+          if (e && typeof e.preventDefault === 'function') e.preventDefault();
           alert('Informe um valor válido. Use apenas números e, se necessário, uma vírgula para decimais.');
+          input.focus();
+          return;
+        }
+        const tipo = String(input.getAttribute('data-unidade-tipo') || '').toLowerCase();
+        const numeric = Number(normalized.replace(',', '.'));
+        if (!Number.isFinite(numeric)) {
+          if (e && typeof e.preventDefault === 'function') e.preventDefault();
+          alert('Informe um valor válido.');
+          input.focus();
+          return;
+        }
+        if (tipo === 'inteiro' && Math.floor(numeric) !== numeric) {
+          if (e && typeof e.preventDefault === 'function') e.preventDefault();
+          alert('Este indicador aceita apenas números inteiros.');
+          input.focus();
+          return;
+        }
+        if (tipo === 'percentual' && (numeric < 0 || numeric > 100)) {
+          if (e && typeof e.preventDefault === 'function') e.preventDefault();
+          alert('Percentual deve estar entre 0 e 100.');
           input.focus();
           return;
         }
