@@ -10,20 +10,52 @@ function failFast(string $msg): void { echo "FAIL: $msg\n"; exit(1); }
 
 $pdo = Database::getConnection();
 $suffix = 'tdi_' . date('YmdHis') . '_' . random_int(100, 999);
+$cnpjSeed = preg_replace('/\D+/', '', $suffix) ?: (string)time();
+$cnpjBase = str_pad(substr($cnpjSeed, -11), 11, '0', STR_PAD_LEFT);
+$cnpjMatriz = $cnpjBase . '000';
+$cnpjFilial = $cnpjBase . '001';
+$cnpjOutro = $cnpjBase . '002';
 $clienteIds = [];
+$departamentoIds = [];
+$setorIds = [];
 $indicadorIds = [];
+$unidadeId = 0;
 
 try {
     $insCli = $pdo->prepare('INSERT INTO clientes (nome_empresa, CNPJ, contato, is_matriz, matriz_id) VALUES (:n, :c, :ct, :m, :mid)');
-    $insCli->execute(['n' => 'Matriz ' . $suffix, 'c' => 'CNPJ-' . $suffix . '-1', 'ct' => 'contato', 'm' => 1, 'mid' => null]);
+    $insCli->execute(['n' => 'Matriz ' . $suffix, 'c' => $cnpjMatriz, 'ct' => 'contato', 'm' => 1, 'mid' => null]);
     $matriz = (int)$pdo->lastInsertId();
     $clienteIds[] = $matriz;
-    $insCli->execute(['n' => 'Filial ' . $suffix, 'c' => 'CNPJ-' . $suffix . '-2', 'ct' => 'contato', 'm' => 0, 'mid' => $matriz]);
+    $insCli->execute(['n' => 'Filial ' . $suffix, 'c' => $cnpjFilial, 'ct' => 'contato', 'm' => 0, 'mid' => $matriz]);
     $filial = (int)$pdo->lastInsertId();
     $clienteIds[] = $filial;
-    $insCli->execute(['n' => 'Outro ' . $suffix, 'c' => 'CNPJ-' . $suffix . '-3', 'ct' => 'contato', 'm' => 1, 'mid' => null]);
+    $insCli->execute(['n' => 'Outro ' . $suffix, 'c' => $cnpjOutro, 'ct' => 'contato', 'm' => 1, 'mid' => null]);
     $outro = (int)$pdo->lastInsertId();
     $clienteIds[] = $outro;
+
+    $insDep = $pdo->prepare('INSERT INTO departamentos (nome, cliente_id) VALUES (:nome, :cliente_id)');
+    $insDep->execute(['nome' => 'Departamento Matriz ' . $suffix, 'cliente_id' => $matriz]);
+    $departamentoMatriz = (int)$pdo->lastInsertId();
+    $departamentoIds[] = $departamentoMatriz;
+    $insDep->execute(['nome' => 'Departamento Outro ' . $suffix, 'cliente_id' => $outro]);
+    $departamentoOutro = (int)$pdo->lastInsertId();
+    $departamentoIds[] = $departamentoOutro;
+
+    $insSetor = $pdo->prepare('INSERT INTO setores (nome, departamento_id) VALUES (:nome, :departamento_id)');
+    $insSetor->execute(['nome' => 'Setor Matriz ' . $suffix, 'departamento_id' => $departamentoMatriz]);
+    $setorMatriz = (int)$pdo->lastInsertId();
+    $setorIds[] = $setorMatriz;
+    $insSetor->execute(['nome' => 'Setor Outro ' . $suffix, 'departamento_id' => $departamentoOutro]);
+    $setorOutro = (int)$pdo->lastInsertId();
+    $setorIds[] = $setorOutro;
+
+    $stmtUnidade = $pdo->prepare('INSERT INTO unidades_medida (nome, simbolo, tipo, ativo) VALUES (:nome, :simbolo, :tipo, 1)');
+    $stmtUnidade->execute([
+        'nome' => 'Unidade TDI ' . $suffix,
+        'simbolo' => 'un',
+        'tipo' => 'inteiro',
+    ]);
+    $unidadeId = (int)$pdo->lastInsertId();
 
     Auth::login([
         'id' => 1,
@@ -36,20 +68,32 @@ try {
     $indicadores = new IndicadorModel();
     $idIndicadorMatriz = $indicadores->create([
         'cliente_id' => $matriz,
-        'nome' => 'Indicador Matriz ' . $suffix,
-        'unidade' => 'R$',
-        'referencia' => date('Y-m-01'),
-        'meta' => 10,
-        'realizado' => 0,
-    ]);
+        'indicador' => 'Indicador Matriz ' . $suffix,
+        'departamento_id' => $departamentoMatriz,
+        'setor_id' => $setorMatriz,
+        'responsavel_ids' => [],
+        'periodicidade_tipo' => 'mensal',
+        'data_inicial' => date('Y-m-01'),
+        'data_final' => date('Y-m-t'),
+        'valor' => '10',
+        'unidade_medida_id' => $unidadeId,
+        'valor_minimo' => '0',
+        'valor_maximo' => '100',
+    ], 1);
     $idIndicadorOutro = $indicadores->create([
         'cliente_id' => $outro,
-        'nome' => 'Indicador Outro ' . $suffix,
-        'unidade' => 'R$',
-        'referencia' => date('Y-m-01'),
-        'meta' => 20,
-        'realizado' => 0,
-    ]);
+        'indicador' => 'Indicador Outro ' . $suffix,
+        'departamento_id' => $departamentoOutro,
+        'setor_id' => $setorOutro,
+        'responsavel_ids' => [],
+        'periodicidade_tipo' => 'mensal',
+        'data_inicial' => date('Y-m-01'),
+        'data_final' => date('Y-m-t'),
+        'valor' => '20',
+        'unidade_medida_id' => $unidadeId,
+        'valor_minimo' => '0',
+        'valor_maximo' => '100',
+    ], 1);
     $indicadorIds = array_filter([(int)$idIndicadorMatriz, (int)$idIndicadorOutro]);
 
     Auth::login([
@@ -73,13 +117,13 @@ try {
     }
     ok('Filtro automático de leitura por cliente');
 
-    $blockedDelete = $indicadores->delete((int)$idIndicadorOutro);
+    $blockedDelete = $indicadores->softDelete((int)$idIndicadorOutro, 2);
     if ($blockedDelete) {
         failFast('Delete fora do escopo deveria ser bloqueado');
     }
     ok('Bloqueio de operação fora do escopo');
 
-    $allowedDelete = $indicadores->delete((int)$idIndicadorMatriz);
+    $allowedDelete = $indicadores->softDelete((int)$idIndicadorMatriz, 2);
     if (!$allowedDelete) {
         failFast('Delete dentro do escopo deveria ser permitido');
     }
@@ -91,7 +135,19 @@ try {
 } finally {
     if (!empty($indicadorIds)) {
         $in = implode(',', array_map('intval', $indicadorIds));
+        $pdo->exec("DELETE FROM indicador_eventos WHERE indicador_id IN ($in)");
         $pdo->exec("DELETE FROM indicadores WHERE id IN ($in)");
+    }
+    if (!empty($setorIds)) {
+        $in = implode(',', array_map('intval', $setorIds));
+        $pdo->exec("DELETE FROM setores WHERE id IN ($in)");
+    }
+    if (!empty($departamentoIds)) {
+        $in = implode(',', array_map('intval', $departamentoIds));
+        $pdo->exec("DELETE FROM departamentos WHERE id IN ($in)");
+    }
+    if ($unidadeId > 0) {
+        $pdo->prepare('DELETE FROM unidades_medida WHERE id = :id')->execute(['id' => $unidadeId]);
     }
     if (!empty($clienteIds)) {
         $in = implode(',', array_map('intval', $clienteIds));

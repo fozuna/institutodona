@@ -22,16 +22,24 @@ class AuditLogger
     public static function log(string $action, string $entity, ?int $recordId = null, array $payload = []): void
     {
         try {
-            $user = $_SESSION['user'] ?? ['email' => null, 'nome' => null, 'tipo_acesso' => null];
+            $user = $_SESSION['user'] ?? ['id' => null, 'email' => null, 'nome' => null, 'tipo_acesso' => null];
+            $route = $_GET['route'] ?? null;
             $line = [
                 'ts' => date('c'),
+                'user_id' => isset($user['id']) ? (int)$user['id'] : null,
                 'user_email' => $user['email'] ?? null,
                 'user_nome' => $user['nome'] ?? null,
                 'user_tipo' => $user['tipo_acesso'] ?? null,
-                'route' => $_GET['route'] ?? null,
+                'user_role_label' => AccessControl::roleLabel((string)($user['tipo_acesso'] ?? '')),
+                'user_cliente_id' => isset($user['id_cliente']) ? (int)$user['id_cliente'] : null,
+                'allowed_client_ids' => array_values(array_map('intval', (array)($user['allowed_client_ids'] ?? []))),
+                'route' => $route,
+                'method' => strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')),
+                'ip' => $_SERVER['REMOTE_ADDR'] ?? null,
                 'action' => $action,
                 'entity' => $entity,
                 'record_id' => $recordId,
+                'result' => $payload['resultado'] ?? null,
                 'post' => self::sanitize($_POST ?? []),
                 'get' => self::sanitize($_GET ?? []),
                 'payload' => self::sanitize($payload),

@@ -3,6 +3,7 @@ namespace App\Controllers;
 
 use App\Core\AuditLogger;
 use App\Core\AuditoriaValidator;
+use App\Core\AccessControl;
 use App\Core\Auth;
 use App\Core\BaseController;
 use App\Core\DateHelper;
@@ -1176,7 +1177,7 @@ class AuditoriasController extends BaseController
 
     private function canManageAuditorias(): bool
     {
-        return Auth::isConsultor() || Auth::isInstituto();
+        return AccessControl::canAccessRoute((string)($_GET['route'] ?? 'auditorias/store'), 'POST');
     }
 
     private function requireManagePermission(bool $json = false): void
@@ -1198,11 +1199,9 @@ class AuditoriasController extends BaseController
     private function requireApiAuth(bool $manage): void
     {
         if ($this->authenticateByBearer()) {
+            $this->authorizeRoute((string)($_GET['route'] ?? ''), true);
             if ($manage && !$this->canManageAuditorias()) {
-                header('Content-Type: application/json; charset=utf-8');
-                http_response_code(403);
-                echo json_encode(['success' => false, 'message' => 'Perfil sem permissão para escrita.'], JSON_UNESCAPED_UNICODE);
-                exit;
+                $this->denyAccess('Seu perfil não permite executar esta ação.', (string)($_GET['route'] ?? ''), null, true);
             }
             return;
         }

@@ -10,7 +10,7 @@ use App\Models\UsuarioEmpresaModel;
 
 class UsuariosController extends BaseController
 {
-    private const CLIENT_SCOPED_ROLES = ['cliente', 'cliente_admin', 'reader'];
+    private const CLIENT_SCOPED_ROLES = ['cliente', 'cliente_admin', 'reader', 'consultor'];
     private UsuarioModel $usuarios;
     private ClienteModel $clientes;
     private ConsultorModel $consultores;
@@ -76,11 +76,17 @@ class UsuariosController extends BaseController
         $email = trim($_POST['email'] ?? '');
         $senha = $_POST['senha'] ?? '';
         $tipo = $_POST['tipo_acesso'] ?? 'cliente_admin';
+        $platformAccess = (string)($_POST['platform_access'] ?? 'WEB_PWA');
         $selectedClientes = $this->parseSelectedClientes($_POST);
         $idConsultor = $_POST['id_consultor'] ?? null;
         if (!$nome || !$email || !$senha) {
             http_response_code(400);
             echo 'Campos obrigatórios faltando';
+            return;
+        }
+        if (!in_array($platformAccess, ['WEB', 'PWA', 'WEB_PWA'], true)) {
+            http_response_code(400);
+            echo 'Platform access inválido';
             return;
         }
         if (in_array($tipo, self::CLIENT_SCOPED_ROLES, true) && empty($selectedClientes)) {
@@ -95,6 +101,7 @@ class UsuariosController extends BaseController
             'senha_hash' => $hash,
             'tipo_acesso' => $tipo,
             'id_cliente' => in_array($tipo, self::CLIENT_SCOPED_ROLES, true) ? (int)($selectedClientes[0] ?? 0) : null,
+            'platform_access' => $platformAccess,
         ]);
         if (in_array($tipo, self::CLIENT_SCOPED_ROLES, true) && $id > 0) {
             $allAllowed = $this->usuarioEmpresas->syncForUser($id, $selectedClientes);
@@ -139,8 +146,14 @@ class UsuariosController extends BaseController
         $nome = trim($_POST['nome'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $tipo = $_POST['tipo_acesso'] ?? 'cliente_admin';
+        $platformAccess = (string)($_POST['platform_access'] ?? 'WEB_PWA');
         $selectedClientes = $this->parseSelectedClientes($_POST);
         $senha = $_POST['senha'] ?? null;
+        if (!in_array($platformAccess, ['WEB', 'PWA', 'WEB_PWA'], true)) {
+            http_response_code(400);
+            echo 'Platform access inválido';
+            return;
+        }
         if (in_array($tipo, self::CLIENT_SCOPED_ROLES, true) && empty($selectedClientes)) {
             http_response_code(400);
             echo 'Selecione ao menos uma empresa para o usuário';
@@ -151,6 +164,7 @@ class UsuariosController extends BaseController
             'email' => $email,
             'tipo_acesso' => $tipo,
             'id_cliente' => in_array($tipo, self::CLIENT_SCOPED_ROLES, true) ? (int)($selectedClientes[0] ?? 0) : null,
+            'platform_access' => $platformAccess,
         ]);
         $this->usuarioEmpresas->syncForUser($id, in_array($tipo, self::CLIENT_SCOPED_ROLES, true) ? $selectedClientes : []);
         if ($senha) {

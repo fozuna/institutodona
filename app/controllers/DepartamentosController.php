@@ -110,7 +110,7 @@ class DepartamentosController extends BaseController
 
     public function delete(): void
     {
-        $this->requireRole('instituto');
+        $this->requireLogin();
         $id = (int)($_GET['id'] ?? 0);
         $dep = $this->deps->find($id);
         $this->deps->delete($id);

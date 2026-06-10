@@ -24,10 +24,19 @@
                 <select name="tipo_acesso" class="border rounded p-2 w-64">
                     <?php $tipo = $item['tipo_acesso']; ?>
                     <option value="cliente_admin" <?= $tipo === 'cliente_admin' ? 'selected' : '' ?>>Cliente Admin</option>
-                    <option value="cliente" <?= $tipo === 'cliente' ? 'selected' : '' ?>>Cliente</option>
-                    <option value="reader" <?= $tipo === 'reader' ? 'selected' : '' ?>>Reader</option>
+                    <option value="cliente" <?= $tipo === 'cliente' ? 'selected' : '' ?>>Cliente Editor</option>
+                    <option value="reader" <?= $tipo === 'reader' ? 'selected' : '' ?>>Cliente Leitor</option>
                     <option value="consultor" <?= $tipo === 'consultor' ? 'selected' : '' ?>>Consultor</option>
                     <option value="instituto" <?= $tipo === 'instituto' ? 'selected' : '' ?>>Instituto</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm">Acesso por plataforma</label>
+                <select name="platform_access" class="border rounded p-2 w-64">
+                    <?php $pa = $item['platform_access'] ?? 'WEB_PWA'; ?>
+                    <option value="WEB_PWA" <?= $pa === 'WEB_PWA' ? 'selected' : '' ?>>WEB + PWA</option>
+                    <option value="WEB" <?= $pa === 'WEB' ? 'selected' : '' ?>>Somente WEB</option>
+                    <option value="PWA" <?= $pa === 'PWA' ? 'selected' : '' ?>>Somente PWA</option>
                 </select>
             </div>
             <div>

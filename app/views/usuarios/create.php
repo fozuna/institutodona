@@ -19,10 +19,18 @@
             <label class="block text-sm">Perfil</label>
             <select name="tipo_acesso" class="border rounded p-2 w-64">
                 <option value="cliente_admin">Cliente Admin</option>
-                <option value="cliente">Cliente</option>
-                <option value="reader">Reader</option>
+                <option value="cliente">Cliente Editor</option>
+                <option value="reader">Cliente Leitor</option>
                 <option value="consultor">Consultor</option>
                 <option value="instituto">Instituto</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-sm">Acesso por plataforma</label>
+            <select name="platform_access" class="border rounded p-2 w-64">
+                <option value="WEB_PWA">WEB + PWA</option>
+                <option value="WEB">Somente WEB</option>
+                <option value="PWA">Somente PWA</option>
             </select>
         </div>
         <div>

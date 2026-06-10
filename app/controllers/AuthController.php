@@ -2,6 +2,7 @@
 namespace App\Controllers;
 
 use App\Core\BaseController;
+use App\Core\AccessControl;
 use App\Core\Auth;
 use App\Core\Security;
 use App\Core\AuditLogger;
@@ -45,6 +46,18 @@ class AuthController extends BaseController
         $user = $this->usuarios->findByEmail($email);
         if ($user && password_verify($senha, $user['senha_hash'])) {
             Auth::login($user);
+            Auth::refreshScope();
+            if (!Auth::canUseWeb()) {
+                AuditLogger::log('auth_login_denied_platform', 'usuario', (int)$user['id'], [
+                    'platform' => 'WEB',
+                    'platform_access' => Auth::platformAccess(),
+                    'tipo_acesso' => $user['tipo_acesso'] ?? null,
+                    'resultado' => 'negado',
+                ]);
+                Auth::logout();
+                $this->render('auth/login', ['error' => 'Você não possui permissão para acessar este recurso.']);
+                return;
+            }
             AuditLogger::log('auth_login_success', 'usuario', (int)$user['id'], [
                 'tipo_acesso' => $user['tipo_acesso'] ?? null,
                 'cliente_id' => isset($user['id_cliente']) ? (int)$user['id_cliente'] : null,
@@ -58,7 +71,7 @@ class AuthController extends BaseController
                     return;
                 }
             }
-            header('Location: index.php?route=dashboard/index');
+            header('Location: index.php?route=' . AccessControl::defaultHomeRoute($user));
         } else {
             AuditLogger::log('auth_login_fail', 'usuario', null, ['email' => $email]);
             $this->render('auth/login', ['error' => 'Credenciais inválidas']);
@@ -67,6 +80,13 @@ class AuthController extends BaseController
 
     public function logout(): void
     {
+        $user = Auth::user();
+        AuditLogger::log('auth_logout', 'usuario', isset($user['id']) ? (int)$user['id'] : null, [
+            'tipo_acesso' => $user['tipo_acesso'] ?? null,
+            'cliente_id' => isset($user['id_cliente']) ? (int)$user['id_cliente'] : null,
+            'scope_clientes' => Auth::allowedClientIds(),
+            'resultado' => 'permitido',
+        ]);
         Auth::logout();
         header('Location: index.php?route=auth/login');
     }

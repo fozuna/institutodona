@@ -129,7 +129,7 @@ class FuncoesController extends BaseController
 
     public function delete(): void
     {
-        $this->requireRole('instituto');
+        $this->requireLogin();
         $id = (int)($_GET['id'] ?? 0);
         $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
         if ($id) { $this->funcoes->delete($id); }

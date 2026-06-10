@@ -5,9 +5,18 @@ class UsuarioModel extends BaseModel
 {
     public function findByEmail(string $email): ?array
     {
-        $stmt = $this->db->prepare('SELECT id, nome, email, senha_hash, tipo_acesso, id_cliente FROM usuarios WHERE email = :email');
-        $stmt->execute(['email' => $email]);
-        $row = $stmt->fetch();
+        try {
+            $stmt = $this->db->prepare('SELECT id, nome, email, senha_hash, tipo_acesso, id_cliente, platform_access FROM usuarios WHERE email = :email');
+            $stmt->execute(['email' => $email]);
+            $row = $stmt->fetch();
+        } catch (\Throwable $e) {
+            $stmt = $this->db->prepare('SELECT id, nome, email, senha_hash, tipo_acesso, id_cliente FROM usuarios WHERE email = :email');
+            $stmt->execute(['email' => $email]);
+            $row = $stmt->fetch();
+            if (is_array($row)) {
+                $row['platform_access'] = 'WEB_PWA';
+            }
+        }
         return $row ?: null;
     }
 
@@ -15,9 +24,18 @@ class UsuarioModel extends BaseModel
     {
         $params = ['id' => $id];
         $scope = $this->tenantInCondition('COALESCE(id_cliente, -1)', $params, 'uif');
-        $stmt = $this->db->prepare("SELECT id, nome, email, senha_hash, tipo_acesso, id_cliente FROM usuarios WHERE id = :id AND $scope");
-        $stmt->execute($params);
-        $row = $stmt->fetch();
+        try {
+            $stmt = $this->db->prepare("SELECT id, nome, email, senha_hash, tipo_acesso, id_cliente, platform_access FROM usuarios WHERE id = :id AND $scope");
+            $stmt->execute($params);
+            $row = $stmt->fetch();
+        } catch (\Throwable $e) {
+            $stmt = $this->db->prepare("SELECT id, nome, email, senha_hash, tipo_acesso, id_cliente FROM usuarios WHERE id = :id AND $scope");
+            $stmt->execute($params);
+            $row = $stmt->fetch();
+            if (is_array($row)) {
+                $row['platform_access'] = 'WEB_PWA';
+            }
+        }
         return $row ?: null;
     }
 
@@ -25,9 +43,22 @@ class UsuarioModel extends BaseModel
     {
         $params = [];
         $scope = $this->tenantInCondition('COALESCE(id_cliente, -1)', $params, 'uia');
-        $stmt = $this->db->prepare("SELECT id, nome, email, tipo_acesso, id_cliente FROM usuarios WHERE $scope ORDER BY nome");
-        $stmt->execute($params);
-        return $stmt->fetchAll();
+        try {
+            $stmt = $this->db->prepare("SELECT id, nome, email, tipo_acesso, id_cliente, platform_access FROM usuarios WHERE $scope ORDER BY nome");
+            $stmt->execute($params);
+            $rows = $stmt->fetchAll();
+        } catch (\Throwable $e) {
+            $stmt = $this->db->prepare("SELECT id, nome, email, tipo_acesso, id_cliente FROM usuarios WHERE $scope ORDER BY nome");
+            $stmt->execute($params);
+            $rows = $stmt->fetchAll();
+            foreach ($rows as &$row) {
+                if (is_array($row) && !isset($row['platform_access'])) {
+                    $row['platform_access'] = 'WEB_PWA';
+                }
+            }
+            unset($row);
+        }
+        return $rows;
     }
 
     public function create(array $data): int
@@ -36,13 +67,14 @@ class UsuarioModel extends BaseModel
         if (($data['tipo_acesso'] ?? '') !== 'instituto' && ($data['id_cliente'] ?? 0) > 0 && !$this->canAccessClienteId((int)$data['id_cliente'])) {
             return 0;
         }
-        $stmt = $this->db->prepare('INSERT INTO usuarios (nome, email, senha_hash, tipo_acesso, id_cliente) VALUES (:nome, :email, :senha_hash, :tipo_acesso, :id_cliente)');
+        $stmt = $this->db->prepare('INSERT INTO usuarios (nome, email, senha_hash, tipo_acesso, id_cliente, platform_access) VALUES (:nome, :email, :senha_hash, :tipo_acesso, :id_cliente, :platform_access)');
         $stmt->execute([
             'nome' => $data['nome'],
             'email' => $data['email'],
             'senha_hash' => $data['senha_hash'],
             'tipo_acesso' => $data['tipo_acesso'],
             'id_cliente' => $data['id_cliente'] ?? null,
+            'platform_access' => $data['platform_access'] ?? 'WEB_PWA',
         ]);
         return (int)$this->db->lastInsertId();
     }
@@ -55,10 +87,11 @@ class UsuarioModel extends BaseModel
             'email' => $data['email'],
             'tipo_acesso' => $data['tipo_acesso'],
             'id_cliente' => $data['id_cliente'] ?? null,
+            'platform_access' => $data['platform_access'] ?? 'WEB_PWA',
             'id' => $id,
         ];
         $scope = $this->tenantInCondition('COALESCE(id_cliente, -1)', $params, 'uiu');
-        $stmt = $this->db->prepare("UPDATE usuarios SET nome = :nome, email = :email, tipo_acesso = :tipo_acesso, id_cliente = :id_cliente WHERE id = :id AND $scope");
+        $stmt = $this->db->prepare("UPDATE usuarios SET nome = :nome, email = :email, tipo_acesso = :tipo_acesso, id_cliente = :id_cliente, platform_access = :platform_access WHERE id = :id AND $scope");
         return $stmt->execute($params);
     }
 

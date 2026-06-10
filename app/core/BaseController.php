@@ -25,9 +25,29 @@ class BaseController
         $params['pageTitle'] = $params['pageTitle'] ?? $this->autoTitle($view);
         extract($params, EXTR_SKIP);
         ob_start();
-        require __DIR__ . '/../views/' . $view . '.php';
+        $defaultViewFile = __DIR__ . '/../views/' . $view . '.php';
+        $pwaViewFile = __DIR__ . '/../views/pwa/' . $view . '.php';
+        if (is_file($pwaViewFile) && $this->isPwaRequest()) {
+            require $pwaViewFile;
+        } else {
+            require $defaultViewFile;
+        }
         $content = ob_get_clean();
+        if ($this->isPwaRequest() && is_file(__DIR__ . '/../views/layouts/pwa.php')) {
+            require __DIR__ . '/../views/layouts/pwa.php';
+            return;
+        }
         require __DIR__ . '/../views/layouts/main.php';
+    }
+
+    protected function isPwaRequest(): bool
+    {
+        $path = parse_url((string)($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH) ?: '';
+        if ($path !== '' && strpos($path, '/pwa') === 0) {
+            return true;
+        }
+        $route = (string)($_GET['route'] ?? '');
+        return strpos($route, 'pwa/') === 0;
     }
 
     protected function requireLogin(): void
@@ -44,7 +64,7 @@ class BaseController
         }
         Auth::refreshScope();
         $route = (string)($_GET['route'] ?? '');
-        $this->enforceScopePermissionByRoute($route);
+        $this->authorizeRoute($route);
         $routeForAudit = $route ?: null;
         $clienteCandidate = null;
         if (isset($_GET['cliente'])) {
@@ -61,6 +81,8 @@ class BaseController
             'route' => $routeForAudit,
             'cliente_id' => $clienteScoped,
             'scoped_clientes' => Auth::allowedClientIds(),
+            'resultado' => 'permitido',
+            'platform' => $this->isPwaRequest() ? 'PWA' : 'WEB',
         ]);
     }
 
@@ -68,14 +90,7 @@ class BaseController
     {
         $this->requireLogin();
         if (!$this->hasRole($role)) {
-            AuditLogger::log('role_denied', 'auth', null, [
-                'required_role' => $role,
-                'actual_role' => $_SESSION['user']['tipo_acesso'] ?? null,
-                'route' => $_GET['route'] ?? null,
-            ]);
-            http_response_code(403);
-            echo 'Sem permissão para esta ação.';
-            exit;
+            $this->denyAccess('Você não possui permissão para acessar este recurso.', (string)($_GET['route'] ?? ''), $this->routeClienteCandidate());
         }
     }
 
@@ -86,56 +101,28 @@ class BaseController
             return true;
         }
         if ($role === 'cliente_admin') {
-            return Auth::isClienteAdmin();
+            return $actual === 'cliente_admin';
         }
         if ($role === 'instituto') {
-            return Auth::isInstituto() || Auth::isClienteAdmin();
+            return Auth::isInstituto();
         }
         return false;
     }
 
-    private function enforceScopePermissionByRoute(string $route): void
+    protected function authorizeRoute(?string $route = null, bool $json = false): void
     {
+        $route = (string)($route ?? ($_GET['route'] ?? ''));
         if ($route === '' || Auth::isInstituto()) {
             return;
         }
-        $isWriteAction = $this->isWriteRoute($route);
         $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
-        if (Auth::isReader()) {
-            if ($method !== 'GET' && $method !== 'HEAD') {
-                AuditLogger::log('reader_method_blocked', 'auth', null, ['route' => $route, 'method' => $method]);
-                http_response_code(403);
-                echo 'Perfil reader possui acesso somente leitura.';
-                exit;
-            }
-            if ($isWriteAction) {
-                AuditLogger::log('reader_write_route_blocked', 'auth', null, ['route' => $route, 'method' => $method]);
-                http_response_code(403);
-                echo 'Perfil reader possui acesso somente leitura.';
-                exit;
-            }
-            return;
+        $clienteCandidate = $this->routeClienteCandidate();
+        if (!AccessControl::canAccessRoute($route, $method)) {
+            $this->denyAccess(AccessControl::denyMessage($route, $clienteCandidate), $route, $clienteCandidate, $json);
         }
-        if ($isWriteAction && $method !== 'POST') {
-            AuditLogger::log('write_method_blocked', 'auth', null, ['route' => $route, 'method' => $method]);
-            http_response_code(405);
-            echo 'Método não permitido para esta ação.';
-            exit;
+        if ($clienteCandidate !== null && $clienteCandidate > 0 && !Auth::canAccessCliente($clienteCandidate)) {
+            $this->denyAccess(AccessControl::denyMessage($route, $clienteCandidate), $route, $clienteCandidate, $json);
         }
-        if (Auth::isClienteAdmin() && $isWriteAction) {
-            AuditLogger::log('client_admin_write', 'auth', null, [
-                'route' => $route,
-                'method' => $method,
-                'scoped_clientes' => Auth::allowedClientIds(),
-            ]);
-        }
-    }
-
-    private function isWriteRoute(string $route): bool
-    {
-        $parts = explode('/', strtolower($route));
-        $action = $parts[1] ?? '';
-        return in_array($action, self::WRITE_ACTIONS, true);
     }
 
     protected function scopedClienteIds(): array
@@ -161,6 +148,46 @@ class BaseController
             return $requestedId;
         }
         return (int)$ids[0];
+    }
+
+    protected function denyAccess(string $message = 'Acesso negado.', ?string $route = null, ?int $clienteId = null, bool $json = false): void
+    {
+        AuditLogger::log('access_denied', 'auth', null, [
+            'route' => $route ?? ($_GET['route'] ?? null),
+            'cliente_id' => $clienteId,
+            'scoped_clientes' => Auth::allowedClientIds(),
+            'perfil' => AccessControl::roleLabel((string)($_SESSION['user']['tipo_acesso'] ?? '')),
+            'ip' => $_SERVER['REMOTE_ADDR'] ?? null,
+            'resultado' => 'negado',
+            'mensagem' => $message,
+            'platform' => $this->isPwaRequest() ? 'PWA' : 'WEB',
+        ]);
+        http_response_code(403);
+        if ($json) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'message' => $message], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        $_SESSION['flash_error'] = $message;
+        echo $message;
+        exit;
+    }
+
+    private function routeClienteCandidate(): ?int
+    {
+        foreach (['cliente', 'cliente_id', 'id_cliente', 'empresa_id'] as $key) {
+            if (isset($_GET[$key]) && (int)$_GET[$key] > 0) {
+                return (int)$_GET[$key];
+            }
+            if (isset($_POST[$key]) && (int)$_POST[$key] > 0) {
+                return (int)$_POST[$key];
+            }
+        }
+        if (!empty($_POST['id_clientes']) && is_array($_POST['id_clientes'])) {
+            $first = (int)($_POST['id_clientes'][0] ?? 0);
+            return $first > 0 ? $first : null;
+        }
+        return null;
     }
 
     protected function redirect(string $url): void

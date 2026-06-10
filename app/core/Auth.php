@@ -1,6 +1,8 @@
 <?php
 namespace App\Core;
 
+use App\Database\Database;
+
 class Auth
 {
     private const ADMIN_CLIENT_ROLES = ['cliente', 'cliente_admin'];
@@ -14,12 +16,14 @@ class Auth
     {
         $idCliente = isset($user['id_cliente']) && $user['id_cliente'] !== null ? (int)$user['id_cliente'] : null;
         $scopeIds = TenantScopeResolver::resolveForUser($user);
+        $platformAccess = (string)($user['platform_access'] ?? 'WEB_PWA');
         $_SESSION['user'] = [
             'id' => $user['id'],
             'nome' => $user['nome'],
             'email' => $user['email'],
             'tipo_acesso' => $user['tipo_acesso'],
             'id_cliente' => $idCliente,
+            'platform_access' => $platformAccess !== '' ? $platformAccess : 'WEB_PWA',
             'allowed_client_ids' => $scopeIds,
             'selected_client_ids' => $scopeIds,
             'unrestricted_access' => ($user['tipo_acesso'] ?? null) === 'instituto',
@@ -32,12 +36,32 @@ class Auth
         if (!$user) {
             return;
         }
-        if (($user['tipo_acesso'] ?? null) === 'instituto') {
+        $userId = (int)($user['id'] ?? 0);
+        if ($userId > 0) {
+            try {
+                $stmt = Database::getConnection()->prepare('SELECT id, nome, email, tipo_acesso, id_cliente, platform_access FROM usuarios WHERE id = :id LIMIT 1');
+                $stmt->execute(['id' => $userId]);
+                $fresh = $stmt->fetch();
+                if ($fresh) {
+                    $_SESSION['user']['nome'] = $fresh['nome'];
+                    $_SESSION['user']['email'] = $fresh['email'];
+                    $_SESSION['user']['tipo_acesso'] = $fresh['tipo_acesso'];
+                    $_SESSION['user']['id_cliente'] = $fresh['id_cliente'] !== null ? (int)$fresh['id_cliente'] : null;
+                    $_SESSION['user']['platform_access'] = (string)($fresh['platform_access'] ?? 'WEB_PWA');
+                    $_SESSION['user']['unrestricted_access'] = ($fresh['tipo_acesso'] ?? null) === 'instituto';
+                }
+            } catch (\Throwable $e) {
+            }
+        }
+        $refreshed = self::user() ?? $user;
+        if (($refreshed['tipo_acesso'] ?? null) === 'instituto') {
             $_SESSION['user']['allowed_client_ids'] = [];
             $_SESSION['user']['selected_client_ids'] = [];
             return;
         }
-        $_SESSION['user']['allowed_client_ids'] = TenantScopeResolver::resolveForUser($user);
+        $scopeIds = TenantScopeResolver::resolveForUser($refreshed);
+        $_SESSION['user']['allowed_client_ids'] = $scopeIds;
+        $_SESSION['user']['selected_client_ids'] = $scopeIds;
     }
 
     public static function logout(): void
@@ -63,6 +87,11 @@ class Auth
         return (self::user()['tipo_acesso'] ?? null) === 'consultor';
     }
 
+    public static function isClienteEditor(): bool
+    {
+        return (self::user()['tipo_acesso'] ?? null) === 'cliente';
+    }
+
     public static function isClienteAdmin(): bool
     {
         return in_array((self::user()['tipo_acesso'] ?? null), self::ADMIN_CLIENT_ROLES, true);
@@ -76,6 +105,28 @@ class Auth
     public static function isLoggedIn(): bool
     {
         return self::user() !== null;
+    }
+
+    public static function platformAccess(): string
+    {
+        $value = (string)(self::user()['platform_access'] ?? 'WEB_PWA');
+        return $value !== '' ? $value : 'WEB_PWA';
+    }
+
+    public static function canUseWeb(): bool
+    {
+        if (self::isInstituto()) {
+            return true;
+        }
+        return in_array(self::platformAccess(), ['WEB', 'WEB_PWA'], true);
+    }
+
+    public static function canUsePwa(): bool
+    {
+        if (self::isInstituto()) {
+            return true;
+        }
+        return in_array(self::platformAccess(), ['PWA', 'WEB_PWA'], true);
     }
 
     public static function allowedClientIds(): array

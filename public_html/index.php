@@ -34,6 +34,7 @@ use App\Controllers\TarefasController;
 use App\Controllers\ReunioesController;
 use App\Controllers\CoachingController;
 use App\Controllers\ProcessosController;
+use App\Controllers\PwaController;
 
 $shouldAutoMigrate = empty($_SESSION['__auto_migrate_done']);
 if ($shouldAutoMigrate) {
@@ -58,6 +59,10 @@ if ($shouldAutoMigrate) {
 }
 
 $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
+if ($requestPath !== '' && preg_match('#^/pwa(?:/(.*))?/?$#', $requestPath, $m)) {
+    $tail = isset($m[1]) ? trim((string)$m[1], '/') : '';
+    $_GET['route'] = 'pwa/' . ($tail !== '' ? $tail : 'dashboard');
+}
 if ($requestPath !== '' && preg_match('#/manuais/download/(\d+)$#', $requestPath, $m)) {
     $_GET['route'] = 'manuais/download';
     $_GET['id'] = $m[1];
@@ -553,6 +558,54 @@ switch ($route) {
     case 'aplicacoes/delete_update':
         (new AplicacoesController())->delete_update();
         break;
+    case 'pwa/login':
+        (new PwaController())->login();
+        break;
+    case 'pwa/dologin':
+        (new PwaController())->doLogin();
+        break;
+    case 'pwa/logout':
+        (new PwaController())->logout();
+        break;
+    case 'pwa/dashboard':
+        (new PwaController())->dashboard();
+        break;
+    case 'pwa/tratamentos':
+        (new PwaController())->tratamentos();
+        break;
+    case 'pwa/balancos':
+        (new PwaController())->balancos();
+        break;
+    case 'pwa/auditorias':
+        (new PwaController())->auditorias();
+        break;
+    case 'pwa/oficinas':
+        (new PwaController())->oficinas();
+        break;
+    case 'pwa/indicadores':
+        (new PwaController())->indicadores();
+        break;
+    case 'pwa/indicadores/historico':
+        (new PwaController())->indicadoresHistorico();
+        break;
+    case 'pwa/indicadores/graficos':
+        (new PwaController())->indicadoresGraficos();
+        break;
+    case 'pwa/agenda':
+        (new PwaController())->agenda();
+        break;
+    case 'pwa/planoacao':
+        (new PwaController())->planoAcao();
+        break;
+    case 'pwa/tarefas':
+        (new PwaController())->tarefas();
+        break;
+    case 'pwa/cronogramas':
+        (new PwaController())->cronogramas();
+        break;
+    case 'pwa/avaliacoes':
+        (new PwaController())->avaliacoes();
+        break;
     case 'auth/login':
         (new AuthController())->login();
         break;
@@ -858,6 +911,10 @@ switch ($route) {
         (new LogsController())->pdfHealth();
         break;
     default:
+        if (strpos((string)$route, 'pwa/') === 0) {
+            (new PwaController())->dashboard();
+            break;
+        }
         (new DashboardController())->index();
         break;
 }

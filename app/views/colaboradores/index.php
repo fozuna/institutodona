@@ -1,14 +1,26 @@
 <?php /** @var array $items */ /** @var array $funcoes */ /** @var int $cliente */ ?>
-<?php $backUrl = ((int)($cliente ?? 0) > 0) ? ('index.php?route=clientes/show&id=' . (int)$cliente) : 'index.php?route=clientes/index'; ?>
+<?php
+$currentUser = $_SESSION['user'] ?? null;
+$canClienteShow = \App\Core\AccessControl::canAccessRoute('clientes/show', 'GET', $currentUser);
+$canCreate = \App\Core\AccessControl::canAccessRoute('colaboradores/create', 'GET', $currentUser);
+$canEdit = \App\Core\AccessControl::canAccessRoute('colaboradores/edit', 'GET', $currentUser);
+$canDelete = \App\Core\AccessControl::canAccessRoute('colaboradores/delete', 'POST', $currentUser);
+$canImport = \App\Core\AccessControl::canAccessRoute('colaboradores/import', 'POST', $currentUser);
+$backUrl = ($canClienteShow && (int)($cliente ?? 0) > 0)
+    ? ('index.php?route=clientes/show&id=' . (int)$cliente)
+    : 'index.php?route=colaboradores/index' . ($cliente ? '&cliente=' . (int)$cliente : '');
+?>
 <div class="p-6">
     <div class="flex justify-between items-center mb-4">
         <h1 class="text-2xl font-bold"><?= htmlspecialchars($pageTitle ?? 'Colaboradores') ?></h1>
         <div class="flex items-center gap-2">
+            <?php if ($canCreate): ?>
             <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=colaboradores/create<?= $cliente ? '&cliente='.(int)$cliente : '' ?>">Novo Colaborador</a>
+            <?php endif; ?>
             <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="<?= htmlspecialchars($backUrl) ?>">Voltar</a>
         </div>
     </div>
-    <?php if (\App\Core\Auth::isInstituto() || \App\Core\Auth::isClienteAdmin()): ?>
+    <?php if ($canImport): ?>
       <div class="bg-white shadow rounded p-4 mb-4">
         <div class="font-semibold mb-2">Importar colaboradores</div>
         <form id="colabImportForm" method="post" action="index.php?route=colaboradores/import" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
@@ -375,8 +387,12 @@
                           <td class="p-3"><?= htmlspecialchars($c['setor'] ?? '') ?></td>
                           <td class="p-3"><?= htmlspecialchars($c['departamento'] ?? '') ?></td>
                           <td class="p-3 whitespace-nowrap">
+                              <?php if ($canEdit): ?>
                               <a class="text-brand-pink icon-action" href="index.php?route=colaboradores/edit&id=<?= (int)$c['id'] ?><?= $cliente ? '&cliente='.(int)$cliente : '' ?>" title="Editar" aria-label="Editar"><span data-feather="edit"></span></a>
+                              <?php endif; ?>
+                              <?php if ($canDelete): ?>
                               <a class="text-brand-brown icon-action ml-2" href="index.php?route=colaboradores/delete&id=<?= (int)$c['id'] ?><?= $cliente ? '&cliente='.(int)$cliente : '' ?>" title="Excluir" aria-label="Excluir"><span data-feather="trash-2"></span></a>
+                              <?php endif; ?>
                           </td>
                       </tr>
                   <?php endforeach; ?>

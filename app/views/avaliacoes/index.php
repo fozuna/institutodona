@@ -23,7 +23,9 @@
   $csrfToken = \App\Core\Security::csrfToken();
   $csrfShareToken = $csrfToken;
   $csrfDeleteToken = $csrfToken;
-  $isReader = (($_SESSION['user']['tipo_acesso'] ?? null) === 'reader');
+  $currentUser = $_SESSION['user'] ?? null;
+  $canCreate = \App\Core\AccessControl::canAccessRoute('avaliacoes/create', 'GET', $currentUser);
+  $canDelete = \App\Core\AccessControl::canAccessRoute('avaliacoes/delete-ajax', 'POST', $currentUser);
   $shareText = $generatedEmpresa !== '' ? ('Olá! Segue o formulário público da empresa ' . $generatedEmpresa . ': ' . $generatedUrl) : ('Olá! Segue o formulário público de avaliação: ' . $generatedUrl);
   $mailtoHref = $generatedUrl !== '' ? ('mailto:?subject=' . rawurlencode('Link da avaliação pública') . '&body=' . rawurlencode($shareText)) : '';
   $whatsHref = $generatedUrl !== '' ? ('https://wa.me/?text=' . rawurlencode($shareText)) : '';
@@ -62,10 +64,12 @@
          class="icon-btn icon-btn--lg icon-btn--muted text-brand-red"
          title="Abrir formulário público"
          aria-label="Abrir formulário público"><span data-feather="external-link"></span><span class="sr-only">Abrir formulário público</span></a>
+      <?php if ($canCreate): ?>
       <a class="icon-btn icon-btn--lg icon-btn--primary"
          href="index.php?route=avaliacoes/create"
          title="Nova avaliação"
          aria-label="Nova avaliação"><span data-feather="plus"></span><span class="sr-only">Nova avaliação</span></a>
+      <?php endif; ?>
     </div>
   </div>
   <?php if ($generatedUrl !== ''): ?>
@@ -203,7 +207,7 @@
             <td class="p-3">
               <a class="text-brand-pink icon-action" href="index.php?route=avaliacoes/show&id=<?= (int)$i['id'] ?>" title="Ver" aria-label="Ver"><span data-feather="bar-chart-2"></span></a>
               <a class="text-brand-pink icon-action ml-2" href="index.php?route=avaliacoes/relatorio_pdf&id=<?= (int)$i['id'] ?>&download=1" title="Baixar PDF" aria-label="Baixar PDF"><span data-feather="download"></span></a>
-              <?php if (!$isReader): ?>
+              <?php if ($canDelete): ?>
                 <button type="button"
                         class="text-brand-red icon-action ml-2 btn-delete-avaliacao"
                         data-avaliacao-id="<?= (int)$i['id'] ?>"

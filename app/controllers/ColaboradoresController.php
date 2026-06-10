@@ -565,7 +565,7 @@ class ColaboradoresController extends BaseController
 
     public function delete(): void
     {
-        $this->requireRole('instituto');
+        $this->requireLogin();
         $id = (int)($_GET['id'] ?? 0);
         $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
         if ($id) { $this->colabs->delete($id); }
@@ -576,16 +576,6 @@ class ColaboradoresController extends BaseController
     {
         $this->requireLogin();
         $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
-        if (!(Auth::isInstituto() || Auth::isClienteAdmin())) {
-            http_response_code(403);
-            if ($isAjax) {
-                header('Content-Type: application/json; charset=utf-8');
-                echo json_encode(['ok' => false, 'message' => 'Sem permissão para importar colaboradores.'], JSON_UNESCAPED_UNICODE);
-                return;
-            }
-            echo 'Sem permissão para importar colaboradores.';
-            return;
-        }
         if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
             http_response_code(405);
             if ($isAjax) {

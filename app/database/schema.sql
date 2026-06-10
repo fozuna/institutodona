@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   senha_hash VARCHAR(255) NOT NULL,
   tipo_acesso ENUM('instituto','cliente','cliente_admin','reader','consultor') NOT NULL DEFAULT 'cliente',
   id_cliente INT NULL,
+  platform_access ENUM('WEB','PWA','WEB_PWA') NOT NULL DEFAULT 'WEB_PWA',
   CONSTRAINT fk_usr_cliente FOREIGN KEY (id_cliente) REFERENCES clientes(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
