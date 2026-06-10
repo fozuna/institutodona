@@ -357,6 +357,8 @@ class ColaboradoresController extends BaseController
         $email = trim($_POST['email'] ?? '');
         $funcaoId = (int)($_POST['funcao_id'] ?? 0);
         $lider = ($_POST['lider'] ?? 'não') === 'sim' ? 'sim' : 'não';
+        $ativo = isset($_POST['ativo']) ? ((int)$_POST['ativo'] === 1 ? 1 : 0) : 1;
+        $statusReason = trim((string)($_POST['status_reason'] ?? ''));
         $cliente = isset($_POST['cliente']) ? (int)$_POST['cliente'] : 0;
         if ($cliente > 0) {
             $cliente = (int)($this->resolveScopedClienteId($cliente) ?? 0);
@@ -376,7 +378,33 @@ class ColaboradoresController extends BaseController
             }
             return;
         }
-        $this->colabs->create(['nome' => $nome, 'email' => $email, 'funcao_id' => $funcaoId, 'lider' => $lider, 'cliente_id' => $cliente]);
+        if ($ativo === 0 && mb_strlen($statusReason) < 5) {
+            $_SESSION['flash_error'] = 'Justificativa obrigatória para cadastrar como inativo (mínimo 5 caracteres).';
+            if (!headers_sent()) {
+                header('Location: index.php?route=colaboradores/create&cliente=' . $cliente);
+            }
+            return;
+        }
+        $newId = $this->colabs->create(['nome' => $nome, 'email' => $email, 'funcao_id' => $funcaoId, 'lider' => $lider, 'cliente_id' => $cliente, 'ativo' => 1]);
+        if ($newId <= 0) {
+            $_SESSION['flash_error'] = 'Não foi possível criar o colaborador.';
+            if (!headers_sent()) {
+                header('Location: index.php?route=colaboradores/create&cliente=' . $cliente);
+            }
+            return;
+        }
+        if ($ativo === 0) {
+            $userId = (int)($_SESSION['user']['id'] ?? 0);
+            $res = $this->colabs->changeAtivoWithAudit($newId, 0, $userId, $statusReason, $_SERVER['REMOTE_ADDR'] ?? null, $_SERVER['HTTP_USER_AGENT'] ?? null);
+            if (empty($res['ok'])) {
+                $_SESSION['flash_error'] = (string)($res['message'] ?? 'Não foi possível inativar o colaborador.');
+                if (!headers_sent()) {
+                    header('Location: index.php?route=colaboradores/edit&id=' . $newId . '&cliente=' . $cliente);
+                }
+                return;
+            }
+        }
+        $_SESSION['flash_success'] = 'Colaborador salvo com sucesso.';
         if (!headers_sent()) {
             header('Location: index.php?route=colaboradores/index' . ($cliente ? '&cliente=' . $cliente : ''));
         }
@@ -485,6 +513,8 @@ class ColaboradoresController extends BaseController
         $email = trim($_POST['email'] ?? '');
         $funcaoId = (int)($_POST['funcao_id'] ?? 0);
         $lider = ($_POST['lider'] ?? 'não') === 'sim' ? 'sim' : 'não';
+        $desiredAtivo = isset($_POST['ativo']) ? ((int)$_POST['ativo'] === 1 ? 1 : 0) : (int)($current['ativo'] ?? 1);
+        $statusReason = trim((string)($_POST['status_reason'] ?? ''));
         $cliente = isset($_POST['cliente']) ? (int)$_POST['cliente'] : 0;
         if ($cliente > 0) {
             $cliente = (int)($this->resolveScopedClienteId($cliente) ?? 0);
@@ -493,7 +523,30 @@ class ColaboradoresController extends BaseController
         $isCatalogFuncao = $catalogClienteId > 0 && $this->funcaoBelongsToCatalog($funcaoId, $catalogClienteId);
         $isKeepingLegacyFuncao = !$isCatalogFuncao && (int)($current['funcao_id'] ?? 0) > 0 && (int)($current['funcao_id'] ?? 0) === $funcaoId;
         if ($cliente > 0 && $funcaoId > 0 && ($isCatalogFuncao || $isKeepingLegacyFuncao)) {
-            $this->colabs->update($id, ['nome' => $nome, 'email' => $email, 'funcao_id' => $funcaoId, 'lider' => $lider, 'cliente_id' => $cliente]);
+            $payload = ['nome' => $nome, 'email' => $email, 'funcao_id' => $funcaoId, 'lider' => $lider, 'cliente_id' => $cliente];
+            $currentAtivo = (int)($current['ativo'] ?? 1);
+            if ($currentAtivo !== $desiredAtivo) {
+                $userId = (int)($_SESSION['user']['id'] ?? 0);
+                $res = $this->colabs->updateWithStatusAudit($id, $payload, $desiredAtivo, $userId, $statusReason, $_SERVER['REMOTE_ADDR'] ?? null, $_SERVER['HTTP_USER_AGENT'] ?? null);
+                if (empty($res['ok'])) {
+                    $_SESSION['flash_error'] = (string)($res['message'] ?? 'Não foi possível alterar o status do colaborador.');
+                    if (!headers_sent()) {
+                        header('Location: index.php?route=colaboradores/edit&id=' . $id . ($cliente ? '&cliente=' . $cliente : ''));
+                    }
+                    return;
+                }
+                $_SESSION['flash_success'] = (string)($res['message'] ?? 'Alterações salvas.');
+            } else {
+                $ok = $this->colabs->update($id, $payload);
+                if (!$ok) {
+                    $_SESSION['flash_error'] = 'Dados inválidos para salvar o colaborador.';
+                    if (!headers_sent()) {
+                        header('Location: index.php?route=colaboradores/edit&id=' . $id . ($cliente ? '&cliente=' . $cliente : ''));
+                    }
+                    return;
+                }
+                $_SESSION['flash_success'] = 'Alterações salvas.';
+            }
         } else {
             $_SESSION['flash_error'] = 'Dados inválidos para salvar o colaborador.';
             if (!headers_sent()) {

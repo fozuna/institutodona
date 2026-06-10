@@ -16,11 +16,11 @@ class ColaboradorModel extends BaseModel
 
     private function statusExpression(): string
     {
-        if (\App\Database\Database::columnExists('colaboradores', 'status_atual')) {
-            return "COALESCE(NULLIF(TRIM(col.status_atual), ''), 'ativo')";
-        }
         if (\App\Database\Database::columnExists('colaboradores', 'ativo')) {
             return "CASE WHEN col.ativo = 1 THEN 'ativo' ELSE 'inativo' END";
+        }
+        if (\App\Database\Database::columnExists('colaboradores', 'status_atual')) {
+            return "COALESCE(NULLIF(TRIM(col.status_atual), ''), 'ativo')";
         }
         return "'ativo'";
     }
@@ -37,13 +37,16 @@ class ColaboradorModel extends BaseModel
             return;
         }
         if (\App\Database\Database::columnExists('colaboradores', 'status_atual')) {
-            $conds[] = $this->statusExpression() . ' = :status';
+            $conds[] = "COALESCE(NULLIF(TRIM(col.status_atual), ''), 'ativo') = :status";
             $params['status'] = $status;
         }
     }
 
     private function ensureTable(): void
     {
+        if ($this->db->inTransaction()) {
+            return;
+        }
         try {
             $this->db->exec('CREATE TABLE IF NOT EXISTS colaboradores (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -256,10 +259,148 @@ class ColaboradorModel extends BaseModel
         $this->ensureTable();
         $params = ['id' => $id];
         $scope = $this->tenantInCondition('cliente_id', $params, 'cf');
-        $stmt = $this->db->prepare("SELECT id, nome, email, funcao_id, cliente_id, lider FROM colaboradores WHERE id = :id AND $scope");
+        $cols = ['id', 'nome', 'email', 'funcao_id', 'cliente_id', 'lider'];
+        if (\App\Database\Database::columnExists('colaboradores', 'ativo')) {
+            $cols[] = 'ativo';
+        }
+        if (\App\Database\Database::columnExists('colaboradores', 'status_atual')) {
+            $cols[] = 'status_atual';
+        }
+        if (\App\Database\Database::columnExists('colaboradores', 'matricula')) {
+            $cols[] = 'matricula';
+        }
+        if (\App\Database\Database::columnExists('colaboradores', 'cpf')) {
+            $cols[] = 'cpf';
+        }
+        if (\App\Database\Database::columnExists('colaboradores', 'data_admissao')) {
+            $cols[] = 'data_admissao';
+        }
+        $stmt = $this->db->prepare("SELECT " . implode(', ', $cols) . " FROM colaboradores WHERE id = :id AND $scope");
         $stmt->execute($params);
         $row = $stmt->fetch();
         return $row ?: null;
+    }
+
+    public function changeAtivoWithAudit(int $id, int $newAtivo, int $userId, string $reason, ?string $ip = null, ?string $userAgent = null): array
+    {
+        $this->ensureTable();
+        if (!\App\Database\Database::columnExists('colaboradores', 'ativo')) {
+            return ['ok' => false, 'message' => 'Coluna de status (ativo) não encontrada.'];
+        }
+        if (!\App\Database\Database::tableExists('colaborador_status_logs')) {
+            return ['ok' => false, 'message' => 'Tabela de auditoria de status (colaborador_status_logs) não encontrada.'];
+        }
+        $id = (int)$id;
+        $newAtivo = $newAtivo ? 1 : 0;
+        $userId = (int)$userId;
+        $reason = trim($reason);
+        if ($reason === '' || mb_strlen($reason) < 5) {
+            return ['ok' => false, 'message' => 'Justificativa obrigatória (mínimo 5 caracteres).'];
+        }
+
+        $params = ['id' => $id];
+        $scope = $this->tenantInCondition('cliente_id', $params, 'csc');
+
+        try {
+            $this->db->beginTransaction();
+            $stmt = $this->db->prepare("SELECT id, cliente_id, ativo FROM colaboradores WHERE id = :id AND $scope FOR UPDATE");
+            $stmt->execute($params);
+            $current = $stmt->fetch();
+            if (!$current) {
+                $this->db->rollBack();
+                return ['ok' => false, 'message' => 'Colaborador não encontrado.'];
+            }
+            $oldAtivo = (int)($current['ativo'] ?? 1);
+            if ($oldAtivo === $newAtivo) {
+                $this->db->rollBack();
+                return ['ok' => true, 'message' => 'Nenhuma alteração de status necessária.'];
+            }
+
+            if ($newAtivo === 0) {
+                $blocks = $this->deactivationBlocks($id);
+                if (!empty($blocks)) {
+                    $this->db->rollBack();
+                    return ['ok' => false, 'message' => implode(' ', $blocks)];
+                }
+            } else {
+                $clienteId = (int)($current['cliente_id'] ?? 0);
+                if ($clienteId > 0 && \App\Database\Database::columnExists('clientes', 'ativo')) {
+                    $stmtCli = $this->db->prepare('SELECT ativo FROM clientes WHERE id = :id LIMIT 1');
+                    $stmtCli->execute(['id' => $clienteId]);
+                    $cliAtivo = $stmtCli->fetchColumn();
+                    if ($cliAtivo !== false && (int)$cliAtivo !== 1) {
+                        $this->db->rollBack();
+                        return ['ok' => false, 'message' => 'Não é possível ativar colaborador em uma unidade inativa.'];
+                    }
+                }
+            }
+
+            $stmtUp = $this->db->prepare("UPDATE colaboradores SET ativo = :a WHERE id = :id AND $scope");
+            $ok = $stmtUp->execute(['a' => $newAtivo, 'id' => $id] + array_diff_key($params, ['id' => true]));
+            if (!$ok) {
+                $this->db->rollBack();
+                return ['ok' => false, 'message' => 'Não foi possível atualizar o status do colaborador.'];
+            }
+
+            if (\App\Database\Database::columnExists('colaboradores', 'status_atual')) {
+                $stmtSa = $this->db->prepare("UPDATE colaboradores SET status_atual = :s WHERE id = :id AND $scope AND (status_atual IS NULL OR TRIM(status_atual) = '' OR LOWER(TRIM(status_atual)) IN ('ativo','inativo'))");
+                $stmtSa->execute(['s' => $newAtivo === 1 ? 'ativo' : 'inativo', 'id' => $id] + array_diff_key($params, ['id' => true]));
+            }
+
+            $stmtLog = $this->db->prepare('INSERT INTO colaborador_status_logs (colaborador_id, cliente_id, old_ativo, new_ativo, justificativa, changed_by, ip, user_agent) VALUES (:col, :cid, :old, :new, :j, :uid, :ip, :ua)');
+            $stmtLog->execute([
+                'col' => $id,
+                'cid' => (int)($current['cliente_id'] ?? 0) ?: null,
+                'old' => $oldAtivo,
+                'new' => $newAtivo,
+                'j' => $reason,
+                'uid' => $userId > 0 ? $userId : null,
+                'ip' => $ip !== null && trim($ip) !== '' ? mb_substr($ip, 0, 45) : null,
+                'ua' => $userAgent !== null && trim($userAgent) !== '' ? mb_substr($userAgent, 0, 255) : null,
+            ]);
+
+            $this->db->commit();
+            return ['ok' => true, 'message' => $newAtivo === 1 ? 'Colaborador ativado com sucesso.' : 'Colaborador inativado com sucesso.'];
+        } catch (\Throwable $e) {
+            try { if ($this->db->inTransaction()) $this->db->rollBack(); } catch (\Throwable $e2) {}
+            return ['ok' => false, 'message' => 'Erro interno ao atualizar status.'];
+        }
+    }
+
+    private function deactivationBlocks(int $colaboradorId): array
+    {
+        $blocks = [];
+        $colaboradorId = (int)$colaboradorId;
+        if ($colaboradorId <= 0) {
+            return ['Colaborador inválido.'];
+        }
+
+        if (\App\Database\Database::tableExists('treinamento_colaboradores')) {
+            $stmt = $this->db->prepare("SELECT COUNT(*) FROM treinamento_colaboradores WHERE colaborador_id = :id AND status = 'pendente'");
+            $stmt->execute(['id' => $colaboradorId]);
+            if ((int)$stmt->fetchColumn() > 0) {
+                $blocks[] = 'Não é possível inativar: existem treinamentos pendentes vinculados ao colaborador.';
+            }
+        }
+        if (\App\Database\Database::tableExists('treinamento_participantes') && \App\Database\Database::tableExists('treinamentos_agenda')) {
+            $stmt = $this->db->prepare('SELECT COUNT(*) FROM treinamento_participantes tp JOIN treinamentos_agenda ta ON ta.id = tp.agenda_id WHERE tp.colaborador_id = :id AND ta.data >= NOW()');
+            $stmt->execute(['id' => $colaboradorId]);
+            if ((int)$stmt->fetchColumn() > 0) {
+                $blocks[] = 'Não é possível inativar: o colaborador possui participação em agendamentos futuros.';
+            }
+        }
+        if (\App\Database\Database::tableExists('indicador_responsavel') && \App\Database\Database::tableExists('indicadores')) {
+            $cond = '1=1';
+            if (\App\Database\Database::columnExists('indicadores', 'deleted_at')) {
+                $cond = 'i.deleted_at IS NULL';
+            }
+            $stmt = $this->db->prepare("SELECT COUNT(*) FROM indicador_responsavel ir JOIN indicadores i ON i.id = ir.indicador_id WHERE ir.colaborador_id = :id AND $cond");
+            $stmt->execute(['id' => $colaboradorId]);
+            if ((int)$stmt->fetchColumn() > 0) {
+                $blocks[] = 'Não é possível inativar: o colaborador está vinculado como responsável em indicadores ativos.';
+            }
+        }
+        return $blocks;
     }
 
     public function create(array $data): int
@@ -288,21 +429,117 @@ class ColaboradorModel extends BaseModel
     {
         $this->ensureTable();
         $data['cliente_id'] = (int)$this->normalizeScopedClienteId(isset($data['cliente_id']) ? (int)$data['cliente_id'] : null);
-        $params = [
-            'nome' => $data['nome'],
-            'email' => $data['email'] ?? null,
-            'documento' => $data['documento'] ?? null,
-            'data_nascimento' => $data['data_nascimento'] ?? null,
-            'celular' => $data['celular'] ?? null,
-            'funcao_id' => (int)$data['funcao_id'],
-            'lider' => ($data['lider'] ?? 'não') === 'sim' ? 'sim' : 'não',
-            'cliente_id' => $data['cliente_id'] ?? null,
-            'ativo' => isset($data['ativo']) ? (int)(bool)$data['ativo'] : 1,
-            'id' => $id
-        ];
+        $params = ['id' => (int)$id];
         $scope = $this->tenantInCondition('cliente_id', $params, 'cu');
-        $stmt = $this->db->prepare("UPDATE colaboradores SET nome = :nome, email = :email, documento = :documento, data_nascimento = :data_nascimento, celular = :celular, funcao_id = :funcao_id, lider = :lider, cliente_id = :cliente_id, ativo = :ativo WHERE id = :id AND $scope");
+
+        $set = [];
+        if (array_key_exists('nome', $data)) { $set[] = 'nome = :nome'; $params['nome'] = $data['nome']; }
+        if (array_key_exists('email', $data)) { $set[] = 'email = :email'; $params['email'] = $data['email'] !== '' ? $data['email'] : null; }
+        if (array_key_exists('documento', $data) && \App\Database\Database::columnExists('colaboradores', 'documento')) { $set[] = 'documento = :documento'; $params['documento'] = $data['documento'] !== '' ? $data['documento'] : null; }
+        if (array_key_exists('data_nascimento', $data) && \App\Database\Database::columnExists('colaboradores', 'data_nascimento')) { $set[] = 'data_nascimento = :data_nascimento'; $params['data_nascimento'] = $data['data_nascimento'] !== '' ? $data['data_nascimento'] : null; }
+        if (array_key_exists('celular', $data) && \App\Database\Database::columnExists('colaboradores', 'celular')) { $set[] = 'celular = :celular'; $params['celular'] = $data['celular'] !== '' ? $data['celular'] : null; }
+        if (array_key_exists('funcao_id', $data)) { $set[] = 'funcao_id = :funcao_id'; $params['funcao_id'] = (int)$data['funcao_id']; }
+        if (array_key_exists('lider', $data) && \App\Database\Database::columnExists('colaboradores', 'lider')) { $set[] = 'lider = :lider'; $params['lider'] = ($data['lider'] ?? 'não') === 'sim' ? 'sim' : 'não'; }
+        if (array_key_exists('cliente_id', $data) && \App\Database\Database::columnExists('colaboradores', 'cliente_id')) { $set[] = 'cliente_id = :cliente_id'; $params['cliente_id'] = (int)($data['cliente_id'] ?? 0) ?: null; }
+        if (array_key_exists('ativo', $data) && \App\Database\Database::columnExists('colaboradores', 'ativo')) { $set[] = 'ativo = :ativo'; $params['ativo'] = (int)(bool)$data['ativo']; }
+        if (array_key_exists('matricula', $data) && \App\Database\Database::columnExists('colaboradores', 'matricula')) { $set[] = 'matricula = :matricula'; $params['matricula'] = $data['matricula'] !== '' ? $data['matricula'] : null; }
+        if (array_key_exists('cpf', $data) && \App\Database\Database::columnExists('colaboradores', 'cpf')) { $set[] = 'cpf = :cpf'; $params['cpf'] = $data['cpf'] !== '' ? $data['cpf'] : null; }
+        if (array_key_exists('data_admissao', $data) && \App\Database\Database::columnExists('colaboradores', 'data_admissao')) { $set[] = 'data_admissao = :data_admissao'; $params['data_admissao'] = $data['data_admissao'] !== '' ? $data['data_admissao'] : null; }
+        if (array_key_exists('status_atual', $data) && \App\Database\Database::columnExists('colaboradores', 'status_atual')) { $set[] = 'status_atual = :status_atual'; $params['status_atual'] = $data['status_atual'] !== '' ? $data['status_atual'] : 'ativo'; }
+
+        if (empty($set)) {
+            return true;
+        }
+        $stmt = $this->db->prepare("UPDATE colaboradores SET " . implode(', ', $set) . " WHERE id = :id AND $scope");
         return $stmt->execute($params);
+    }
+
+    public function updateWithStatusAudit(int $id, array $data, int $newAtivo, int $userId, string $reason, ?string $ip = null, ?string $userAgent = null): array
+    {
+        $this->ensureTable();
+        if (!\App\Database\Database::columnExists('colaboradores', 'ativo')) {
+            return ['ok' => false, 'message' => 'Coluna de status (ativo) não encontrada.'];
+        }
+        if (!\App\Database\Database::tableExists('colaborador_status_logs')) {
+            return ['ok' => false, 'message' => 'Tabela de auditoria de status (colaborador_status_logs) não encontrada.'];
+        }
+
+        $id = (int)$id;
+        $newAtivo = $newAtivo ? 1 : 0;
+        $userId = (int)$userId;
+        $reason = trim($reason);
+        if ($reason === '' || mb_strlen($reason) < 5) {
+            return ['ok' => false, 'message' => 'Justificativa obrigatória (mínimo 5 caracteres).'];
+        }
+
+        $params = ['id' => $id];
+        $scope = $this->tenantInCondition('cliente_id', $params, 'usau');
+        $data['cliente_id'] = (int)$this->normalizeScopedClienteId(isset($data['cliente_id']) ? (int)$data['cliente_id'] : null);
+
+        try {
+            $this->db->beginTransaction();
+            $stmt = $this->db->prepare("SELECT id, cliente_id, ativo FROM colaboradores WHERE id = :id AND $scope FOR UPDATE");
+            $stmt->execute($params);
+            $current = $stmt->fetch();
+            if (!$current) {
+                $this->db->rollBack();
+                return ['ok' => false, 'message' => 'Colaborador não encontrado.'];
+            }
+            $oldAtivo = (int)($current['ativo'] ?? 1);
+            if ($oldAtivo === $newAtivo) {
+                $this->db->rollBack();
+                return ['ok' => false, 'message' => 'Status não alterado.'];
+            }
+
+            if ($newAtivo === 0) {
+                $blocks = $this->deactivationBlocks($id);
+                if (!empty($blocks)) {
+                    $this->db->rollBack();
+                    return ['ok' => false, 'message' => implode(' ', $blocks)];
+                }
+            } else {
+                $clienteId = (int)($current['cliente_id'] ?? 0);
+                if ($clienteId > 0 && \App\Database\Database::columnExists('clientes', 'ativo')) {
+                    $stmtCli = $this->db->prepare('SELECT ativo FROM clientes WHERE id = :id LIMIT 1');
+                    $stmtCli->execute(['id' => $clienteId]);
+                    $cliAtivo = $stmtCli->fetchColumn();
+                    if ($cliAtivo !== false && (int)$cliAtivo !== 1) {
+                        $this->db->rollBack();
+                        return ['ok' => false, 'message' => 'Não é possível ativar colaborador em uma unidade inativa.'];
+                    }
+                }
+            }
+
+            $data['ativo'] = $newAtivo;
+            $ok = $this->update($id, $data);
+            if (!$ok) {
+                $this->db->rollBack();
+                return ['ok' => false, 'message' => 'Não foi possível salvar o colaborador.'];
+            }
+
+            if (\App\Database\Database::columnExists('colaboradores', 'status_atual')) {
+                $stmtSa = $this->db->prepare("UPDATE colaboradores SET status_atual = :s WHERE id = :id AND $scope AND (status_atual IS NULL OR TRIM(status_atual) = '' OR LOWER(TRIM(status_atual)) IN ('ativo','inativo'))");
+                $stmtSa->execute(['s' => $newAtivo === 1 ? 'ativo' : 'inativo', 'id' => $id] + array_diff_key($params, ['id' => true]));
+            }
+
+            $stmtLog = $this->db->prepare('INSERT INTO colaborador_status_logs (colaborador_id, cliente_id, old_ativo, new_ativo, justificativa, changed_by, ip, user_agent) VALUES (:col, :cid, :old, :new, :j, :uid, :ip, :ua)');
+            $stmtLog->execute([
+                'col' => $id,
+                'cid' => (int)($current['cliente_id'] ?? 0) ?: null,
+                'old' => $oldAtivo,
+                'new' => $newAtivo,
+                'j' => $reason,
+                'uid' => $userId > 0 ? $userId : null,
+                'ip' => $ip !== null && trim($ip) !== '' ? mb_substr($ip, 0, 45) : null,
+                'ua' => $userAgent !== null && trim($userAgent) !== '' ? mb_substr($userAgent, 0, 255) : null,
+            ]);
+
+            $this->db->commit();
+            return ['ok' => true, 'message' => $newAtivo === 1 ? 'Colaborador ativado com sucesso.' : 'Colaborador inativado com sucesso.'];
+        } catch (\Throwable $e) {
+            try { if ($this->db->inTransaction()) $this->db->rollBack(); } catch (\Throwable $e2) {}
+            return ['ok' => false, 'message' => 'Erro interno ao salvar colaborador.'];
+        }
     }
 
     public function delete(int $id): bool

@@ -71,6 +71,19 @@
                     <option value="sim" <?= (($item['lider'] ?? 'não') === 'sim') ? 'selected' : '' ?>>Sim</option>
                 </select>
             </div>
+            <div>
+                <label class="block text-sm">Status do cadastro</label>
+                <?php $curAtivo = isset($item['ativo']) ? (int)$item['ativo'] : 1; ?>
+                <select name="ativo" id="colabAtivo" class="border rounded p-2 w-48" data-initial="<?= $curAtivo ?>">
+                    <option value="1" <?= $curAtivo === 1 ? 'selected' : '' ?>>Ativo</option>
+                    <option value="0" <?= $curAtivo !== 1 ? 'selected' : '' ?>>Inativo</option>
+                </select>
+                <div class="text-xs text-gray-500 mt-1">A inativação exige justificativa e pode ser bloqueada por vínculos pendentes.</div>
+            </div>
+            <div id="colabStatusReasonWrap" class="hidden">
+                <label class="block text-sm">Justificativa (obrigatória para ativar/inativar)</label>
+                <textarea name="status_reason" id="colabStatusReason" class="border rounded p-2 w-full" rows="3" placeholder="Descreva o motivo (mínimo 5 caracteres)."></textarea>
+            </div>
             <div class="flex items-center gap-3">
                 <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">Salvar</button>
                 <a class="px-4 py-2 rounded bg-gray-200 text-brand-brown" href="<?= htmlspecialchars($backUrl) ?>">Voltar</a>
@@ -86,6 +99,9 @@
     const dep = document.getElementById('colabDepartamentoId');
     const setor = document.getElementById('colabSetorId');
     const funcao = document.getElementById('colabFuncaoId');
+    const ativo = document.getElementById('colabAtivo');
+    const reasonWrap = document.getElementById('colabStatusReasonWrap');
+    const reason = document.getElementById('colabStatusReason');
     if (!dep || !setor || !funcao) return;
 
     const normalize = (v) => {
@@ -146,5 +162,17 @@
 
     filterBy(setor, 'data-departamento-id', dep.value);
     filterFuncoes();
+
+    const toggleReason = () => {
+      if (!ativo || !reasonWrap || !reason) return;
+      const initial = String(ativo.getAttribute('data-initial') || '1');
+      const current = String(ativo.value || '1');
+      const show = current !== initial;
+      reasonWrap.classList.toggle('hidden', !show);
+      reason.required = show;
+      if (!show) reason.value = '';
+    };
+    if (ativo) ativo.addEventListener('change', toggleReason);
+    toggleReason();
   })();
 </script>
