@@ -30,17 +30,6 @@ class CronogramaEventoModel extends BaseModel
         'Não Realizado' => 'Pendente',
     ];
 
-    private const EVENT_TYPES = [
-        'Tarefa',
-        'Reunião',
-        'Indicador',
-        'Pessoas',
-        'Processos',
-        'Treinamento',
-        'Auditoria',
-        'Coaching',
-    ];
-
     private ?string $dedupCollation = null;
 
     private function ensureTables(): void
@@ -63,6 +52,10 @@ class CronogramaEventoModel extends BaseModel
               unidade VARCHAR(120) NULL,
               atividade VARCHAR(255) NOT NULL,
               responsavel VARCHAR(255) NULL,
+              responsavel_principal VARCHAR(255) NULL,
+              responsaveis_secundarios VARCHAR(255) NULL,
+              comentarios TEXT NULL,
+              notas_internas TEXT NULL,
               modelo ENUM('Online','Presencial') NULL,
               status VARCHAR(20) NOT NULL DEFAULT 'Planejado',
               ata_path VARCHAR(255) NULL,
@@ -95,6 +88,18 @@ class CronogramaEventoModel extends BaseModel
             if (!Database::columnExists('cronograma_eventos', 'tipo_evento')) {
                 $this->db->exec("ALTER TABLE cronograma_eventos ADD COLUMN tipo_evento VARCHAR(30) NOT NULL DEFAULT 'Tarefa' AFTER periodicidade");
             }
+            if (!Database::columnExists('cronograma_eventos', 'responsavel_principal')) {
+                $this->db->exec("ALTER TABLE cronograma_eventos ADD COLUMN responsavel_principal VARCHAR(255) NULL AFTER responsavel");
+            }
+            if (!Database::columnExists('cronograma_eventos', 'responsaveis_secundarios')) {
+                $this->db->exec("ALTER TABLE cronograma_eventos ADD COLUMN responsaveis_secundarios VARCHAR(255) NULL AFTER responsavel_principal");
+            }
+            if (!Database::columnExists('cronograma_eventos', 'comentarios')) {
+                $this->db->exec("ALTER TABLE cronograma_eventos ADD COLUMN comentarios TEXT NULL AFTER responsaveis_secundarios");
+            }
+            if (!Database::columnExists('cronograma_eventos', 'notas_internas')) {
+                $this->db->exec("ALTER TABLE cronograma_eventos ADD COLUMN notas_internas TEXT NULL AFTER comentarios");
+            }
             if (!Database::columnExists('cronograma_eventos', 'ata_path')) {
                 $this->db->exec("ALTER TABLE cronograma_eventos ADD COLUMN ata_path VARCHAR(255) NULL AFTER status");
             }
@@ -123,13 +128,41 @@ class CronogramaEventoModel extends BaseModel
 
     public static function eventTypeOptions(): array
     {
-        return self::EVENT_TYPES;
+        $options = [];
+        try {
+            $options = (new CronogramaEventoTipoModel())->allActive();
+        } catch (\Throwable $e) {
+        }
+        $options = array_values(array_filter(array_map(static fn($v): string => trim((string)$v), $options), static fn(string $v): bool => $v !== ''));
+        if (!empty($options)) {
+            return $options;
+        }
+
+        try {
+            if (!Database::tableExists('cronograma_eventos') || !Database::columnExists('cronograma_eventos', 'tipo_evento')) {
+                return [];
+            }
+            $pdo = Database::getConnection();
+            $stmt = $pdo->query("SELECT DISTINCT tipo_evento FROM cronograma_eventos WHERE tipo_evento IS NOT NULL AND tipo_evento <> '' ORDER BY tipo_evento");
+            $rows = $stmt ? $stmt->fetchAll() : [];
+            $fallback = array_values(array_filter(array_map(static fn(array $r): string => trim((string)($r['tipo_evento'] ?? '')), $rows), static fn(string $v): bool => $v !== ''));
+            return $fallback;
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 
     public static function normalizeEventType(?string $value): string
     {
         $value = trim((string)$value);
-        return in_array($value, self::EVENT_TYPES, true) ? $value : 'Tarefa';
+        $options = self::eventTypeOptions();
+        if (empty($options)) {
+            throw new RuntimeException('Nenhum tipo de evento está cadastrado. Cadastre pelo menos um tipo para continuar.');
+        }
+        if (!in_array($value, $options, true)) {
+            throw new RuntimeException('Tipo do evento inválido.');
+        }
+        return $value;
     }
 
     public static function validateAtaUpload(string $clientFilename, int $sizeBytes, string $detectedMime, int $maxBytes = 52428800): array
@@ -432,7 +465,7 @@ class CronogramaEventoModel extends BaseModel
             return false;
         }
         if ($status === 'Finalizado') {
-            $tipo = self::normalizeEventType($event['tipo_evento'] ?? 'Tarefa');
+            $tipo = trim((string)($event['tipo_evento'] ?? ''));
             if ($tipo === 'Reunião') {
                 $ataPath = Database::columnExists('cronograma_eventos', 'ata_path') ? (string)($event['ata_path'] ?? '') : '';
                 if ($this->documentosCountForEvent((int)($event['id'] ?? 0), $ataPath) <= 0) {
@@ -518,11 +551,15 @@ class CronogramaEventoModel extends BaseModel
         $payload = [
             'data' => trim((string)($data['data'] ?? '')),
             'periodicidade' => $this->normalizePeriodicidade($data['periodicidade'] ?? 'unico'),
-            'tipo_evento' => self::normalizeEventType($data['tipo_evento'] ?? 'Tarefa'),
+            'tipo_evento' => self::normalizeEventType($data['tipo_evento'] ?? null),
             'topico' => trim((string)($data['topico'] ?? '')),
             'unidade' => trim((string)($data['unidade'] ?? '')),
             'atividade' => trim((string)($data['atividade'] ?? '')),
             'responsavel' => trim((string)($data['responsavel'] ?? '')),
+            'responsavel_principal' => trim((string)($data['responsavel_principal'] ?? '')),
+            'responsaveis_secundarios' => trim((string)($data['responsaveis_secundarios'] ?? '')),
+            'comentarios' => trim((string)($data['comentarios'] ?? '')),
+            'notas_internas' => trim((string)($data['notas_internas'] ?? '')),
             'modelo' => in_array(($data['modelo'] ?? ''), ['Online', 'Presencial'], true) ? $data['modelo'] : null,
             'status' => in_array($incomingStatus, self::STATUS_VALUES, true) ? $incomingStatus : 'Planejado',
             'ata_path' => isset($data['ata_path']) ? (string)$data['ata_path'] : null,
@@ -531,6 +568,16 @@ class CronogramaEventoModel extends BaseModel
             'ata_size' => isset($data['ata_size']) ? (int)$data['ata_size'] : null,
             'ata_sha256' => isset($data['ata_sha256']) ? (string)$data['ata_sha256'] : null,
         ];
+        if ($payload['responsavel'] === '') {
+            $parts = [];
+            if ($payload['responsavel_principal'] !== '') {
+                $parts[] = $payload['responsavel_principal'];
+            }
+            if ($payload['responsaveis_secundarios'] !== '') {
+                $parts[] = $payload['responsaveis_secundarios'];
+            }
+            $payload['responsavel'] = trim(implode(', ', $parts));
+        }
         if ($payload['data'] === '' || $payload['topico'] === '' || $payload['atividade'] === '') {
             throw new RuntimeException('Preencha data, pilar e atividade para salvar o evento.');
         }
@@ -646,6 +693,18 @@ class CronogramaEventoModel extends BaseModel
         if (Database::columnExists('cronograma_eventos', 'tipo_evento')) {
             $cols['tipo_evento'] = 'tipo_evento';
         }
+        if (Database::columnExists('cronograma_eventos', 'responsavel_principal')) {
+            $cols['responsavel_principal'] = 'responsavel_principal';
+        }
+        if (Database::columnExists('cronograma_eventos', 'responsaveis_secundarios')) {
+            $cols['responsaveis_secundarios'] = 'responsaveis_secundarios';
+        }
+        if (Database::columnExists('cronograma_eventos', 'comentarios')) {
+            $cols['comentarios'] = 'comentarios';
+        }
+        if (Database::columnExists('cronograma_eventos', 'notas_internas')) {
+            $cols['notas_internas'] = 'notas_internas';
+        }
         if (Database::columnExists('cronograma_eventos', 'ata_path')) {
             $cols['ata_path'] = 'ata_path';
             $cols['ata_original_name'] = 'ata_original_name';
@@ -666,6 +725,10 @@ class CronogramaEventoModel extends BaseModel
             'unidade' => $payload['unidade'] !== '' ? $payload['unidade'] : null,
             'atividade' => $payload['atividade'],
             'responsavel' => $payload['responsavel'] !== '' ? $payload['responsavel'] : null,
+            'responsavel_principal' => ($payload['responsavel_principal'] ?? '') !== '' ? $payload['responsavel_principal'] : null,
+            'responsaveis_secundarios' => ($payload['responsaveis_secundarios'] ?? '') !== '' ? $payload['responsaveis_secundarios'] : null,
+            'comentarios' => ($payload['comentarios'] ?? '') !== '' ? $payload['comentarios'] : null,
+            'notas_internas' => ($payload['notas_internas'] ?? '') !== '' ? $payload['notas_internas'] : null,
             'modelo' => $payload['modelo'],
             'status' => $payload['status'],
             'ata_path' => $payload['ata_path'] ?? null,
@@ -767,8 +830,13 @@ class CronogramaEventoModel extends BaseModel
             'unidade' => $payload['unidade'] !== '' ? $payload['unidade'] : null,
             'atividade' => $payload['atividade'],
             'responsavel' => $payload['responsavel'] !== '' ? $payload['responsavel'] : null,
+            'responsavel_principal' => $payload['responsavel_principal'] !== '' ? $payload['responsavel_principal'] : null,
+            'responsaveis_secundarios' => $payload['responsaveis_secundarios'] !== '' ? $payload['responsaveis_secundarios'] : null,
+            'comentarios' => $payload['comentarios'] !== '' ? $payload['comentarios'] : null,
+            'notas_internas' => $payload['notas_internas'] !== '' ? $payload['notas_internas'] : null,
             'modelo' => $payload['modelo'],
             'status' => $payload['status'],
+            'tipo_evento' => $payload['tipo_evento'],
             'id' => (int)$event['id'],
         ];
         $scope = $this->tenantInCondition('cr.id_cliente', $params, 'ceu');
@@ -776,10 +844,15 @@ class CronogramaEventoModel extends BaseModel
             JOIN cronogramas cr ON cr.id = ce.id_cronograma
             SET ce.data = :data,
                 ce.periodicidade = :periodicidade,
+                ce.tipo_evento = :tipo_evento,
                 ce.topico = :topico,
                 ce.unidade = :unidade,
                 ce.atividade = :atividade,
                 ce.responsavel = :responsavel,
+                ce.responsavel_principal = :responsavel_principal,
+                ce.responsaveis_secundarios = :responsaveis_secundarios,
+                ce.comentarios = :comentarios,
+                ce.notas_internas = :notas_internas,
                 ce.modelo = :modelo,
                 ce.status = :status
             WHERE ce.id = :id AND $scope");
@@ -813,10 +886,15 @@ class CronogramaEventoModel extends BaseModel
             $updateRoot = $this->db->prepare("UPDATE cronograma_eventos
                 SET data = :data,
                     periodicidade = :periodicidade,
+                    tipo_evento = :tipo_evento,
                     topico = :topico,
                     unidade = :unidade,
                     atividade = :atividade,
                     responsavel = :responsavel,
+                    responsavel_principal = :responsavel_principal,
+                    responsaveis_secundarios = :responsaveis_secundarios,
+                    comentarios = :comentarios,
+                    notas_internas = :notas_internas,
                     modelo = :modelo,
                     status = :status,
                     evento_pai_id = NULL
@@ -824,10 +902,15 @@ class CronogramaEventoModel extends BaseModel
             $updateRoot->execute([
                 'data' => $dates[0],
                 'periodicidade' => $payload['periodicidade'],
+                'tipo_evento' => $payload['tipo_evento'],
                 'topico' => $payload['topico'],
                 'unidade' => $payload['unidade'] !== '' ? $payload['unidade'] : null,
                 'atividade' => $payload['atividade'],
                 'responsavel' => $payload['responsavel'] !== '' ? $payload['responsavel'] : null,
+                'responsavel_principal' => $payload['responsavel_principal'] !== '' ? $payload['responsavel_principal'] : null,
+                'responsaveis_secundarios' => $payload['responsaveis_secundarios'] !== '' ? $payload['responsaveis_secundarios'] : null,
+                'comentarios' => $payload['comentarios'] !== '' ? $payload['comentarios'] : null,
+                'notas_internas' => $payload['notas_internas'] !== '' ? $payload['notas_internas'] : null,
                 'modelo' => $payload['modelo'],
                 'status' => $payload['status'],
                 'id' => $rootId,

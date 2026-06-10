@@ -29,7 +29,7 @@
         <div>
           <label class="block text-sm">Tipo de evento</label>
           <select class="border rounded p-2 w-full" name="tipo_evento" id="cronogramaTipoEvento" required>
-            <?php foreach (\App\Models\CronogramaEventoModel::eventTypeOptions() as $tipo): ?>
+            <?php foreach (($eventTypes ?? \App\Models\CronogramaEventoModel::eventTypeOptions()) as $tipo): ?>
               <option value="<?= htmlspecialchars($tipo) ?>"><?= htmlspecialchars($tipo) ?></option>
             <?php endforeach; ?>
           </select>

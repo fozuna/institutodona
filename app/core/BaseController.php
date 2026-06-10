@@ -40,6 +40,19 @@ class BaseController
         require __DIR__ . '/../views/layouts/main.php';
     }
 
+    protected function renderPartial(string $view, array $params = []): void
+    {
+        $params['pageTitle'] = $params['pageTitle'] ?? $this->autoTitle($view);
+        extract($params, EXTR_SKIP);
+        $defaultViewFile = __DIR__ . '/../views/' . $view . '.php';
+        $pwaViewFile = __DIR__ . '/../views/pwa/' . $view . '.php';
+        if (is_file($pwaViewFile) && $this->isPwaRequest()) {
+            require $pwaViewFile;
+            return;
+        }
+        require $defaultViewFile;
+    }
+
     protected function isPwaRequest(): bool
     {
         $path = parse_url((string)($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH) ?: '';

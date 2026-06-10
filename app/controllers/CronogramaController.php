@@ -918,10 +918,47 @@ class CronogramaController extends BaseController
         $id = (int)($_GET['id'] ?? 0);
         $crono = $this->cronogramas->find($id);
         $pilares = (new PilarModel())->all();
+        $eventTypes = CronogramaEventoModel::eventTypeOptions();
         $this->render('cronograma/add_evento', [
             'crono' => $crono,
             'periodicidades' => self::PERIODICIDADES,
             'pilares' => $pilares,
+            'eventTypes' => $eventTypes,
+        ]);
+    }
+
+    public function eventoDrawer(): void
+    {
+        $this->requireRole('instituto');
+        $idEvento = (int)($_GET['id_evento'] ?? 0);
+        $idCronograma = (int)($_GET['id_cronograma'] ?? 0);
+        $scope = (string)($_GET['escopo'] ?? 'evento');
+        $mode = (string)($_GET['mode'] ?? 'edit');
+        $event = $idEvento > 0 ? $this->eventos->find($idEvento) : null;
+        if (!$event) {
+            http_response_code(404);
+            echo 'Evento não encontrado.';
+            return;
+        }
+        $event = $this->annotateEvent($event);
+        $pilares = (new PilarModel())->all();
+        $eventTypes = CronogramaEventoModel::eventTypeOptions();
+        $anexos = [];
+        $hasLegacyAta = !empty($event['ata_path']);
+        if (($event['tipo_evento'] ?? '') === 'Reunião') {
+            $anexos = $this->eventos->anexosList((int)$event['id']);
+        }
+        header('Content-Type: text/html; charset=utf-8');
+        $this->renderPartial('cronograma/evento_drawer', [
+            'event' => $event,
+            'cronoId' => $idCronograma > 0 ? $idCronograma : (int)($event['id_cronograma'] ?? 0),
+            'periodicidades' => self::PERIODICIDADES,
+            'pilares' => $pilares,
+            'eventTypes' => $eventTypes,
+            'anexos' => $anexos,
+            'hasLegacyAta' => $hasLegacyAta,
+            'scope' => $scope === 'serie' ? 'serie' : 'evento',
+            'mode' => $mode,
         ]);
     }
 
@@ -933,22 +970,44 @@ class CronogramaController extends BaseController
         $id = (int)($_POST['id_evento'] ?? 0);
         $idCronograma = (int)($_POST['id_cronograma'] ?? 0);
         $statusFilter = CronogramaTrafficLight::normalizeFilter($_POST['status_filter'] ?? 'todos');
+        $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
+
+        $responsavelPrincipal = trim((string)($_POST['responsavel_principal'] ?? ''));
+        $responsaveisSecundarios = trim((string)($_POST['responsaveis_secundarios'] ?? ''));
+        $responsavel = trim((string)($_POST['responsavel'] ?? ''));
+        if ($responsavel === '') {
+            $parts = [];
+            if ($responsavelPrincipal !== '') {
+                $parts[] = $responsavelPrincipal;
+            }
+            if ($responsaveisSecundarios !== '') {
+                $parts[] = $responsaveisSecundarios;
+            }
+            $responsavel = trim(implode(', ', $parts));
+        }
+
         $data = [
             'data' => $_POST['data'] ?? null,
             'topico' => trim($_POST['topico'] ?? ''),
             'unidade' => trim($_POST['unidade'] ?? ''),
             'atividade' => trim($_POST['atividade'] ?? ''),
-            'responsavel' => trim($_POST['responsavel'] ?? ''),
+            'responsavel' => $responsavel,
+            'responsavel_principal' => $responsavelPrincipal,
+            'responsaveis_secundarios' => $responsaveisSecundarios,
+            'comentarios' => trim((string)($_POST['comentarios'] ?? '')),
+            'notas_internas' => trim((string)($_POST['notas_internas'] ?? '')),
             'modelo' => $_POST['modelo'] ?? null,
             'status' => $_POST['status'] ?? 'Planejado',
             'periodicidade' => $_POST['periodicidade'] ?? 'unico',
+            'tipo_evento' => trim((string)($_POST['tipo_evento'] ?? '')),
         ];
         $scope = ($_POST['escopo'] ?? 'evento') === 'serie' ? 'serie' : 'evento';
         if ($id) {
             try {
                 $event = $this->eventos->find($id);
                 if ($event) {
-                    $tipo = CronogramaEventoModel::normalizeEventType($event['tipo_evento'] ?? null);
+                    $tipo = CronogramaEventoModel::normalizeEventType($data['tipo_evento'] ?? ($event['tipo_evento'] ?? null));
+                    $data['tipo_evento'] = $tipo;
                     $currentStatus = (string)($event['status'] ?? 'Planejado');
                     $targetStatus = (string)($data['status'] ?? 'Planejado');
                     if ($tipo === 'Reunião' && $targetStatus === 'Finalizado') {
@@ -972,10 +1031,50 @@ class CronogramaController extends BaseController
                     }
                 }
                 $this->eventos->update($id, $data, $scope);
+                if ($isAjax) {
+                    $updated = $this->annotateEvent($this->eventos->find($id));
+                    if (!$updated) {
+                        throw new \RuntimeException('Evento não encontrado após a atualização.');
+                    }
+                    $serieId = (int)($updated['serie_id'] ?? $updated['id']);
+                    $seriesMembers = $this->annotateEvents($this->eventos->seriesMembers($serieId));
+                    $grid = $this->buildGrid($seriesMembers);
+                    $row = $grid[$serieId] ?? null;
+                    header('Content-Type: application/json; charset=utf-8');
+                    echo json_encode([
+                        'ok' => true,
+                        'message' => $scope === 'serie' ? 'Série atualizada com sucesso.' : 'Evento atualizado com sucesso.',
+                        'occurrence' => [
+                            'id' => (int)$updated['id'],
+                            'data' => (string)$updated['data'],
+                            'topico' => (string)$updated['topico'],
+                            'unidade' => (string)($updated['unidade'] ?? ''),
+                            'atividade' => (string)$updated['atividade'],
+                            'responsavel' => (string)($updated['responsavel'] ?? ''),
+                            'tipo_evento' => (string)($updated['tipo_evento'] ?? ''),
+                            'periodicidade' => (string)($updated['periodicidade'] ?? 'unico'),
+                            'modelo' => (string)($updated['modelo'] ?? ''),
+                            'status' => (string)($updated['status'] ?? ''),
+                            'traffic' => $updated['traffic'] ?? null,
+                        ],
+                        'series' => [
+                            'serie_id' => $serieId,
+                            'traffic' => $row['traffic'] ?? CronogramaTrafficLight::series([]),
+                            'months' => $row['meses'] ?? [],
+                        ],
+                    ], JSON_UNESCAPED_UNICODE);
+                    return;
+                }
                 $_SESSION['flash_success'] = $scope === 'serie'
-                    ? 'Serie atualizada com sucesso.'
-                    : 'Ocorrencia atualizada com sucesso.';
+                    ? 'Série atualizada com sucesso.'
+                    : 'Evento atualizado com sucesso.';
             } catch (\Throwable $e) {
+                if ($isAjax) {
+                    http_response_code(422);
+                    header('Content-Type: application/json; charset=utf-8');
+                    echo json_encode(['ok' => false, 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+                    return;
+                }
                 $_SESSION['flash_error'] = $e->getMessage();
             }
         }
@@ -1165,7 +1264,7 @@ class CronogramaController extends BaseController
             if ($end && $data > $end) {
                 return false;
             }
-            if (!empty($tipos) && !in_array((string)($event['topico'] ?? ''), $tipos, true)) {
+            if (!empty($tipos) && !in_array((string)($event['tipo_evento'] ?? ''), $tipos, true)) {
                 return false;
             }
             if (!empty($status)) {
@@ -1232,7 +1331,7 @@ class CronogramaController extends BaseController
         $locais = [];
         $status = [];
         foreach ($events as $event) {
-            $tipos[] = (string)($event['topico'] ?? '');
+            $tipos[] = (string)($event['tipo_evento'] ?? '');
             $responsaveis[] = (string)($event['responsavel'] ?? '');
             $locais[] = (string)($event['unidade'] ?? '');
             $statusLabel = (string)($event['traffic']['label'] ?? $event['status'] ?? '');

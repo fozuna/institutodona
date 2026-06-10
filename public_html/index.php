@@ -282,6 +282,9 @@ switch ($route) {
     case 'cronograma/addEventoForm':
         (new CronogramaController())->addEventoForm();
         break;
+    case 'cronograma/eventoDrawer':
+        (new CronogramaController())->eventoDrawer();
+        break;
     case 'cronograma/ataDownload':
         (new CronogramaController())->ataDownload();
         break;

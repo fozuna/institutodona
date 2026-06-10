@@ -94,14 +94,14 @@ foreach ([
     'Filtro do farol',
     'Apenas finalizados',
     'Apenas pendentes',
-    'Alternar finalizado',
-    'Editar evento',
-    'Encerrar evento',
+    'Tipo',
+    'Editar',
+    'Encerrar',
     'Documentos',
-    'Nenhum documento anexado',
     'Editar série',
-    'Excluir série',
     'Ocorrências materializadas',
+    'cronogramaDrawer',
+    'cronogramaDrawerBackdrop',
 ] as $needle) {
     if (!str_contains($html, $needle)) {
         failFast('View do cronograma deveria conter: ' . $needle);

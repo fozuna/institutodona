@@ -28,6 +28,7 @@ $events = [
   [
     'id' => 1,
     'data' => '2026-05-10',
+    'tipo_evento' => 'Gestão',
     'topico' => 'Árvore',
     'atividade' => 'Atividade A',
     'responsavel' => 'João',
@@ -39,6 +40,7 @@ $events = [
   [
     'id' => 2,
     'data' => '2026-04-15',
+    'tipo_evento' => 'Auditoria',
     'topico' => 'Banana',
     'atividade' => 'Atividade B',
     'responsavel' => 'Maria',
@@ -50,6 +52,7 @@ $events = [
   [
     'id' => 3,
     'data' => '2026-06-20',
+    'tipo_evento' => 'Reunião',
     'topico' => 'Coração',
     'atividade' => 'Atividade C',
     'responsavel' => 'João',
@@ -63,7 +66,7 @@ $events = [
 $filters = [
   'date_start' => '2026-04-01',
   'date_end' => '2026-05-31',
-  'tipo' => ['Árvore', 'Banana'],
+  'tipo' => ['Gestão', 'Auditoria'],
   'status' => ['Pendente', 'Finalizado'],
   'responsavel' => 'jo',
   'local' => 'são',
