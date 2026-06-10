@@ -15,10 +15,193 @@ use RuntimeException;
 class ColaboradorImportService
 {
     private PDO $pdo;
+    private const STATUS_ATUAL_OPTIONS = ['ativo', 'inativo', 'afastado', 'desligado'];
 
     public function __construct(?PDO $pdo = null)
     {
         $this->pdo = $pdo ?? Database::getConnection();
+    }
+
+    public function templateDefinition(int $userId): array
+    {
+        $schema = $this->importSchema();
+        $columns = [];
+        foreach ($schema as $key => $def) {
+            $columns[$key] = (string)($def['label'] ?? $key);
+        }
+
+        $clienteModel = new ClienteModel();
+        $clientes = $clienteModel->all();
+        $clienteMeta = [];
+        foreach ($clientes as $c) {
+            $id = (int)($c['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $clienteMeta[$id] = [
+                'id' => $id,
+                'nome_empresa' => (string)($c['nome_empresa'] ?? ''),
+                'is_matriz' => (int)($c['is_matriz'] ?? 1),
+                'matriz_id' => (int)($c['matriz_id'] ?? 0),
+            ];
+        }
+
+        $selectedClienteId = 0;
+        foreach ($clienteMeta as $id => $meta) {
+            if (!Auth::canAccessCliente($id)) {
+                continue;
+            }
+            $isMatriz = ((int)($meta['is_matriz'] ?? 1) === 1) || ((int)($meta['matriz_id'] ?? 0) <= 0);
+            if ($isMatriz) {
+                $selectedClienteId = $id;
+                break;
+            }
+        }
+        if ($selectedClienteId <= 0) {
+            foreach ($clienteMeta as $id => $meta) {
+                if (Auth::canAccessCliente($id)) {
+                    $selectedClienteId = $id;
+                    break;
+                }
+            }
+        }
+
+        $unidadeNome = $selectedClienteId > 0 ? (string)($clienteMeta[$selectedClienteId]['nome_empresa'] ?? '') : '';
+        $catalogRootId = $selectedClienteId > 0 ? $this->catalogRootIdForCliente($selectedClienteId, array_map(static fn(array $m): array => ['is_matriz' => (int)($m['is_matriz'] ?? 1), 'matriz_id' => (int)($m['matriz_id'] ?? 0)], $clienteMeta)) : 0;
+        $allowCatalogCreate = false;
+        if ($selectedClienteId > 0) {
+            $meta = $clienteMeta[$selectedClienteId] ?? ['is_matriz' => 1, 'matriz_id' => 0];
+            $isFilial = (int)($meta['is_matriz'] ?? 1) !== 1 && (int)($meta['matriz_id'] ?? 0) > 0;
+            $allowCatalogCreate = !$isFilial || $catalogRootId === $selectedClienteId;
+        }
+
+        $stamp = date('Ymd_His') . '_' . substr(bin2hex(random_bytes(3)), 0, 6);
+        $departamentoNome = '';
+        $setorNome = '';
+        $funcaoNome = '';
+        if ($catalogRootId > 0) {
+            $stmt = $this->pdo->prepare('SELECT id, nome FROM departamentos WHERE cliente_id = :cid AND ativo = 1 ORDER BY nome LIMIT 1');
+            $stmt->execute(['cid' => $catalogRootId]);
+            $dep = $stmt->fetch();
+            if ($dep) {
+                $departamentoNome = (string)($dep['nome'] ?? '');
+                $depId = (int)($dep['id'] ?? 0);
+                if ($depId > 0) {
+                    $stmtS = $this->pdo->prepare('SELECT id, nome FROM setores WHERE departamento_id = :dep AND ativo = 1 ORDER BY nome LIMIT 1');
+                    $stmtS->execute(['dep' => $depId]);
+                    $set = $stmtS->fetch();
+                    if ($set) {
+                        $setorNome = (string)($set['nome'] ?? '');
+                        $setId = (int)($set['id'] ?? 0);
+                        if ($setId > 0) {
+                            $stmtF = $this->pdo->prepare('SELECT nome FROM funcoes WHERE setor_id = :setor AND ativo = 1 ORDER BY nome LIMIT 1');
+                            $stmtF->execute(['setor' => $setId]);
+                            $fun = $stmtF->fetch();
+                            if ($fun) {
+                                $funcaoNome = (string)($fun['nome'] ?? '');
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if ($allowCatalogCreate) {
+            if ($departamentoNome === '') { $departamentoNome = 'Departamento Import ' . $stamp; }
+            if ($setorNome === '') { $setorNome = 'Setor Import ' . $stamp; }
+            if ($funcaoNome === '') { $funcaoNome = 'Funcao Import ' . $stamp; }
+        }
+
+        $seed = (int)(microtime(true) * 1000) % 900000;
+        $doc1 = $this->cpfFromBase((string)($seed . '123'));
+        $doc2 = $this->cpfFromBase((string)(($seed + 1) . '456'));
+        $cpf2 = $this->cpfFromBase((string)(($seed + 2) . '789'));
+        $email1 = 'exemplo_' . $stamp . '_1@institutodona.local';
+        $email2 = 'exemplo_' . $stamp . '_2@institutodona.local';
+
+        $rows = [
+            [
+                'nome' => 'Mariana Alves',
+                'documento' => $doc1,
+                'dn' => '14/08/1992',
+                'celular' => '11987654321',
+                'email' => $email1,
+                'unidade' => $unidadeNome,
+                'funcao' => $funcaoNome,
+                'setor' => $setorNome,
+                'departamento' => $departamentoNome,
+                'matricula' => 'MAT-' . $stamp . '-001',
+                'cpf' => '',
+                'data_admissao' => '03/02/2020',
+                'status_atual' => 'ativo',
+                'lider' => 'não',
+                'ativo' => '1',
+            ],
+            [
+                'nome' => 'Carlos Pereira',
+                'documento' => $doc2,
+                'dn' => '22/11/1988',
+                'celular' => '21999998888',
+                'email' => $email2,
+                'unidade' => $unidadeNome,
+                'funcao' => $funcaoNome,
+                'setor' => $setorNome,
+                'departamento' => $departamentoNome,
+                'matricula' => 'MAT-' . $stamp . '-002',
+                'cpf' => $cpf2,
+                'data_admissao' => '15/07/2019',
+                'status_atual' => 'ativo',
+                'lider' => 'sim',
+                'ativo' => '1',
+            ],
+        ];
+
+        foreach ($rows as $i => $row) {
+            foreach (array_keys($columns) as $key) {
+                if (!array_key_exists($key, $row)) {
+                    $rows[$i][$key] = '';
+                }
+            }
+        }
+
+        $orientationColumns = [
+            'campo' => 'Campo',
+            'obrigatorio' => 'Obrigatório',
+            'descricao' => 'Descrição',
+            'formato' => 'Formato / Valores aceitos',
+            'max' => 'Tamanho máximo',
+            'exemplo' => 'Exemplo',
+            'erros' => 'Erros comuns / Observações',
+        ];
+
+        $orientationRows = [];
+        foreach ($schema as $key => $def) {
+            $label = (string)($def['label'] ?? $key);
+            $required = !empty($def['required']) ? 'Sim' : 'Não';
+            $fmt = (string)($def['format'] ?? '');
+            $values = $def['values'] ?? [];
+            if (is_array($values) && !empty($values)) {
+                $fmt = trim($fmt . ($fmt !== '' ? ' | ' : '') . implode(', ', array_map('strval', $values)));
+            }
+            $max = isset($def['max']) ? (string)(int)$def['max'] : '';
+            $example = (string)($def['example'] ?? '');
+            $errors = (string)($def['common_errors'] ?? '');
+            $orientationRows[] = [
+                'campo' => $label,
+                'obrigatorio' => $required,
+                'descricao' => (string)($def['description'] ?? ''),
+                'formato' => $fmt,
+                'max' => $max,
+                'exemplo' => $example,
+                'erros' => $errors,
+            ];
+        }
+
+        return [
+            'columns' => $columns,
+            'rows' => $rows,
+            'orientation_columns' => $orientationColumns,
+            'orientation_rows' => $orientationRows,
+        ];
     }
 
     public function import(string $tmpPath, string $clientFilename, int $userId): array
@@ -38,6 +221,7 @@ class ColaboradorImportService
         $clienteModel = new ClienteModel();
         $clientes = $clienteModel->all();
         $clienteByName = [];
+        $clienteNameById = [];
         $clienteMeta = [];
         foreach ($clientes as $c) {
             $id = (int)($c['id'] ?? 0);
@@ -45,6 +229,9 @@ class ColaboradorImportService
             $key = $this->normalizeName($name);
             if ($key !== '' && !isset($clienteByName[$key])) {
                 $clienteByName[$key] = $id;
+            }
+            if ($id > 0 && !isset($clienteNameById[$id])) {
+                $clienteNameById[$id] = $name;
             }
             if ($id > 0) {
                 $clienteMeta[$id] = [
@@ -58,6 +245,7 @@ class ColaboradorImportService
         $inserted = 0;
         $seenDoc = [];
         $seenEmail = [];
+        $touchedClienteIds = [];
 
         $stmtExistsDoc = $this->pdo->prepare('SELECT 1 FROM colaboradores WHERE documento = :doc LIMIT 1');
         $stmtExistsEmail = $this->pdo->prepare('SELECT 1 FROM colaboradores WHERE email = :email LIMIT 1');
@@ -67,7 +255,21 @@ class ColaboradorImportService
         $stmtInsertSetor = $this->pdo->prepare('INSERT INTO setores (nome, departamento_id) VALUES (:nome, :dep)');
         $stmtFindFuncao = $this->pdo->prepare('SELECT id FROM funcoes WHERE setor_id = :setor AND nome = :nome AND ativo = 1 LIMIT 1');
         $stmtInsertFuncao = $this->pdo->prepare('INSERT INTO funcoes (nome, setor_id) VALUES (:nome, :setor)');
-        $stmtInsertCol = $this->pdo->prepare('INSERT INTO colaboradores (nome, email, documento, data_nascimento, celular, funcao_id, lider, cliente_id, ativo) VALUES (:nome, :email, :documento, :data_nascimento, :celular, :funcao_id, :lider, :cliente_id, :ativo)');
+        $insertCols = ['nome', 'email', 'documento', 'data_nascimento', 'celular', 'funcao_id', 'lider', 'cliente_id', 'ativo'];
+        $schema = $this->importSchema();
+        $optionalDbCols = [
+            'matricula' => 'matricula',
+            'cpf' => 'cpf',
+            'data_admissao' => 'data_admissao',
+            'status_atual' => 'status_atual',
+        ];
+        foreach ($optionalDbCols as $key => $dbCol) {
+            if (!empty($schema[$key]['db_column'])) {
+                $insertCols[] = $dbCol;
+            }
+        }
+        $placeholders = array_map(static fn(string $c): string => ':' . $c, $insertCols);
+        $stmtInsertCol = $this->pdo->prepare('INSERT INTO colaboradores (' . implode(',', $insertCols) . ') VALUES (' . implode(',', $placeholders) . ')');
 
         $catalogRootCache = [];
         $this->pdo->beginTransaction();
@@ -181,18 +383,40 @@ class ColaboradorImportService
                     continue;
                 }
 
-                $stmtInsertCol->execute([
+                $params = [
                     'nome' => $normalized['nome'],
                     'email' => $email,
                     'documento' => $doc,
                     'data_nascimento' => $normalized['data_nascimento_db'],
                     'celular' => $normalized['celular'],
                     'funcao_id' => $funcaoId,
-                    'lider' => 'não',
+                    'lider' => $normalized['lider'] !== '' ? $normalized['lider'] : 'não',
                     'cliente_id' => $clienteId,
-                    'ativo' => 1,
-                ]);
+                    'ativo' => $normalized['ativo'] !== null ? (int)$normalized['ativo'] : 1,
+                ];
+                if (!empty($schema['matricula']['db_column'])) {
+                    $params['matricula'] = $normalized['matricula'] !== '' ? $normalized['matricula'] : null;
+                }
+                if (!empty($schema['cpf']['db_column'])) {
+                    $cpfDigits = $normalized['cpf_digits'];
+                    if ($cpfDigits === '' && strlen($doc) === 11) {
+                        $cpfDigits = $doc;
+                    }
+                    $params['cpf'] = $cpfDigits !== '' ? $cpfDigits : null;
+                }
+                if (!empty($schema['data_admissao']['db_column'])) {
+                    $params['data_admissao'] = $normalized['data_admissao_db'] !== '' ? $normalized['data_admissao_db'] : null;
+                }
+                if (!empty($schema['status_atual']['db_column'])) {
+                    $statusAtual = $normalized['status_atual'];
+                    if ($statusAtual === '' && isset($params['ativo'])) {
+                        $statusAtual = ((int)$params['ativo'] === 1) ? 'ativo' : 'inativo';
+                    }
+                    $params['status_atual'] = $statusAtual !== '' ? $statusAtual : 'ativo';
+                }
+                $stmtInsertCol->execute($params);
                 $inserted++;
+                $touchedClienteIds[$clienteId] = true;
             }
 
             if (!empty($errors)) {
@@ -200,7 +424,21 @@ class ColaboradorImportService
                 return ['ok' => false, 'inserted' => 0, 'errors' => $errors];
             }
             $this->pdo->commit();
-            return ['ok' => true, 'inserted' => $inserted, 'errors' => []];
+            $clienteIds = array_values(array_unique(array_filter(array_map('intval', array_keys($touchedClienteIds)))));
+            $clienteNames = [];
+            foreach ($clienteIds as $cid) {
+                $nome = (string)($clienteNameById[$cid] ?? '');
+                if ($nome !== '') {
+                    $clienteNames[] = $nome;
+                }
+            }
+            return [
+                'ok' => true,
+                'inserted' => $inserted,
+                'errors' => [],
+                'cliente_ids' => $clienteIds,
+                'cliente_nomes' => $clienteNames,
+            ];
         } catch (\Throwable $e) {
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
@@ -362,6 +600,38 @@ class ColaboradorImportService
             $errors[] = ['line' => $line, 'field' => 'Departamento', 'message' => 'Departamento excede 50 caracteres.', 'value' => $row['departamento']];
         }
 
+        if (array_key_exists('matricula', $row) && $row['matricula'] !== '' && mb_strlen($row['matricula']) > 60) {
+            $errors[] = ['line' => $line, 'field' => 'Matrícula', 'message' => 'Matrícula excede 60 caracteres.', 'value' => $row['matricula']];
+        }
+        if (array_key_exists('cpf', $row) && $row['cpf'] !== '') {
+            $cpfDigits = preg_replace('/\D+/', '', $row['cpf']) ?: '';
+            if (!$this->isCpfValid($cpfDigits)) {
+                $errors[] = ['line' => $line, 'field' => 'CPF', 'message' => 'CPF inválido.', 'value' => $row['cpf']];
+            }
+        }
+        if (array_key_exists('data_admissao', $row) && $row['data_admissao'] !== '') {
+            $db = $this->parseBrDateToDb($row['data_admissao']);
+            if ($db === null) {
+                $errors[] = ['line' => $line, 'field' => 'Data Admissão', 'message' => 'Data de admissão inválida. Use DD/MM/AAAA.', 'value' => $row['data_admissao']];
+            }
+        }
+        if (array_key_exists('status_atual', $row) && $row['status_atual'] !== '') {
+            $st = mb_strtolower(trim($row['status_atual']));
+            if (!in_array($st, self::STATUS_ATUAL_OPTIONS, true)) {
+                $errors[] = ['line' => $line, 'field' => 'Status Atual', 'message' => 'Status atual inválido.', 'value' => $row['status_atual']];
+            }
+        }
+        if (array_key_exists('lider', $row) && $row['lider'] !== '') {
+            $l = $this->normalizeLiderValue($row['lider']);
+            if ($l === null) {
+                $errors[] = ['line' => $line, 'field' => 'Líder', 'message' => 'Valor inválido. Use sim ou não.', 'value' => $row['lider']];
+            }
+        }
+        if (array_key_exists('ativo_raw', $row) && trim((string)$row['ativo_raw']) !== '') {
+            if ($this->normalizeAtivoValue((string)$row['ativo_raw']) === null) {
+                $errors[] = ['line' => $line, 'field' => 'Ativo', 'message' => 'Valor inválido. Use 1/0, sim/não, ativo/inativo.', 'value' => (string)$row['ativo_raw']];
+            }
+        }
         return $errors;
     }
 
@@ -383,11 +653,21 @@ class ColaboradorImportService
         $email = $get($raw, $headerMap, 'email');
         $dn = $get($raw, $headerMap, 'dn');
         $cel = $get($raw, $headerMap, 'celular');
+        $matricula = $get($raw, $headerMap, 'matricula');
+        $cpf = $get($raw, $headerMap, 'cpf');
+        $dataAdmissao = $get($raw, $headerMap, 'data_admissao');
+        $statusAtual = $get($raw, $headerMap, 'status_atual');
+        $lider = $get($raw, $headerMap, 'lider');
+        $ativoRaw = $get($raw, $headerMap, 'ativo');
 
         $digits = preg_replace('/\D+/', '', $doc) ?: '';
         $emailLower = mb_strtolower(trim($email));
 
         $dbDate = $this->parseBrDateToDb($dn);
+        $cpfDigits = preg_replace('/\D+/', '', $cpf) ?: '';
+        $dataAdmissaoDb = $this->parseBrDateToDb($dataAdmissao);
+        $liderNorm = $this->normalizeLiderValue($lider);
+        $ativoNorm = $this->normalizeAtivoValue($ativoRaw);
 
         return [
             'nome' => $get($raw, $headerMap, 'nome'),
@@ -402,6 +682,15 @@ class ColaboradorImportService
             'funcao' => $get($raw, $headerMap, 'funcao'),
             'setor' => $get($raw, $headerMap, 'setor'),
             'departamento' => $get($raw, $headerMap, 'departamento'),
+            'matricula' => $matricula,
+            'cpf' => $cpf,
+            'cpf_digits' => $cpfDigits,
+            'data_admissao' => $dataAdmissao,
+            'data_admissao_db' => $dataAdmissaoDb ?? '',
+            'status_atual' => mb_strtolower(trim($statusAtual)),
+            'lider' => $liderNorm ?? '',
+            'ativo_raw' => $ativoRaw,
+            'ativo' => $ativoNorm,
         ];
     }
 
@@ -422,21 +711,17 @@ class ColaboradorImportService
 
     private function expectedHeader(): array
     {
-        return [
-            'nome' => 'Nome',
-            'documento' => 'Documento',
-            'dn' => 'DN',
-            'celular' => 'Celular',
-            'email' => 'Email',
-            'unidade' => 'Unidade',
-            'funcao' => 'Função',
-            'setor' => 'Setor',
-            'departamento' => 'Departamento',
-        ];
+        $schema = $this->importSchema();
+        $expected = [];
+        foreach ($schema as $key => $def) {
+            $expected[$key] = (string)($def['label'] ?? $key);
+        }
+        return $expected;
     }
 
     private function buildHeaderMap(array $header): array
     {
+        $schema = $this->importSchema();
         $expected = $this->expectedHeader();
         $map = [];
         $normalizedHeader = [];
@@ -447,7 +732,10 @@ class ColaboradorImportService
             $wanted = $this->normalizeName($label);
             $idx = array_search($wanted, $normalizedHeader, true);
             if ($idx === false) {
-                return [];
+                if (!empty($schema[$key]['required'])) {
+                    return [];
+                }
+                continue;
             }
             $map[$key] = (int)$idx;
         }
@@ -475,7 +763,8 @@ class ColaboradorImportService
 
         $headerMap = $this->buildHeaderMap($first);
         if (empty($headerMap)) {
-            return ['error' => ['line' => 1, 'field' => 'Header', 'message' => 'Cabeçalho inválido. Colunas obrigatórias: Nome, Documento, DN, Celular, Email, Unidade, Função, Setor, Departamento.', 'value' => json_encode($first, JSON_UNESCAPED_UNICODE)]];
+            $required = $this->requiredHeaderLabels();
+            return ['error' => ['line' => 1, 'field' => 'Header', 'message' => 'Cabeçalho inválido. Colunas obrigatórias: ' . implode(', ', $required) . '.', 'value' => json_encode($first, JSON_UNESCAPED_UNICODE)]];
         }
 
         $iter = (function() use ($file) {
@@ -550,7 +839,8 @@ class ColaboradorImportService
 
         $headerMap = $this->buildHeaderMap($header);
         if (empty($headerMap)) {
-            return ['error' => ['line' => 1, 'field' => 'Header', 'message' => 'Cabeçalho inválido. Colunas obrigatórias: Nome, Documento, DN, Celular, Email, Unidade, Função, Setor, Departamento.', 'value' => json_encode($header, JSON_UNESCAPED_UNICODE)]];
+            $required = $this->requiredHeaderLabels();
+            return ['error' => ['line' => 1, 'field' => 'Header', 'message' => 'Cabeçalho inválido. Colunas obrigatórias: ' . implode(', ', $required) . '.', 'value' => json_encode($header, JSON_UNESCAPED_UNICODE)]];
         }
 
         $iter = (function() use ($rows) {
@@ -606,7 +896,8 @@ class ColaboradorImportService
         $header = $rows[0];
         $headerMap = $this->buildHeaderMap($header);
         if (empty($headerMap)) {
-            return ['error' => ['line' => 1, 'field' => 'Header', 'message' => 'Cabeçalho inválido. Colunas obrigatórias: Nome, Documento, DN, Celular, Email, Unidade, Função, Setor, Departamento.', 'value' => json_encode($header, JSON_UNESCAPED_UNICODE)]];
+            $required = $this->requiredHeaderLabels();
+            return ['error' => ['line' => 1, 'field' => 'Header', 'message' => 'Cabeçalho inválido. Colunas obrigatórias: ' . implode(', ', $required) . '.', 'value' => json_encode($header, JSON_UNESCAPED_UNICODE)]];
         }
         $iter = (function() use ($rows) {
             $line = 1;
@@ -887,5 +1178,220 @@ class ColaboradorImportService
         $d2 = $sum % 11;
         $d2 = $d2 < 2 ? 0 : 11 - $d2;
         return $d2 === (int)$cnpj[13];
+    }
+    private function importSchema(): array
+    {
+        $schema = [
+            'nome' => [
+                'label' => 'Nome',
+                'required' => true,
+                'max' => 100,
+                'format' => 'Texto',
+                'description' => 'Nome completo do colaborador.',
+                'example' => 'Mariana Alves',
+                'common_errors' => 'Evite abreviações excessivas e caracteres inválidos.',
+            ],
+            'documento' => [
+                'label' => 'Documento',
+                'required' => true,
+                'max' => 20,
+                'format' => 'CPF ou CNPJ (com ou sem pontuação)',
+                'description' => 'Documento principal do colaborador. O sistema normaliza para apenas dígitos e valida CPF/CNPJ.',
+                'example' => '111.444.777-35',
+                'common_errors' => 'CPF/CNPJ inválido ou com quantidade de dígitos incorreta.',
+            ],
+            'dn' => [
+                'label' => 'DN',
+                'required' => true,
+                'format' => 'DD/MM/AAAA',
+                'description' => 'Data de nascimento do colaborador.',
+                'example' => '14/08/1992',
+                'common_errors' => 'Formato diferente de DD/MM/AAAA ou data inexistente.',
+            ],
+            'celular' => [
+                'label' => 'Celular',
+                'required' => true,
+                'max' => 15,
+                'format' => 'Somente números (recomendado)',
+                'description' => 'Celular/WhatsApp do colaborador.',
+                'example' => '11987654321',
+                'common_errors' => 'Exceder 15 caracteres ou inserir texto.',
+            ],
+            'email' => [
+                'label' => 'Email',
+                'required' => true,
+                'max' => 180,
+                'format' => 'email@dominio',
+                'description' => 'E-mail do colaborador.',
+                'example' => 'mariana.alves@empresa.com.br',
+                'common_errors' => 'E-mail inválido ou duplicado no arquivo / no sistema.',
+            ],
+            'unidade' => [
+                'label' => 'Unidade',
+                'required' => true,
+                'max' => 50,
+                'format' => 'Nome exato da unidade (Clientes.nome_empresa)',
+                'description' => 'Unidade/empresa para a qual o colaborador será importado. Deve existir no sistema.',
+                'example' => 'Unidade Matriz',
+                'common_errors' => 'Nome diferente do cadastrado (acentos, espaços, abreviações).',
+            ],
+            'funcao' => [
+                'label' => 'Função',
+                'required' => true,
+                'max' => 50,
+                'format' => 'Texto',
+                'description' => 'Nome da função/cargo do colaborador.',
+                'example' => 'Analista',
+                'common_errors' => 'Em filiais, precisa existir no catálogo da matriz.',
+            ],
+            'setor' => [
+                'label' => 'Setor',
+                'required' => true,
+                'max' => 50,
+                'format' => 'Texto',
+                'description' => 'Nome do setor associado ao colaborador.',
+                'example' => 'Administrativo',
+                'common_errors' => 'Em filiais, precisa existir no catálogo da matriz.',
+            ],
+            'departamento' => [
+                'label' => 'Departamento',
+                'required' => true,
+                'max' => 50,
+                'format' => 'Texto',
+                'description' => 'Nome do departamento associado ao colaborador.',
+                'example' => 'Operações',
+                'common_errors' => 'Em filiais, precisa existir no catálogo da matriz.',
+            ],
+        ];
+
+        if (Database::columnExists('colaboradores', 'matricula')) {
+            $schema['matricula'] = [
+                'label' => 'Matrícula',
+                'required' => false,
+                'max' => 60,
+                'format' => 'Texto',
+                'description' => 'Identificador interno do colaborador.',
+                'example' => 'MAT-20260610-001',
+                'common_errors' => 'Exceder 60 caracteres.',
+                'db_column' => 'matricula',
+            ];
+        }
+        if (Database::columnExists('colaboradores', 'cpf')) {
+            $schema['cpf'] = [
+                'label' => 'CPF',
+                'required' => false,
+                'max' => 20,
+                'format' => 'CPF (com ou sem pontuação)',
+                'description' => 'CPF do colaborador (quando separado de Documento).',
+                'example' => '111.444.777-35',
+                'common_errors' => 'CPF inválido.',
+                'db_column' => 'cpf',
+            ];
+        }
+        if (Database::columnExists('colaboradores', 'data_admissao')) {
+            $schema['data_admissao'] = [
+                'label' => 'Data Admissão',
+                'required' => false,
+                'format' => 'DD/MM/AAAA',
+                'description' => 'Data de admissão/entrada do colaborador.',
+                'example' => '03/02/2020',
+                'common_errors' => 'Formato diferente de DD/MM/AAAA ou data inexistente.',
+                'db_column' => 'data_admissao',
+            ];
+        }
+        if (Database::columnExists('colaboradores', 'status_atual')) {
+            $schema['status_atual'] = [
+                'label' => 'Status Atual',
+                'required' => false,
+                'max' => 40,
+                'format' => 'Texto',
+                'values' => self::STATUS_ATUAL_OPTIONS,
+                'description' => 'Status atual do colaborador (usado em filtros de treinamentos/relatórios).',
+                'example' => 'ativo',
+                'common_errors' => 'Usar valor fora da lista de opções.',
+                'db_column' => 'status_atual',
+            ];
+        }
+        if (Database::columnExists('colaboradores', 'lider')) {
+            $schema['lider'] = [
+                'label' => 'Líder',
+                'required' => false,
+                'format' => 'sim ou não',
+                'values' => ['sim', 'não'],
+                'description' => 'Indica se o colaborador é líder.',
+                'example' => 'não',
+                'common_errors' => 'Usar valores diferentes de sim/não.',
+                'db_column' => 'lider',
+            ];
+        }
+        if (Database::columnExists('colaboradores', 'ativo')) {
+            $schema['ativo'] = [
+                'label' => 'Ativo',
+                'required' => false,
+                'format' => '1/0, sim/não, ativo/inativo',
+                'values' => ['1', '0', 'sim', 'não', 'ativo', 'inativo'],
+                'description' => 'Status ativo/inativo do registro.',
+                'example' => '1',
+                'common_errors' => 'Usar valores não reconhecidos.',
+                'db_column' => 'ativo',
+            ];
+        }
+        return $schema;
+    }
+
+    private function requiredHeaderLabels(): array
+    {
+        $schema = $this->importSchema();
+        $labels = [];
+        foreach ($schema as $def) {
+            if (!empty($def['required'])) {
+                $labels[] = (string)($def['label'] ?? '');
+            }
+        }
+        return array_values(array_filter($labels, static fn(string $v): bool => $v !== ''));
+    }
+
+    private function normalizeLiderValue(string $raw): ?string
+    {
+        $v = trim(mb_strtolower($raw));
+        if ($v === '') {
+            return null;
+        }
+        if ($v === 'sim' || $v === 's' || $v === '1' || $v === 'true') {
+            return 'sim';
+        }
+        if ($v === 'não' || $v === 'nao' || $v === 'n' || $v === '0' || $v === 'false') {
+            return 'não';
+        }
+        return null;
+    }
+
+    private function normalizeAtivoValue(string $raw): ?int
+    {
+        $v = trim(mb_strtolower($raw));
+        if ($v === '') {
+            return null;
+        }
+        if (in_array($v, ['1', 'sim', 's', 'true', 'ativo'], true)) {
+            return 1;
+        }
+        if (in_array($v, ['0', 'não', 'nao', 'n', 'false', 'inativo'], true)) {
+            return 0;
+        }
+        return null;
+    }
+
+    private function cpfFromBase(string $base9): string
+    {
+        $base9 = preg_replace('/\D+/', '', $base9) ?: '';
+        $base9 = str_pad(substr($base9, 0, 9), 9, '1');
+        $sum = 0;
+        for ($i = 0, $w = 10; $i < 9; $i++, $w--) { $sum += ((int)$base9[$i]) * $w; }
+        $d1 = 11 - ($sum % 11); $d1 = $d1 >= 10 ? 0 : $d1;
+        $base10 = $base9 . $d1;
+        $sum = 0;
+        for ($i = 0, $w = 11; $i < 10; $i++, $w--) { $sum += ((int)$base10[$i]) * $w; }
+        $d2 = 11 - ($sum % 11); $d2 = $d2 >= 10 ? 0 : $d2;
+        return $base10 . $d2;
     }
 }

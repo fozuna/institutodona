@@ -63,6 +63,92 @@ class XlsxExport
         return $path;
     }
 
+    public static function exportTemplateWorkbook(array $sheets, string $filename, array $branding = []): string
+    {
+        $sheets = array_values(array_filter($sheets, static fn($s): bool => is_array($s) && !empty($s['columns'])));
+        if (empty($sheets)) {
+            throw new \RuntimeException('Nenhuma planilha informada para exportação.');
+        }
+
+        $sheetNames = [];
+        foreach ($sheets as $i => $sheet) {
+            $name = trim((string)($sheet['name'] ?? ''));
+            if ($name === '') {
+                $name = 'Sheet' . ($i + 1);
+            }
+            $sheetNames[] = mb_substr($name, 0, 31);
+        }
+
+        $branding = ReportBranding::aplicarBrandingRelatorio('excel', array_merge([
+            'report_title' => 'Modelo de Importação',
+            'generated_at' => DateHelper::now(),
+        ], $branding));
+
+        $tmpDir = sys_get_temp_dir();
+        $path = $tmpDir . DIRECTORY_SEPARATOR . $filename;
+
+        $entries = [
+            '[Content_Types].xml' => self::contentTypesForSheets(count($sheetNames)),
+            '_rels/.rels' => self::rels(),
+            'docProps/app.xml' => self::appXml(),
+            'docProps/core.xml' => self::coreXml($branding),
+            'xl/_rels/workbook.xml.rels' => self::workbookRelsForSheets(count($sheetNames)),
+            'xl/workbook.xml' => self::workbookForSheets($sheetNames),
+            'xl/styles.xml' => self::styles(),
+        ];
+        foreach ($sheets as $i => $sheet) {
+            $sheetIndex = $i + 1;
+            $columns = (array)$sheet['columns'];
+            $rows = is_array($sheet['rows'] ?? null) ? $sheet['rows'] : [];
+            $entries['xl/worksheets/sheet' . $sheetIndex . '.xml'] = self::templateSheet($rows, $columns);
+        }
+
+        if (class_exists(\ZipArchive::class)) {
+            $zip = new \ZipArchive();
+            if ($zip->open($path, \ZipArchive::OVERWRITE | \ZipArchive::CREATE) !== true) {
+                throw new \RuntimeException('Não foi possível criar arquivo XLSX');
+            }
+            foreach ($entries as $name => $data) {
+                $zip->addFromString((string)$name, (string)$data);
+            }
+            $zip->close();
+        } else {
+            self::zipWriteStored($path, $entries);
+        }
+        return $path;
+    }
+
+    private static function zipWriteStored(string $path, array $entries): void
+    {
+        $offset = 0;
+        $cd = '';
+        $out = '';
+        $now = getdate();
+        $dosTime = (($now['hours'] ?? 0) << 11) | (($now['minutes'] ?? 0) << 5) | (int)(($now['seconds'] ?? 0) / 2);
+        $dosDate = ((($now['year'] ?? 1980) - 1980) << 9) | (($now['mon'] ?? 1) << 5) | ($now['mday'] ?? 1);
+
+        foreach ($entries as $name => $data) {
+            $name = str_replace('\\', '/', (string)$name);
+            $data = (string)$data;
+            $crc = crc32($data);
+            $size = strlen($data);
+            $nameLen = strlen($name);
+
+            $lh = pack('VvvvvvVVVvv', 0x04034b50, 20, 0, 0, $dosTime, $dosDate, $crc, $size, $size, $nameLen, 0);
+            $out .= $lh . $name . $data;
+
+            $cdh = pack('VvvvvvvVVVvvvvvVV', 0x02014b50, 0, 20, 0, 0, $dosTime, $dosDate, $crc, $size, $size, $nameLen, 0, 0, 0, 0, 0, $offset);
+            $cd .= $cdh . $name;
+
+            $offset += strlen($lh) + $nameLen + $size;
+        }
+
+        $out .= $cd;
+        $eocd = pack('VvvvvVVv', 0x06054b50, 0, 0, count($entries), count($entries), strlen($cd), $offset, 0);
+        $out .= $eocd;
+        file_put_contents($path, $out);
+    }
+
     private static function esc($s): string
     {
         return htmlspecialchars((string)$s, ENT_XML1 | ENT_COMPAT, 'UTF-8');
@@ -80,6 +166,24 @@ class XlsxExport
   <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
   <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
 </Types>';
+    }
+
+    private static function contentTypesForSheets(int $count): string
+    {
+        $count = max(1, (int)$count);
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>';
+        $xml .= '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">';
+        $xml .= '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>';
+        $xml .= '<Default Extension="xml" ContentType="application/xml"/>';
+        $xml .= '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>';
+        for ($i = 1; $i <= $count; $i++) {
+            $xml .= '<Override PartName="/xl/worksheets/sheet' . $i . '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
+        }
+        $xml .= '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>';
+        $xml .= '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>';
+        $xml .= '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>';
+        $xml .= '</Types>';
+        return $xml;
     }
 
     private static function rels(): string
@@ -131,6 +235,19 @@ class XlsxExport
 </Relationships>';
     }
 
+    private static function workbookRelsForSheets(int $count): string
+    {
+        $count = max(1, (int)$count);
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>';
+        $xml .= '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">';
+        for ($i = 1; $i <= $count; $i++) {
+            $xml .= '<Relationship Id="rId' . $i . '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' . $i . '.xml"/>';
+        }
+        $xml .= '<Relationship Id="rId' . ($count + 1) . '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>';
+        $xml .= '</Relationships>';
+        return $xml;
+    }
+
     private static function workbook(array $branding): string
     {
         return '<?xml version="1.0" encoding="UTF-8"?>
@@ -139,6 +256,23 @@ class XlsxExport
     <sheet name="' . self::esc($branding['sheet_name'] ?? 'Relatorio') . '" sheetId="1" r:id="rId1"/>
   </sheets>
 </workbook>';
+    }
+
+    private static function workbookForSheets(array $sheetNames): string
+    {
+        $sheetNames = array_values(array_filter(array_map('strval', $sheetNames), static fn(string $v): bool => trim($v) !== ''));
+        if (empty($sheetNames)) {
+            $sheetNames = ['Sheet1'];
+        }
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>';
+        $xml .= '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">';
+        $xml .= '<sheets>';
+        foreach ($sheetNames as $i => $name) {
+            $sheetId = $i + 1;
+            $xml .= '<sheet name="' . self::esc(mb_substr($name, 0, 31)) . '" sheetId="' . $sheetId . '" r:id="rId' . $sheetId . '"/>';
+        }
+        $xml .= '</sheets></workbook>';
+        return $xml;
     }
 
     private static function styles(): string
@@ -190,6 +324,56 @@ class XlsxExport
             $widths[] = self::guessWidth($key);
         }
         return self::renderSheetXml($rows, $labels, $keys, $widths, $branding);
+    }
+
+    private static function templateSheet(array $rows, array $columns): string
+    {
+        $keys = array_keys($columns);
+        $labels = array_values($columns);
+        $widths = [];
+        foreach ($keys as $key) {
+            $widths[] = self::guessWidth($key);
+        }
+        return self::renderTemplateSheetXml($rows, $labels, $keys, $widths);
+    }
+
+    private static function renderTemplateSheetXml(array $rows, array $columns, array $keys, array $colWidths): string
+    {
+        $maxR = max(1, count($rows) + 1);
+        $lastColName = self::coordCol(max(count($columns) - 1, 0));
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>';
+        $xml .= '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+        $xml .= '<dimension ref="A1:' . $lastColName . $maxR . '"/>';
+        $xml .= '<sheetViews><sheetView workbookViewId="0"/></sheetViews>';
+        $xml .= '<cols>';
+        $colCount = count($columns);
+        for ($i = 0; $i < $colCount; $i++) {
+            $w = $colWidths[$i] ?? 15;
+            $xml .= '<col min="' . ($i + 1) . '" max="' . ($i + 1) . '" width="' . $w . '" customWidth="1"/>';
+        }
+        $xml .= '</cols><sheetData>';
+        $xml .= '<row r="1">';
+        foreach ($columns as $j => $label) {
+            $xml .= '<c r="' . self::coord($j, 1) . '" t="inlineStr" s="3"><is><t>' . self::esc($label) . '</t></is></c>';
+        }
+        $xml .= '</row>';
+        $rIdx = 2;
+        foreach ($rows as $row) {
+            $xml .= '<row r="' . $rIdx . '">';
+            $cells = [];
+            foreach ($keys as $key) {
+                $cells[] = self::formatCell($key, $row[$key] ?? null);
+            }
+            foreach ($cells as $j => $val) {
+                $xml .= '<c r="' . self::coord($j, $rIdx) . '" t="inlineStr" s="4"><is><t>' . self::esc($val) . '</t></is></c>';
+            }
+            $xml .= '</row>';
+            $rIdx++;
+        }
+        $xml .= '</sheetData>';
+        $xml .= '<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>';
+        $xml .= '</worksheet>';
+        return $xml;
     }
 
     private static function renderSheetXml(array $rows, array $columns, array $keys, array $colWidths, array $branding): string

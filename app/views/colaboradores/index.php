@@ -6,6 +6,7 @@ $canCreate = \App\Core\AccessControl::canAccessRoute('colaboradores/create', 'GE
 $canEdit = \App\Core\AccessControl::canAccessRoute('colaboradores/edit', 'GET', $currentUser);
 $canDelete = \App\Core\AccessControl::canAccessRoute('colaboradores/delete', 'POST', $currentUser);
 $canImport = \App\Core\AccessControl::canAccessRoute('colaboradores/import', 'POST', $currentUser);
+$canDownloadTemplate = \App\Core\AccessControl::canAccessRoute('colaboradores/importTemplate', 'GET', $currentUser);
 $backUrl = ($canClienteShow && (int)($cliente ?? 0) > 0)
     ? ('index.php?route=clientes/show&id=' . (int)$cliente)
     : 'index.php?route=colaboradores/index' . ($cliente ? '&cliente=' . (int)$cliente : '');
@@ -29,7 +30,20 @@ $backUrl = ($canClienteShow && (int)($cliente ?? 0) > 0)
           <div class="md:col-span-6">
             <label class="text-sm">Arquivo (CSV, XLS, XLSX)</label>
             <input type="file" name="arquivo" id="colabImportFile" class="border rounded p-2 w-full" accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required />
-            <div class="text-xs text-gray-500 mt-1">Colunas obrigatórias: Nome, Documento, DN, Celular, Email, Unidade, Função, Setor, Departamento. Máximo: 50MB.</div>
+            <div class="text-xs text-gray-500 mt-1">Baixe o modelo padrão para ver todas as colunas obrigatórias e opcionais aceitas. Máximo: 50MB.</div>
+            <?php if ($canDownloadTemplate): ?>
+              <div class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown text-sm w-full sm:w-auto text-center"
+                   href="index.php?route=colaboradores/importTemplate&format=xlsx">
+                  Baixar modelo (XLSX)
+                </a>
+                <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown text-sm w-full sm:w-auto text-center"
+                   href="index.php?route=colaboradores/importTemplate&format=csv">
+                  Baixar modelo (CSV)
+                </a>
+                <div class="text-xs text-gray-500">O XLSX contém uma aba extra com orientações detalhadas.</div>
+              </div>
+            <?php endif; ?>
           </div>
           <div class="md:col-span-3">
             <label class="text-sm">Pré-visualização</label>
@@ -77,13 +91,23 @@ $backUrl = ($canClienteShow && (int)($cliente ?? 0) > 0)
             return (v >= 10 || u === 0 ? v.toFixed(0) : v.toFixed(1)) + ' ' + units[u];
           }
           function setErrorHtml(html) {
+            setNoticeHtml('error', html);
+          }
+          function setNoticeHtml(kind, html) {
             if (!errorsBox) return;
             if (!html) {
               errorsBox.classList.add('hidden');
               errorsBox.innerHTML = '';
               return;
             }
-            errorsBox.className = 'md:col-span-12 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700';
+            const k = String(kind || 'info');
+            if (k === 'success') {
+              errorsBox.className = 'md:col-span-12 rounded border border-green-200 bg-green-50 p-3 text-sm text-green-800';
+            } else if (k === 'info') {
+              errorsBox.className = 'md:col-span-12 rounded border border-brand-brown/10 bg-white p-3 text-sm text-brand-brown';
+            } else {
+              errorsBox.className = 'md:col-span-12 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700';
+            }
             errorsBox.innerHTML = html;
             errorsBox.classList.remove('hidden');
           }
@@ -210,9 +234,9 @@ $backUrl = ($canClienteShow && (int)($cliente ?? 0) > 0)
               setErrorHtml('');
               const file = input && input.files && input.files[0];
               if (!file) { setErrorHtml('Selecione um arquivo para importar.'); return; }
+              const data = new FormData(form);
               setSubmitting(true);
               setProgress(true, 0);
-              const data = new FormData(form);
               const xhr = new XMLHttpRequest();
               xhr.open('POST', form.action, true);
               xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
@@ -226,7 +250,26 @@ $backUrl = ($canClienteShow && (int)($cliente ?? 0) > 0)
                 let payload = null;
                 try { payload = JSON.parse(xhr.responseText || '{}'); } catch (err) { payload = null; }
                 if (xhr.status >= 200 && xhr.status < 300 && payload && payload.ok) {
-                  window.location.reload();
+                  const inserted = Number(payload.inserted || 0);
+                  const msg = payload.message ? String(payload.message) : ('Importação concluída. Inseridos: ' + inserted);
+                  setNoticeHtml('success', '<div class="font-semibold mb-1">Importação concluída</div><div>' + msg.replace(/</g,'&lt;') + '</div>');
+                  if (input) input.value = '';
+                  if (meta) meta.textContent = 'Nenhum arquivo selecionado';
+                  if (clearBtn) clearBtn.disabled = true;
+                  if (submitBtn) submitBtn.disabled = true;
+                  const ids = (payload && Array.isArray(payload.cliente_ids)) ? payload.cliente_ids.map((v)=>parseInt(v,10)).filter((n)=>Number.isFinite(n) && n>0) : [];
+                  const clienteSelect = document.getElementById('colaboradoresCliente');
+                  if (clienteSelect && (!clienteSelect.value || clienteSelect.value === '0' || clienteSelect.value === '') && ids.length === 1) {
+                    clienteSelect.value = String(ids[0]);
+                    clienteSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                  } else {
+                    const filterForm = document.getElementById('colaboradoresFilterForm');
+                    if (filterForm) {
+                      filterForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                    } else {
+                      window.location.reload();
+                    }
+                  }
                   return;
                 }
                 const errs = payload && Array.isArray(payload.errors) ? payload.errors : [];
@@ -260,6 +303,22 @@ $backUrl = ($canClienteShow && (int)($cliente ?? 0) > 0)
           }
         })();
       </script>
+    <?php elseif ($canDownloadTemplate): ?>
+      <div class="bg-white shadow rounded p-4 mb-4">
+        <div class="font-semibold mb-2">Modelo de importação</div>
+        <div class="text-sm text-gray-600">Baixe a planilha modelo padrão para preparar os registros de colaboradores no formato aceito pelo sistema.</div>
+        <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown text-sm w-full sm:w-auto text-center"
+             href="index.php?route=colaboradores/importTemplate&format=xlsx">
+            Baixar modelo (XLSX)
+          </a>
+          <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown text-sm w-full sm:w-auto text-center"
+             href="index.php?route=colaboradores/importTemplate&format=csv">
+            Baixar modelo (CSV)
+          </a>
+          <div class="text-xs text-gray-500">O XLSX contém uma aba extra com orientações detalhadas.</div>
+        </div>
+      </div>
     <?php endif; ?>
     <form method="get" action="index.php" id="colaboradoresFilterForm" class="mb-4 grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
         <input type="hidden" name="route" value="colaboradores/index" />

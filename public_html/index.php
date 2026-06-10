@@ -753,6 +753,9 @@ switch ($route) {
     case 'colaboradores/import':
         (new ColaboradoresController())->import();
         break;
+    case 'colaboradores/importTemplate':
+        (new ColaboradoresController())->importTemplate();
+        break;
     case 'tarefas/index':
         (new TarefasController())->index();
         break;

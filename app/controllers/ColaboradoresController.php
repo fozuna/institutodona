@@ -5,6 +5,7 @@ use App\Core\BaseController;
 use App\Core\Auth;
 use App\Core\AuditLogger;
 use App\Core\Security;
+use App\Core\XlsxExport;
 use App\Models\ColaboradorModel;
 use App\Models\FuncaoModel;
 use App\Models\SetorModel;
@@ -572,6 +573,99 @@ class ColaboradoresController extends BaseController
         header('Location: index.php?route=colaboradores/index' . ($cliente ? '&cliente=' . $cliente : ''));
     }
 
+    public function importTemplate(): void
+    {
+        $this->requireLogin();
+        $format = strtolower(trim((string)($_GET['format'] ?? 'xlsx')));
+        if (!in_array($format, ['xlsx', 'csv'], true)) {
+            $format = 'xlsx';
+        }
+
+        $userId = (int)($_SESSION['user']['id'] ?? 0);
+        $service = new ColaboradorImportService();
+        $def = $service->templateDefinition($userId);
+        $columns = (array)($def['columns'] ?? []);
+        $rows = is_array($def['rows'] ?? null) ? $def['rows'] : [];
+
+        $normalizedRows = [];
+        $keys = array_keys($columns);
+        foreach ($rows as $row) {
+            $line = [];
+            foreach ($keys as $k) {
+                $line[$k] = isset($row[$k]) ? (string)$row[$k] : '';
+            }
+            $normalizedRows[] = $line;
+        }
+
+        $baseName = 'modelo_importacao_colaboradores_' . date('Ymd_His');
+
+        AuditLogger::log('download_template', 'colaboradores', 0, [
+            'format' => $format,
+            'usuario_id' => $userId,
+        ]);
+
+        if ($format === 'csv') {
+            $fh = fopen('php://temp', 'wb+');
+            if ($fh === false) {
+                http_response_code(500);
+                echo 'Não foi possível gerar o arquivo.';
+                return;
+            }
+            fwrite($fh, "\xEF\xBB\xBF");
+            fputcsv($fh, array_values($columns), ';', '"', '\\');
+            foreach ($normalizedRows as $row) {
+                $vals = [];
+                foreach ($keys as $k) {
+                    $vals[] = (string)($row[$k] ?? '');
+                }
+                fputcsv($fh, $vals, ';', '"', '\\');
+            }
+            rewind($fh);
+            $csv = stream_get_contents($fh);
+            fclose($fh);
+            if ($csv === false) {
+                http_response_code(500);
+                echo 'Não foi possível gerar o arquivo.';
+                return;
+            }
+            header('Content-Type: text/csv; charset=utf-8');
+            header('Content-Disposition: attachment; filename="' . $baseName . '.csv"');
+            header('X-Content-Type-Options: nosniff');
+            echo $csv;
+            return;
+        }
+
+        $orientationColumns = (array)($def['orientation_columns'] ?? []);
+        $orientationRows = is_array($def['orientation_rows'] ?? null) ? $def['orientation_rows'] : [];
+
+        $tmpPath = XlsxExport::exportTemplateWorkbook([
+            [
+                'name' => 'Modelo',
+                'columns' => $columns,
+                'rows' => $normalizedRows,
+            ],
+            [
+                'name' => 'Orientações',
+                'columns' => $orientationColumns,
+                'rows' => $orientationRows,
+            ],
+        ], $baseName . '.xlsx', [
+            'report_title' => 'Modelo de Importação - Colaboradores',
+        ]);
+
+        $content = @file_get_contents($tmpPath);
+        @unlink($tmpPath);
+        if ($content === false) {
+            http_response_code(500);
+            echo 'Não foi possível gerar o arquivo.';
+            return;
+        }
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="' . $baseName . '.xlsx"');
+        header('X-Content-Type-Options: nosniff');
+        echo $content;
+    }
+
     public function import(): void
     {
         $this->requireLogin();
@@ -683,19 +777,27 @@ class ColaboradoresController extends BaseController
         $result = $service->import((string)$file['tmp_name'], $name, $userId);
 
         if (!empty($result['ok'])) {
+            $inserted = (int)($result['inserted'] ?? 0);
+            $clienteIds = array_values(array_unique(array_filter(array_map('intval', (array)($result['cliente_ids'] ?? [])))));
             AuditLogger::log('import', 'colaboradores', 0, [
                 'via' => 'upload',
                 'arquivo' => $name,
                 'tamanho' => $sizeBytes,
-                'inserted' => (int)($result['inserted'] ?? 0),
+                'inserted' => $inserted,
+                'cliente_ids' => $clienteIds,
                 'usuario_id' => $userId,
             ]);
+            $_SESSION['flash_success'] = 'Importação concluída. Inseridos: ' . $inserted;
             if ($isAjax) {
                 header('Content-Type: application/json; charset=utf-8');
-                echo json_encode(['ok' => true, 'inserted' => (int)($result['inserted'] ?? 0)], JSON_UNESCAPED_UNICODE);
+                echo json_encode([
+                    'ok' => true,
+                    'inserted' => $inserted,
+                    'message' => 'Importação concluída. Inseridos: ' . $inserted,
+                    'cliente_ids' => $clienteIds,
+                ], JSON_UNESCAPED_UNICODE);
                 return;
             }
-            $_SESSION['flash_success'] = 'Importação concluída. Inseridos: ' . (int)($result['inserted'] ?? 0);
             header('Location: index.php?route=colaboradores/index');
             return;
         }
