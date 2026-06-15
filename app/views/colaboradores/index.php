@@ -30,7 +30,7 @@ $backUrl = ($canClienteShow && (int)($cliente ?? 0) > 0)
           <div class="md:col-span-6">
             <label class="text-sm">Arquivo (CSV, XLS, XLSX)</label>
             <input type="file" name="arquivo" id="colabImportFile" class="border rounded p-2 w-full" accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required />
-            <div class="text-xs text-gray-500 mt-1">Baixe o modelo padrão para ver todas as colunas obrigatórias e opcionais aceitas. Máximo: 50MB.</div>
+            <div class="text-xs text-gray-500 mt-1">Baixe o modelo padrão para ver todas as colunas aceitas. Documento, Celular e Email são opcionais. Máximo: 50MB.</div>
             <?php if ($canDownloadTemplate): ?>
               <div class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
                 <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown text-sm w-full sm:w-auto text-center"

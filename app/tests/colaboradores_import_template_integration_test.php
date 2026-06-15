@@ -83,9 +83,20 @@ $svc = new ColaboradorImportService($pdo);
 $defCsv = $svc->templateDefinition(1);
 $cols = (array)($defCsv['columns'] ?? []);
 if (empty($cols['nome']) || empty($cols['documento']) || empty($cols['dn']) || empty($cols['celular']) || empty($cols['email']) || empty($cols['unidade']) || empty($cols['funcao']) || empty($cols['setor']) || empty($cols['departamento'])) {
-    failFast('Template: colunas obrigatórias não encontradas.');
+    failFast('Template: colunas base esperadas não encontradas.');
 }
-ok('Template contém colunas obrigatórias');
+$orientationRows = is_array($defCsv['orientation_rows'] ?? null) ? $defCsv['orientation_rows'] : [];
+$requiredMap = [];
+foreach ($orientationRows as $row) {
+    $requiredMap[(string)($row['campo'] ?? '')] = mb_strtolower((string)($row['obrigatorio'] ?? ''));
+}
+if (($requiredMap['Documento'] ?? '') !== 'não' || ($requiredMap['Celular'] ?? '') !== 'não' || ($requiredMap['Email'] ?? '') !== 'não') {
+    failFast('Template: Documento, Celular e Email deveriam constar como opcionais nas orientações.');
+}
+if (($requiredMap['Nome'] ?? '') !== 'sim' || ($requiredMap['DN'] ?? '') !== 'sim' || ($requiredMap['Unidade'] ?? '') !== 'sim') {
+    failFast('Template: campos ainda obrigatórios não foram preservados nas orientações.');
+}
+ok('Template contém colunas e obrigatoriedades corretas');
 
 $rowsCsv = is_array($defCsv['rows'] ?? null) ? $defCsv['rows'] : [];
 if (count($rowsCsv) < 2) {

@@ -302,26 +302,34 @@ class ColaboradorImportService
 
                 $doc = $normalized['documento_digits'];
                 $email = $normalized['email_lower'];
-                if (isset($seenDoc[$doc])) {
+                if ($doc !== '' && isset($seenDoc[$doc])) {
                     $errors[] = ['line' => $line, 'field' => 'Documento', 'message' => 'Documento duplicado no arquivo.', 'value' => $normalized['documento']];
                     continue;
                 }
-                if (isset($seenEmail[$email])) {
+                if ($email !== '' && isset($seenEmail[$email])) {
                     $errors[] = ['line' => $line, 'field' => 'Email', 'message' => 'Email duplicado no arquivo.', 'value' => $normalized['email']];
                     continue;
                 }
-                $seenDoc[$doc] = true;
-                $seenEmail[$email] = true;
-
-                $stmtExistsDoc->execute(['doc' => $doc]);
-                if ($stmtExistsDoc->fetchColumn()) {
-                    $errors[] = ['line' => $line, 'field' => 'Documento', 'message' => 'Documento já cadastrado.', 'value' => $normalized['documento']];
-                    continue;
+                if ($doc !== '') {
+                    $seenDoc[$doc] = true;
                 }
-                $stmtExistsEmail->execute(['email' => $email]);
-                if ($stmtExistsEmail->fetchColumn()) {
-                    $errors[] = ['line' => $line, 'field' => 'Email', 'message' => 'Email já cadastrado.', 'value' => $normalized['email']];
-                    continue;
+                if ($email !== '') {
+                    $seenEmail[$email] = true;
+                }
+
+                if ($doc !== '') {
+                    $stmtExistsDoc->execute(['doc' => $doc]);
+                    if ($stmtExistsDoc->fetchColumn()) {
+                        $errors[] = ['line' => $line, 'field' => 'Documento', 'message' => 'Documento já cadastrado.', 'value' => $normalized['documento']];
+                        continue;
+                    }
+                }
+                if ($email !== '') {
+                    $stmtExistsEmail->execute(['email' => $email]);
+                    if ($stmtExistsEmail->fetchColumn()) {
+                        $errors[] = ['line' => $line, 'field' => 'Email', 'message' => 'Email já cadastrado.', 'value' => $normalized['email']];
+                        continue;
+                    }
                 }
 
                 $departamentoId = $this->getOrCreateDepartamento($catalogClienteId, $normalized['departamento'], $allowCatalogCreate, $stmtFindDept, $stmtInsertDept);
@@ -385,10 +393,10 @@ class ColaboradorImportService
 
                 $params = [
                     'nome' => $normalized['nome'],
-                    'email' => $email,
-                    'documento' => $doc,
+                    'email' => $email !== '' ? $email : null,
+                    'documento' => $doc !== '' ? $doc : null,
                     'data_nascimento' => $normalized['data_nascimento_db'],
-                    'celular' => $normalized['celular'],
+                    'celular' => $normalized['celular'] !== '' ? $normalized['celular'] : null,
                     'funcao_id' => $funcaoId,
                     'lider' => $normalized['lider'] !== '' ? $normalized['lider'] : 'não',
                     'cliente_id' => $clienteId,
@@ -540,9 +548,7 @@ class ColaboradorImportService
             $errors[] = ['line' => $line, 'field' => 'Nome', 'message' => 'Nome excede 100 caracteres.', 'value' => $row['nome']];
         }
 
-        if ($row['documento'] === '') {
-            $errors[] = ['line' => $line, 'field' => 'Documento', 'message' => 'Documento é obrigatório.', 'value' => ''];
-        } else {
+        if ($row['documento'] !== '') {
             $digits = $row['documento_digits'];
             if ($digits === '') {
                 $errors[] = ['line' => $line, 'field' => 'Documento', 'message' => 'Documento inválido.', 'value' => $row['documento']];
@@ -562,17 +568,13 @@ class ColaboradorImportService
             }
         }
 
-        if ($row['celular'] === '') {
-            $errors[] = ['line' => $line, 'field' => 'Celular', 'message' => 'Celular é obrigatório.', 'value' => ''];
-        } elseif (mb_strlen($row['celular']) > 15) {
+        if ($row['celular'] !== '' && mb_strlen($row['celular']) > 15) {
             $errors[] = ['line' => $line, 'field' => 'Celular', 'message' => 'Celular excede 15 caracteres.', 'value' => $row['celular']];
         }
 
-        if ($row['email'] === '') {
-            $errors[] = ['line' => $line, 'field' => 'Email', 'message' => 'Email é obrigatório.', 'value' => ''];
-        } elseif (mb_strlen($row['email']) > 180) {
+        if ($row['email'] !== '' && mb_strlen($row['email']) > 180) {
             $errors[] = ['line' => $line, 'field' => 'Email', 'message' => 'Email excede 180 caracteres.', 'value' => $row['email']];
-        } elseif (!filter_var($row['email'], FILTER_VALIDATE_EMAIL)) {
+        } elseif ($row['email'] !== '' && !filter_var($row['email'], FILTER_VALIDATE_EMAIL)) {
             $errors[] = ['line' => $line, 'field' => 'Email', 'message' => 'Email inválido.', 'value' => $row['email']];
         }
 
@@ -1193,10 +1195,10 @@ class ColaboradorImportService
             ],
             'documento' => [
                 'label' => 'Documento',
-                'required' => true,
+                'required' => false,
                 'max' => 20,
                 'format' => 'CPF ou CNPJ (com ou sem pontuação)',
-                'description' => 'Documento principal do colaborador. O sistema normaliza para apenas dígitos e valida CPF/CNPJ.',
+                'description' => 'Documento principal do colaborador. Opcional. Quando informado, o sistema normaliza para apenas dígitos e valida CPF/CNPJ.',
                 'example' => '111.444.777-35',
                 'common_errors' => 'CPF/CNPJ inválido ou com quantidade de dígitos incorreta.',
             ],
@@ -1210,21 +1212,21 @@ class ColaboradorImportService
             ],
             'celular' => [
                 'label' => 'Celular',
-                'required' => true,
+                'required' => false,
                 'max' => 15,
                 'format' => 'Somente números (recomendado)',
-                'description' => 'Celular/WhatsApp do colaborador.',
+                'description' => 'Celular/WhatsApp do colaborador. Opcional.',
                 'example' => '11987654321',
                 'common_errors' => 'Exceder 15 caracteres ou inserir texto.',
             ],
             'email' => [
                 'label' => 'Email',
-                'required' => true,
+                'required' => false,
                 'max' => 180,
                 'format' => 'email@dominio',
-                'description' => 'E-mail do colaborador.',
+                'description' => 'E-mail do colaborador. Opcional.',
                 'example' => 'mariana.alves@empresa.com.br',
-                'common_errors' => 'E-mail inválido ou duplicado no arquivo / no sistema.',
+                'common_errors' => 'Quando informado, deve estar em formato válido e não pode duplicar no arquivo / no sistema.',
             ],
             'unidade' => [
                 'label' => 'Unidade',

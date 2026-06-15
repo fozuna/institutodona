@@ -413,10 +413,10 @@ class ColaboradorModel extends BaseModel
         $stmt = $this->db->prepare('INSERT INTO colaboradores (nome, email, documento, data_nascimento, celular, funcao_id, lider, cliente_id, ativo) VALUES (:nome, :email, :documento, :data_nascimento, :celular, :funcao_id, :lider, :cliente_id, :ativo)');
         $stmt->execute([
             'nome' => $data['nome'],
-            'email' => $data['email'] ?? null,
-            'documento' => $data['documento'] ?? null,
+            'email' => isset($data['email']) && $data['email'] !== '' ? $data['email'] : null,
+            'documento' => isset($data['documento']) && $data['documento'] !== '' ? $data['documento'] : null,
             'data_nascimento' => $data['data_nascimento'] ?? null,
-            'celular' => $data['celular'] ?? null,
+            'celular' => isset($data['celular']) && $data['celular'] !== '' ? $data['celular'] : null,
             'funcao_id' => (int)$data['funcao_id'],
             'lider' => ($data['lider'] ?? 'não') === 'sim' ? 'sim' : 'não',
             'cliente_id' => $data['cliente_id'] ?? null,
