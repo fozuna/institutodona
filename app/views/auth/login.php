@@ -55,6 +55,10 @@ $results = [
             radial-gradient(circle at top, rgba(247,127,137,.35), transparent 30%),
             radial-gradient(circle at bottom right, rgba(200,49,4,.35), transparent 32%);
     }
+    .theme-blue-surface {
+        background-color: #102040;
+        color: #ffffff;
+    }
     .metric-chip {
         background: linear-gradient(135deg, rgba(255,255,255,.18), rgba(255,255,255,.07));
         border: 1px solid rgba(255,255,255,.18);
@@ -314,12 +318,12 @@ $results = [
 
         <section id="demonstracao" class="pb-16 pt-4 sm:pb-20">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div class="overflow-hidden rounded-[2rem] bg-gradient-to-r from-brand-brown via-[#1a2d54] to-brand-brown p-8 text-white shadow-[0_24px_80px_rgba(16,32,64,.22)] sm:p-10">
+                <div class="theme-blue-surface overflow-hidden rounded-[2rem] border border-white/10 p-8 shadow-[0_24px_80px_rgba(16,32,64,.22)] sm:p-10">
                     <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
                         <div class="max-w-3xl">
-                            <div class="text-sm font-semibold uppercase tracking-[0.2em] text-brand-pink">Demonstração</div>
+                            <div class="text-sm font-semibold uppercase tracking-[0.2em] text-white/80">Demonstração</div>
                             <h2 class="mt-3 text-3xl font-black sm:text-4xl">Conheça a experiência de gestão do Instituto Doná</h2>
-                            <p class="mt-4 text-base leading-8 text-white/80">Apresente a plataforma, seus fluxos, indicadores e potencial de transformação organizacional em um ambiente institucional premium.</p>
+                            <p class="mt-4 text-base leading-8 text-white/90">Apresente a plataforma, seus fluxos, indicadores e potencial de transformação organizacional em um ambiente institucional premium.</p>
                         </div>
                         <div class="flex flex-col gap-3 sm:flex-row">
                             <a href="#sobre" class="inline-flex items-center justify-center rounded-2xl border border-white/20 bg-white/10 px-6 py-3 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/20">
@@ -402,9 +406,9 @@ $results = [
             </div>
 
             <div class="flex-1 overflow-y-auto px-5 py-6 sm:px-7 sm:py-7">
-                <div class="mb-6 rounded-3xl bg-gradient-to-r from-brand-brown to-[#1a2d54] p-5 text-white">
-                    <div class="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">Instituto Doná</div>
-                    <p class="mt-3 text-sm leading-7 text-white/85">Acesse a plataforma para acompanhar indicadores, avaliações, cronogramas, planos de ação e evolução organizacional.</p>
+                <div class="theme-blue-surface mb-6 rounded-3xl border border-white/10 p-5">
+                    <div class="text-xs font-semibold uppercase tracking-[0.2em] text-white/80">Instituto Doná</div>
+                    <p class="mt-3 text-sm leading-7 text-white">Acesse a plataforma para acompanhar indicadores, avaliações, cronogramas, planos de ação e evolução organizacional.</p>
                 </div>
 
                 <?php if (!empty($error)): ?>
