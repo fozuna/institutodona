@@ -89,7 +89,7 @@ class I18n
             'indicadores.validation.invalid_unit' => 'Selecione uma unidade de medida ativa e válida.',
             'indicadores.validation.invalid_number' => 'Informe um valor numérico válido para {field}.',
             'indicadores.validation.invalid_integer' => 'A unidade selecionada exige um valor inteiro.',
-            'indicadores.validation.invalid_percentage' => 'Valores percentuais devem estar entre 0 e 100.',
+            'indicadores.validation.invalid_percentage' => 'Valores percentuais devem ser menores ou iguais a 100.',
             'indicadores.validation.invalid_limits' => 'O valor mínimo deve ser menor que o valor máximo.',
             'indicadores.validation.invalid_limit_pair' => 'Informe ambos os limites ou deixe os dois campos em branco.',
             'indicadores.validation.invalid_value_update' => 'Não foi possível atualizar o valor do indicador.',

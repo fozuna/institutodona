@@ -15,5 +15,7 @@ fi
 php -r "require 'app/autoload.php'; new Dompdf\\Options(); new Dompdf\\Dompdf(new Dompdf\\Options()); echo 'DOMPDF_OK'.PHP_EOL;"
 
 php app/database/migrate.php
+php app/database/migrate_status.php
+php -r 'require "app/autoload.php"; $runner = new \App\Database\MigrationRunner(); $status = $runner->status(); $mismatches = $runner->checksumMismatches(); if (!empty($status["pending"]) || !empty($mismatches)) { fwrite(STDERR, json_encode(["pending" => $status["pending"], "checksum_mismatches" => $mismatches], JSON_UNESCAPED_UNICODE) . PHP_EOL); exit(1); } echo "MIGRATIONS_OK" . PHP_EOL;'
 
 exec apache2-foreground

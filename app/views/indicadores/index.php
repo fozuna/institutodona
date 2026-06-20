@@ -340,7 +340,7 @@ $viewMode = $viewMode ?? 'cards';
       const numeric = Number(normalized.replace(',', '.'));
       if (!Number.isFinite(numeric)) return { ok: false, message: 'Valor inválido.' };
       if (tipo === 'inteiro' && Math.floor(numeric) !== numeric) return { ok: false, message: 'Este indicador aceita apenas números inteiros.' };
-      if (tipo === 'percentual' && (numeric < 0 || numeric > 100)) return { ok: false, message: 'Percentual deve estar entre 0 e 100.' };
+      if (tipo === 'percentual' && numeric > 100) return { ok: false, message: 'Percentual deve ser menor ou igual a 100.' };
       return { ok: true, normalized, numeric };
     }
 

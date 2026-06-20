@@ -283,7 +283,7 @@ class IndicadorEventoModel extends BaseModel
             if ($type === 'inteiro' && floor((float)$normalized) !== (float)$normalized) {
                 return false;
             }
-            if ($type === 'percentual' && ((float)$normalized < 0 || (float)$normalized > 100)) {
+            if ($type === 'percentual' && (float)$normalized > 100) {
                 return false;
             }
         }
@@ -309,7 +309,7 @@ class IndicadorEventoModel extends BaseModel
                  updated_by = :updated_by
              WHERE id = :id AND deleted_at IS NULL AND ' . $whereScope
         );
-        return $stmt->execute($params) && $stmt->rowCount() > 0;
+        return $stmt->execute($params);
     }
 
     public function indicatorHistorySummary(int $indicadorId): array

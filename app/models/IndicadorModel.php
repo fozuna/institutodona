@@ -148,7 +148,7 @@ class IndicadorModel extends BaseModel
             if ($type === 'inteiro' && floor((float)$data['valor']) !== (float)$data['valor']) {
                 $errors['valor'] = I18n::t('indicadores.validation.invalid_integer');
             }
-            if ($type === 'percentual' && ((float)$data['valor'] < 0 || (float)$data['valor'] > 100)) {
+            if ($type === 'percentual' && (float)$data['valor'] > 100) {
                 $errors['valor'] = I18n::t('indicadores.validation.invalid_percentage');
             }
         }
@@ -372,7 +372,7 @@ class IndicadorModel extends BaseModel
                  updated_by = :updated_by
              WHERE id = :id AND deleted_at IS NULL AND ' . $scope
         );
-        $ok = $stmt->execute($params) && $stmt->rowCount() > 0;
+        $ok = $stmt->execute($params);
         if ($ok) {
             $this->syncResponsaveis($id, $data['responsavel_ids']);
             $this->eventos->syncForIndicator($this->find($id) ?: array_merge($data, ['id' => $id]), $userId);
@@ -395,7 +395,7 @@ class IndicadorModel extends BaseModel
             if (($unit['tipo'] ?? '') === 'inteiro' && floor((float)$normalized) !== (float)$normalized) {
                 return false;
             }
-            if (($unit['tipo'] ?? '') === 'percentual' && ((float)$normalized < 0 || (float)$normalized > 100)) {
+            if (($unit['tipo'] ?? '') === 'percentual' && (float)$normalized > 100) {
                 return false;
             }
         }
@@ -408,7 +408,7 @@ class IndicadorModel extends BaseModel
                  updated_by = :updated_by
              WHERE id = :id AND deleted_at IS NULL AND ' . $scope
         );
-        $ok = $stmt->execute($params) && $stmt->rowCount() > 0;
+        $ok = $stmt->execute($params);
         if ($ok) {
             $this->eventos->syncForIndicator($this->find($id) ?: ['id' => $id], $userId);
         }

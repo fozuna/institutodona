@@ -218,5 +218,25 @@ if (abs((float)$fresh['valor'] - 25.50) > 0.0001) {
 }
 ok('Persistência ok');
 
+$_POST = ['csrf' => $csrf, 'id' => $indicadorId, 'valor' => '-12,75'];
+$_GET = ['route' => 'indicadores/updateValorAjax'];
+$_SERVER['HTTP_X_REQUESTED_WITH'] = 'XMLHttpRequest';
+
+ob_start();
+(new IndicadoresController())->updateValorAjax();
+$outNegative = ob_get_clean();
+$payloadNegative = json_decode((string)$outNegative, true);
+if (!is_array($payloadNegative) || empty($payloadNegative['ok'])) {
+    failFast('Resposta negativa inválida: ' . $outNegative);
+}
+ok('Resposta ok para valor negativo');
+
+$freshNegative = $model->find($indicadorId);
+if (!$freshNegative) failFast('Indicador não encontrado após update negativo');
+if (abs((float)$freshNegative['valor'] - (-12.75)) > 0.0001) {
+    failFast('Valor negativo não persistiu. Atual: ' . json_encode($freshNegative['valor']));
+}
+ok('Persistência negativa ok');
+
 echo "All indicadores updateValorAjax integration tests passed.\n";
 ob_end_flush();

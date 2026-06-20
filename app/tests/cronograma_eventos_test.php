@@ -3,6 +3,7 @@ require_once __DIR__ . '/../autoload.php';
 
 use App\Models\ClienteModel;
 use App\Models\CronogramaEventoModel;
+use App\Models\CronogramaEventoTipoModel;
 use App\Models\CronogramaModel;
 
 function assert_true($cond, $msg) {
@@ -21,6 +22,9 @@ $_SESSION['user'] = [
 $clientes = new ClienteModel();
 $cronogramas = new CronogramaModel();
 $eventos = new CronogramaEventoModel();
+$tipos = new CronogramaEventoTipoModel();
+$tipoEvento = 'Teste Cronograma ' . uniqid();
+$tipos->create($tipoEvento);
 
 $clienteId = $clientes->create([
   'nome_empresa' => 'Teste Cronograma Eventos ' . uniqid(),
@@ -58,6 +62,7 @@ foreach ($expectedCounts as $periodicidade => $expectedCount) {
   $rootId = $eventos->create($cronogramaId, [
     'data' => $baseDates[$periodicidade],
     'periodicidade' => $periodicidade,
+    'tipo_evento' => $tipoEvento,
     'topico' => 'Pilar ' . strtoupper($periodicidade),
     'unidade' => 'Departamento ' . strtoupper($periodicidade),
     'atividade' => 'Atividade ' . strtoupper($periodicidade),
@@ -99,6 +104,7 @@ assert_true((bool)$firstChild, 'Encontrou uma ocorrencia filha para testar edica
 $updatedSingle = $eventos->update((int)$firstChild['id'], [
   'data' => '2026-11-20',
   'periodicidade' => 'mensal',
+  'tipo_evento' => $tipoEvento,
   'topico' => $firstChild['topico'],
   'unidade' => $firstChild['unidade'],
   'atividade' => $firstChild['atividade'],
@@ -116,6 +122,7 @@ assert_true(($eventos->find((int)$firstChild['id'])['status'] ?? '') === 'Planej
 $updatedSeries = $eventos->update((int)$roots['mensal'], [
   'data' => '2026-02-15',
   'periodicidade' => 'trimestral',
+  'tipo_evento' => $tipoEvento,
   'topico' => 'Pilar SERIE',
   'unidade' => 'Departamento SERIE',
   'atividade' => 'Atividade SERIE',

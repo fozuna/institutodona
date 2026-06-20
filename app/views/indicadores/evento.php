@@ -184,9 +184,9 @@ $formatValue = static function ($value) use ($evento): string {
           input.focus();
           return;
         }
-        if (tipo === 'percentual' && (numeric < 0 || numeric > 100)) {
+        if (tipo === 'percentual' && numeric > 100) {
           if (e && typeof e.preventDefault === 'function') e.preventDefault();
-          alert('Percentual deve estar entre 0 e 100.');
+          alert('Percentual deve ser menor ou igual a 100.');
           input.focus();
           return;
         }

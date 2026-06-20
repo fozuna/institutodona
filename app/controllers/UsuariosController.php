@@ -94,29 +94,35 @@ class UsuariosController extends BaseController
             echo 'Selecione ao menos uma empresa para o usuário';
             return;
         }
-        $hash = password_hash($senha, PASSWORD_DEFAULT);
-        $id = $this->usuarios->create([
-            'nome' => $nome,
-            'email' => $email,
-            'senha_hash' => $hash,
-            'tipo_acesso' => $tipo,
-            'id_cliente' => in_array($tipo, self::CLIENT_SCOPED_ROLES, true) ? (int)($selectedClientes[0] ?? 0) : null,
-            'platform_access' => $platformAccess,
-        ]);
-        if (in_array($tipo, self::CLIENT_SCOPED_ROLES, true) && $id > 0) {
-            $allAllowed = $this->usuarioEmpresas->syncForUser($id, $selectedClientes);
-            if (empty($allAllowed)) {
-                http_response_code(400);
-                echo 'Nenhuma empresa elegível foi vinculada. Verifique filiais inativas ou com acesso restrito.';
-                return;
+        try {
+            $hash = password_hash($senha, PASSWORD_DEFAULT);
+            $id = $this->usuarios->create([
+                'nome' => $nome,
+                'email' => $email,
+                'senha_hash' => $hash,
+                'tipo_acesso' => $tipo,
+                'id_cliente' => in_array($tipo, self::CLIENT_SCOPED_ROLES, true) ? (int)($selectedClientes[0] ?? 0) : null,
+                'platform_access' => $platformAccess,
+            ]);
+            if (in_array($tipo, self::CLIENT_SCOPED_ROLES, true) && $id > 0) {
+                $allAllowed = $this->usuarioEmpresas->syncForUser($id, $selectedClientes);
+                if (empty($allAllowed)) {
+                    http_response_code(400);
+                    echo 'Nenhuma empresa elegível foi vinculada. Verifique filiais inativas ou com acesso restrito.';
+                    return;
+                }
+            } else {
+                $this->usuarioEmpresas->syncForUser($id, []);
             }
-        } else {
-            $this->usuarioEmpresas->syncForUser($id, []);
+            if ($tipo === 'consultor' && $idConsultor) {
+                $this->consultores->linkUser((int)$idConsultor, $id);
+            }
+            header('Location: index.php?route=usuarios/index');
+        } catch (\Throwable $e) {
+            error_log('[usuarios.store] ' . $e->getMessage());
+            $_SESSION['flash_error'] = 'Nao foi possivel cadastrar o usuario. Verifique se as migrations do ambiente estao atualizadas.';
+            header('Location: index.php?route=usuarios/create');
         }
-        if ($tipo === 'consultor' && $idConsultor) {
-            $this->consultores->linkUser((int)$idConsultor, $id);
-        }
-        header('Location: index.php?route=usuarios/index');
     }
 
     public function edit(): void
@@ -159,19 +165,25 @@ class UsuariosController extends BaseController
             echo 'Selecione ao menos uma empresa para o usuário';
             return;
         }
-        $this->usuarios->update($id, [
-            'nome' => $nome,
-            'email' => $email,
-            'tipo_acesso' => $tipo,
-            'id_cliente' => in_array($tipo, self::CLIENT_SCOPED_ROLES, true) ? (int)($selectedClientes[0] ?? 0) : null,
-            'platform_access' => $platformAccess,
-        ]);
-        $this->usuarioEmpresas->syncForUser($id, in_array($tipo, self::CLIENT_SCOPED_ROLES, true) ? $selectedClientes : []);
-        if ($senha) {
-            $hash = password_hash($senha, PASSWORD_DEFAULT);
-            $this->usuarios->updatePassword($id, $hash);
+        try {
+            $this->usuarios->update($id, [
+                'nome' => $nome,
+                'email' => $email,
+                'tipo_acesso' => $tipo,
+                'id_cliente' => in_array($tipo, self::CLIENT_SCOPED_ROLES, true) ? (int)($selectedClientes[0] ?? 0) : null,
+                'platform_access' => $platformAccess,
+            ]);
+            $this->usuarioEmpresas->syncForUser($id, in_array($tipo, self::CLIENT_SCOPED_ROLES, true) ? $selectedClientes : []);
+            if ($senha) {
+                $hash = password_hash($senha, PASSWORD_DEFAULT);
+                $this->usuarios->updatePassword($id, $hash);
+            }
+            header('Location: index.php?route=usuarios/index');
+        } catch (\Throwable $e) {
+            error_log('[usuarios.update] ' . $e->getMessage());
+            $_SESSION['flash_error'] = 'Nao foi possivel atualizar o usuario. Verifique se as migrations do ambiente estao atualizadas.';
+            header('Location: index.php?route=usuarios/edit&id=' . $id);
         }
-        header('Location: index.php?route=usuarios/index');
     }
 
     public function delete(): void

@@ -2,6 +2,7 @@
 <?php
   $months = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
   $statusFilter = $statusFilter ?? 'todos';
+  $gridOrder = $gridOrder ?? ['column' => 'topico', 'direction' => 'asc'];
 ?>
 <style>
   .cronograma-traffic-cell,
@@ -79,14 +80,36 @@
   <div class="bg-white shadow rounded">
     <div class="px-4 py-3 border-b font-semibold">Grade anual estilo planilha</div>
     <div class="p-4 overflow-x-auto">
-      <table class="min-w-full text-sm">
+      <table class="min-w-full text-sm" id="cronogramaGridTable">
         <thead>
           <tr class="text-left border-b bg-gray-50">
-            <th class="p-3">Pilar</th>
-            <th class="p-3">Departamento</th>
-            <th class="p-3">Atividade</th>
-            <th class="p-3">Responsável</th>
-            <th class="p-3">Status</th>
+            <?php
+              $gridBase = $_GET;
+              $gridBase['route'] = 'cronograma/show';
+              $gridBase['id'] = (int)$crono['id'];
+              $renderGridHeader = static function (string $label, string $column) use ($gridBase, $gridOrder): void {
+                  $active = ($gridOrder['column'] ?? 'topico') === $column;
+                  $nextDir = $active && (($gridOrder['direction'] ?? 'asc') === 'asc') ? 'desc' : 'asc';
+                  $params = array_merge($gridBase, ['grid_sort' => $column, 'grid_dir' => $nextDir]);
+                  ?>
+                  <th class="p-3">
+                    <a class="inline-flex items-center gap-1 hover:underline"
+                       data-grid-sort="<?= htmlspecialchars($column) ?>"
+                       href="index.php?<?= htmlspecialchars(http_build_query($params)) ?>">
+                      <?= htmlspecialchars($label) ?>
+                      <span class="text-xs cronograma-sort-icon <?= $active ? 'text-brand-red' : 'text-gray-400' ?>" data-grid-sort-icon="<?= htmlspecialchars($column) ?>" aria-hidden="true">
+                        <?= $active && (($gridOrder['direction'] ?? 'asc') === 'asc') ? '▲' : ($active ? '▼' : '↕') ?>
+                      </span>
+                    </a>
+                  </th>
+                  <?php
+              };
+              $renderGridHeader('Pilar', 'topico');
+              $renderGridHeader('Departamento', 'unidade');
+              $renderGridHeader('Atividade', 'atividade');
+              $renderGridHeader('Responsável', 'responsavel');
+              $renderGridHeader('Status', 'status');
+            ?>
             <?php foreach ($months as $m): ?>
               <th class="p-3 text-center"><?= $m ?></th>
             <?php endforeach; ?>
@@ -97,7 +120,14 @@
             <tr><td class="p-4 text-center text-gray-500" colspan="17">Nenhum evento cadastrado para este cronograma.</td></tr>
           <?php endif; ?>
           <?php foreach ($grid as $row): ?>
-            <tr class="border-b cronograma-traffic-row" data-serie-id="<?= (int)$row['serie_id'] ?>">
+            <tr class="border-b cronograma-traffic-row"
+                data-grid-row
+                data-serie-id="<?= (int)$row['serie_id'] ?>"
+                data-grid-topico="<?= htmlspecialchars($row['topico']) ?>"
+                data-grid-unidade="<?= htmlspecialchars($row['unidade']) ?>"
+                data-grid-atividade="<?= htmlspecialchars($row['atividade']) ?>"
+                data-grid-responsavel="<?= htmlspecialchars($row['responsavel']) ?>"
+                data-grid-status="<?= htmlspecialchars($row['status']) ?>">
               <td class="p-3 font-medium"><?= htmlspecialchars($row['topico']) ?></td>
               <td class="p-3"><?= htmlspecialchars($row['unidade']) ?></td>
               <td class="p-3"><?= htmlspecialchars($row['atividade']) ?></td>
@@ -351,6 +381,15 @@
                           data-serie-id="<?= $serieId ?>"
                           data-scope="evento"
                           data-mode="docs">Documentos</button>
+                  <button type="button"
+                          class="px-3 py-2 rounded bg-red-100 text-red-700 text-xs"
+                          data-cronograma-delete-open
+                          data-event-id="<?= $eventId ?>"
+                          data-serie-id="<?= $serieId ?>"
+                          data-scope="evento"
+                          data-label="Excluir evento">
+                    Excluir evento
+                  </button>
                 </div>
               </td>
             </tr>
@@ -408,6 +447,8 @@
       document.body.appendChild(dl);
     }
     const activeFilter = <?= json_encode($statusFilter, JSON_UNESCAPED_UNICODE) ?>;
+    const gridInitialOrder = <?= json_encode($gridOrder ?? ['column' => 'topico', 'direction' => 'asc'], JSON_UNESCAPED_UNICODE) ?>;
+    const cronogramaDeleteCsrf = <?= json_encode(\App\Core\Security::csrfToken(), JSON_UNESCAPED_UNICODE) ?>;
     const applyToggleVisualState = (button, checked, traffic) => {
       button.dataset.checked = checked ? '1' : '0';
       button.classList.toggle('bg-green-500', checked);
@@ -589,6 +630,28 @@
 
           form.addEventListener('submit', async (ev) => {
             ev.preventDefault();
+            const scopeInput = form.querySelector('input[name="escopo"]');
+            const periodicidadeInput = form.querySelector('[name="periodicidade"]');
+            const initialPeriod = periodicidadeInput ? (periodicidadeInput.getAttribute('data-initial-periodicidade') || '') : '';
+            const drawerContent = drawerBody.querySelector('[data-cronograma-drawer-content]');
+            const eventId = drawerContent ? parseInt(drawerContent.getAttribute('data-event-id') || '0', 10) : 0;
+            const serieId = drawerContent ? parseInt(drawerContent.getAttribute('data-serie-id') || '0', 10) : 0;
+            const belongsToSeries = (eventId > 0 && serieId > 0 && eventId !== serieId) || initialPeriod !== 'unico';
+            if (scopeInput && periodicidadeInput && scopeInput.value === 'evento' && periodicidadeInput.value !== initialPeriod) {
+              const applySeries = await askConfirm(
+                'Atualizar periodicidade',
+                belongsToSeries
+                  ? 'A periodicidade é uma classificação da série. Deseja aplicar essa alteração em toda a série?'
+                  : 'Ao alterar a periodicidade, o sistema precisará materializar a recorrência. Deseja aplicar essa alteração como série?'
+                ,
+                'Aplicar à série',
+                'Cancelar'
+              );
+              if (!applySeries) {
+                return;
+              }
+              scopeInput.value = 'serie';
+            }
             const existing = parseInt(form.getAttribute('data-anexos-count') || '0', 10) || 0;
             const isFinal = statusSelect && statusSelect.value === 'Finalizado';
             const fileInput = form.querySelector('input[type="file"][name="anexos[]"]');
@@ -653,6 +716,41 @@
 
         const closeBtn = drawerBody.querySelectorAll('[data-cronograma-drawer-close]');
         closeBtn.forEach((btn) => btn.addEventListener('click', () => closeDrawer(false)));
+
+        const deleteForm = drawerBody.querySelector('form[data-cronograma-delete-form]');
+        const deleteSubmit = drawerBody.querySelector('[data-cronograma-delete-submit]');
+        if (deleteForm && deleteSubmit) {
+          deleteSubmit.addEventListener('click', async () => {
+            const deleteScope = (deleteForm.querySelector('input[name="escopo"]') || {}).value || 'evento';
+            const confirmed = await askConfirm(
+              'Confirmar exclusão',
+              deleteScope === 'serie'
+                ? 'Deseja realmente excluir esta série e todas as suas ocorrências?'
+                : 'Deseja realmente excluir este evento do cronograma?',
+              'Excluir',
+              'Cancelar'
+            );
+            if (!confirmed) return;
+            const fd = new FormData(deleteForm);
+            try {
+              const response = await fetch(deleteForm.action, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: fd,
+              });
+              const payload = await response.json();
+              if (!response.ok || !payload.ok) {
+                throw new Error(payload.message || 'Não foi possível excluir o evento.');
+              }
+              showToast(payload.message || 'Evento excluído com sucesso.');
+              window.setTimeout(() => {
+                window.location.href = payload.redirect_url || window.location.href;
+              }, 250);
+            } catch (error) {
+              showToast(error.message || 'Erro ao excluir o evento.');
+            }
+          });
+        }
 
         const closeEventBtn = drawerBody.querySelector('[data-cronograma-close-event]');
         const closeForm = drawerBody.querySelector('form[data-cronograma-close-form]');
@@ -770,6 +868,42 @@
           return;
         }
         openDrawer({ eventId, scope: 'evento', mode: 'close' });
+        return;
+      }
+      const deleteBtn = ev.target && ev.target.closest ? ev.target.closest('[data-cronograma-delete-open]') : null;
+      if (deleteBtn) {
+        const eventId = deleteBtn.getAttribute('data-event-id');
+        if (!eventId) return;
+        askConfirm(
+          'Confirmar exclusão',
+          'Deseja realmente excluir este evento do cronograma?',
+          'Excluir',
+          'Cancelar'
+        ).then((confirmed) => {
+          if (!confirmed) return;
+          const fd = new FormData();
+          fd.set('csrf', cronogramaDeleteCsrf);
+          fd.set('id', eventId);
+          fd.set('id_cronograma', String(<?= (int)$crono['id'] ?>));
+          fd.set('status_filter', activeFilter);
+          fd.set('escopo', deleteBtn.getAttribute('data-scope') || 'evento');
+          fetch('index.php?route=cronograma/deleteEvento', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: fd,
+          })
+            .then(async (response) => {
+              const payload = await response.json();
+              if (!response.ok || !payload.ok) {
+                throw new Error(payload.message || 'Não foi possível excluir o evento.');
+              }
+              showToast(payload.message || 'Evento excluído com sucesso.');
+              window.setTimeout(() => {
+                window.location.href = payload.redirect_url || window.location.href;
+              }, 250);
+            })
+            .catch((error) => showToast(error.message || 'Erro ao excluir o evento.'));
+        });
       }
     });
 
@@ -806,6 +940,7 @@
 
     const occForm = document.getElementById('occFiltersForm');
     const occTable = document.getElementById('occTable');
+    const gridTable = document.getElementById('cronogramaGridTable');
     const occError = document.getElementById('occClientError');
     const occDataset = occForm ? occForm.querySelector('input[name="occ_dataset"]') : null;
     const isClientMode = occDataset && occDataset.value === 'client';
@@ -1016,6 +1151,62 @@
 
     if (isClientMode) {
       bindClientBehavior();
+    }
+
+    const gridCollator = typeof Intl !== 'undefined' ? new Intl.Collator('pt-BR', { sensitivity: 'base' }) : null;
+    const getGridValue = (row, column) => (row.dataset['grid' + column.charAt(0).toUpperCase() + column.slice(1)] || '').toString();
+    const updateGridSortIcons = (activeColumn, activeDir) => {
+      if (!gridTable) return;
+      gridTable.querySelectorAll('[data-grid-sort-icon]').forEach((icon) => {
+        const column = icon.getAttribute('data-grid-sort-icon');
+        if (column === activeColumn) {
+          icon.textContent = activeDir === 'asc' ? '▲' : '▼';
+          icon.classList.remove('text-gray-400');
+          icon.classList.add('text-brand-red');
+        } else {
+          icon.textContent = '↕';
+          icon.classList.add('text-gray-400');
+          icon.classList.remove('text-brand-red');
+        }
+      });
+    };
+    const applyGridSort = (column, direction) => {
+      if (!gridTable) return;
+      const tbody = gridTable.querySelector('tbody');
+      if (!tbody) return;
+      const rows = Array.from(tbody.querySelectorAll('tr[data-grid-row]'));
+      const dir = direction === 'desc' ? -1 : 1;
+      rows.sort((a, b) => {
+        const left = getGridValue(a, column);
+        const right = getGridValue(b, column);
+        const result = gridCollator ? gridCollator.compare(left, right) : left.toLowerCase().localeCompare(right.toLowerCase());
+        return result * dir;
+      });
+      rows.forEach((row) => tbody.appendChild(row));
+      updateGridSortIcons(column, direction);
+    };
+    if (gridTable) {
+      applyGridSort(gridInitialOrder.column || 'topico', gridInitialOrder.direction || 'asc');
+      gridTable.querySelectorAll('[data-grid-sort]').forEach((link) => {
+        link.addEventListener('click', (event) => {
+          event.preventDefault();
+          const column = link.getAttribute('data-grid-sort');
+          if (!column) return;
+          const currentColumn = link.closest('table') ? null : null;
+          const activeColumn = gridTable.getAttribute('data-grid-active-column') || (gridInitialOrder.column || 'topico');
+          const activeDir = gridTable.getAttribute('data-grid-active-dir') || (gridInitialOrder.direction || 'asc');
+          const nextDir = activeColumn === column && activeDir === 'asc' ? 'desc' : 'asc';
+          gridTable.setAttribute('data-grid-active-column', column);
+          gridTable.setAttribute('data-grid-active-dir', nextDir);
+          applyGridSort(column, nextDir);
+          const url = new URL(window.location.href);
+          url.searchParams.set('grid_sort', column);
+          url.searchParams.set('grid_dir', nextDir);
+          window.history.replaceState({}, '', url.toString());
+        });
+      });
+      gridTable.setAttribute('data-grid-active-column', gridInitialOrder.column || 'topico');
+      gridTable.setAttribute('data-grid-active-dir', gridInitialOrder.direction || 'asc');
     }
   })();
 </script>

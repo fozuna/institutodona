@@ -1,8 +1,38 @@
 <?php
 namespace App\Models;
 
+use App\Database\Database;
+
 class ClienteModel extends BaseModel
 {
+    private function clienteWritePayload(array $data): array
+    {
+        $payload = [
+            'nome_empresa' => $data['nome_empresa'],
+            'CNPJ' => $data['CNPJ'],
+            'contato' => $data['contato'] ?? null,
+        ];
+
+        $optionalColumns = [
+            'logo_path' => null,
+            'dominio_publico' => null,
+            'is_matriz' => 1,
+            'matriz_id' => null,
+        ];
+
+        foreach ($optionalColumns as $column => $default) {
+            if (Database::columnExists('clientes', $column)) {
+                $payload[$column] = $data[$column] ?? $default;
+            }
+        }
+
+        if (Database::columnExists('clientes', 'ativo') && array_key_exists('ativo', $data)) {
+            $payload['ativo'] = (int)$data['ativo'];
+        }
+
+        return $payload;
+    }
+
     private function scopedParams(string $prefix = 'cli'): array
     {
         $params = [];
@@ -137,36 +167,12 @@ class ClienteModel extends BaseModel
     public function create(array $data): int
     {
         $this->ensureColumns();
-        try {
-            $stmt = $this->db->prepare('INSERT INTO clientes (nome_empresa, CNPJ, contato, logo_path, dominio_publico, is_matriz, matriz_id) VALUES (:nome_empresa, :cnpj, :contato, :logo_path, :dominio_publico, :is_matriz, :matriz_id)');
-            $stmt->execute([
-                'nome_empresa' => $data['nome_empresa'],
-                'cnpj' => $data['CNPJ'],
-                'contato' => $data['contato'] ?? null,
-                'logo_path' => $data['logo_path'] ?? null,
-                'dominio_publico' => $data['dominio_publico'] ?? null,
-                'is_matriz' => $data['is_matriz'] ?? 1,
-                'matriz_id' => $data['matriz_id'] ?? null,
-            ]);
-        } catch (\PDOException $e) {
-            try {
-                $stmt = $this->db->prepare('INSERT INTO clientes (nome_empresa, CNPJ, contato, logo_path, dominio_publico) VALUES (:nome_empresa, :cnpj, :contato, :logo_path, :dominio_publico)');
-                $stmt->execute([
-                    'nome_empresa' => $data['nome_empresa'],
-                    'cnpj' => $data['CNPJ'],
-                    'contato' => $data['contato'] ?? null,
-                    'logo_path' => $data['logo_path'] ?? null,
-                    'dominio_publico' => $data['dominio_publico'] ?? null,
-                ]);
-            } catch (\PDOException $e2) {
-                $stmt = $this->db->prepare('INSERT INTO clientes (nome_empresa, CNPJ, contato) VALUES (:nome_empresa, :cnpj, :contato)');
-                $stmt->execute([
-                    'nome_empresa' => $data['nome_empresa'],
-                    'cnpj' => $data['CNPJ'],
-                    'contato' => $data['contato'] ?? null,
-                ]);
-            }
-        }
+        $payload = $this->clienteWritePayload($data);
+        $columns = array_keys($payload);
+        $placeholders = array_map(static fn(string $column): string => ':' . $column, $columns);
+        $sql = 'INSERT INTO clientes (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $placeholders) . ')';
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($payload);
         return (int)$this->db->lastInsertId();
     }
 
@@ -176,39 +182,14 @@ class ClienteModel extends BaseModel
             return false;
         }
         $this->ensureColumns();
-        try {
-            $stmt = $this->db->prepare('UPDATE clientes SET nome_empresa = :nome_empresa, CNPJ = :cnpj, contato = :contato, logo_path = :logo_path, dominio_publico = :dominio_publico, is_matriz = :is_matriz, matriz_id = :matriz_id WHERE id = :id');
-            return $stmt->execute([
-                'nome_empresa' => $data['nome_empresa'],
-                'cnpj' => $data['CNPJ'],
-                'contato' => $data['contato'] ?? null,
-                'logo_path' => $data['logo_path'] ?? null,
-                'dominio_publico' => $data['dominio_publico'] ?? null,
-                'is_matriz' => $data['is_matriz'] ?? 1,
-                'matriz_id' => $data['matriz_id'] ?? null,
-                'id' => $id,
-            ]);
-        } catch (\PDOException $e) {
-            try {
-                $stmt = $this->db->prepare('UPDATE clientes SET nome_empresa = :nome_empresa, CNPJ = :cnpj, contato = :contato, logo_path = :logo_path, dominio_publico = :dominio_publico WHERE id = :id');
-                return $stmt->execute([
-                    'nome_empresa' => $data['nome_empresa'],
-                    'cnpj' => $data['CNPJ'],
-                    'contato' => $data['contato'] ?? null,
-                    'logo_path' => $data['logo_path'] ?? null,
-                    'dominio_publico' => $data['dominio_publico'] ?? null,
-                    'id' => $id,
-                ]);
-            } catch (\PDOException $e2) {
-                $stmt = $this->db->prepare('UPDATE clientes SET nome_empresa = :nome_empresa, CNPJ = :cnpj, contato = :contato WHERE id = :id');
-                return $stmt->execute([
-                    'nome_empresa' => $data['nome_empresa'],
-                    'cnpj' => $data['CNPJ'],
-                    'contato' => $data['contato'] ?? null,
-                    'id' => $id,
-                ]);
-            }
-        }
+        $payload = $this->clienteWritePayload($data);
+        $assignments = array_map(
+            static fn(string $column): string => $column . ' = :' . $column,
+            array_keys($payload)
+        );
+        $payload['id'] = $id;
+        $stmt = $this->db->prepare('UPDATE clientes SET ' . implode(', ', $assignments) . ' WHERE id = :id');
+        return $stmt->execute($payload);
     }
 
     public function delete(int $id): bool

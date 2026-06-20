@@ -38,11 +38,21 @@ use App\Controllers\PwaController;
 
 $shouldAutoMigrate = empty($_SESSION['__auto_migrate_done']);
 if ($shouldAutoMigrate) {
-    $lockPath = __DIR__ . '/../storage/.auto_migrate.lock';
-    $lockHandle = @fopen($lockPath, 'c+');
+    $storageDir = __DIR__ . '/../storage';
+    if (!is_dir($storageDir) && !@mkdir($storageDir, 0775, true) && !is_dir($storageDir)) {
+        $storageDir = rtrim(sys_get_temp_dir(), '\\/') . DIRECTORY_SEPARATOR . 'institutodona';
+        if (!is_dir($storageDir) && !@mkdir($storageDir, 0775, true) && !is_dir($storageDir)) {
+            error_log('[auto_migrate_failed] nao foi possivel preparar diretorio de lock');
+            $storageDir = '';
+        }
+    }
+    $lockPath = $storageDir !== '' ? ($storageDir . DIRECTORY_SEPARATOR . '.auto_migrate.lock') : '';
+    $lockHandle = $lockPath !== '' ? @fopen($lockPath, 'c+') : false;
     $locked = false;
     if (is_resource($lockHandle)) {
         $locked = @flock($lockHandle, LOCK_EX | LOCK_NB);
+    } elseif ($lockPath !== '') {
+        error_log('[auto_migrate_failed] nao foi possivel abrir lock file: ' . $lockPath);
     }
     if ($locked) {
         try {

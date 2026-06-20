@@ -158,11 +158,17 @@ $limitErrors = $indicadores->validate(array_merge($baseData, [
 ]));
 assert_true(isset($limitErrors['valor_minimo']), 'Valida valor mínimo menor que valor máximo');
 
+$negativePercentageErrors = $indicadores->validate(array_merge($baseData, [
+    'indicador' => 'Indicador Percentual Negativo ' . $suffix,
+    'valor' => '-15',
+]));
+assert_true($negativePercentageErrors === [], 'Aceita percentual negativo no cadastro do indicador');
+
 $percentageErrors = $indicadores->validate(array_merge($baseData, [
     'indicador' => 'Indicador Percentual ' . $suffix,
     'valor' => '110',
 ]));
-assert_true(isset($percentageErrors['valor']), 'Restringe percentual ao intervalo de 0 a 100');
+assert_true(isset($percentageErrors['valor']), 'Restringe percentual apenas ao teto de 100');
 
 $integerErrors = $indicadores->validate(array_merge($baseData, [
     'indicador' => 'Indicador Inteiro ' . $suffix,
@@ -200,6 +206,8 @@ $updatedEventComma = $indicadorEventos->find((int)$createdEvents[2]['id']);
 assert_true($updatedEventComma !== null && abs((float)($updatedEventComma['valor_atingido'] ?? 0) - 68.5) < 0.0001, 'Persistiu valor com vírgula corretamente');
 assert_true(!$indicadorEventos->updateAchievedValue((int)$createdEvents[3]['id'], '10,0,0', 1, 'Inválido'), 'Rejeita formato com múltiplas vírgulas');
 assert_true(!$indicadorEventos->updateAchievedValue((int)$createdEvents[4]['id'], '110', 1, 'Percentual inválido'), 'Rejeita percentual acima de 100 no evento');
+assert_true($indicadorEventos->updateAchievedValue((int)$createdEvents[5]['id'], '-10', 1, 'Percentual negativo'), 'Aceita percentual negativo no evento');
+assert_true((float)($indicadorEventos->find((int)$createdEvents[5]['id'])['valor_atingido'] ?? 0) === -10.0, 'Persistiu valor negativo no evento');
 assert_true($indicadorEventos->updateAchievedValue((int)$createdEvents[1]['id'], '85', 1, 'Meta atendida'), 'Atualiza evento com meta atingida');
 assert_true(($indicadorEventos->find((int)$createdEvents[1]['id'])['meta_status_key'] ?? '') === 'atingida', 'Marca meta atingida quando valor supera 100%');
 
@@ -238,5 +246,22 @@ assert_true($duplicateAfterDelete === [], 'Soft delete libera novo cadastro com 
 
 assert_true($indicadores->updateValor($outOfRangeId, '88', 1), 'Atualiza valor lançado do indicador');
 assert_true((float)($indicadores->find($outOfRangeId)['valor'] ?? 0) === 88.0, 'Persistiu atualização do valor lançado');
+assert_true($indicadores->updateValor($outOfRangeId, '-12', 1), 'Aceita atualização negativa do valor lançado');
+assert_true((float)($indicadores->find($outOfRangeId)['valor'] ?? 0) === -12.0, 'Persistiu atualização negativa do indicador');
+assert_true($indicadores->update($outOfRangeId, array_merge($indicadores->find($outOfRangeId) ?: [], [
+    'cliente_id' => $clienteId,
+    'cliente_nome' => 'Cliente Indicadores ' . $suffix,
+    'indicador' => 'Indicador Fora Faixa ' . $suffix,
+    'departamento_id' => $departamentoId,
+    'setor_id' => $setorId,
+    'responsavel_ids' => [$responsavelId],
+    'periodicidade_tipo' => 'mensal',
+    'data_inicial' => '2026-01-01',
+    'data_final' => '2026-12-31',
+    'valor' => '-12',
+    'unidade_medida_id' => $unitPercent,
+    'valor_minimo' => '60',
+    'valor_maximo' => '90',
+]), 1), 'Permite salvar indicador já existente mesmo sem mudança efetiva em todas as colunas');
 
 echo "All indicadores validation tests passed.\n";

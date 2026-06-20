@@ -821,7 +821,6 @@ class CronogramaEventoModel extends BaseModel
                 throw new RuntimeException('Para finalizar eventos do tipo Reunião, é obrigatório anexar pelo menos um documento antes de marcar como finalizado.');
             }
         }
-        $payload['periodicidade'] = (string)($event['periodicidade'] ?? 'unico');
         $this->assertNoDuplicateOccurrences((int)$event['id_cronograma'], $payload, [$payload['data']], [(int)$event['id']]);
         $params = [
             'data' => $payload['data'],

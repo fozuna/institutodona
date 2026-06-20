@@ -2,11 +2,82 @@
 <?php
   $importEnabled = $importEnabled ?? false;
   $importAlreadyRun = $importAlreadyRun ?? false;
-  $page = $page ?? 1;
-  $per = $per ?? 20;
-  $total = $total ?? 0;
-  $totalPages = $totalPages ?? 1;
-  $statusFilters = $statusFilters ?? [];
+  $page = max(1, (int)($page ?? 1));
+  $per = max(1, (int)($per ?? 12));
+  $total = (int)($total ?? 0);
+  $totalPages = max(1, (int)($totalPages ?? 1));
+  $statusFilters = array_values(array_filter($statusFilters ?? []));
+  $viewMode = (($viewMode ?? 'cards') === 'list') ? 'list' : 'cards';
+
+  $deadlineBadgeClass = static function(array $task): string {
+      $prazoDate = $task['prazo'] ?? null;
+      if (($task['status'] ?? '') === 'Concluído' || !$prazoDate || $prazoDate === '0000-00-00') {
+          return 'bg-gray-300';
+      }
+      $deadline = new DateTime($prazoDate);
+      $today = new DateTime('today');
+      if ($deadline < $today) {
+          return 'bg-red-500';
+      }
+      $diff = $today->diff($deadline);
+      return ($diff->invert === 0 && $diff->days <= 2) ? 'bg-yellow-400' : 'bg-green-500';
+  };
+
+  $statusClass = static function(string $status): string {
+      return match ($status) {
+          'Concluído' => 'bg-green-100 text-green-800',
+          'Em Andamento' => 'bg-blue-100 text-blue-800',
+          'Pendente' => 'bg-yellow-100 text-yellow-800',
+          'Atrasado' => 'bg-red-100 text-red-800',
+          default => 'bg-gray-100 text-gray-700',
+      };
+  };
+
+  $formatPrazo = static function(?string $prazo): string {
+      if (!$prazo || $prazo === '0000-00-00') {
+          return '—';
+      }
+      return date('d/m/Y', strtotime($prazo));
+  };
+
+  $buildIndexUrl = static function(array $overrides = []) use ($selectedCliente, $statusFilters, $viewMode, $per): string {
+      $params = [
+          'route' => 'planoacao/index',
+          'cliente' => $selectedCliente,
+          'view' => $viewMode,
+          'per' => $per,
+      ];
+      if (!empty($statusFilters)) {
+          $params['status'] = $statusFilters;
+      }
+      foreach ($overrides as $key => $value) {
+          if ($value === null || $value === '' || $value === []) {
+              unset($params[$key]);
+              continue;
+          }
+          $params[$key] = $value;
+      }
+      if (empty($params['cliente'])) {
+          unset($params['cliente']);
+      }
+      if (empty($params['status'])) {
+          unset($params['status']);
+      }
+      if (($params['view'] ?? 'cards') === 'cards') {
+          unset($params['view']);
+      }
+      if ((int)($params['per'] ?? 12) === 12) {
+          unset($params['per']);
+      }
+      if ((int)($params['page'] ?? 1) <= 1) {
+          unset($params['page']);
+      }
+      return 'index.php?' . http_build_query($params);
+  };
+
+  $visibleFrom = ($total > 0) ? (($page - 1) * $per) + 1 : 0;
+  $visibleTo = min($total, $page * $per);
+  $allStatusOptions = ['Planejado','Em Andamento','Concluído','Pendente','Atrasado'];
 ?>
 <div class="p-6 space-y-6">
   <div class="bg-white shadow rounded p-4 md:p-5 space-y-4">
@@ -29,6 +100,11 @@
 
     <form method="get" class="flex flex-col md:flex-row md:items-center gap-2" id="searchForm">
       <input type="hidden" name="route" value="planoacao/index" />
+      <input type="hidden" name="per" value="<?= (int)$per ?>" />
+      <input type="hidden" name="view" value="<?= htmlspecialchars($viewMode) ?>" />
+      <?php foreach ($statusFilters as $statusFilter): ?>
+        <input type="hidden" name="status[]" value="<?= htmlspecialchars($statusFilter) ?>" />
+      <?php endforeach; ?>
       <label for="clienteSelect" class="text-sm text-gray-600 md:whitespace-nowrap">Cliente</label>
       <select name="cliente" id="clienteSelect" class="w-full md:max-w-xl border-gray-300 rounded-md shadow-sm focus:border-brand-orange focus:ring focus:ring-brand-orange focus:ring-opacity-50">
         <option value="">-- Selecione o Cliente --</option>
@@ -43,36 +119,50 @@
     </form>
 
     <?php if ($selectedCliente): ?>
-    <form method="get" class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3 border-t pt-3" id="statusFilterForm">
-      <input type="hidden" name="route" value="planoacao/index" />
-      <input type="hidden" name="cliente" value="<?= (int)$selectedCliente ?>" />
-      <div class="flex flex-wrap items-center gap-2 text-xs">
-        <?php $allStatusOptions = ['Planejado','Em Andamento','Concluído','Pendente','Atrasado']; ?>
-        <label class="inline-flex items-center gap-1 cursor-pointer px-2 py-1 rounded bg-gray-100">
-          <input type="checkbox" id="idxStAll" class="form-checkbox">
-          <span>Selecionar Todos</span>
-        </label>
-        <?php foreach ($allStatusOptions as $opt): ?>
-          <label class="inline-flex items-center gap-1 cursor-pointer px-2 py-1 rounded border border-gray-200">
-            <input type="checkbox" name="status[]" value="<?= $opt ?>" class="form-checkbox idx-st-item"
-              <?= in_array($opt, $statusFilters ?? [], true) ? 'checked' : '' ?>>
-            <span><?= $opt ?></span>
+    <div class="border-t pt-3 space-y-3">
+      <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <div class="text-xs text-gray-500">
+          Visualização disponível em cards e lista. Paginação padrão: <?= (int)$per ?> planos por tela.
+        </div>
+        <div class="inline-flex rounded-lg border border-gray-200 bg-white p-1">
+          <a href="<?= htmlspecialchars($buildIndexUrl(['view' => 'cards', 'page' => 1])) ?>"
+             class="px-3 py-1.5 rounded-md text-sm font-medium transition-colors <?= $viewMode === 'cards' ? 'bg-brand-orange text-white' : 'text-gray-600 hover:bg-gray-100' ?>">
+            Cards
+          </a>
+          <a href="<?= htmlspecialchars($buildIndexUrl(['view' => 'list', 'page' => 1])) ?>"
+             class="px-3 py-1.5 rounded-md text-sm font-medium transition-colors <?= $viewMode === 'list' ? 'bg-brand-orange text-white' : 'text-gray-600 hover:bg-gray-100' ?>">
+            Lista
+          </a>
+        </div>
+      </div>
+
+      <form method="get" class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3" id="statusFilterForm">
+        <input type="hidden" name="route" value="planoacao/index" />
+        <input type="hidden" name="cliente" value="<?= (int)$selectedCliente ?>" />
+        <input type="hidden" name="view" value="<?= htmlspecialchars($viewMode) ?>" />
+        <input type="hidden" name="per" value="<?= (int)$per ?>" />
+        <div class="flex flex-wrap items-center gap-2 text-xs">
+          <label class="inline-flex items-center gap-1 cursor-pointer px-2 py-1 rounded bg-gray-100">
+            <input type="checkbox" id="idxStAll" class="form-checkbox">
+            <span>Selecionar Todos</span>
           </label>
-        <?php endforeach; ?>
-      </div>
-      <div class="flex items-center gap-2">
-        <select name="per" class="text-xs border rounded px-2 py-2 min-w-[120px]">
-          <?php foreach ([10,20,50,100] as $opt): ?>
-            <option value="<?= $opt ?>" <?= ((int)($per ?? 20) === $opt) ? 'selected' : '' ?>><?= $opt ?> por página</option>
+          <?php foreach ($allStatusOptions as $opt): ?>
+            <label class="inline-flex items-center gap-1 cursor-pointer px-2 py-1 rounded border border-gray-200">
+              <input type="checkbox" name="status[]" value="<?= $opt ?>" class="form-checkbox idx-st-item"
+                <?= in_array($opt, $statusFilters, true) ? 'checked' : '' ?>>
+              <span><?= $opt ?></span>
+            </label>
           <?php endforeach; ?>
-        </select>
-        <button type="submit" class="px-3 py-2 rounded bg-gray-200 text-xs text-brand-brown hover:bg-gray-300">Aplicar</button>
-      </div>
-    </form>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-gray-500">Exibindo <?= (int)$visibleFrom ?>-<?= (int)$visibleTo ?> de <?= (int)$total ?></span>
+          <button type="submit" class="px-3 py-2 rounded bg-gray-200 text-xs text-brand-brown hover:bg-gray-300">Aplicar</button>
+        </div>
+      </form>
+    </div>
     <?php endif; ?>
   </div>
 
-  <!-- Results Section -->
   <div id="resultsContainer">
       <?php if (!$selectedCliente): ?>
         <div class="bg-white shadow rounded p-6 text-gray-600 text-center">
@@ -87,71 +177,95 @@
           <a href="index.php?route=planoacao/create&cliente=<?= (int)$selectedCliente ?>" class="text-brand-orange hover:underline mt-2 inline-block">Criar o primeiro plano</a>
         </div>
       <?php else: ?>
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          <?php foreach ($items as $t): ?>
-            <div class="card bg-white shadow rounded-lg p-4 border border-gray-100 hover:shadow-md transition-shadow">
-              <div class="font-semibold text-gray-900 line-clamp-2 min-h-[2.75rem]"><?= htmlspecialchars($t['titulo']) ?></div>
-              <div class="text-xs text-gray-500 mt-2 flex flex-wrap items-center gap-2">
-                 <?php 
-                    // Logic for traffic light
-                    $prazoDate = ($t['prazo'] && $t['prazo'] !== '0000-00-00') ? $t['prazo'] : null;
-                    $colorClass = 'bg-gray-300';
-                    if ($t['status'] !== 'Concluído' && $prazoDate) {
-                        $deadline = new DateTime($prazoDate);
-                        $today = new DateTime('today');
-                        if ($deadline < $today) {
-                            $colorClass = 'bg-red-500';
-                        } else {
-                            $diff = $today->diff($deadline);
-                            if ($diff->days <= 2 && $diff->invert == 0) {
-                                $colorClass = 'bg-yellow-400';
-                            } else {
-                                $colorClass = 'bg-green-500';
-                            }
-                        }
-                    }
-                    $prazoDisplay = $prazoDate ? date('d/m/Y', strtotime($prazoDate)) : '—';
-                 ?>
-                <span class="w-3 h-3 rounded-full <?= $colorClass ?>" title="Status do Prazo"></span>
-                <span>Prazo: <?= $prazoDisplay ?></span>
-                <span class="text-gray-300">|</span>
-                <span>Resp.: <?= htmlspecialchars($t['responsavel'] ?? '—') ?></span>
-              </div>
-              
-              <div class="mt-3 flex items-center justify-between gap-3 border-t pt-3">
-                  <?php
-                    $statusClass = match($t['status']) {
-                        'Concluído' => 'bg-green-100 text-green-800',
-                        'Em Andamento' => 'bg-blue-100 text-blue-800',
-                        'Pendente' => 'bg-yellow-100 text-yellow-800',
-                        'Atrasado' => 'bg-red-100 text-red-800',
-                        default => 'bg-gray-100 text-gray-700'
-                    };
-                  ?>
-                  <span class="px-2 py-1 rounded-full text-xs font-semibold <?= $statusClass ?>">
+        <?php if ($viewMode === 'list'): ?>
+          <div class="bg-white shadow rounded overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Plano</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Responsável</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Prazo</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Status</th>
+                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">Ações</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <?php foreach ($items as $t): ?>
+                    <tr class="hover:bg-gray-50">
+                      <td class="px-4 py-3">
+                        <div class="flex items-start gap-3">
+                          <span class="mt-1 w-3 h-3 rounded-full <?= $deadlineBadgeClass($t) ?>" title="Status do Prazo"></span>
+                          <div>
+                            <div class="font-medium text-gray-900"><?= htmlspecialchars($t['titulo']) ?></div>
+                            <div class="text-xs text-gray-500 mt-1">ID #<?= (int)$t['id'] ?></div>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="px-4 py-3 text-sm text-gray-600"><?= htmlspecialchars($t['responsavel'] ?? '—') ?></td>
+                      <td class="px-4 py-3 text-sm text-gray-600"><?= htmlspecialchars($formatPrazo($t['prazo'] ?? null)) ?></td>
+                      <td class="px-4 py-3">
+                        <span class="px-2 py-1 rounded-full text-xs font-semibold <?= $statusClass((string)($t['status'] ?? '')) ?>">
+                          <?= htmlspecialchars($t['status'] ?? '—') ?>
+                        </span>
+                      </td>
+                      <td class="px-4 py-3 text-right">
+                        <a class="inline-flex items-center gap-1 text-sm font-semibold text-brand-orange hover:text-orange-800 transition-colors" href="index.php?route=planoacao/show&id=<?= (int)$t['id'] ?>">
+                          Abrir <span data-feather="chevron-right" class="w-4 h-4"></span>
+                        </a>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        <?php else: ?>
+          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <?php foreach ($items as $t): ?>
+              <div class="card bg-white shadow rounded-lg p-4 border border-gray-100 hover:shadow-md transition-shadow">
+                <div class="font-semibold text-gray-900 line-clamp-2 min-h-[2.75rem]"><?= htmlspecialchars($t['titulo']) ?></div>
+                <div class="text-xs text-gray-500 mt-2 flex flex-wrap items-center gap-2">
+                  <span class="w-3 h-3 rounded-full <?= $deadlineBadgeClass($t) ?>" title="Status do Prazo"></span>
+                  <span>Prazo: <?= htmlspecialchars($formatPrazo($t['prazo'] ?? null)) ?></span>
+                  <span class="text-gray-300">|</span>
+                  <span>Resp.: <?= htmlspecialchars($t['responsavel'] ?? '—') ?></span>
+                </div>
+
+                <div class="mt-3 flex items-center justify-between gap-3 border-t pt-3">
+                  <span class="px-2 py-1 rounded-full text-xs font-semibold <?= $statusClass((string)($t['status'] ?? '')) ?>">
                     <?= htmlspecialchars($t['status']) ?>
                   </span>
                   <a class="text-brand-orange hover:text-orange-800 text-sm font-semibold flex items-center gap-1 transition-colors" href="index.php?route=planoacao/show&id=<?= (int)$t['id'] ?>">
-                      Abrir <span data-feather="chevron-right" class="w-4 h-4"></span>
+                    Abrir <span data-feather="chevron-right" class="w-4 h-4"></span>
                   </a>
+                </div>
               </div>
-            </div>
-          <?php endforeach; ?>
-        </div>
+            <?php endforeach; ?>
+          </div>
+        <?php endif; ?>
+
         <?php if ($totalPages > 1): ?>
-        <div class="mt-4 flex items-center justify-between text-xs text-gray-600">
-          <div>Total: <?= (int)$total ?> • Página <?= (int)$page ?> de <?= (int)$totalPages ?></div>
-          <div class="flex items-center gap-2">
+        <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-xs text-gray-600">
+          <div>Total: <?= (int)$total ?> • Exibindo <?= (int)$visibleFrom ?>-<?= (int)$visibleTo ?> • Página <?= (int)$page ?> de <?= (int)$totalPages ?></div>
+          <div class="flex items-center gap-2 flex-wrap">
             <?php
-              $base = 'index.php?route=planoacao/index&cliente=' . (int)$selectedCliente
-                . (empty($statusFilters) ? '' : '&' . http_build_query(['status' => $statusFilters]))
-                . '&per=' . (int)$per
-                . '&page=';
-              $prev = max(1, (int)$page - 1);
-              $next = min((int)$totalPages, (int)$page + 1);
+              $prev = max(1, $page - 1);
+              $next = min($totalPages, $page + 1);
+              $windowStart = max(1, $page - 2);
+              $windowEnd = min($totalPages, $windowStart + 4);
+              $windowStart = max(1, $windowEnd - 4);
             ?>
-            <a href="<?= $page > 1 ? $base . $prev : '#' ?>" class="px-2 py-1 rounded bg-gray-200 text-brand-brown <?= $page <= 1 ? 'opacity-50 pointer-events-none' : '' ?>">Anterior</a>
-            <a href="<?= $page < $totalPages ? $base . $next : '#' ?>" class="px-2 py-1 rounded bg-gray-200 text-brand-brown <?= $page >= $totalPages ? 'opacity-50 pointer-events-none' : '' ?>">Próximo</a>
+            <a href="<?= htmlspecialchars($buildIndexUrl(['page' => 1])) ?>" class="px-2 py-1 rounded bg-gray-200 text-brand-brown <?= $page <= 1 ? 'opacity-50 pointer-events-none' : '' ?>">Primeira</a>
+            <a href="<?= htmlspecialchars($buildIndexUrl(['page' => $prev])) ?>" class="px-2 py-1 rounded bg-gray-200 text-brand-brown <?= $page <= 1 ? 'opacity-50 pointer-events-none' : '' ?>">Anterior</a>
+            <?php for ($p = $windowStart; $p <= $windowEnd; $p++): ?>
+              <a href="<?= htmlspecialchars($buildIndexUrl(['page' => $p])) ?>"
+                 class="px-2 py-1 rounded <?= $p === $page ? 'bg-brand-orange text-white' : 'bg-gray-100 text-brand-brown hover:bg-gray-200' ?>">
+                <?= (int)$p ?>
+              </a>
+            <?php endfor; ?>
+            <a href="<?= htmlspecialchars($buildIndexUrl(['page' => $next])) ?>" class="px-2 py-1 rounded bg-gray-200 text-brand-brown <?= $page >= $totalPages ? 'opacity-50 pointer-events-none' : '' ?>">Próximo</a>
+            <a href="<?= htmlspecialchars($buildIndexUrl(['page' => $totalPages])) ?>" class="px-2 py-1 rounded bg-gray-200 text-brand-brown <?= $page >= $totalPages ? 'opacity-50 pointer-events-none' : '' ?>">Última</a>
           </div>
         </div>
         <?php endif; ?>
@@ -207,7 +321,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('searchForm');
     const select = document.getElementById('clienteSelect');
-    const container = document.getElementById('resultsContainer');
     const createBtn = document.getElementById('createBtn');
     const backBtn = document.getElementById('backBtn');
     const importOpenBtn = document.getElementById('importOpenBtn');
@@ -222,160 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const importClienteSelect = document.getElementById('importClienteSelect');
     const urlParams = new URLSearchParams(window.location.search);
     const shouldOpenImport = urlParams.get('open_import') === '1';
-    
-    // Simple in-memory cache for this session
-    const localCache = {};
 
-    async function fetchPlans(clienteId) {
-        // Update UI controls immediately
-        updateUrl(clienteId);
-        updateButtons(clienteId);
-
-        // If no client selected, show empty state
-        if (!clienteId) {
-            container.innerHTML = `
-                <div class="bg-white shadow rounded p-6 text-gray-600 text-center">
-                    <span data-feather="arrow-up" class="w-6 h-6 mx-auto mb-2 text-gray-400 md:hidden"></span>
-                    <span data-feather="arrow-up-right" class="w-6 h-6 mx-auto mb-2 text-gray-400 hidden md:block"></span>
-                    Escolha um cliente acima para ver as tarefas.
-                </div>`;
-            feather.replace();
-            return;
-        }
-
-        const start = performance.now();
-        
-        // Check cache
-        if (localCache[clienteId]) {
-            renderResults(localCache[clienteId], clienteId);
-            return;
-        }
-
-        // Show loading state
-        container.innerHTML = `
-            <div class="flex flex-col justify-center items-center p-12">
-                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-orange mb-3"></div>
-                <span class="text-gray-600">Carregando planos de ação...</span>
-            </div>
-        `;
-
-        try {
-            const response = await fetch(`index.php?route=planoacao/api_list&cliente=${clienteId}`, {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            });
-            
-            if (!response.ok) throw new Error('Falha na comunicação com o servidor');
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                localCache[clienteId] = data.data; // Save to cache
-                renderResults(data.data, clienteId);
-            } else {
-                showError(data.error || 'Erro desconhecido ao carregar dados.');
-            }
-        } catch (error) {
-            console.error('Fetch error:', error);
-            showError('Não foi possível carregar os planos de ação. Verifique sua conexão.');
-        }
-    }
-
-    function renderResults(items, clienteId) {
-        if (!items || items.length === 0) {
-            container.innerHTML = `
-                <div class="bg-white shadow rounded p-10 text-center text-gray-500">
-                  <div class="mb-3"><span data-feather="clipboard" class="w-12 h-12 mx-auto text-gray-300"></span></div>
-                  <p>Nenhum plano de ação encontrado para este cliente.</p>
-                  <a href="index.php?route=planoacao/create&cliente=${clienteId}" class="text-brand-orange hover:underline mt-2 inline-block">Criar o primeiro plano</a>
-                </div>`;
-            feather.replace();
-            return;
-        }
-
-        const escapeHtml = (str) => str ? String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : '';
-
-        const cards = items.map(t => {
-            // Logic for traffic light (replicated from PHP logic)
-            let colorClass = 'bg-gray-300';
-            let deadlineDate = null;
-            
-            if (t.status !== 'Concluído' && t.prazo && t.prazo !== '0000-00-00') {
-                const deadline = new Date(t.prazo + 'T00:00:00'); // Ensure local time
-                const today = new Date();
-                today.setHours(0,0,0,0);
-                deadlineDate = deadline;
-                
-                if (deadline < today) {
-                    colorClass = 'bg-red-500';
-                } else {
-                    const diffTime = deadline - today;
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-                    if (diffDays <= 2) {
-                        colorClass = 'bg-yellow-400';
-                    } else {
-                        colorClass = 'bg-green-500';
-                    }
-                }
-            }
-
-            const prazoDisplay = (t.prazo && t.prazo !== '0000-00-00') ? new Date(t.prazo + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
-
-            return `
-            <div class="card bg-white shadow rounded-lg p-4 border border-gray-100 hover:shadow-md transition-shadow">
-              <div class="font-semibold text-gray-900 line-clamp-2 min-h-[2.75rem]">${escapeHtml(t.titulo)}</div>
-              <div class="text-xs text-gray-500 mt-2 flex flex-wrap items-center gap-2">
-                <span class="w-3 h-3 rounded-full ${colorClass}" title="Status do Prazo"></span>
-                <span>Prazo: ${prazoDisplay}</span>
-                <span class="text-gray-300">|</span>
-                <span>Resp.: ${escapeHtml(t.responsavel || '—')}</span>
-              </div>
-              <div class="mt-3 flex items-center justify-between gap-3 border-t pt-3">
-                  <span class="px-2 py-1 rounded-full text-xs font-semibold ${statusBadgeClass(t.status)}">${escapeHtml(t.status)}</span>
-                  <a class="text-brand-orange hover:text-orange-800 text-sm font-semibold flex items-center gap-1 transition-colors" href="index.php?route=planoacao/show&id=${t.id}">
-                      Abrir <span data-feather="chevron-right" class="w-4 h-4"></span>
-                  </a>
-              </div>
-            </div>`;
-        }).join('');
-
-        container.innerHTML = `
-            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                ${cards}
-            </div>`;
-        
-        feather.replace();
-    }
-
-    function showError(msg) {
-        container.innerHTML = `
-            <div class="bg-red-50 border border-red-200 text-red-700 p-4 rounded shadow-sm flex items-center gap-3">
-                <span data-feather="alert-circle"></span>
-                <span>${msg}</span>
-            </div>
-        `;
-        feather.replace();
-    }
-
-    function statusBadgeClass(status) {
-        switch (status) {
-            case 'Concluído': return 'bg-green-100 text-green-800';
-            case 'Em Andamento': return 'bg-blue-100 text-blue-800';
-            case 'Pendente': return 'bg-yellow-100 text-yellow-800';
-            case 'Atrasado': return 'bg-red-100 text-red-800';
-            default: return 'bg-gray-100 text-gray-700';
-        }
-    }
-
-    function updateUrl(clienteId) {
-        const url = new URL(window.location);
-        if (clienteId) {
-            url.searchParams.set('cliente', clienteId);
-        } else {
-            url.searchParams.delete('cliente');
-        }
-        window.history.pushState({}, '', url);
-    }
-    
     function updateButtons(clienteId) {
         if (createBtn) {
             const baseUrl = 'index.php?route=planoacao/create';
@@ -389,6 +349,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 backBtn.classList.add('hidden');
             }
         }
+    }
+
+    function redirectToIndex(clienteId) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('route', 'planoacao/index');
+        url.searchParams.delete('open_import');
+        url.searchParams.delete('page');
+        if (clienteId) {
+            url.searchParams.set('cliente', clienteId);
+        } else {
+            url.searchParams.delete('cliente');
+        }
+        window.location.href = url.toString();
     }
 
     function openImportModal() {
@@ -463,11 +436,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const errors = report.errors || 0;
             importStatus.textContent = 'Importação concluída. Importados: ' + imported + ', ignorados: ' + ignored + ', com erro: ' + errors + '.';
             importStatus.className = 'text-xs mt-1 text-green-700';
-            if (select && select.value) {
-                fetchPlans(select.value);
-            }
             setTimeout(() => {
-                closeImportModal();
+                redirectToIndex((importClienteSelect && importClienteSelect.value) || (select && select.value) || '');
             }, 2000);
         } catch (err) {
             console.error(err);
@@ -479,12 +449,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Event Listeners
     select.addEventListener('change', (e) => {
-        fetchPlans(e.target.value);
-    });
-
-    form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        fetchPlans(select.value);
+        updateButtons(e.target.value);
+        form.submit();
     });
     if (importOpenBtn) {
         importOpenBtn.addEventListener('click', openImportModal);
@@ -501,6 +467,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (importForm) {
         importForm.addEventListener('submit', handleImportSubmit);
     }
+    updateButtons(select ? select.value : '');
     if (shouldOpenImport && importOpenBtn) {
         openImportModal();
     }

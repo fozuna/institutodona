@@ -114,7 +114,10 @@ $notasInternas = (string)($event['notas_internas'] ?? '');
         </div>
         <div>
           <label class="block text-xs text-gray-600 mb-1" for="drawer_periodicidade">Periodicidade</label>
-          <select id="drawer_periodicidade" class="border rounded p-3 w-full" name="periodicidade" <?= $scope === 'evento' ? '' : '' ?>>
+          <select id="drawer_periodicidade"
+                  class="border rounded p-3 w-full"
+                  name="periodicidade"
+                  data-initial-periodicidade="<?= htmlspecialchars((string)($event['periodicidade'] ?? 'unico')) ?>">
             <?php foreach (($periodicidades ?? []) as $value => $label): ?>
               <option value="<?= htmlspecialchars((string)$value) ?>" <?= ((string)($event['periodicidade'] ?? 'unico') === (string)$value) ? 'selected' : '' ?>><?= htmlspecialchars((string)$label) ?></option>
             <?php endforeach; ?>
@@ -213,5 +216,26 @@ $notasInternas = (string)($event['notas_internas'] ?? '');
         <button type="button" class="px-4 py-3 rounded bg-green-600 text-white font-semibold w-full" data-cronograma-close-event>Encerrar evento</button>
       </form>
     <?php endif; ?>
+  </section>
+
+  <section class="bg-white border rounded p-4 space-y-3">
+    <div class="font-semibold text-sm text-red-700">Exclusão</div>
+    <div class="text-xs text-gray-600">
+      <?= $scope === 'serie'
+        ? 'A exclusão da série remove a ocorrência atual e as demais ocorrências vinculadas.'
+        : 'A exclusão remove permanentemente esta ocorrência do cronograma.' ?>
+    </div>
+    <form method="post" action="index.php?route=cronograma/deleteEvento" data-cronograma-delete-form>
+      <input type="hidden" name="csrf" value="<?= Security::csrfToken() ?>" />
+      <input type="hidden" name="id" value="<?= $eventId ?>" />
+      <input type="hidden" name="id_cronograma" value="<?= (int)$cronoId ?>" />
+      <input type="hidden" name="status_filter" value="<?= htmlspecialchars((string)($_GET['status_filter'] ?? 'todos')) ?>" />
+      <input type="hidden" name="escopo" value="<?= $scope ?>" />
+      <button type="button"
+              class="px-4 py-3 rounded bg-red-600 text-white font-semibold w-full"
+              data-cronograma-delete-submit>
+        <?= $scope === 'serie' ? 'Excluir série' : 'Excluir evento' ?>
+      </button>
+    </form>
   </section>
 </div>

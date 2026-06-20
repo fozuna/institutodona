@@ -155,7 +155,12 @@ class IndicadoresController extends BaseController
 
     public function edit(): void
     {
-        $this->requireRole('instituto');
+        $this->requireLogin();
+        if (!(Auth::isInstituto() || Auth::isClienteAdmin())) {
+            http_response_code(403);
+            $_SESSION['flash_error'] = 'Sem permissão para editar indicadores.';
+            $this->redirect('index.php?route=indicadores/index');
+        }
         $id = (int)($_GET['id'] ?? 0);
         $item = $this->model->find($id);
         if (!$item) {
@@ -492,7 +497,12 @@ class IndicadoresController extends BaseController
 
     public function update(): void
     {
-        $this->requireRole('instituto');
+        $this->requireLogin();
+        if (!(Auth::isInstituto() || Auth::isClienteAdmin())) {
+            http_response_code(403);
+            $_SESSION['flash_error'] = 'Sem permissão para editar indicadores.';
+            $this->redirect('index.php?route=indicadores/index');
+        }
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) {
             http_response_code(400);
@@ -512,7 +522,12 @@ class IndicadoresController extends BaseController
             $this->renderForm('edit', $formData, $errors, $current);
             return;
         }
-        $this->model->update($id, $formData, $this->currentUserId());
+        if (!$this->model->update($id, $formData, $this->currentUserId())) {
+            $_SESSION['flash_error'] = 'Não foi possível atualizar o indicador.';
+            $formData['id'] = $id;
+            $this->renderForm('edit', $formData, ['indicador' => 'Não foi possível salvar as alterações agora.'], $current);
+            return;
+        }
         $_SESSION['flash_success'] = I18n::t('indicadores.flash.updated');
         $this->redirect('index.php?route=indicadores/edit&id=' . $id);
     }

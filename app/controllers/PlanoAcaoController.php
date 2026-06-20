@@ -43,7 +43,11 @@ class PlanoAcaoController extends BaseController
         $clientes = (new ClienteModel())->all();
         $selectedCliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : null;
         $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
-        $per = isset($_GET['per']) ? max(1, (int)$_GET['per']) : 20;
+        $per = isset($_GET['per']) ? max(1, (int)$_GET['per']) : 12;
+        $viewMode = trim((string)($_GET['view'] ?? 'cards'));
+        if (!in_array($viewMode, ['cards', 'list'], true)) {
+            $viewMode = 'cards';
+        }
         $statusFilters = $_GET['status'] ?? [];
         if (!is_array($statusFilters)) {
             $statusFilters = [$statusFilters];
@@ -55,12 +59,19 @@ class PlanoAcaoController extends BaseController
         if ($selectedCliente) {
             if (!empty($statusFilters)) {
                 $total = $this->tasks->countByClienteMulti($selectedCliente, $statusFilters);
+                $totalPages = max(1, (int)ceil($total / $per));
+                if ($page > $totalPages) {
+                    $page = $totalPages;
+                }
                 $items = $this->tasks->paginateByClienteMulti($selectedCliente, $page, $per, $statusFilters);
             } else {
                 $total = $this->tasks->countByCliente($selectedCliente);
+                $totalPages = max(1, (int)ceil($total / $per));
+                if ($page > $totalPages) {
+                    $page = $totalPages;
+                }
                 $items = $this->tasks->paginateByCliente($selectedCliente, $page, $per);
             }
-            $totalPages = max(1, (int)ceil($total / $per));
         }
         $this->render('planoacao/index', [
             'clientes' => $clientes,
@@ -71,6 +82,7 @@ class PlanoAcaoController extends BaseController
             'total' => $total,
             'totalPages' => $totalPages,
             'statusFilters' => $statusFilters,
+            'viewMode' => $viewMode,
             'importEnabled' => getenv('PLANOACAO_IMPORT_ENABLED') === '1',
             'importAlreadyRun' => is_file(__DIR__ . '/../../storage/imports/planoacao_import_done.flag'),
         ]);
@@ -93,7 +105,7 @@ class PlanoAcaoController extends BaseController
             // usleep(300000); 
             
             $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
-            $per = isset($_GET['per']) ? max(1, (int)$_GET['per']) : 20;
+            $per = isset($_GET['per']) ? max(1, (int)$_GET['per']) : 12;
             $statusFilters = $_GET['status'] ?? [];
             if (!is_array($statusFilters)) {
                 $statusFilters = [$statusFilters];
@@ -101,9 +113,17 @@ class PlanoAcaoController extends BaseController
             $statusFilters = array_values(array_filter(array_map('trim', $statusFilters)));
             if (!empty($statusFilters)) {
                 $total = $this->tasks->countByClienteMulti($clienteId, $statusFilters);
+                $totalPages = max(1, (int)ceil($total / $per));
+                if ($page > $totalPages) {
+                    $page = $totalPages;
+                }
                 $items = $this->tasks->paginateByClienteMulti($clienteId, $page, $per, $statusFilters);
             } else {
                 $total = $this->tasks->countByCliente($clienteId);
+                $totalPages = max(1, (int)ceil($total / $per));
+                if ($page > $totalPages) {
+                    $page = $totalPages;
+                }
                 $items = $this->tasks->paginateByCliente($clienteId, $page, $per);
             }
             echo json_encode([
@@ -113,7 +133,7 @@ class PlanoAcaoController extends BaseController
                     'page' => $page,
                     'per' => $per,
                     'total' => $total,
-                    'totalPages' => max(1, (int)ceil($total / $per)),
+                    'totalPages' => $totalPages,
                 ],
                 'filters' => ['status' => $statusFilters],
             ]);

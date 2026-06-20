@@ -259,6 +259,7 @@ class CronogramaController extends BaseController
         $statusFilter = CronogramaTrafficLight::normalizeFilter($_GET['status_filter'] ?? 'todos');
         $filters = $this->buildOcorrenciasFilters();
         $order = $this->buildOcorrenciasOrder();
+        $gridOrder = $this->buildGridOrder();
         $allEvents = $this->eventos->byCronograma($id);
         $annotatedEvents = $this->annotateEvents($allEvents);
         $grid = $this->buildGrid($annotatedEvents);
@@ -266,7 +267,7 @@ class CronogramaController extends BaseController
         $grid = $this->filterGridByTraffic($grid, $statusFilter);
         $events = $this->filterEventsByCriteria($events, $filters);
         $events = $this->sortEvents($events, $order);
-        $grid = $this->sortGridRows($grid, $order);
+        $grid = $this->sortGridRows($grid, $gridOrder);
         $eventIds = [];
         foreach ($events as $ev) {
             if (($ev['tipo_evento'] ?? '') === 'Reunião') {
@@ -302,6 +303,7 @@ class CronogramaController extends BaseController
             'pilares' => $pilares,
             'occFilters' => $filters,
             'occOrder' => $order,
+            'gridOrder' => $gridOrder,
             'occOptions' => $occOptions,
             'totalEvents' => count($allEvents),
             'occFilterError' => $filters['error'] ?? null,
@@ -1086,6 +1088,7 @@ class CronogramaController extends BaseController
     {
         $this->requireRole('instituto');
         $src = $_SERVER['REQUEST_METHOD'] === 'POST' ? $_POST : $_GET;
+        $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $csrf = $src['csrf'] ?? null;
             if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
@@ -1094,18 +1097,44 @@ class CronogramaController extends BaseController
         $idCronograma = (int)($src['id_cronograma'] ?? 0);
         $statusFilter = CronogramaTrafficLight::normalizeFilter($src['status_filter'] ?? 'todos');
         $scope = (($src['escopo'] ?? 'evento') === 'serie') ? 'serie' : 'evento';
+        $redirectUrl = $this->buildOccRedirectUrl($idCronograma, $statusFilter, $src);
         if ($id) {
             try {
+                $event = $this->eventos->find($id);
+                if (!$event) {
+                    throw new \RuntimeException('Evento não encontrado.');
+                }
                 $this->eventos->delete($id, $scope);
-                $_SESSION['flash_success'] = $scope === 'serie'
+                $message = $scope === 'serie'
                     ? 'Serie excluida com sucesso.'
                     : 'Ocorrencia excluida com sucesso.';
+                if ($isAjax) {
+                    header('Content-Type: application/json; charset=utf-8');
+                    echo json_encode([
+                        'ok' => true,
+                        'message' => $message,
+                        'deleted_id' => $id,
+                        'scope' => $scope,
+                        'redirect_url' => $redirectUrl,
+                        'serie_id' => (int)($event['serie_id'] ?? $id),
+                    ], JSON_UNESCAPED_UNICODE);
+                    return;
+                }
+                $_SESSION['flash_success'] = $message;
             } catch (\Throwable $e) {
+                if ($isAjax) {
+                    http_response_code(422);
+                    header('Content-Type: application/json; charset=utf-8');
+                    echo json_encode([
+                        'ok' => false,
+                        'message' => $e->getMessage(),
+                    ], JSON_UNESCAPED_UNICODE);
+                    return;
+                }
                 $_SESSION['flash_error'] = $e->getMessage();
             }
         }
-        $url = $this->buildOccRedirectUrl($idCronograma, $statusFilter, $src);
-        header('Location: ' . $url);
+        header('Location: ' . $redirectUrl);
     }
 
     private function buildGrid(array $events): array
@@ -1241,6 +1270,20 @@ class CronogramaController extends BaseController
         $direction = strtolower((string)($_GET['occ_dir'] ?? ''));
         if (!in_array($column, $allowed, true)) {
             return ['column' => 'data', 'direction' => 'asc'];
+        }
+        return [
+            'column' => $column,
+            'direction' => $direction === 'desc' ? 'desc' : 'asc',
+        ];
+    }
+
+    private function buildGridOrder(): array
+    {
+        $allowed = ['topico', 'unidade', 'atividade', 'responsavel', 'status'];
+        $column = strtolower((string)($_GET['grid_sort'] ?? ''));
+        $direction = strtolower((string)($_GET['grid_dir'] ?? ''));
+        if (!in_array($column, $allowed, true)) {
+            return ['column' => 'topico', 'direction' => 'asc'];
         }
         return [
             'column' => $column,

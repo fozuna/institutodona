@@ -1,8 +1,19 @@
 <?php
 namespace App\Models;
 
+use App\Database\Database;
+
 class UsuarioModel extends BaseModel
 {
+    private function hasPlatformAccessColumn(): bool
+    {
+        try {
+            return Database::columnExists('usuarios', 'platform_access');
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
     public function findByEmail(string $email): ?array
     {
         try {
@@ -67,15 +78,20 @@ class UsuarioModel extends BaseModel
         if (($data['tipo_acesso'] ?? '') !== 'instituto' && ($data['id_cliente'] ?? 0) > 0 && !$this->canAccessClienteId((int)$data['id_cliente'])) {
             return 0;
         }
-        $stmt = $this->db->prepare('INSERT INTO usuarios (nome, email, senha_hash, tipo_acesso, id_cliente, platform_access) VALUES (:nome, :email, :senha_hash, :tipo_acesso, :id_cliente, :platform_access)');
-        $stmt->execute([
+        $params = [
             'nome' => $data['nome'],
             'email' => $data['email'],
             'senha_hash' => $data['senha_hash'],
             'tipo_acesso' => $data['tipo_acesso'],
             'id_cliente' => $data['id_cliente'] ?? null,
-            'platform_access' => $data['platform_access'] ?? 'WEB_PWA',
-        ]);
+        ];
+        if ($this->hasPlatformAccessColumn()) {
+            $params['platform_access'] = $data['platform_access'] ?? 'WEB_PWA';
+            $stmt = $this->db->prepare('INSERT INTO usuarios (nome, email, senha_hash, tipo_acesso, id_cliente, platform_access) VALUES (:nome, :email, :senha_hash, :tipo_acesso, :id_cliente, :platform_access)');
+        } else {
+            $stmt = $this->db->prepare('INSERT INTO usuarios (nome, email, senha_hash, tipo_acesso, id_cliente) VALUES (:nome, :email, :senha_hash, :tipo_acesso, :id_cliente)');
+        }
+        $stmt->execute($params);
         return (int)$this->db->lastInsertId();
     }
 
@@ -87,11 +103,15 @@ class UsuarioModel extends BaseModel
             'email' => $data['email'],
             'tipo_acesso' => $data['tipo_acesso'],
             'id_cliente' => $data['id_cliente'] ?? null,
-            'platform_access' => $data['platform_access'] ?? 'WEB_PWA',
             'id' => $id,
         ];
         $scope = $this->tenantInCondition('COALESCE(id_cliente, -1)', $params, 'uiu');
-        $stmt = $this->db->prepare("UPDATE usuarios SET nome = :nome, email = :email, tipo_acesso = :tipo_acesso, id_cliente = :id_cliente, platform_access = :platform_access WHERE id = :id AND $scope");
+        if ($this->hasPlatformAccessColumn()) {
+            $params['platform_access'] = $data['platform_access'] ?? 'WEB_PWA';
+            $stmt = $this->db->prepare("UPDATE usuarios SET nome = :nome, email = :email, tipo_acesso = :tipo_acesso, id_cliente = :id_cliente, platform_access = :platform_access WHERE id = :id AND $scope");
+        } else {
+            $stmt = $this->db->prepare("UPDATE usuarios SET nome = :nome, email = :email, tipo_acesso = :tipo_acesso, id_cliente = :id_cliente WHERE id = :id AND $scope");
+        }
         return $stmt->execute($params);
     }
 
