@@ -75,6 +75,17 @@ class ManualModel extends BaseModel
         }
     }
 
+    private function manualCatalogClienteId(int $manualId): ?int
+    {
+        $manual = $this->findAny($manualId);
+        if (!$manual) {
+            return null;
+        }
+        $empresaId = (int)($manual['empresa_id'] ?? 0);
+        $catalogClienteId = (int)($this->resolveCatalogClienteId($empresaId) ?? 0);
+        return $catalogClienteId > 0 ? $catalogClienteId : null;
+    }
+
     public function list(array $filters = []): array
     {
         $this->ensureTable();
@@ -181,6 +192,9 @@ class ManualModel extends BaseModel
         if ($params['empresa_id'] <= 0 || !$this->canAccessClienteId($params['empresa_id'])) {
             return false;
         }
+        if (!$this->departamentoBelongsToCatalogCliente($params['departamento_id'], $params['empresa_id'])) {
+            return false;
+        }
         $scope = $this->tenantInCondition('empresa_id', $params, 'mu');
         $stmt = $this->db->prepare("UPDATE manuais
             SET empresa_id = :empresa_id,
@@ -242,6 +256,10 @@ class ManualModel extends BaseModel
         if ($manualId <= 0) {
             return;
         }
+        $catalogClienteId = $this->manualCatalogClienteId($manualId);
+        if ($catalogClienteId === null || $catalogClienteId <= 0) {
+            return;
+        }
         $this->db->prepare('DELETE FROM manual_filial_links WHERE manual_id = :mid')->execute(['mid' => $manualId]);
         $filialIds = array_values(array_unique(array_filter(array_map('intval', $filialIds))));
         if (empty($filialIds)) {
@@ -249,6 +267,13 @@ class ManualModel extends BaseModel
         }
         $stmt = $this->db->prepare('INSERT INTO manual_filial_links (manual_id, filial_id) VALUES (:mid, :fid)');
         foreach ($filialIds as $fid) {
+            if (!$this->canAccessClienteId($fid) && !Auth::isInstituto()) {
+                continue;
+            }
+            $filialCatalogId = (int)($this->resolveCatalogClienteId($fid) ?? 0);
+            if ($filialCatalogId !== $catalogClienteId) {
+                continue;
+            }
             $stmt->execute(['mid' => $manualId, 'fid' => $fid]);
         }
     }
@@ -273,10 +298,14 @@ class ManualModel extends BaseModel
         if ($empresaId <= 0 || !$this->canAccessClienteId($empresaId)) {
             return 0;
         }
+        $departamentoId = (int)($data['departamento_id'] ?? 0);
+        if (!$this->departamentoBelongsToCatalogCliente($departamentoId, $empresaId)) {
+            return 0;
+        }
         $stmt = $this->db->prepare('INSERT INTO manuais (empresa_id, departamento_id, nome, descricao, arquivo, tipo_arquivo, tamanho, usuario_id) VALUES (:empresa_id, :departamento_id, :nome, :descricao, :arquivo, :tipo_arquivo, :tamanho, :usuario_id)');
         $stmt->execute([
             'empresa_id' => $empresaId,
-            'departamento_id' => (int)$data['departamento_id'],
+            'departamento_id' => $departamentoId,
             'nome' => trim((string)$data['nome']),
             'descricao' => $data['descricao'] !== null ? trim((string)$data['descricao']) : null,
             'arquivo' => (string)$data['arquivo'],

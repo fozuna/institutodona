@@ -36,7 +36,10 @@ use App\Controllers\CoachingController;
 use App\Controllers\ProcessosController;
 use App\Controllers\PwaController;
 
-$shouldAutoMigrate = empty($_SESSION['__auto_migrate_done']);
+$migrationRunner = new MigrationRunner();
+$currentMigrationFingerprint = $migrationRunner->currentFingerprint();
+$lastMigratedFingerprint = (string)($_SESSION['__auto_migrate_fingerprint'] ?? '');
+$shouldAutoMigrate = $lastMigratedFingerprint !== $currentMigrationFingerprint;
 if ($shouldAutoMigrate) {
     $storageDir = __DIR__ . '/../storage';
     if (!is_dir($storageDir) && !@mkdir($storageDir, 0775, true) && !is_dir($storageDir)) {
@@ -56,8 +59,8 @@ if ($shouldAutoMigrate) {
     }
     if ($locked) {
         try {
-            (new MigrationRunner())->applyAll();
-            $_SESSION['__auto_migrate_done'] = time();
+            $migrationRunner->applyAll();
+            $_SESSION['__auto_migrate_fingerprint'] = $currentMigrationFingerprint;
         } catch (\Throwable $e) {
             error_log('[auto_migrate_failed] ' . $e->getMessage());
         }

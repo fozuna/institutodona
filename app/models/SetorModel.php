@@ -3,6 +3,15 @@ namespace App\Models;
 
 class SetorModel extends BaseModel
 {
+    /**
+     * @param array<int> $clienteIds
+     * @return array<int>
+     */
+    private function catalogClienteIds(array $clienteIds): array
+    {
+        return $this->normalizeCatalogClienteIds($clienteIds);
+    }
+
     private function buildClienteScopeClause(string $column, array $clienteIds, array &$params, string $prefix): string
     {
         $holders = [];
@@ -33,7 +42,7 @@ class SetorModel extends BaseModel
     {
         $this->ensureTable();
         $params = [];
-        $scope = $this->tenantInCondition('d.cliente_id', $params, 'sa');
+        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'sa');
         $stmt = $this->db->prepare("SELECT s.id, s.nome, s.departamento_id FROM setores s JOIN departamentos d ON d.id = s.departamento_id WHERE $scope ORDER BY s.nome");
         $stmt->execute($params);
         return $stmt->fetchAll();
@@ -42,11 +51,15 @@ class SetorModel extends BaseModel
     public function allByCliente(int $clienteId): array
     {
         $this->ensureTable();
+        $clienteId = (int)($this->resolveCatalogClienteId($clienteId) ?? 0);
+        if ($clienteId <= 0) {
+            return [];
+        }
         $sql = 'SELECT s.id, s.nome, s.departamento_id, d.nome AS departamento
                 FROM setores s JOIN departamentos d ON d.id = s.departamento_id
                 WHERE d.cliente_id = :cid ORDER BY d.nome, s.nome';
         $params = ['cid' => $clienteId];
-        $scope = $this->tenantInCondition('d.cliente_id', $params, 'sbc');
+        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'sbc');
         $sql = str_replace('WHERE d.cliente_id = :cid', 'WHERE d.cliente_id = :cid AND ' . $scope, $sql);
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
@@ -56,14 +69,14 @@ class SetorModel extends BaseModel
     public function allByClientes(array $clienteIds): array
     {
         $this->ensureTable();
-        $clienteIds = array_values(array_unique(array_filter(array_map('intval', $clienteIds))));
+        $clienteIds = $this->catalogClienteIds($clienteIds);
         if (empty($clienteIds)) {
             return [];
         }
         $params = [];
         $where = [
             $this->buildClienteScopeClause('d.cliente_id', $clienteIds, $params, 'sabc_scope'),
-            $this->tenantInCondition('d.cliente_id', $params, 'sabc_tenant'),
+            $this->tenantCatalogInCondition('d.cliente_id', $params, 'sabc_tenant'),
         ];
         $stmt = $this->db->prepare(
             "SELECT s.id, s.nome, s.departamento_id, d.nome AS departamento
@@ -80,7 +93,7 @@ class SetorModel extends BaseModel
     {
         $this->ensureTable();
         $params = ['id' => $id];
-        $scope = $this->tenantInCondition('d.cliente_id', $params, 'sf');
+        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'sf');
         $cols = ['s.id', 's.nome', 's.departamento_id'];
         if (\App\Database\Database::columnExists('setores', 'ativo')) {
             $cols[] = 's.ativo';
@@ -95,7 +108,7 @@ class SetorModel extends BaseModel
     {
         $this->ensureTable();
         $params = ['dep' => $departamentoId];
-        $scope = $this->tenantInCondition('d.cliente_id', $params, 'sda');
+        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'sda');
         $stmt = $this->db->prepare(
             "SELECT s.id, s.nome, s.departamento_id, s.ativo
              FROM setores s
@@ -110,12 +123,12 @@ class SetorModel extends BaseModel
     public function activeByCliente(int $clienteId): array
     {
         $this->ensureTable();
-        $clienteId = (int)$clienteId;
+        $clienteId = (int)($this->resolveCatalogClienteId($clienteId) ?? 0);
         if ($clienteId <= 0) {
             return [];
         }
         $params = ['cid' => $clienteId];
-        $scope = $this->tenantInCondition('d.cliente_id', $params, 'sbcact');
+        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'sbcact');
         $stmt = $this->db->prepare(
             "SELECT s.id, s.nome, s.departamento_id, d.nome AS departamento
              FROM setores s
@@ -136,7 +149,7 @@ class SetorModel extends BaseModel
             $params['dep'] = $departamentoId;
             $where[] = 's.departamento_id = :dep';
         }
-        $where[] = $this->tenantInCondition('d.cliente_id', $params, 'sfa');
+        $where[] = $this->tenantCatalogInCondition('d.cliente_id', $params, 'sfa');
         $stmt = $this->db->prepare(
             'SELECT s.id, s.nome, s.departamento_id, s.ativo
              FROM setores s
@@ -154,7 +167,7 @@ class SetorModel extends BaseModel
         $this->ensureTable();
         $depId = (int)$data['departamento_id'];
         $params = ['dep' => $depId];
-        $scope = $this->tenantInCondition('cliente_id', $params, 'sc');
+        $scope = $this->tenantCatalogInCondition('cliente_id', $params, 'sc');
         $check = $this->db->prepare("SELECT id FROM departamentos WHERE id = :dep AND $scope LIMIT 1");
         $check->execute($params);
         if (!$check->fetch()) {
@@ -169,7 +182,7 @@ class SetorModel extends BaseModel
     {
         $this->ensureTable();
         $params = ['nome' => $data['nome'], 'departamento_id' => (int)$data['departamento_id'], 'id' => $id];
-        $scope = $this->tenantInCondition('d.cliente_id', $params, 'su');
+        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'su');
         $stmt = $this->db->prepare("UPDATE setores s JOIN departamentos d ON d.id = s.departamento_id SET s.nome = :nome, s.departamento_id = :departamento_id WHERE s.id = :id AND $scope");
         return $stmt->execute($params);
     }
@@ -178,7 +191,7 @@ class SetorModel extends BaseModel
     {
         $this->ensureTable();
         $params = ['id' => $id];
-        $scope = $this->tenantInCondition('d.cliente_id', $params, 'sd');
+        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'sd');
         $stmt = $this->db->prepare("DELETE s FROM setores s JOIN departamentos d ON d.id = s.departamento_id WHERE s.id = :id AND $scope");
         return $stmt->execute($params);
     }

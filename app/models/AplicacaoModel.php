@@ -3,6 +3,39 @@ namespace App\Models;
 
 class AplicacaoModel extends BaseModel
 {
+    private function scopedApplicationClienteId(int $aplicacaoId): ?int
+    {
+        $aplicacaoId = (int)$aplicacaoId;
+        if ($aplicacaoId <= 0) {
+            return null;
+        }
+        $params = ['id' => $aplicacaoId];
+        $scope = $this->tenantInCondition('id_cliente', $params, 'apcl');
+        $stmt = $this->db->prepare("SELECT id_cliente FROM aplicacoes WHERE id = :id AND $scope LIMIT 1");
+        $stmt->execute($params);
+        $clienteId = $stmt->fetchColumn();
+        return $clienteId !== false ? (int)$clienteId : null;
+    }
+
+    /**
+     * @param array<int> $funcaoIds
+     * @return array<int>
+     */
+    private function filterAplicacaoFuncaoIds(int $aplicacaoId, array $funcaoIds): array
+    {
+        $clienteId = $this->scopedApplicationClienteId($aplicacaoId);
+        if ($clienteId === null || $clienteId <= 0) {
+            return [];
+        }
+        $valid = [];
+        foreach (array_values(array_unique(array_filter(array_map('intval', $funcaoIds)))) as $funcaoId) {
+            if ($this->funcaoBelongsToCatalogCliente($funcaoId, $clienteId)) {
+                $valid[] = $funcaoId;
+            }
+        }
+        return $valid;
+    }
+
     private function ensureTable(): void
     {
         try {
@@ -151,7 +184,14 @@ class AplicacaoModel extends BaseModel
             if (!\App\Database\Database::columnExists('aplicacoes', 'funcao_id')) {
                 $this->db->exec('ALTER TABLE aplicacoes ADD COLUMN funcao_id INT NULL');
             }
+            $clienteId = $this->scopedApplicationClienteId($idAplicacao);
+            if ($clienteId === null || $clienteId <= 0) {
+                return false;
+            }
             if ($funcaoId) {
+                if (!$this->funcaoBelongsToCatalogCliente($funcaoId, $clienteId)) {
+                    return false;
+                }
                 $chk = $this->db->prepare('SELECT 1 FROM aplicacao_funcoes WHERE aplicacao_id = :ap AND funcao_id = :fn');
                 $chk->execute(['ap' => $idAplicacao, 'fn' => $funcaoId]);
                 if (!$chk->fetch()) { return false; }
@@ -298,6 +338,10 @@ class AplicacaoModel extends BaseModel
     public function addFunctions(int $aplicacaoId, array $funcaoIds): void
     {
         $this->ensureTable();
+        $funcaoIds = $this->filterAplicacaoFuncaoIds($aplicacaoId, $funcaoIds);
+        if (empty($funcaoIds)) {
+            return;
+        }
         $stmt = $this->db->prepare('INSERT IGNORE INTO aplicacao_funcoes (aplicacao_id, funcao_id) VALUES (:ap, :fn)');
         foreach ($funcaoIds as $fid) {
             $fid = (int)$fid;
@@ -308,15 +352,36 @@ class AplicacaoModel extends BaseModel
     public function functionsForAplicacao(int $aplicacaoId): array
     {
         $this->ensureTable();
+        $clienteId = $this->scopedApplicationClienteId($aplicacaoId);
+        if ($clienteId === null || $clienteId <= 0) {
+            return [];
+        }
+        $catalogClienteId = (int)($this->resolveCatalogClienteId($clienteId) ?? 0);
+        if ($catalogClienteId <= 0) {
+            return [];
+        }
         $sql = 'SELECT f.id, f.nome, f.setor_id, s.nome AS setor, d.nome AS departamento
                 FROM aplicacao_funcoes af
+                JOIN aplicacoes a ON a.id = af.aplicacao_id
                 JOIN funcoes f ON f.id = af.funcao_id
                 JOIN setores s ON s.id = f.setor_id
                 JOIN departamentos d ON d.id = s.departamento_id
                 WHERE af.aplicacao_id = :id
+                  AND d.cliente_id = :catalog_cliente_id
                 ORDER BY d.nome, s.nome, f.nome';
+        $params = [
+            'id' => $aplicacaoId,
+            'catalog_cliente_id' => $catalogClienteId,
+        ];
+        $scopeAplicacao = $this->tenantInCondition('a.id_cliente', $params, 'affa');
+        $scopeCatalogo = $this->tenantCatalogInCondition('d.cliente_id', $params, 'affc');
+        $sql = str_replace(
+            'ORDER BY d.nome, s.nome, f.nome',
+            'AND ' . $scopeAplicacao . ' AND ' . $scopeCatalogo . ' ORDER BY d.nome, s.nome, f.nome',
+            $sql
+        );
         $stmt = $this->db->prepare($sql);
-        $stmt->execute(['id' => $aplicacaoId]);
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 
@@ -361,7 +426,10 @@ class AplicacaoModel extends BaseModel
     public function setFunctions(int $aplicacaoId, array $funcaoIds): void
     {
         $this->ensureTable();
-        $funcaoIds = array_values(array_unique(array_filter(array_map('intval', $funcaoIds))));
+        $funcaoIds = $this->filterAplicacaoFuncaoIds($aplicacaoId, $funcaoIds);
+        if ($this->scopedApplicationClienteId($aplicacaoId) === null) {
+            return;
+        }
         // Remove não selecionadas
         $in = $funcaoIds ? implode(',', $funcaoIds) : 'NULL';
         $sqlDel = $funcaoIds

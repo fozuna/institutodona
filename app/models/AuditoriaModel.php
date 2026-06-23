@@ -188,6 +188,17 @@ class AuditoriaModel extends BaseModel
         return Auth::isInstituto() || Auth::isConsultor();
     }
 
+    private function isValidAuditoriaCatalogSelection(int $clienteId, int $setorId): bool
+    {
+        if ($clienteId <= 0 || $setorId <= 0) {
+            return false;
+        }
+        if (!$this->canBypassScope() && !$this->canAccessClienteId($clienteId)) {
+            return false;
+        }
+        return $this->setorBelongsToCatalogCliente($setorId, $clienteId);
+    }
+
     public function list(array $filters, int $page, int $per): array
     {
         $this->ensureTables();
@@ -539,7 +550,8 @@ class AuditoriaModel extends BaseModel
     {
         $this->ensureTables();
         $clienteId = (int)$data['cliente_id'];
-        if ($clienteId <= 0 || (!$this->canBypassScope() && !$this->canAccessClienteId($clienteId))) {
+        $setorId = (int)($data['setor_id'] ?? 0);
+        if (!$this->isValidAuditoriaCatalogSelection($clienteId, $setorId)) {
             return 0;
         }
         $this->db->beginTransaction();
@@ -552,7 +564,7 @@ class AuditoriaModel extends BaseModel
                 (:cliente_id, :setor_id, :responsavel_id, :data_auditoria, :nome_auditoria, :pergunta, :objetivo, :referencia_esperada, 'Agendada', :created_by, :updated_by)");
             $stmt->execute([
                 'cliente_id' => $clienteId,
-                'setor_id' => (int)$data['setor_id'],
+                'setor_id' => $setorId,
                 'responsavel_id' => !empty($responsavelIds) ? $responsavelIds[0] : null,
                 'data_auditoria' => (string)$data['data_auditoria'],
                 'nome_auditoria' => (string)$data['nome_auditoria'],
@@ -579,7 +591,8 @@ class AuditoriaModel extends BaseModel
         $this->ensureTables();
         $this->lastError = null;
         $clienteId = (int)$data['cliente_id'];
-        if ($clienteId <= 0 || (!$this->canBypassScope() && !$this->canAccessClienteId($clienteId))) {
+        $setorId = (int)($data['setor_id'] ?? 0);
+        if (!$this->isValidAuditoriaCatalogSelection($clienteId, $setorId)) {
             $this->lastError = 'scope';
             return false;
         }
@@ -590,7 +603,7 @@ class AuditoriaModel extends BaseModel
             $params = [
             'id' => $id,
             'cliente_id' => $clienteId,
-            'setor_id' => (int)$data['setor_id'],
+            'setor_id' => $setorId,
             'responsavel_id' => !empty($responsavelIds) ? (int)$responsavelIds[0] : null,
             'data_auditoria' => $data['data_auditoria'],
             'nome_auditoria' => (string)$data['nome_auditoria'],
@@ -642,14 +655,21 @@ class AuditoriaModel extends BaseModel
     {
         $this->ensureTables();
         $this->lastError = null;
+        $current = $this->find($id);
+        if (!$current) {
+            return false;
+        }
         $params = ['id' => $id, 'updated_by' => $userId];
         $set = ['updated_by = :updated_by'];
 
+        $effectiveClienteId = (int)($data['cliente_id'] ?? ($current['cliente_id'] ?? 0));
+        $effectiveSetorId = (int)($data['setor_id'] ?? ($current['setor_id'] ?? 0));
+        if (!$this->isValidAuditoriaCatalogSelection($effectiveClienteId, $effectiveSetorId)) {
+            return false;
+        }
+
         $clienteId = (int)($data['cliente_id'] ?? 0);
         if ($clienteId > 0) {
-            if (!$this->canBypassScope() && !$this->canAccessClienteId($clienteId)) {
-                return false;
-            }
             $params['cliente_id'] = $clienteId;
             $set[] = 'cliente_id = :cliente_id';
         }

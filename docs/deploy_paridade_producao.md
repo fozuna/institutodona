@@ -14,6 +14,9 @@ Garantir que:
 - Produção é promovida a partir da branch `main` via workflow [`.github/workflows/easypanel-deploy.yml`](file:///c:/laragon/www/institutodona/.github/workflows/easypanel-deploy.yml).
 - O dump de referência de produção fica em [`public/institutodona_dump.sql`](file:///c:/laragon/www/institutodona/public/institutodona_dump.sql).
 - O runner de migrations é [`app/database/MigrationRunner.php`](file:///c:/laragon/www/institutodona/app/database/MigrationRunner.php).
+- O comando padronizado de deploy para migrations é [`app/database/deploy_migrate.php`](file:///c:/laragon/www/institutodona/app/database/deploy_migrate.php), exposto também em `composer run deploy:migrate`.
+- O deploy por webhook executa `composer install` e `composer run deploy:migrate` automaticamente em [`webhook.php`](file:///c:/laragon/www/institutodona/webhook.php).
+- O front controller [`public_html/index.php`](file:///c:/laragon/www/institutodona/public_html/index.php) mantém um fallback idempotente por fingerprint para aplicar novas migrations caso o ambiente suba com código novo antes de receber tráfego estável.
 
 ## Critério De Paridade
 
@@ -124,8 +127,8 @@ Promover todos os arquivos listados neste documento no mesmo deploy.
 Executar:
 
 ```bash
-php app/database/migrate.php
-php app/database/migrate_status.php
+composer run deploy:migrate
+composer run db:migrate:status
 ```
 
 Confirmar `pending: []`.

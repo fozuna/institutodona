@@ -26,6 +26,21 @@ class ClienteModel extends BaseModel
             }
         }
 
+        if (array_key_exists('matriz_id', $payload)) {
+            $matrizId = isset($payload['matriz_id']) ? (int)$payload['matriz_id'] : 0;
+            if ($matrizId > 0) {
+                $payload['matriz_id'] = $matrizId;
+                if (array_key_exists('is_matriz', $payload)) {
+                    $payload['is_matriz'] = 0;
+                }
+            } else {
+                $payload['matriz_id'] = null;
+                if (array_key_exists('is_matriz', $payload)) {
+                    $payload['is_matriz'] = 1;
+                }
+            }
+        }
+
         if (Database::columnExists('clientes', 'ativo') && array_key_exists('ativo', $data)) {
             $payload['ativo'] = (int)$data['ativo'];
         }

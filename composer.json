@@ -1,4 +1,9 @@
 {
+    "scripts": {
+        "db:migrate": "php app/database/migrate.php",
+        "db:migrate:status": "php app/database/migrate_status.php",
+        "deploy:migrate": "php app/database/deploy_migrate.php"
+    },
     "require": {
         "dompdf/dompdf": "3.1"
     }

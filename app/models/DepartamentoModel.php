@@ -3,6 +3,15 @@ namespace App\Models;
 
 class DepartamentoModel extends BaseModel
 {
+    /**
+     * @param array<int> $clienteIds
+     * @return array<int>
+     */
+    private function catalogClienteIds(array $clienteIds): array
+    {
+        return $this->normalizeCatalogClienteIds($clienteIds);
+    }
+
     private function buildClienteScopeClause(string $column, array $clienteIds, array &$params, string $prefix): string
     {
         $holders = [];
@@ -33,7 +42,7 @@ class DepartamentoModel extends BaseModel
     {
         $this->ensureTable();
         $params = [];
-        $scope = $this->tenantInCondition('d.cliente_id', $params, 'da');
+        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'da');
         $stmt = $this->db->prepare("SELECT d.id, d.nome, d.cliente_id, c.nome_empresa AS cliente FROM departamentos d JOIN clientes c ON c.id = d.cliente_id WHERE $scope ORDER BY c.nome_empresa, d.nome");
         $stmt->execute($params);
         return $stmt->fetchAll();
@@ -42,8 +51,12 @@ class DepartamentoModel extends BaseModel
     public function allByCliente(int $clienteId): array
     {
         $this->ensureTable();
+        $clienteId = (int)($this->resolveCatalogClienteId($clienteId) ?? 0);
+        if ($clienteId <= 0) {
+            return [];
+        }
         $params = ['cid' => $clienteId];
-        $scope = $this->tenantInCondition('cliente_id', $params, 'dbc');
+        $scope = $this->tenantCatalogInCondition('cliente_id', $params, 'dbc');
         $stmt = $this->db->prepare("SELECT id, nome, cliente_id FROM departamentos WHERE cliente_id = :cid AND $scope ORDER BY nome");
         $stmt->execute($params);
         return $stmt->fetchAll();
@@ -52,14 +65,14 @@ class DepartamentoModel extends BaseModel
     public function allByClientes(array $clienteIds): array
     {
         $this->ensureTable();
-        $clienteIds = array_values(array_unique(array_filter(array_map('intval', $clienteIds))));
+        $clienteIds = $this->catalogClienteIds($clienteIds);
         if (empty($clienteIds)) {
             return [];
         }
         $params = [];
         $where = [
             $this->buildClienteScopeClause('d.cliente_id', $clienteIds, $params, 'dabc_scope'),
-            $this->tenantInCondition('d.cliente_id', $params, 'dabc_tenant'),
+            $this->tenantCatalogInCondition('d.cliente_id', $params, 'dabc_tenant'),
         ];
         $stmt = $this->db->prepare("SELECT d.id, d.nome, d.cliente_id, c.nome_empresa AS cliente FROM departamentos d JOIN clientes c ON c.id = d.cliente_id WHERE " . implode(' AND ', $where) . " ORDER BY c.nome_empresa, d.nome");
         $stmt->execute($params);
@@ -69,8 +82,12 @@ class DepartamentoModel extends BaseModel
     public function activeByCliente(int $clienteId): array
     {
         $this->ensureTable();
+        $clienteId = (int)($this->resolveCatalogClienteId($clienteId) ?? 0);
+        if ($clienteId <= 0) {
+            return [];
+        }
         $params = ['cid' => $clienteId];
-        $scope = $this->tenantInCondition('cliente_id', $params, 'dact');
+        $scope = $this->tenantCatalogInCondition('cliente_id', $params, 'dact');
         $stmt = $this->db->prepare(
             "SELECT id, nome, cliente_id, ativo
              FROM departamentos
@@ -85,7 +102,7 @@ class DepartamentoModel extends BaseModel
     {
         $this->ensureTable();
         $params = ['id' => $id];
-        $scope = $this->tenantInCondition('cliente_id', $params, 'df');
+        $scope = $this->tenantCatalogInCondition('cliente_id', $params, 'df');
         $cols = ['id', 'nome', 'cliente_id'];
         if (\App\Database\Database::columnExists('departamentos', 'ativo')) {
             $cols[] = 'ativo';
@@ -102,10 +119,11 @@ class DepartamentoModel extends BaseModel
         $params = ['id' => $id];
         $where = ['id = :id', 'ativo = 1'];
         if ($clienteId !== null && $clienteId > 0) {
-            $params['cid'] = $clienteId;
+            $catalogClienteId = (int)($this->resolveCatalogClienteId($clienteId) ?? 0);
+            $params['cid'] = $catalogClienteId;
             $where[] = 'cliente_id = :cid';
         }
-        $where[] = $this->tenantInCondition('cliente_id', $params, 'dfa');
+        $where[] = $this->tenantCatalogInCondition('cliente_id', $params, 'dfa');
         $stmt = $this->db->prepare(
             'SELECT id, nome, cliente_id, ativo
              FROM departamentos
@@ -120,8 +138,9 @@ class DepartamentoModel extends BaseModel
     public function create(array $data): int
     {
         $this->ensureTable();
-        $data['cliente_id'] = (int)$this->normalizeScopedClienteId(isset($data['cliente_id']) ? (int)$data['cliente_id'] : null);
-        if (($data['cliente_id'] ?? 0) <= 0 || !$this->canAccessClienteId((int)$data['cliente_id'])) {
+        $requestedClienteId = isset($data['cliente_id']) ? (int)$data['cliente_id'] : null;
+        $data['cliente_id'] = (int)$this->normalizeCatalogClienteId($requestedClienteId);
+        if (($data['cliente_id'] ?? 0) <= 0 || !$this->canAccessCatalogClienteId((int)$data['cliente_id'])) {
             return 0;
         }
         $stmt = $this->db->prepare('INSERT INTO departamentos (nome, cliente_id) VALUES (:nome, :cliente_id)');
@@ -132,9 +151,9 @@ class DepartamentoModel extends BaseModel
     public function update(int $id, array $data): bool
     {
         $this->ensureTable();
-        $data['cliente_id'] = (int)$this->normalizeScopedClienteId(isset($data['cliente_id']) ? (int)$data['cliente_id'] : null);
+        $data['cliente_id'] = (int)$this->normalizeCatalogClienteId(isset($data['cliente_id']) ? (int)$data['cliente_id'] : null);
         $params = ['nome' => $data['nome'], 'cliente_id' => (int)$data['cliente_id'], 'id' => $id];
-        $scope = $this->tenantInCondition('cliente_id', $params, 'du');
+        $scope = $this->tenantCatalogInCondition('cliente_id', $params, 'du');
         $stmt = $this->db->prepare("UPDATE departamentos SET nome = :nome, cliente_id = :cliente_id WHERE id = :id AND $scope");
         return $stmt->execute($params);
     }
@@ -143,7 +162,7 @@ class DepartamentoModel extends BaseModel
     {
         $this->ensureTable();
         $params = ['id' => $id];
-        $scope = $this->tenantInCondition('cliente_id', $params, 'dd');
+        $scope = $this->tenantCatalogInCondition('cliente_id', $params, 'dd');
         $stmt = $this->db->prepare("DELETE FROM departamentos WHERE id = :id AND $scope");
         return $stmt->execute($params);
     }

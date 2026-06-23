@@ -40,10 +40,10 @@ jobs:
         run: composer install --no-interaction --prefer-dist
       - name: Validate Dompdf bootstrap
         run: php app/tests/dompdf_bootstrap_smoke.php
-      - name: Apply migrations twice to verify idempotency
+      - name: Apply deploy migration command twice to verify idempotency
         run: |
-          php app/database/migrate.php
-          php app/database/migrate.php
+          composer run deploy:migrate
+          composer run deploy:migrate
       - name: Check migration status
         run: php app/tests/migration_runner_status_smoke.php
       - name: Validate resulting schema

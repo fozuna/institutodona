@@ -135,6 +135,15 @@ class MigrationRunner
         ];
     }
 
+    public function currentFingerprint(): string
+    {
+        $parts = [];
+        foreach ($this->allMigrations() as $migration) {
+            $parts[] = $migration['version'] . ':' . $migration['checksum'];
+        }
+        return hash('sha256', implode('|', $parts));
+    }
+
     private function applyOne(array $migration): void
     {
         try {

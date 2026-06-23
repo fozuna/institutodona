@@ -27,6 +27,36 @@ class TreinamentoModel extends BaseModel
         $this->schemaEnsured = true;
     }
 
+    /**
+     * @param array<int> $ids
+     * @return array<int>
+     */
+    private function validSetorIdsForDepartamento(array $ids, int $departamentoId): array
+    {
+        $valid = [];
+        foreach (array_values(array_unique(array_filter(array_map('intval', $ids)))) as $id) {
+            if ($this->setorBelongsToCatalogCliente($id, null, $departamentoId)) {
+                $valid[] = $id;
+            }
+        }
+        return $valid;
+    }
+
+    /**
+     * @param array<int> $ids
+     * @return array<int>
+     */
+    private function validFuncaoIdsForDepartamento(array $ids, int $departamentoId): array
+    {
+        $valid = [];
+        foreach (array_values(array_unique(array_filter(array_map('intval', $ids)))) as $id) {
+            if ($this->funcaoBelongsToCatalogCliente($id, null, null, $departamentoId)) {
+                $valid[] = $id;
+            }
+        }
+        return $valid;
+    }
+
     public static function periodicidadeOptions(): array
     {
         return [
@@ -86,6 +116,17 @@ class TreinamentoModel extends BaseModel
     public function create(array $data): int
     {
         $this->ensureSchema();
+        $departamentoId = (int)($data['departamento_id'] ?? 0);
+        if (!$this->departamentoBelongsToCatalogCliente($departamentoId)) {
+            return 0;
+        }
+        $requestedSetorIds = array_values(array_unique(array_filter(array_map('intval', (array)($data['setor_ids'] ?? [])))));
+        $requestedFuncaoIds = array_values(array_unique(array_filter(array_map('intval', (array)($data['funcao_ids'] ?? [])))));
+        $setorIds = $this->validSetorIdsForDepartamento($requestedSetorIds, $departamentoId);
+        $funcaoIds = $this->validFuncaoIdsForDepartamento($requestedFuncaoIds, $departamentoId);
+        if (count($setorIds) !== count($requestedSetorIds) || count($funcaoIds) !== count($requestedFuncaoIds)) {
+            return 0;
+        }
         $stmt = $this->db->prepare("INSERT INTO treinamentos
             (nome, objetivo, publico, carga_horaria, departamento_id, periodicidade, fornecedor, tipo_treinamento, template_certificado, assinatura_responsavel)
             VALUES (:nome,:objetivo,:publico,:carga,:departamento,:periodicidade,:fornecedor,:tipo_treinamento,:template_certificado,:assinatura_responsavel)");
@@ -94,7 +135,7 @@ class TreinamentoModel extends BaseModel
             'objetivo' => trim((string)($data['objetivo'] ?? '')),
             'publico' => trim((string)($data['publico'] ?? '')),
             'carga' => $data['carga_horaria'] !== '' ? (float)$data['carga_horaria'] : null,
-            'departamento' => (int)$data['departamento_id'],
+            'departamento' => $departamentoId,
             'periodicidade' => trim((string)($data['periodicidade'] ?? 'avulso')),
             'fornecedor' => trim((string)($data['fornecedor'] ?? '')),
             'tipo_treinamento' => trim((string)($data['tipo_treinamento'] ?? '')),
@@ -102,8 +143,8 @@ class TreinamentoModel extends BaseModel
             'assinatura_responsavel' => trim((string)($data['assinatura_responsavel'] ?? '')),
         ]);
         $id = (int)$this->db->lastInsertId();
-        $this->syncSetores($id, $data['setor_ids'] ?? []);
-        $this->syncFuncoes($id, $data['funcao_ids'] ?? []);
+        $this->syncSetores($id, $setorIds);
+        $this->syncFuncoes($id, $funcaoIds);
         return $id;
     }
 
@@ -111,6 +152,17 @@ class TreinamentoModel extends BaseModel
     {
         $this->ensureSchema();
         if (!$this->find($id)) {
+            return false;
+        }
+        $departamentoId = (int)($data['departamento_id'] ?? 0);
+        if (!$this->departamentoBelongsToCatalogCliente($departamentoId)) {
+            return false;
+        }
+        $requestedSetorIds = array_values(array_unique(array_filter(array_map('intval', (array)($data['setor_ids'] ?? [])))));
+        $requestedFuncaoIds = array_values(array_unique(array_filter(array_map('intval', (array)($data['funcao_ids'] ?? [])))));
+        $setorIds = $this->validSetorIdsForDepartamento($requestedSetorIds, $departamentoId);
+        $funcaoIds = $this->validFuncaoIdsForDepartamento($requestedFuncaoIds, $departamentoId);
+        if (count($setorIds) !== count($requestedSetorIds) || count($funcaoIds) !== count($requestedFuncaoIds)) {
             return false;
         }
         $stmt = $this->db->prepare("UPDATE treinamentos
@@ -131,15 +183,15 @@ class TreinamentoModel extends BaseModel
             'objetivo' => trim((string)($data['objetivo'] ?? '')),
             'publico' => trim((string)($data['publico'] ?? '')),
             'carga' => $data['carga_horaria'] !== '' ? (float)$data['carga_horaria'] : null,
-            'departamento' => (int)$data['departamento_id'],
+            'departamento' => $departamentoId,
             'periodicidade' => trim((string)($data['periodicidade'] ?? 'avulso')),
             'fornecedor' => trim((string)($data['fornecedor'] ?? '')),
             'tipo_treinamento' => trim((string)($data['tipo_treinamento'] ?? '')),
             'template_certificado' => trim((string)($data['template_certificado'] ?? '')),
             'assinatura_responsavel' => trim((string)($data['assinatura_responsavel'] ?? '')),
         ]);
-        $this->syncSetores($id, $data['setor_ids'] ?? []);
-        $this->syncFuncoes($id, $data['funcao_ids'] ?? []);
+        $this->syncSetores($id, $setorIds);
+        $this->syncFuncoes($id, $funcaoIds);
         return $ok;
     }
 
@@ -333,7 +385,7 @@ class TreinamentoModel extends BaseModel
             $sql .= " AND t.id = :treinamento_id";
             $params['treinamento_id'] = $treinamentoId;
         }
-        $scope = $this->tenantInCondition('d.cliente_id', $params, 'tralert');
+        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'tralert');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
         }
@@ -711,7 +763,7 @@ class TreinamentoModel extends BaseModel
                 JOIN departamentos d ON d.id = t.departamento_id
                 WHERE 1=1";
         $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['d.cliente_id', 'col.cliente_id']);
-        $scope = $this->tenantInCondition('d.cliente_id', $params, 'trdash');
+        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'trdash');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
         }
@@ -741,7 +793,7 @@ class TreinamentoModel extends BaseModel
                 JOIN departamentos d ON d.id = t.departamento_id
                 WHERE tc.status = :status";
         $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['d.cliente_id', 'col.cliente_id', 'c.id']);
-        $scope = $this->tenantInCondition('d.cliente_id', $params, 'trlist');
+        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'trlist');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
         }
@@ -778,7 +830,7 @@ class TreinamentoModel extends BaseModel
                 JOIN departamentos d ON d.id = t.departamento_id
                 WHERE 1=1";
         $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['d.cliente_id', 'col.cliente_id', 'c.id']);
-        $scope = $this->tenantInCondition('d.cliente_id', $params, 'tralert');
+        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'tralert');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
         }
@@ -1081,7 +1133,7 @@ class TreinamentoModel extends BaseModel
                 LEFT JOIN setores s ON s.id = f.setor_id
                 WHERE 1=1";
         $sql .= $this->applyDashboardFilters($filters, $params, true);
-        $scope = $this->tenantInCondition('d.cliente_id', $params, 'trpart');
+        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'trpart');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
         }
@@ -1135,7 +1187,7 @@ class TreinamentoModel extends BaseModel
             $sql .= " AND ta.instrutor LIKE :instrutor";
             $params['instrutor'] = '%' . trim((string)$filters['instrutor']) . '%';
         }
-        $scope = $this->tenantInCondition('d.cliente_id', $params, 'trset');
+        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'trset');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
         }
@@ -1175,7 +1227,7 @@ class TreinamentoModel extends BaseModel
                 LEFT JOIN setores s ON s.id = f.setor_id
                 WHERE 1=1";
         $sql .= $this->applyDashboardFilters($filters, $params, true);
-        $scope = $this->tenantInCondition('d.cliente_id', $params, 'tracc');
+        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'tracc');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
         }
