@@ -3,26 +3,6 @@ namespace App\Models;
 
 class FuncaoModel extends BaseModel
 {
-    /**
-     * @param array<int> $clienteIds
-     * @return array<int>
-     */
-    private function catalogClienteIds(array $clienteIds): array
-    {
-        return $this->normalizeCatalogClienteIds($clienteIds);
-    }
-
-    private function buildClienteScopeClause(string $column, array $clienteIds, array &$params, string $prefix): string
-    {
-        $holders = [];
-        foreach (array_values($clienteIds) as $i => $clienteId) {
-            $key = $prefix . $i;
-            $holders[] = ':' . $key;
-            $params[$key] = (int)$clienteId;
-        }
-        return $column . ' IN (' . implode(',', $holders) . ')';
-    }
-
     private function ensureTable(): void
     {
         try {
@@ -41,8 +21,8 @@ class FuncaoModel extends BaseModel
     public function allByCliente(int $clienteId): array
     {
         $this->ensureTable();
-        $clienteId = (int)($this->resolveCatalogClienteId($clienteId) ?? 0);
-        if ($clienteId <= 0) {
+        $clienteId = (int)$this->normalizeScopedClienteId($clienteId);
+        if ($clienteId <= 0 || !$this->canAccessClienteId($clienteId)) {
             return [];
         }
         try {
@@ -55,14 +35,15 @@ class FuncaoModel extends BaseModel
         } catch (\PDOException $e) {
         }
         try {
-            $sql = 'SELECT f.id, f.nome, f.setor_id, s.nome AS setor, d.nome AS departamento
-                    FROM funcoes f JOIN setores s ON s.id = f.setor_id
-                    JOIN departamentos d ON d.id = s.departamento_id
-                    WHERE d.cliente_id = :cid ORDER BY d.nome, s.nome, f.nome';
             $params = ['cid' => $clienteId];
-            $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'fbc');
-            $sql = str_replace('WHERE d.cliente_id = :cid', 'WHERE d.cliente_id = :cid AND ' . $scope, $sql);
-            $stmt = $this->db->prepare($sql);
+            $stmt = $this->db->prepare(
+                'SELECT f.id, f.nome, f.setor_id, s.nome AS setor, d.nome AS departamento
+                 FROM funcoes f
+                 JOIN setores s ON s.id = f.setor_id
+                 JOIN departamentos d ON d.id = s.departamento_id
+                 WHERE ' . $this->departamentoVisibilitySql('d', ':cid') . '
+                 ORDER BY d.nome, s.nome, f.nome'
+            );
             $stmt->execute($params);
             return $stmt->fetchAll();
         } catch (\PDOException $e) {
@@ -73,7 +54,7 @@ class FuncaoModel extends BaseModel
     public function allByClientes(array $clienteIds): array
     {
         $this->ensureTable();
-        $clienteIds = $this->catalogClienteIds($clienteIds);
+        $clienteIds = array_values(array_unique(array_filter(array_map('intval', $clienteIds))));
         if (empty($clienteIds)) {
             return [];
         }
@@ -88,10 +69,11 @@ class FuncaoModel extends BaseModel
         }
         try {
             $params = [];
-            $where = [
-                $this->buildClienteScopeClause('d.cliente_id', $clienteIds, $params, 'fabc_scope'),
-                $this->tenantCatalogInCondition('d.cliente_id', $params, 'fabc_tenant'),
-            ];
+            $where = [$this->departamentoVisibilityForClientesCondition('d', $clienteIds, $params, 'fabc_scope')];
+            $tenantScope = $this->tenantDepartamentoVisibilityCondition('d', $params, 'fabc_tenant');
+            if ($tenantScope !== '1=1') {
+                $where[] = $tenantScope;
+            }
             $stmt = $this->db->prepare(
                 "SELECT f.id, f.nome, f.setor_id, s.nome AS setor, d.nome AS departamento
                  FROM funcoes f
@@ -114,13 +96,12 @@ class FuncaoModel extends BaseModel
         if ($setorId <= 0) {
             return [];
         }
-        $clienteIds = $this->catalogClienteIds($clienteIds);
         $params = ['sid' => $setorId];
         $where = ['s.id = :sid'];
         if (!empty($clienteIds)) {
-            $where[] = $this->buildClienteScopeClause('d.cliente_id', $clienteIds, $params, 'fbs_scope');
+            $where[] = $this->departamentoVisibilityForClientesCondition('d', $clienteIds, $params, 'fbs_scope');
         }
-        $where[] = $this->tenantCatalogInCondition('d.cliente_id', $params, 'fbs_tenant');
+        $where[] = $this->tenantDepartamentoVisibilityCondition('d', $params, 'fbs_tenant');
         $stmt = $this->db->prepare(
             "SELECT f.id, f.nome, f.setor_id, s.nome AS setor, d.nome AS departamento
              FROM funcoes f
@@ -136,18 +117,20 @@ class FuncaoModel extends BaseModel
     public function activeByCliente(int $clienteId): array
     {
         $this->ensureTable();
-        $clienteId = (int)($this->resolveCatalogClienteId($clienteId) ?? 0);
-        if ($clienteId <= 0) {
+        $clienteId = (int)$this->normalizeScopedClienteId($clienteId);
+        if ($clienteId <= 0 || !$this->canAccessClienteId($clienteId)) {
             return [];
         }
         $params = ['cid' => $clienteId];
-        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'fabcact');
         $stmt = $this->db->prepare(
             "SELECT f.id, f.nome, f.setor_id, s.nome AS setor, d.nome AS departamento
              FROM funcoes f
              JOIN setores s ON s.id = f.setor_id
              JOIN departamentos d ON d.id = s.departamento_id
-             WHERE d.cliente_id = :cid AND f.ativo = 1 AND s.ativo = 1 AND d.ativo = 1 AND $scope
+             WHERE f.ativo = 1
+               AND s.ativo = 1
+               AND d.ativo = 1
+               AND " . $this->departamentoVisibilitySql('d', ':cid') . "
              ORDER BY d.nome, s.nome, f.nome"
         );
         $stmt->execute($params);
@@ -161,13 +144,12 @@ class FuncaoModel extends BaseModel
         if ($setorId <= 0) {
             return [];
         }
-        $clienteIds = $this->catalogClienteIds($clienteIds);
         $params = ['sid' => $setorId];
         $where = ['s.id = :sid', 'f.ativo = 1', 's.ativo = 1', 'd.ativo = 1'];
         if (!empty($clienteIds)) {
-            $where[] = $this->buildClienteScopeClause('d.cliente_id', $clienteIds, $params, 'fbsact_scope');
+            $where[] = $this->departamentoVisibilityForClientesCondition('d', $clienteIds, $params, 'fbsact_scope');
         }
-        $where[] = $this->tenantCatalogInCondition('d.cliente_id', $params, 'fbsact_tenant');
+        $where[] = $this->tenantDepartamentoVisibilityCondition('d', $params, 'fbsact_tenant');
         $stmt = $this->db->prepare(
             "SELECT f.id, f.nome, f.setor_id, s.nome AS setor, d.nome AS departamento
              FROM funcoes f
@@ -184,7 +166,7 @@ class FuncaoModel extends BaseModel
     {
         $this->ensureTable();
         $params = ['id' => $id];
-        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'ff');
+        $scope = $this->tenantDepartamentoVisibilityCondition('d', $params, 'ff');
         $cols = ['f.id', 'f.nome', 'f.setor_id', 'd.cliente_id AS cliente_id', 's.departamento_id'];
         if (\App\Database\Database::columnExists('funcoes', 'ativo')) {
             $cols[] = 'f.ativo';
@@ -198,11 +180,7 @@ class FuncaoModel extends BaseModel
     public function create(array $data): int
     {
         $this->ensureTable();
-        $params = ['sid' => (int)$data['setor_id']];
-        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'fc');
-        $check = $this->db->prepare("SELECT s.id FROM setores s JOIN departamentos d ON d.id = s.departamento_id WHERE s.id = :sid AND $scope LIMIT 1");
-        $check->execute($params);
-        if (!$check->fetch()) {
+        if (!$this->setorBelongsToCatalogCliente((int)$data['setor_id'])) {
             return 0;
         }
         $stmt = $this->db->prepare('INSERT INTO funcoes (nome, setor_id) VALUES (:nome, :setor_id)');
@@ -213,8 +191,11 @@ class FuncaoModel extends BaseModel
     public function update(int $id, array $data): bool
     {
         $this->ensureTable();
+        if (!$this->setorBelongsToCatalogCliente((int)$data['setor_id'])) {
+            return false;
+        }
         $params = ['nome' => $data['nome'], 'setor_id' => (int)$data['setor_id'], 'id' => $id];
-        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'fu');
+        $scope = $this->tenantDepartamentoVisibilityCondition('d', $params, 'fu');
         $stmt = $this->db->prepare("UPDATE funcoes f JOIN setores s ON s.id = f.setor_id JOIN departamentos d ON d.id = s.departamento_id SET f.nome = :nome, f.setor_id = :setor_id WHERE f.id = :id AND $scope");
         return $stmt->execute($params);
     }
@@ -223,7 +204,7 @@ class FuncaoModel extends BaseModel
     {
         $this->ensureTable();
         $params = ['id' => $id];
-        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'fd');
+        $scope = $this->tenantDepartamentoVisibilityCondition('d', $params, 'fd');
         $stmt = $this->db->prepare("DELETE f FROM funcoes f JOIN setores s ON s.id = f.setor_id JOIN departamentos d ON d.id = s.departamento_id WHERE f.id = :id AND $scope");
         return $stmt->execute($params);
     }

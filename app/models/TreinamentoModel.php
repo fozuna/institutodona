@@ -385,7 +385,7 @@ class TreinamentoModel extends BaseModel
             $sql .= " AND t.id = :treinamento_id";
             $params['treinamento_id'] = $treinamentoId;
         }
-        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'tralert');
+        $scope = $this->tenantDepartamentoVisibilityCondition('d', $params, 'tralert');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
         }
@@ -763,7 +763,7 @@ class TreinamentoModel extends BaseModel
                 JOIN departamentos d ON d.id = t.departamento_id
                 WHERE 1=1";
         $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['d.cliente_id', 'col.cliente_id']);
-        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'trdash');
+        $scope = $this->tenantDepartamentoVisibilityCondition('d', $params, 'trdash');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
         }
@@ -793,7 +793,7 @@ class TreinamentoModel extends BaseModel
                 JOIN departamentos d ON d.id = t.departamento_id
                 WHERE tc.status = :status";
         $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['d.cliente_id', 'col.cliente_id', 'c.id']);
-        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'trlist');
+        $scope = $this->tenantDepartamentoVisibilityCondition('d', $params, 'trlist');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
         }
@@ -830,7 +830,7 @@ class TreinamentoModel extends BaseModel
                 JOIN departamentos d ON d.id = t.departamento_id
                 WHERE 1=1";
         $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['d.cliente_id', 'col.cliente_id', 'c.id']);
-        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'tralert');
+        $scope = $this->tenantDepartamentoVisibilityCondition('d', $params, 'tralert');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
         }
@@ -1133,7 +1133,7 @@ class TreinamentoModel extends BaseModel
                 LEFT JOIN setores s ON s.id = f.setor_id
                 WHERE 1=1";
         $sql .= $this->applyDashboardFilters($filters, $params, true);
-        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'trpart');
+        $scope = $this->tenantDepartamentoVisibilityCondition('d', $params, 'trpart');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
         }
@@ -1187,7 +1187,7 @@ class TreinamentoModel extends BaseModel
             $sql .= " AND ta.instrutor LIKE :instrutor";
             $params['instrutor'] = '%' . trim((string)$filters['instrutor']) . '%';
         }
-        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'trset');
+        $scope = $this->tenantDepartamentoVisibilityCondition('d', $params, 'trset');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
         }
@@ -1227,7 +1227,7 @@ class TreinamentoModel extends BaseModel
                 LEFT JOIN setores s ON s.id = f.setor_id
                 WHERE 1=1";
         $sql .= $this->applyDashboardFilters($filters, $params, true);
-        $scope = $this->tenantCatalogInCondition('d.cliente_id', $params, 'tracc');
+        $scope = $this->tenantDepartamentoVisibilityCondition('d', $params, 'tracc');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
         }

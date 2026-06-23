@@ -253,6 +253,44 @@ class ClienteModel extends BaseModel
         }
     }
 
+    public function groupCompanies(int $clienteId): array
+    {
+        $clienteId = (int)$clienteId;
+        if ($clienteId <= 0) {
+            return [];
+        }
+        $rootId = $this->catalogRootIdFor($clienteId);
+        if ($rootId <= 0) {
+            return [];
+        }
+        if (!$this->canAccessClienteId($clienteId) && !$this->canAccessClienteId($rootId)) {
+            return [];
+        }
+
+        $params = ['root_id' => $rootId];
+        $scope = $this->tenantInCondition('id', $params, 'cgroup');
+        $stmt = $this->db->prepare(
+            "SELECT id, nome_empresa, is_matriz, matriz_id
+             FROM clientes
+             WHERE (id = :root_id OR matriz_id = :root_id)
+               AND $scope
+             ORDER BY is_matriz DESC, nome_empresa"
+        );
+        $stmt->execute($params);
+        return $stmt->fetchAll() ?: [];
+    }
+
+    /**
+     * @return array<int>
+     */
+    public function groupCompanyIds(int $clienteId): array
+    {
+        return array_values(array_filter(array_map(
+            static fn(array $cliente): int => (int)($cliente['id'] ?? 0),
+            $this->groupCompanies($clienteId)
+        )));
+    }
+
     public function catalogRootIdFor(int $clienteId): int
     {
         $clienteId = (int)$clienteId;

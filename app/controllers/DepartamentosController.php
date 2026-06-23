@@ -22,8 +22,7 @@ class DepartamentosController extends BaseController
     {
         $this->requireLogin();
         $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
-        $effectiveCliente = $cliente > 0 ? $this->clientes->catalogRootIdFor($cliente) : 0;
-        $items = $effectiveCliente > 0 ? $this->deps->allByCliente($effectiveCliente) : $this->deps->all();
+        $items = $cliente > 0 ? $this->deps->allByCliente($cliente) : $this->deps->all();
         $clientes = $this->clientes->all();
         $this->render('departamentos/index', ['items' => $items, 'clientes' => $clientes, 'selectedCliente' => $cliente]);
     }
@@ -32,14 +31,25 @@ class DepartamentosController extends BaseController
     {
         $this->requireLogin();
         $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
-        if ($cliente > 0 && $this->clientes->isFilial($cliente)) {
-            $_SESSION['flash_error'] = 'Cadastros de Departamentos são geridos pela Matriz e herdados automaticamente pelas filiais.';
-            $root = $this->clientes->catalogRootIdFor($cliente);
-            header('Location: index.php?route=departamentos/index&cliente=' . (int)$root);
-            return;
-        }
         $clientes = $this->clientes->all();
-        $this->render('departamentos/create', ['clientes' => $clientes, 'cliente' => $cliente]);
+        if ($cliente <= 0 && !empty($clientes)) {
+            $cliente = (int)($clientes[0]['id'] ?? 0);
+        }
+        $clientRootMap = [];
+        foreach ($clientes as $clienteRow) {
+            $clienteIdMap = (int)($clienteRow['id'] ?? 0);
+            if ($clienteIdMap > 0) {
+                $clientRootMap[$clienteIdMap] = $this->clientes->catalogRootIdFor($clienteIdMap);
+            }
+        }
+        $selectedClienteIds = $cliente > 0 ? [$cliente] : [];
+        $this->render('departamentos/create', [
+            'clientes' => $clientes,
+            'cliente' => $cliente,
+            'clientRootMap' => $clientRootMap,
+            'selectedClienteIds' => $selectedClienteIds,
+            'compartilharTodasFiliais' => false,
+        ]);
     }
 
     public function store(): void
@@ -53,19 +63,24 @@ class DepartamentosController extends BaseController
         }
         $nome = trim($_POST['nome'] ?? '');
         $clienteId = (int)($_POST['cliente_id'] ?? 0);
-        if ($clienteId > 0 && $this->clientes->isFilial($clienteId)) {
-            $_SESSION['flash_error'] = 'Filiais não podem cadastrar Departamentos. Cadastre na Matriz e a herança será automática.';
-            AuditLogger::log('catalog_write_blocked', 'departamentos', null, ['cliente_id' => $clienteId]);
-            $root = $this->clientes->catalogRootIdFor($clienteId);
-            header('Location: index.php?route=departamentos/index&cliente=' . (int)$root);
-            return;
-        }
+        $clienteIds = isset($_POST['cliente_ids']) && is_array($_POST['cliente_ids']) ? $_POST['cliente_ids'] : [];
+        $compartilharTodasFiliais = isset($_POST['compartilhar_todas_filiais']) && (int)$_POST['compartilhar_todas_filiais'] === 1;
         if (!$nome || !$clienteId) {
             http_response_code(400);
             echo 'Campos obrigatórios faltando';
             return;
         }
-        $this->deps->create(['nome' => $nome, 'cliente_id' => $clienteId]);
+        $id = $this->deps->create([
+            'nome' => $nome,
+            'cliente_id' => $clienteId,
+            'cliente_ids' => $clienteIds,
+            'compartilhar_todas_filiais' => $compartilharTodasFiliais ? 1 : 0,
+        ]);
+        AuditLogger::log('create', 'departamentos', $id ?: null, [
+            'cliente_id' => $clienteId,
+            'cliente_ids' => array_values(array_unique(array_map('intval', $clienteIds))),
+            'compartilhar_todas_filiais' => $compartilharTodasFiliais,
+        ]);
         header('Location: index.php?route=departamentos/index&cliente=' . $clienteId);
     }
 
@@ -76,13 +91,25 @@ class DepartamentosController extends BaseController
         $item = $this->deps->find($id);
         $clientes = $this->clientes->all();
         $cliente = (int)($_GET['cliente'] ?? (($item['cliente_id'] ?? 0)));
-        if ($cliente > 0 && $this->clientes->isFilial($cliente)) {
-            $_SESSION['flash_error'] = 'Filiais não podem editar Departamentos. Edite na Matriz.';
-            $root = $this->clientes->catalogRootIdFor($cliente);
-            header('Location: index.php?route=departamentos/index&cliente=' . (int)$root);
-            return;
+        if ($cliente <= 0 && !empty($clientes)) {
+            $cliente = (int)($clientes[0]['id'] ?? 0);
         }
-        $this->render('departamentos/edit', ['item' => $item, 'clientes' => $clientes, 'cliente' => $cliente]);
+        $clientRootMap = [];
+        foreach ($clientes as $clienteRow) {
+            $clienteIdMap = (int)($clienteRow['id'] ?? 0);
+            if ($clienteIdMap > 0) {
+                $clientRootMap[$clienteIdMap] = $this->clientes->catalogRootIdFor($clienteIdMap);
+            }
+        }
+        $selectedClienteIds = $item ? ($item['cliente_ids'] ?? [$cliente]) : [$cliente];
+        $this->render('departamentos/edit', [
+            'item' => $item,
+            'clientes' => $clientes,
+            'cliente' => $cliente,
+            'clientRootMap' => $clientRootMap,
+            'selectedClienteIds' => $selectedClienteIds,
+            'compartilharTodasFiliais' => !empty($item['compartilhar_todas_filiais']),
+        ]);
     }
 
     public function update(): void
@@ -97,14 +124,19 @@ class DepartamentosController extends BaseController
         $id = (int)($_POST['id'] ?? 0);
         $nome = trim($_POST['nome'] ?? '');
         $clienteId = (int)($_POST['cliente_id'] ?? 0);
-        if ($clienteId > 0 && $this->clientes->isFilial($clienteId)) {
-            $_SESSION['flash_error'] = 'Filiais não podem editar Departamentos. Edite na Matriz.';
-            AuditLogger::log('catalog_write_blocked', 'departamentos', $id ?: null, ['cliente_id' => $clienteId]);
-            $root = $this->clientes->catalogRootIdFor($clienteId);
-            header('Location: index.php?route=departamentos/index&cliente=' . (int)$root);
-            return;
-        }
-        $this->deps->update($id, ['nome' => $nome, 'cliente_id' => $clienteId]);
+        $clienteIds = isset($_POST['cliente_ids']) && is_array($_POST['cliente_ids']) ? $_POST['cliente_ids'] : [];
+        $compartilharTodasFiliais = isset($_POST['compartilhar_todas_filiais']) && (int)$_POST['compartilhar_todas_filiais'] === 1;
+        $this->deps->update($id, [
+            'nome' => $nome,
+            'cliente_id' => $clienteId,
+            'cliente_ids' => $clienteIds,
+            'compartilhar_todas_filiais' => $compartilharTodasFiliais ? 1 : 0,
+        ]);
+        AuditLogger::log('update', 'departamentos', $id ?: null, [
+            'cliente_id' => $clienteId,
+            'cliente_ids' => array_values(array_unique(array_map('intval', $clienteIds))),
+            'compartilhar_todas_filiais' => $compartilharTodasFiliais,
+        ]);
         header('Location: index.php?route=departamentos/index&cliente=' . $clienteId);
     }
 

@@ -356,8 +356,8 @@ class AplicacaoModel extends BaseModel
         if ($clienteId === null || $clienteId <= 0) {
             return [];
         }
-        $catalogClienteId = (int)($this->resolveCatalogClienteId($clienteId) ?? 0);
-        if ($catalogClienteId <= 0) {
+        $clienteId = (int)$this->normalizeScopedClienteId($clienteId);
+        if ($clienteId <= 0 || !$this->canAccessClienteId($clienteId)) {
             return [];
         }
         $sql = 'SELECT f.id, f.nome, f.setor_id, s.nome AS setor, d.nome AS departamento
@@ -367,14 +367,14 @@ class AplicacaoModel extends BaseModel
                 JOIN setores s ON s.id = f.setor_id
                 JOIN departamentos d ON d.id = s.departamento_id
                 WHERE af.aplicacao_id = :id
-                  AND d.cliente_id = :catalog_cliente_id
+                  AND ' . $this->departamentoVisibilitySql('d', ':cliente_id') . '
                 ORDER BY d.nome, s.nome, f.nome';
         $params = [
             'id' => $aplicacaoId,
-            'catalog_cliente_id' => $catalogClienteId,
+            'cliente_id' => $clienteId,
         ];
         $scopeAplicacao = $this->tenantInCondition('a.id_cliente', $params, 'affa');
-        $scopeCatalogo = $this->tenantCatalogInCondition('d.cliente_id', $params, 'affc');
+        $scopeCatalogo = $this->tenantDepartamentoVisibilityCondition('d', $params, 'affc');
         $sql = str_replace(
             'ORDER BY d.nome, s.nome, f.nome',
             'AND ' . $scopeAplicacao . ' AND ' . $scopeCatalogo . ' ORDER BY d.nome, s.nome, f.nome',

@@ -92,8 +92,20 @@ CREATE TABLE IF NOT EXISTS departamentos (
   id INT AUTO_INCREMENT PRIMARY KEY,
   nome VARCHAR(180) NOT NULL,
   cliente_id INT NOT NULL,
+  compartilhar_todas_filiais TINYINT(1) NOT NULL DEFAULT 0,
   UNIQUE KEY dep_unique (cliente_id, nome),
   CONSTRAINT fk_dep_cliente FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS departamento_clientes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  departamento_id INT NOT NULL,
+  cliente_id INT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_departamento_cliente (departamento_id, cliente_id),
+  KEY idx_departamento_clientes_cliente (cliente_id),
+  CONSTRAINT fk_departamento_clientes_departamento FOREIGN KEY (departamento_id) REFERENCES departamentos(id) ON DELETE CASCADE,
+  CONSTRAINT fk_departamento_clientes_cliente FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS manuais (

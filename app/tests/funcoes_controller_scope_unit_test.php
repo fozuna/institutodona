@@ -93,6 +93,7 @@ $cleanup['clientes'][] = $outroClienteId;
 $departamentoMatrizId = $departamentos->create([
     'nome' => 'Departamento Matriz ' . $suffix,
     'cliente_id' => $matrizId,
+    'cliente_ids' => [$matrizId, $filialId],
 ]);
 $departamentoOutroId = $departamentos->create([
     'nome' => 'Departamento Externo ' . $suffix,
@@ -144,8 +145,8 @@ $setoresList = $params['setores'] ?? [];
 
 assert_true(($params['cliente'] ?? 0) === $filialId, 'Resolve cliente autenticado quando a query não informa cliente');
 assert_true(count($items) === 1, 'Lista apenas funções do cliente autenticado');
-assert_true((int)($items[0]['id'] ?? 0) === $funcaoMatrizId, 'Função retornada pertence à matriz herdada da filial autenticada');
-assert_true(count($departamentosList) === 1 && (int)($departamentosList[0]['cliente_id'] ?? 0) === $matrizId, 'Departamentos ficam restritos ao cliente efetivo');
-assert_true(count($setoresList) === 1 && (int)($setoresList[0]['departamento_id'] ?? 0) === $departamentoMatrizId, 'Setores ficam restritos ao cliente efetivo');
+assert_true((int)($items[0]['id'] ?? 0) === $funcaoMatrizId, 'Função retornada pertence a departamento compartilhado com a filial autenticada');
+assert_true(count($departamentosList) === 1 && (int)($departamentosList[0]['cliente_id'] ?? 0) === $matrizId, 'Departamentos respeitam compartilhamento seletivo por empresa');
+assert_true(count($setoresList) === 1 && (int)($setoresList[0]['departamento_id'] ?? 0) === $departamentoMatrizId, 'Setores herdam visibilidade do departamento compartilhado');
 
 echo "Funcoes controller scope unit test passed.\n";

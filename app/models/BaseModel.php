@@ -175,6 +175,81 @@ abstract class BaseModel
         return $column . ' IN (' . implode(',', $holders) . ')';
     }
 
+    protected function departamentoVisibilitySql(string $departamentoAlias, string $clienteExpression): string
+    {
+        $departamentoAlias = trim($departamentoAlias);
+        $clienteExpression = trim($clienteExpression);
+        if ($departamentoAlias === '' || $clienteExpression === '') {
+            return '1=0';
+        }
+
+        return 'EXISTS (
+                    SELECT 1
+                    FROM clientes req_cli
+                    JOIN clientes owner_cli ON owner_cli.id = ' . $departamentoAlias . '.cliente_id
+                    LEFT JOIN departamento_clientes dcv
+                      ON dcv.departamento_id = ' . $departamentoAlias . '.id
+                     AND dcv.cliente_id = req_cli.id
+                    WHERE req_cli.id = ' . $clienteExpression . '
+                      AND (
+                        dcv.id IS NOT NULL
+                        OR (
+                            COALESCE(' . $departamentoAlias . '.compartilhar_todas_filiais, 0) = 1
+                            AND (CASE WHEN COALESCE(owner_cli.matriz_id, 0) > 0 THEN owner_cli.matriz_id ELSE owner_cli.id END)
+                                = (CASE WHEN COALESCE(req_cli.matriz_id, 0) > 0 THEN req_cli.matriz_id ELSE req_cli.id END)
+                        )
+                      )
+                )';
+    }
+
+    protected function tenantDepartamentoVisibilityCondition(
+        string $departamentoAlias,
+        array &$params,
+        string $prefix = 'dep_scope'
+    ): string {
+        if (!$this->hasTenantRestriction()) {
+            return '1=1';
+        }
+
+        $ids = array_values(array_unique(array_filter(array_map('intval', $this->tenantClientIds()))));
+        if (empty($ids)) {
+            return '1=1';
+        }
+
+        $parts = [];
+        foreach ($ids as $i => $clienteId) {
+            $key = $prefix . $i;
+            $params[$key] = $clienteId;
+            $parts[] = $this->departamentoVisibilitySql($departamentoAlias, ':' . $key);
+        }
+
+        return '(' . implode(' OR ', $parts) . ')';
+    }
+
+    /**
+     * @param array<int> $clienteIds
+     */
+    protected function departamentoVisibilityForClientesCondition(
+        string $departamentoAlias,
+        array $clienteIds,
+        array &$params,
+        string $prefix = 'dep_client'
+    ): string {
+        $clienteIds = array_values(array_unique(array_filter(array_map('intval', $clienteIds))));
+        if (empty($clienteIds)) {
+            return '1=0';
+        }
+
+        $parts = [];
+        foreach ($clienteIds as $i => $clienteId) {
+            $key = $prefix . $i;
+            $params[$key] = $clienteId;
+            $parts[] = $this->departamentoVisibilitySql($departamentoAlias, ':' . $key);
+        }
+
+        return '(' . implode(' OR ', $parts) . ')';
+    }
+
     protected function departamentoBelongsToCatalogCliente(int $departamentoId, ?int $clienteId = null): bool
     {
         $departamentoId = (int)$departamentoId;
@@ -182,18 +257,19 @@ abstract class BaseModel
             return false;
         }
         $params = ['id' => $departamentoId];
-        $where = ['id = :id'];
+        $where = ['d.id = :id'];
         if ($clienteId !== null && $clienteId > 0) {
-            $catalogClienteId = (int)($this->resolveCatalogClienteId($clienteId) ?? 0);
-            if ($catalogClienteId <= 0) {
+            $clienteId = (int)$this->normalizeScopedClienteId($clienteId);
+            if ($clienteId <= 0 || !$this->canAccessClienteId($clienteId)) {
                 return false;
             }
-            $params['cliente_id'] = $catalogClienteId;
-            $where[] = 'cliente_id = :cliente_id';
+            $params['cliente_id'] = $clienteId;
+            $where[] = $this->departamentoVisibilitySql('d', ':cliente_id');
+        } else {
+            $where[] = $this->tenantDepartamentoVisibilityCondition('d', $params, 'dep_catalog');
         }
-        $where[] = $this->tenantCatalogInCondition('cliente_id', $params, 'dep_catalog');
         $stmt = $this->db->prepare(
-            'SELECT id FROM departamentos WHERE ' . implode(' AND ', $where) . ' LIMIT 1'
+            'SELECT d.id FROM departamentos d WHERE ' . implode(' AND ', $where) . ' LIMIT 1'
         );
         $stmt->execute($params);
         return (bool)$stmt->fetchColumn();
@@ -212,14 +288,15 @@ abstract class BaseModel
             $where[] = 's.departamento_id = :departamento_id';
         }
         if ($clienteId !== null && $clienteId > 0) {
-            $catalogClienteId = (int)($this->resolveCatalogClienteId($clienteId) ?? 0);
-            if ($catalogClienteId <= 0) {
+            $clienteId = (int)$this->normalizeScopedClienteId($clienteId);
+            if ($clienteId <= 0 || !$this->canAccessClienteId($clienteId)) {
                 return false;
             }
-            $params['cliente_id'] = $catalogClienteId;
-            $where[] = 'd.cliente_id = :cliente_id';
+            $params['cliente_id'] = $clienteId;
+            $where[] = $this->departamentoVisibilitySql('d', ':cliente_id');
+        } else {
+            $where[] = $this->tenantDepartamentoVisibilityCondition('d', $params, 'setor_catalog');
         }
-        $where[] = $this->tenantCatalogInCondition('d.cliente_id', $params, 'setor_catalog');
         $stmt = $this->db->prepare(
             'SELECT s.id
              FROM setores s
@@ -252,14 +329,15 @@ abstract class BaseModel
             $where[] = 's.departamento_id = :departamento_id';
         }
         if ($clienteId !== null && $clienteId > 0) {
-            $catalogClienteId = (int)($this->resolveCatalogClienteId($clienteId) ?? 0);
-            if ($catalogClienteId <= 0) {
+            $clienteId = (int)$this->normalizeScopedClienteId($clienteId);
+            if ($clienteId <= 0 || !$this->canAccessClienteId($clienteId)) {
                 return false;
             }
-            $params['cliente_id'] = $catalogClienteId;
-            $where[] = 'd.cliente_id = :cliente_id';
+            $params['cliente_id'] = $clienteId;
+            $where[] = $this->departamentoVisibilitySql('d', ':cliente_id');
+        } else {
+            $where[] = $this->tenantDepartamentoVisibilityCondition('d', $params, 'func_catalog');
         }
-        $where[] = $this->tenantCatalogInCondition('d.cliente_id', $params, 'func_catalog');
         $stmt = $this->db->prepare(
             'SELECT f.id
              FROM funcoes f

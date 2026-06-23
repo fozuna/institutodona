@@ -37,7 +37,8 @@ $backUrl = ($canClienteShow && $selectedCliente)
             <thead>
                 <tr class="text-left border-b">
                     <th class="p-3">Departamento</th>
-                    <th class="p-3">Cliente</th>
+                    <th class="p-3">Origem</th>
+                    <th class="p-3">Visibilidade</th>
                     <th class="p-3">Ações</th>
                 </tr>
             </thead>
@@ -51,6 +52,9 @@ $backUrl = ($canClienteShow && $selectedCliente)
                             <?php else: ?>
                                 <?php foreach ($clientes as $c): if ((int)$c['id'] === (int)$d['cliente_id']) { echo htmlspecialchars($c['nome_empresa']); break; } endforeach; ?>
                             <?php endif; ?>
+                        </td>
+                        <td class="p-3">
+                            <?= htmlspecialchars((string)($d['visibilidade_resumo'] ?? ($d['clientes_vinculados'] ?? 'Exclusivo'))) ?>
                         </td>
                         <td class="p-3 whitespace-nowrap">
                             <?php if ($canEdit): ?>

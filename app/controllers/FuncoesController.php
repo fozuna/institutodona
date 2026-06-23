@@ -29,18 +29,10 @@ class FuncoesController extends BaseController
     {
         $this->requireLogin();
         $cliente = $this->resolveClienteSelecionado(isset($_GET['cliente']) ? (int)$_GET['cliente'] : null);
-        $effectiveCliente = $cliente > 0 ? $this->resolveCatalogRootId($cliente) : 0;
-        if ($effectiveCliente > 0) {
-            $catalogData = $this->withCatalogScope($cliente, function () use ($effectiveCliente): array {
-                return [
-                    'items' => $this->funcoes->allByCliente($effectiveCliente),
-                    'departamentos' => $this->deps->allByCliente($effectiveCliente),
-                    'setores' => $this->setores->allByCliente($effectiveCliente),
-                ];
-            });
-            $items = $catalogData['items'] ?? [];
-            $departamentos = $catalogData['departamentos'] ?? [];
-            $setores = $catalogData['setores'] ?? [];
+        if ($cliente > 0) {
+            $items = $this->funcoes->allByCliente($cliente);
+            $departamentos = $this->deps->allByCliente($cliente);
+            $setores = $this->setores->allByCliente($cliente);
         } elseif (Auth::isInstituto()) {
             $items = $this->funcoes->allByClientes($this->clienteIdsVisiveis());
             $departamentos = $this->deps->allByClientes($this->clienteIdsVisiveis());
@@ -57,23 +49,10 @@ class FuncoesController extends BaseController
     {
         $this->requireLogin();
         $cliente = $this->resolveClienteSelecionado(isset($_GET['cliente']) ? (int)$_GET['cliente'] : null);
-        if ($cliente > 0 && $this->clientes->isFilial($cliente)) {
-            $_SESSION['flash_error'] = 'Cadastros de Funções são geridos pela Matriz e herdados automaticamente pelas filiais.';
-            $root = $this->resolveCatalogRootId($cliente);
-            header('Location: index.php?route=funcoes/index&cliente=' . (int)$root);
-            return;
-        }
         $selectedSetorId = isset($_GET['setor_id']) ? (int)$_GET['setor_id'] : 0;
-        $effectiveCliente = $cliente > 0 ? $this->resolveCatalogRootId($cliente) : 0;
-        if ($effectiveCliente > 0) {
-            $catalogData = $this->withCatalogScope($cliente, function () use ($effectiveCliente): array {
-                return [
-                    'setores' => $this->setores->allByCliente($effectiveCliente),
-                    'departamentos' => $this->deps->allByCliente($effectiveCliente),
-                ];
-            });
-            $setores = $catalogData['setores'] ?? [];
-            $departamentos = $catalogData['departamentos'] ?? [];
+        if ($cliente > 0) {
+            $setores = $this->setores->allByCliente($cliente);
+            $departamentos = $this->deps->allByCliente($cliente);
         } else {
             $setores = [];
             $departamentos = [];
@@ -98,13 +77,6 @@ class FuncoesController extends BaseController
         $nome = trim($_POST['nome'] ?? '');
         $setorId = (int)($_POST['setor_id'] ?? 0);
         $cliente = $this->resolveClienteSelecionado(isset($_POST['cliente']) ? (int)$_POST['cliente'] : null);
-        if ($cliente > 0 && $this->clientes->isFilial($cliente)) {
-            $_SESSION['flash_error'] = 'Filiais não podem cadastrar Funções. Cadastre na Matriz e a herança será automática.';
-            AuditLogger::log('catalog_write_blocked', 'funcoes', null, ['cliente_id' => $cliente]);
-            $root = $this->resolveCatalogRootId($cliente);
-            header('Location: index.php?route=funcoes/index&cliente=' . (int)$root);
-            return;
-        }
         if ($nome && $setorId) { $this->funcoes->create(['nome' => $nome, 'setor_id' => $setorId]); }
         header('Location: index.php?route=funcoes/index' . ($cliente ? '&cliente=' . $cliente : ''));
     }
@@ -115,22 +87,9 @@ class FuncoesController extends BaseController
         $id = (int)($_GET['id'] ?? 0);
         $item = $this->funcoes->find($id);
         $cliente = $this->resolveClienteSelecionado(isset($_GET['cliente']) ? (int)$_GET['cliente'] : (($item['cliente_id'] ?? 0) ?: null));
-        if ($cliente > 0 && $this->clientes->isFilial($cliente)) {
-            $_SESSION['flash_error'] = 'Filiais não podem editar Funções. Edite na Matriz.';
-            $root = $this->resolveCatalogRootId($cliente);
-            header('Location: index.php?route=funcoes/index&cliente=' . (int)$root);
-            return;
-        }
-        $effectiveCliente = $cliente > 0 ? $this->resolveCatalogRootId($cliente) : 0;
-        if ($effectiveCliente > 0) {
-            $catalogData = $this->withCatalogScope($cliente, function () use ($effectiveCliente): array {
-                return [
-                    'setores' => $this->setores->allByCliente($effectiveCliente),
-                    'departamentos' => $this->deps->allByCliente($effectiveCliente),
-                ];
-            });
-            $setores = $catalogData['setores'] ?? [];
-            $departamentos = $catalogData['departamentos'] ?? [];
+        if ($cliente > 0) {
+            $setores = $this->setores->allByCliente($cliente);
+            $departamentos = $this->deps->allByCliente($cliente);
         } else {
             $setores = [];
             $departamentos = [];
@@ -156,13 +115,6 @@ class FuncoesController extends BaseController
         $nome = trim($_POST['nome'] ?? '');
         $setorId = (int)($_POST['setor_id'] ?? 0);
         $cliente = $this->resolveClienteSelecionado(isset($_POST['cliente']) ? (int)$_POST['cliente'] : null);
-        if ($cliente > 0 && $this->clientes->isFilial($cliente)) {
-            $_SESSION['flash_error'] = 'Filiais não podem editar Funções. Edite na Matriz.';
-            AuditLogger::log('catalog_write_blocked', 'funcoes', $id ?: null, ['cliente_id' => $cliente]);
-            $root = $this->resolveCatalogRootId($cliente);
-            header('Location: index.php?route=funcoes/index&cliente=' . (int)$root);
-            return;
-        }
         if ($id) { $this->funcoes->update($id, ['nome' => $nome, 'setor_id' => $setorId]); }
         header('Location: index.php?route=funcoes/index' . ($cliente ? '&cliente=' . $cliente : ''));
     }
