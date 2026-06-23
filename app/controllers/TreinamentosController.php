@@ -7,6 +7,10 @@ use App\Core\BaseController;
 use App\Core\DateHelper;
 use App\Core\Security;
 use App\Database\Database;
+use App\Models\ClienteModel;
+use App\Models\DepartamentoModel;
+use App\Models\FuncaoModel;
+use App\Models\SetorModel;
 use App\Models\TreinamentoAgendaModel;
 use App\Models\TreinamentoModel;
 use App\Services\TreinamentoDocumentService;
@@ -16,12 +20,20 @@ class TreinamentosController extends BaseController
     private TreinamentoModel $model;
     private TreinamentoAgendaModel $agendaModel;
     private TreinamentoDocumentService $documents;
+    private ClienteModel $clientesModel;
+    private DepartamentoModel $departamentosModel;
+    private SetorModel $setoresModel;
+    private FuncaoModel $funcoesModel;
 
     public function __construct()
     {
         $this->model = new TreinamentoModel();
         $this->agendaModel = new TreinamentoAgendaModel();
         $this->documents = new TreinamentoDocumentService();
+        $this->clientesModel = new ClienteModel();
+        $this->departamentosModel = new DepartamentoModel();
+        $this->setoresModel = new SetorModel();
+        $this->funcoesModel = new FuncaoModel();
     }
 
     public function index(): void
@@ -57,7 +69,7 @@ class TreinamentosController extends BaseController
         $setores = $this->setorOptions();
         if (!empty($filters['cliente_id'])) {
             $cid = (int)$filters['cliente_id'];
-            $setores = array_values(array_filter($setores, static fn(array $row): bool => (int)($row['cliente_id'] ?? 0) === $cid));
+            $setores = $this->catalogOptionsForCliente($cid)['setores'];
         }
         $this->render('treinamentos/dashboard', [
             'pageTitle' => 'Dashboard de Treinamentos',
@@ -171,9 +183,7 @@ class TreinamentosController extends BaseController
         $eligibleFilters = $this->normalizeEligibleFilters((int)($item['cliente_id'] ?? 0), $this->eligibleFilters());
         $eligibleRows = $this->model->eligibleColaboradoresForTraining((int)$item['id'], $eligibleFilters);
         $clienteId = (int)($item['cliente_id'] ?? 0);
-        $departamentos = array_values(array_filter($this->departamentoOptions(), static fn(array $row): bool => (int)($row['cliente_id'] ?? 0) === $clienteId));
-        $setores = array_values(array_filter($this->setorOptions(), static fn(array $row): bool => (int)($row['cliente_id'] ?? 0) === $clienteId));
-        $funcoes = array_values(array_filter($this->funcaoOptions(), static fn(array $row): bool => (int)($row['cliente_id'] ?? 0) === $clienteId));
+        $catalogo = $this->catalogOptionsForCliente($clienteId);
         $this->render('treinamentos/show', [
             'pageTitle' => 'Treinamento',
             'item' => $item,
@@ -186,11 +196,29 @@ class TreinamentosController extends BaseController
             'alerts' => $this->model->pendingAlerts((int)$item['id']),
             'unidades' => $this->clienteOptions(),
             'usuarios' => $this->usuarioOptions(),
-            'departamentos' => $departamentos,
-            'setores' => $setores,
-            'funcoes' => $funcoes,
+            'departamentos' => $catalogo['departamentos'],
+            'setores' => $catalogo['setores'],
+            'funcoes' => $catalogo['funcoes'],
             'statusAtualOptions' => $this->statusAtualOptions(),
         ]);
+    }
+
+    public function catalogoOptionsAjax(): void
+    {
+        $this->requireManagePermission();
+        header('Content-Type: application/json; charset=utf-8');
+        $clienteId = (int)($_GET['cliente_id'] ?? 0);
+        if ($clienteId <= 0 || !$this->canAccessCliente($clienteId)) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'message' => 'Empresa inválida.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        echo json_encode([
+            'ok' => true,
+            'cliente_id' => $clienteId,
+            'catalogo' => $this->catalogOptionsForCliente($clienteId),
+        ], JSON_UNESCAPED_UNICODE);
     }
 
     public function eligibleAjax(): void
@@ -774,14 +802,17 @@ class TreinamentosController extends BaseController
 
     private function renderForm(string $view, array $values, array $errors = []): void
     {
+        $clienteId = (int)($values['cliente_id'] ?? 0);
+        $catalogo = $this->catalogOptionsForCliente($clienteId);
         $this->render($view, [
             'pageTitle' => str_contains($view, 'edit') ? 'Editar Treinamento' : 'Novo Treinamento',
             'values' => $values,
             'errors' => $errors,
             'clientes' => $this->clienteOptions(),
-            'departamentos' => $this->departamentoOptions(),
-            'setores' => $this->setorOptions(),
-            'funcoes' => $this->funcaoOptions(),
+            'departamentos' => $catalogo['departamentos'],
+            'setores' => $catalogo['setores'],
+            'funcoes' => $catalogo['funcoes'],
+            'catalogoEndpoint' => 'index.php?route=treinamentos/catalogoOptionsAjax',
             'periodicidades' => TreinamentoModel::periodicidadeOptions(),
         ]);
     }
@@ -831,10 +862,10 @@ class TreinamentosController extends BaseController
             if (!$this->departamentoBelongsToCliente((int)$payload['departamento_id'], $clienteId)) {
                 $errors['departamento_id'] = 'Departamento inválido para a empresa selecionada.';
             }
-            if (!empty($payload['setor_ids']) && !$this->setoresBelongToCliente($payload['setor_ids'], $clienteId)) {
+            if (!empty($payload['setor_ids']) && !$this->setoresBelongToCliente($payload['setor_ids'], $clienteId, (int)$payload['departamento_id'])) {
                 $errors['setor_ids'] = 'Existem setores que não pertencem à empresa selecionada.';
             }
-            if (!empty($payload['funcao_ids']) && !$this->funcoesBelongToCliente($payload['funcao_ids'], $clienteId)) {
+            if (!empty($payload['funcao_ids']) && !$this->funcoesBelongToCliente($payload['funcao_ids'], $clienteId, (int)$payload['departamento_id'])) {
                 $errors['funcao_ids'] = 'Existem funções que não pertencem à empresa selecionada.';
             }
         }
@@ -883,102 +914,82 @@ class TreinamentosController extends BaseController
 
     private function departamentoOptions(): array
     {
-        $pdo = Database::getConnection();
-        $params = [];
-        $sql = "SELECT d.id, d.nome, c.nome_empresa, d.cliente_id
-                FROM departamentos d
-                JOIN clientes c ON c.id = d.cliente_id
-                WHERE 1=1";
-        if (!Auth::isInstituto()) {
-            $ids = Auth::allowedClientIds();
-            if (empty($ids)) {
-                return [];
-            }
-            $holders = [];
-            foreach (array_values($ids) as $i => $id) {
-                $key = 'td' . $i;
-                $holders[] = ':' . $key;
-                $params[$key] = (int)$id;
-            }
-            $sql .= " AND d.cliente_id IN (" . implode(',', $holders) . ")";
+        if (Auth::isInstituto()) {
+            $rows = $this->departamentosModel->all();
+        } else {
+            $rows = $this->departamentosModel->allByClientes(Auth::allowedClientIds());
         }
-        $sql .= " ORDER BY c.nome_empresa, d.nome";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetchAll() ?: [];
+        return array_map(function (array $row): array {
+            return [
+                'id' => (int)($row['id'] ?? 0),
+                'nome' => (string)($row['nome'] ?? ''),
+                'cliente_id' => (int)($row['cliente_id'] ?? 0),
+                'label' => trim((string)($row['nome'] ?? '')),
+            ];
+        }, $rows);
     }
 
     private function setorOptions(): array
     {
-        $pdo = Database::getConnection();
-        $params = [];
-        $sql = "SELECT s.id, s.nome, s.departamento_id, d.nome AS departamento_nome, d.cliente_id
-                FROM setores s
-                JOIN departamentos d ON d.id = s.departamento_id
-                WHERE 1=1";
-        if (!Auth::isInstituto()) {
-            $ids = Auth::allowedClientIds();
-            if (empty($ids)) {
-                return [];
+        if (Auth::isInstituto()) {
+            $rows = [];
+            foreach ($this->clienteOptions() as $cliente) {
+                $rows = array_merge($rows, $this->setoresModel->activeByCliente((int)($cliente['id'] ?? 0)));
             }
-            $holders = [];
-            foreach (array_values($ids) as $i => $id) {
-                $key = 'ts' . $i;
-                $holders[] = ':' . $key;
-                $params[$key] = (int)$id;
+        } else {
+            $rows = [];
+            foreach (Auth::allowedClientIds() as $clienteId) {
+                $rows = array_merge($rows, $this->setoresModel->activeByCliente((int)$clienteId));
             }
-            $sql .= " AND d.cliente_id IN (" . implode(',', $holders) . ")";
         }
-        $sql .= " ORDER BY d.nome, s.nome";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetchAll() ?: [];
+        $unique = [];
+        foreach ($rows as $row) {
+            $unique[(int)($row['id'] ?? 0)] = [
+                'id' => (int)($row['id'] ?? 0),
+                'nome' => (string)($row['nome'] ?? ''),
+                'departamento_id' => (int)($row['departamento_id'] ?? 0),
+                'departamento_nome' => (string)($row['departamento'] ?? ''),
+                'cliente_id' => (int)($row['cliente_id'] ?? 0),
+                'label' => trim((string)(($row['departamento'] ?? '') . ' • ' . ($row['nome'] ?? ''))),
+            ];
+        }
+        return array_values($unique);
     }
 
     private function funcaoOptions(): array
     {
-        $pdo = Database::getConnection();
-        $params = [];
-        $sql = "SELECT f.id, f.nome, f.setor_id, s.departamento_id, s.nome AS setor_nome, d.cliente_id
-                FROM funcoes f
-                JOIN setores s ON s.id = f.setor_id
-                JOIN departamentos d ON d.id = s.departamento_id
-                WHERE 1=1";
-        if (!Auth::isInstituto()) {
-            $ids = Auth::allowedClientIds();
-            if (empty($ids)) {
-                return [];
+        if (Auth::isInstituto()) {
+            $rows = [];
+            foreach ($this->clienteOptions() as $cliente) {
+                $rows = array_merge($rows, $this->funcoesModel->activeByCliente((int)($cliente['id'] ?? 0)));
             }
-            $holders = [];
-            foreach (array_values($ids) as $i => $id) {
-                $key = 'tf' . $i;
-                $holders[] = ':' . $key;
-                $params[$key] = (int)$id;
+        } else {
+            $rows = [];
+            foreach (Auth::allowedClientIds() as $clienteId) {
+                $rows = array_merge($rows, $this->funcoesModel->activeByCliente((int)$clienteId));
             }
-            $sql .= " AND d.cliente_id IN (" . implode(',', $holders) . ")";
         }
-        $sql .= " ORDER BY f.nome";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetchAll() ?: [];
+        $unique = [];
+        foreach ($rows as $row) {
+            $unique[(int)($row['id'] ?? 0)] = [
+                'id' => (int)($row['id'] ?? 0),
+                'nome' => (string)($row['nome'] ?? ''),
+                'setor_id' => (int)($row['setor_id'] ?? 0),
+                'departamento_id' => (int)($row['departamento_id'] ?? 0),
+                'setor_nome' => (string)($row['setor'] ?? ''),
+                'cliente_id' => (int)($row['cliente_id'] ?? 0),
+                'label' => trim((string)(($row['setor'] ?? '') . ' • ' . ($row['nome'] ?? ''))),
+            ];
+        }
+        return array_values($unique);
     }
 
     private function departamentoBelongsToCliente(int $departamentoId, int $clienteId): bool
     {
-        if ($departamentoId <= 0 || $clienteId <= 0) {
-            return false;
-        }
-        if (!$this->canAccessCliente($clienteId)) {
-            return false;
-        }
-        $pdo = Database::getConnection();
-        $params = ['dep' => $departamentoId, 'cid' => $clienteId];
-        $stmt = $pdo->prepare("SELECT d.id FROM departamentos d WHERE d.id = :dep AND d.cliente_id = :cid LIMIT 1");
-        $stmt->execute($params);
-        return (bool)$stmt->fetch();
+        return $this->departamentosModel->findActive($departamentoId, $clienteId) !== null;
     }
 
-    private function setoresBelongToCliente(array $setorIds, int $clienteId): bool
+    private function setoresBelongToCliente(array $setorIds, int $clienteId, int $departamentoId = 0): bool
     {
         $setorIds = array_values(array_unique(array_filter(array_map('intval', $setorIds))));
         if (empty($setorIds) || $clienteId <= 0) {
@@ -987,24 +998,19 @@ class TreinamentosController extends BaseController
         if (!$this->canAccessCliente($clienteId)) {
             return false;
         }
-        $pdo = Database::getConnection();
-        $params = ['cid' => $clienteId];
-        $holders = [];
-        foreach ($setorIds as $i => $id) {
-            $key = 's' . $i;
-            $holders[] = ':' . $key;
-            $params[$key] = $id;
+        foreach ($setorIds as $id) {
+            $row = $this->setoresModel->findActive($id, $departamentoId);
+            if (!$row) {
+                return false;
+            }
+            if (!$this->departamentoBelongsToCliente((int)($row['departamento_id'] ?? 0), $clienteId)) {
+                return false;
+            }
         }
-        $sql = "SELECT COUNT(*) FROM setores s
-                JOIN departamentos d ON d.id = s.departamento_id
-                WHERE s.id IN (" . implode(',', $holders) . ")
-                  AND d.cliente_id = :cid";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        return (int)$stmt->fetchColumn() === count($setorIds);
+        return true;
     }
 
-    private function funcoesBelongToCliente(array $funcaoIds, int $clienteId): bool
+    private function funcoesBelongToCliente(array $funcaoIds, int $clienteId, int $departamentoId = 0): bool
     {
         $funcaoIds = array_values(array_unique(array_filter(array_map('intval', $funcaoIds))));
         if (empty($funcaoIds) || $clienteId <= 0) {
@@ -1013,22 +1019,22 @@ class TreinamentosController extends BaseController
         if (!$this->canAccessCliente($clienteId)) {
             return false;
         }
-        $pdo = Database::getConnection();
-        $params = ['cid' => $clienteId];
-        $holders = [];
-        foreach ($funcaoIds as $i => $id) {
-            $key = 'f' . $i;
-            $holders[] = ':' . $key;
-            $params[$key] = $id;
+        foreach ($funcaoIds as $id) {
+            $row = $this->funcoesModel->find($id);
+            if (!$row) {
+                return false;
+            }
+            if ((int)($row['departamento_id'] ?? 0) !== $departamentoId) {
+                return false;
+            }
+            if (!$this->departamentoBelongsToCliente($departamentoId, $clienteId)) {
+                return false;
+            }
+            if (array_key_exists('ativo', $row) && (int)($row['ativo'] ?? 1) !== 1) {
+                return false;
+            }
         }
-        $sql = "SELECT COUNT(*) FROM funcoes f
-                JOIN setores s ON s.id = f.setor_id
-                JOIN departamentos d ON d.id = s.departamento_id
-                WHERE f.id IN (" . implode(',', $holders) . ")
-                  AND d.cliente_id = :cid";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        return (int)$stmt->fetchColumn() === count($funcaoIds);
+        return true;
     }
 
     private function usuarioOptions(): array
@@ -1047,7 +1053,7 @@ class TreinamentosController extends BaseController
                 JOIN departamentos d ON d.id = t.departamento_id
                 WHERE t.tipo_treinamento IS NOT NULL AND TRIM(t.tipo_treinamento) <> ''";
         if ($clienteId > 0) {
-            $sql .= " AND d.cliente_id = :cid";
+            $sql .= " AND COALESCE(t.cliente_id, d.cliente_id) = :cid";
             $params['cid'] = $clienteId;
         }
         if (!Auth::isInstituto()) {
@@ -1061,7 +1067,7 @@ class TreinamentosController extends BaseController
                 $holders[] = ':' . $key;
                 $params[$key] = (int)$id;
             }
-            $sql .= " AND d.cliente_id IN (" . implode(',', $holders) . ")";
+            $sql .= " AND COALESCE(t.cliente_id, d.cliente_id) IN (" . implode(',', $holders) . ")";
         }
         $sql .= " ORDER BY t.tipo_treinamento";
         $stmt = $pdo->prepare($sql);
@@ -1161,7 +1167,7 @@ class TreinamentosController extends BaseController
             $filters['historico_dias'] = 0;
         }
 
-        $departamentos = array_values(array_filter($this->departamentoOptions(), static fn(array $row): bool => (int)($row['cliente_id'] ?? 0) === $clienteId));
+        $departamentos = $this->catalogOptionsForCliente($clienteId)['departamentos'];
         $allowedDep = [];
         foreach ($departamentos as $d) {
             $allowedDep[(int)$d['id']] = true;
@@ -1172,7 +1178,7 @@ class TreinamentosController extends BaseController
             $selectedDep[(int)$id] = true;
         }
 
-        $setores = array_values(array_filter($this->setorOptions(), static fn(array $row): bool => (int)($row['cliente_id'] ?? 0) === $clienteId));
+        $setores = $this->catalogOptionsForCliente($clienteId)['setores'];
         $setorToDep = [];
         foreach ($setores as $s) {
             $setorToDep[(int)$s['id']] = (int)($s['departamento_id'] ?? 0);
@@ -1191,7 +1197,7 @@ class TreinamentosController extends BaseController
             $selectedSet[(int)$id] = true;
         }
 
-        $funcoes = array_values(array_filter($this->funcaoOptions(), static fn(array $row): bool => (int)($row['cliente_id'] ?? 0) === $clienteId));
+        $funcoes = $this->catalogOptionsForCliente($clienteId)['funcoes'];
         $funcaoMeta = [];
         foreach ($funcoes as $f) {
             $funcaoMeta[(int)$f['id']] = [
@@ -1315,6 +1321,56 @@ class TreinamentosController extends BaseController
             'setor_id' => $setorId,
             'tipo_treinamento' => trim((string)($_GET['tipo_treinamento'] ?? '')),
             'instrutor' => trim((string)($_GET['instrutor'] ?? '')),
+        ];
+    }
+
+    private function catalogOptionsForCliente(int $clienteId): array
+    {
+        $clienteId = (int)$clienteId;
+        if ($clienteId <= 0 || !$this->canAccessCliente($clienteId)) {
+            return [
+                'departamentos' => [],
+                'setores' => [],
+                'funcoes' => [],
+            ];
+        }
+
+        $departamentos = array_map(static function (array $row): array {
+            return [
+                'id' => (int)($row['id'] ?? 0),
+                'nome' => (string)($row['nome'] ?? ''),
+                'cliente_id' => (int)($row['cliente_id'] ?? 0),
+                'label' => (string)($row['nome'] ?? ''),
+            ];
+        }, $this->departamentosModel->activeByCliente($clienteId));
+
+        $setores = array_map(static function (array $row): array {
+            return [
+                'id' => (int)($row['id'] ?? 0),
+                'nome' => (string)($row['nome'] ?? ''),
+                'cliente_id' => (int)($row['cliente_id'] ?? 0),
+                'departamento_id' => (int)($row['departamento_id'] ?? 0),
+                'departamento_nome' => (string)($row['departamento'] ?? ''),
+                'label' => trim((string)(($row['departamento'] ?? '') . ' • ' . ($row['nome'] ?? ''))),
+            ];
+        }, $this->setoresModel->activeByCliente($clienteId));
+
+        $funcoes = array_map(static function (array $row): array {
+            return [
+                'id' => (int)($row['id'] ?? 0),
+                'nome' => (string)($row['nome'] ?? ''),
+                'cliente_id' => (int)($row['cliente_id'] ?? 0),
+                'setor_id' => (int)($row['setor_id'] ?? 0),
+                'departamento_id' => (int)($row['departamento_id'] ?? 0),
+                'setor_nome' => (string)($row['setor'] ?? ''),
+                'label' => trim((string)(($row['setor'] ?? '') . ' • ' . ($row['nome'] ?? ''))),
+            ];
+        }, $this->funcoesModel->activeByCliente($clienteId));
+
+        return [
+            'departamentos' => $departamentos,
+            'setores' => $setores,
+            'funcoes' => $funcoes,
         ];
     }
 

@@ -1,5 +1,5 @@
-<?php /** @var array $clientes */ ?>
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4" data-treinamentos-form>
+<?php /** @var array $clientes */ /** @var string $catalogoEndpoint */ ?>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4" data-treinamentos-form data-catalog-endpoint="<?= htmlspecialchars((string)($catalogoEndpoint ?? '')) ?>">
   <div class="md:col-span-2">
     <label class="block text-sm">Nome</label>
     <input name="nome" class="border rounded p-2 w-full" required value="<?= htmlspecialchars((string)($values['nome'] ?? '')) ?>" />
@@ -36,9 +36,8 @@
       <option value="0">Selecione</option>
       <?php foreach ($departamentos as $departamento): ?>
         <option value="<?= (int)$departamento['id'] ?>"
-                data-cliente-id="<?= (int)($departamento['cliente_id'] ?? 0) ?>"
                 <?= ((int)($values['departamento_id'] ?? 0) === (int)$departamento['id']) ? 'selected' : '' ?>>
-          <?= htmlspecialchars($departamento['nome_empresa'] . ' • ' . $departamento['nome']) ?>
+          <?= htmlspecialchars((string)($departamento['label'] ?? $departamento['nome'] ?? '')) ?>
         </option>
       <?php endforeach; ?>
     </select>
@@ -48,9 +47,8 @@
     <label class="block text-sm">Departamentos (Filtro)</label>
     <select multiple size="4" class="border rounded p-2 w-full" id="treinamentosDepartamentosFiltro">
       <?php foreach ($departamentos as $departamento): ?>
-        <option value="<?= (int)$departamento['id'] ?>"
-                data-cliente-id="<?= (int)($departamento['cliente_id'] ?? 0) ?>">
-          <?= htmlspecialchars($departamento['nome_empresa'] . ' • ' . $departamento['nome']) ?>
+        <option value="<?= (int)$departamento['id'] ?>">
+          <?= htmlspecialchars((string)($departamento['label'] ?? $departamento['nome'] ?? '')) ?>
         </option>
       <?php endforeach; ?>
     </select>
@@ -87,10 +85,9 @@
     <select name="setor_ids[]" multiple size="6" class="border rounded p-2 w-full" id="treinamentosSetores">
       <?php foreach ($setores as $setor): ?>
         <option value="<?= (int)$setor['id'] ?>"
-                data-cliente-id="<?= (int)($setor['cliente_id'] ?? 0) ?>"
                 data-departamento-id="<?= (int)($setor['departamento_id'] ?? 0) ?>"
                 <?= in_array((int)$setor['id'], array_map('intval', $values['setor_ids'] ?? []), true) ? 'selected' : '' ?>>
-          <?= htmlspecialchars(($setor['departamento_nome'] ?? '') . ' • ' . $setor['nome']) ?>
+          <?= htmlspecialchars((string)($setor['label'] ?? (($setor['departamento_nome'] ?? '') . ' • ' . ($setor['nome'] ?? '')))) ?>
         </option>
       <?php endforeach; ?>
     </select>
@@ -102,11 +99,10 @@
     <select name="funcao_ids[]" multiple size="6" class="border rounded p-2 w-full" id="treinamentosFuncoes">
       <?php foreach ($funcoes as $funcao): ?>
         <option value="<?= (int)$funcao['id'] ?>"
-                data-cliente-id="<?= (int)($funcao['cliente_id'] ?? 0) ?>"
                 data-setor-id="<?= (int)($funcao['setor_id'] ?? 0) ?>"
                 data-departamento-id="<?= (int)($funcao['departamento_id'] ?? 0) ?>"
                 <?= in_array((int)$funcao['id'], array_map('intval', $values['funcao_ids'] ?? []), true) ? 'selected' : '' ?>>
-          <?= htmlspecialchars(($funcao['setor_nome'] ?? '') . ' • ' . $funcao['nome']) ?>
+          <?= htmlspecialchars((string)($funcao['label'] ?? (($funcao['setor_nome'] ?? '') . ' • ' . ($funcao['nome'] ?? '')))) ?>
         </option>
       <?php endforeach; ?>
     </select>
@@ -124,6 +120,7 @@
     const departamentosFiltro = document.getElementById('treinamentosDepartamentosFiltro');
     const setores = document.getElementById('treinamentosSetores');
     const funcoes = document.getElementById('treinamentosFuncoes');
+    const catalogEndpoint = root.getAttribute('data-catalog-endpoint') || '';
     if (!cliente || !departamento || !setores || !funcoes) return;
 
     const normalizeClientId = () => {
@@ -131,13 +128,34 @@
       return Number.isFinite(id) ? id : 0;
     };
 
-    const filterOptionsByClient = (select, clientId) => {
-      Array.from(select.options).forEach((opt) => {
-        const optClient = parseInt(opt.getAttribute('data-cliente-id') || '0', 10);
-        const isPlaceholder = opt.value === '0';
-        const visible = isPlaceholder || clientId === 0 || optClient === clientId;
-        opt.hidden = !visible;
-        opt.disabled = !visible;
+    const buildOptions = (select, items, config = {}) => {
+      if (!select) return;
+      const {
+        placeholder = false,
+        labelKey = 'label',
+        attrs = [],
+      } = config;
+      const selected = new Set(Array.from(select.selectedOptions).map((opt) => String(opt.value || '')));
+      select.innerHTML = '';
+      if (placeholder) {
+        const opt = document.createElement('option');
+        opt.value = '0';
+        opt.textContent = 'Selecione';
+        select.appendChild(opt);
+      }
+      items.forEach((item) => {
+        const opt = document.createElement('option');
+        opt.value = String(item.id || 0);
+        opt.textContent = String(item[labelKey] || item.nome || '');
+        attrs.forEach((attr) => {
+          if (item[attr.key] !== undefined && item[attr.key] !== null) {
+            opt.setAttribute(attr.name, String(item[attr.key]));
+          }
+        });
+        if (selected.has(opt.value)) {
+          opt.selected = true;
+        }
+        select.appendChild(opt);
       });
     };
 
@@ -187,24 +205,16 @@
       });
     };
 
-    const ensureDepartamentoValid = (clientId) => {
+    const ensureDepartamentoValid = () => {
       const opt = departamento.options[departamento.selectedIndex];
       if (!opt || opt.value === '0') return;
-      const optClient = parseInt(opt.getAttribute('data-cliente-id') || '0', 10);
-      if (clientId !== 0 && optClient !== clientId) {
+      if (opt.disabled || opt.hidden) {
         departamento.value = '0';
       }
     };
 
     const apply = () => {
-      const clientId = normalizeClientId();
-      filterOptionsByClient(departamento, clientId);
-      if (departamentosFiltro) {
-        filterOptionsByClient(departamentosFiltro, clientId);
-      }
-      filterOptionsByClient(setores, clientId);
-      filterOptionsByClient(funcoes, clientId);
-      ensureDepartamentoValid(clientId);
+      ensureDepartamentoValid();
 
       const depIds = selectedIdsFromSelect(departamentosFiltro);
       filterOptionsByDepartments(setores, depIds);
@@ -216,11 +226,47 @@
       dropInvalidSelections(funcoes);
     };
 
-    cliente.addEventListener('change', apply);
+    const loadCatalog = async () => {
+      const clientId = normalizeClientId();
+      if (!catalogEndpoint || clientId <= 0) {
+        buildOptions(departamento, [], { placeholder: true });
+        buildOptions(departamentosFiltro, []);
+        buildOptions(setores, [], { attrs: [{ key: 'departamento_id', name: 'data-departamento-id' }] });
+        buildOptions(funcoes, [], { attrs: [{ key: 'setor_id', name: 'data-setor-id' }, { key: 'departamento_id', name: 'data-departamento-id' }] });
+        apply();
+        return;
+      }
+
+      try {
+        const response = await fetch(catalogEndpoint + '&cliente_id=' + encodeURIComponent(String(clientId)), {
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+        const payload = await response.json();
+        const catalogo = payload && payload.ok ? (payload.catalogo || {}) : {};
+        buildOptions(departamento, catalogo.departamentos || [], { placeholder: true });
+        buildOptions(departamentosFiltro, catalogo.departamentos || []);
+        buildOptions(setores, catalogo.setores || [], {
+          attrs: [{ key: 'departamento_id', name: 'data-departamento-id' }]
+        });
+        buildOptions(funcoes, catalogo.funcoes || [], {
+          attrs: [
+            { key: 'setor_id', name: 'data-setor-id' },
+            { key: 'departamento_id', name: 'data-departamento-id' }
+          ]
+        });
+        apply();
+      } catch (error) {
+        console.error('Falha ao carregar catálogo de treinamentos.', error);
+      }
+    };
+
+    cliente.addEventListener('change', loadCatalog);
     if (departamentosFiltro) {
       departamentosFiltro.addEventListener('change', apply);
     }
     setores.addEventListener('change', apply);
-    apply();
+    loadCatalog();
   })();
 </script>

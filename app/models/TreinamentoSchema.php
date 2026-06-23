@@ -14,6 +14,7 @@ final class TreinamentoSchema
             objetivo TEXT NULL,
             publico VARCHAR(180) NULL,
             carga_horaria DECIMAL(10,2) NULL,
+            cliente_id INT NULL,
             departamento_id INT NOT NULL,
             periodicidade VARCHAR(40) NULL,
             fornecedor VARCHAR(180) NULL,
@@ -21,8 +22,10 @@ final class TreinamentoSchema
             template_certificado TEXT NULL,
             assinatura_responsavel VARCHAR(180) NULL,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_treinamentos_cliente (cliente_id),
             INDEX idx_treinamentos_departamento (departamento_id),
             INDEX idx_treinamentos_tipo (tipo_treinamento),
+            CONSTRAINT fk_treinamentos_cliente FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE,
             CONSTRAINT fk_treinamentos_departamento FOREIGN KEY (departamento_id) REFERENCES departamentos(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
@@ -132,6 +135,13 @@ final class TreinamentoSchema
         self::ensureColumn($db, 'treinamentos', 'tipo_treinamento', "ALTER TABLE treinamentos ADD COLUMN tipo_treinamento VARCHAR(80) NULL AFTER publico");
         self::ensureColumn($db, 'treinamentos', 'template_certificado', "ALTER TABLE treinamentos ADD COLUMN template_certificado TEXT NULL AFTER fornecedor");
         self::ensureColumn($db, 'treinamentos', 'assinatura_responsavel', "ALTER TABLE treinamentos ADD COLUMN assinatura_responsavel VARCHAR(180) NULL AFTER template_certificado");
+        self::ensureColumn($db, 'treinamentos', 'cliente_id', "ALTER TABLE treinamentos ADD COLUMN cliente_id INT NULL AFTER carga_horaria");
+        $db->exec("UPDATE treinamentos t
+                   JOIN departamentos d ON d.id = t.departamento_id
+                   SET t.cliente_id = d.cliente_id
+                   WHERE t.cliente_id IS NULL");
+        self::ensureIndex($db, 'treinamentos', 'idx_treinamentos_cliente', "ALTER TABLE treinamentos ADD INDEX idx_treinamentos_cliente (cliente_id)");
+        self::ensureForeignKey($db, 'treinamentos', 'fk_treinamentos_cliente', "ALTER TABLE treinamentos ADD CONSTRAINT fk_treinamentos_cliente FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE");
 
         self::ensureColumn($db, 'colaboradores', 'matricula', "ALTER TABLE colaboradores ADD COLUMN matricula VARCHAR(60) NULL AFTER nome");
         self::ensureColumn($db, 'colaboradores', 'cpf', "ALTER TABLE colaboradores ADD COLUMN cpf VARCHAR(20) NULL AFTER matricula");
@@ -169,6 +179,18 @@ final class TreinamentoSchema
         $stmt->execute([
             'table_name' => $table,
             'index_name' => $index,
+        ]);
+        if ((int)$stmt->fetchColumn() === 0) {
+            $db->exec($sql);
+        }
+    }
+
+    private static function ensureForeignKey(PDO $db, string $table, string $constraint, string $sql): void
+    {
+        $stmt = $db->prepare('SELECT COUNT(*) FROM information_schema.table_constraints WHERE table_schema = DATABASE() AND table_name = :table_name AND constraint_name = :constraint_name');
+        $stmt->execute([
+            'table_name' => $table,
+            'constraint_name' => $constraint,
         ]);
         if ((int)$stmt->fetchColumn() === 0) {
             $db->exec($sql);

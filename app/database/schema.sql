@@ -170,11 +170,14 @@ CREATE TABLE IF NOT EXISTS treinamentos (
   objetivo TEXT NULL,
   publico VARCHAR(180) NULL,
   carga_horaria DECIMAL(10,2) NULL,
+  cliente_id INT NULL,
   departamento_id INT NOT NULL,
   periodicidade VARCHAR(40) NULL,
   fornecedor VARCHAR(180) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_treinamentos_cliente (cliente_id),
   INDEX idx_treinamentos_departamento (departamento_id),
+  CONSTRAINT fk_treinamentos_cliente FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE,
   CONSTRAINT fk_treinamentos_departamento FOREIGN KEY (departamento_id) REFERENCES departamentos(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

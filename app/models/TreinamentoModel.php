@@ -83,14 +83,14 @@ class TreinamentoModel extends BaseModel
         $sql = "SELECT
                     t.*,
                     d.nome AS departamento_nome,
-                    c.id AS cliente_id,
+                    COALESCE(t.cliente_id, d.cliente_id) AS cliente_id,
                     c.nome_empresa AS unidade_nome,
                     (SELECT COUNT(*) FROM treinamento_colaboradores tc WHERE tc.treinamento_id = t.id) AS total_colaboradores,
                     (SELECT COUNT(*) FROM treinamento_colaboradores tc WHERE tc.treinamento_id = t.id AND tc.status = 'concluido') AS total_concluidos,
                     (SELECT COUNT(*) FROM treinamentos_agenda ta WHERE ta.treinamento_id = t.id) AS total_agendamentos
                 FROM treinamentos t
                 JOIN departamentos d ON d.id = t.departamento_id
-                JOIN clientes c ON c.id = d.cliente_id
+                LEFT JOIN clientes c ON c.id = COALESCE(t.cliente_id, d.cliente_id)
                 WHERE 1=1";
 
         if (!empty($filters['cliente_id'])) {
@@ -116,8 +116,9 @@ class TreinamentoModel extends BaseModel
     public function create(array $data): int
     {
         $this->ensureSchema();
+        $clienteId = (int)($data['cliente_id'] ?? 0);
         $departamentoId = (int)($data['departamento_id'] ?? 0);
-        if (!$this->departamentoBelongsToCatalogCliente($departamentoId)) {
+        if ($clienteId <= 0 || !$this->departamentoBelongsToCatalogCliente($departamentoId, $clienteId)) {
             return 0;
         }
         $requestedSetorIds = array_values(array_unique(array_filter(array_map('intval', (array)($data['setor_ids'] ?? [])))));
@@ -128,13 +129,14 @@ class TreinamentoModel extends BaseModel
             return 0;
         }
         $stmt = $this->db->prepare("INSERT INTO treinamentos
-            (nome, objetivo, publico, carga_horaria, departamento_id, periodicidade, fornecedor, tipo_treinamento, template_certificado, assinatura_responsavel)
-            VALUES (:nome,:objetivo,:publico,:carga,:departamento,:periodicidade,:fornecedor,:tipo_treinamento,:template_certificado,:assinatura_responsavel)");
+            (nome, objetivo, publico, carga_horaria, cliente_id, departamento_id, periodicidade, fornecedor, tipo_treinamento, template_certificado, assinatura_responsavel)
+            VALUES (:nome,:objetivo,:publico,:carga,:cliente_id,:departamento,:periodicidade,:fornecedor,:tipo_treinamento,:template_certificado,:assinatura_responsavel)");
         $stmt->execute([
             'nome' => trim((string)$data['nome']),
             'objetivo' => trim((string)($data['objetivo'] ?? '')),
             'publico' => trim((string)($data['publico'] ?? '')),
             'carga' => $data['carga_horaria'] !== '' ? (float)$data['carga_horaria'] : null,
+            'cliente_id' => $clienteId,
             'departamento' => $departamentoId,
             'periodicidade' => trim((string)($data['periodicidade'] ?? 'avulso')),
             'fornecedor' => trim((string)($data['fornecedor'] ?? '')),
@@ -154,8 +156,9 @@ class TreinamentoModel extends BaseModel
         if (!$this->find($id)) {
             return false;
         }
+        $clienteId = (int)($data['cliente_id'] ?? 0);
         $departamentoId = (int)($data['departamento_id'] ?? 0);
-        if (!$this->departamentoBelongsToCatalogCliente($departamentoId)) {
+        if ($clienteId <= 0 || !$this->departamentoBelongsToCatalogCliente($departamentoId, $clienteId)) {
             return false;
         }
         $requestedSetorIds = array_values(array_unique(array_filter(array_map('intval', (array)($data['setor_ids'] ?? [])))));
@@ -170,6 +173,7 @@ class TreinamentoModel extends BaseModel
                 objetivo = :objetivo,
                 publico = :publico,
                 carga_horaria = :carga,
+                cliente_id = :cliente_id,
                 departamento_id = :departamento,
                 periodicidade = :periodicidade,
                 fornecedor = :fornecedor,
@@ -183,6 +187,7 @@ class TreinamentoModel extends BaseModel
             'objetivo' => trim((string)($data['objetivo'] ?? '')),
             'publico' => trim((string)($data['publico'] ?? '')),
             'carga' => $data['carga_horaria'] !== '' ? (float)$data['carga_horaria'] : null,
+            'cliente_id' => $clienteId,
             'departamento' => $departamentoId,
             'periodicidade' => trim((string)($data['periodicidade'] ?? 'avulso')),
             'fornecedor' => trim((string)($data['fornecedor'] ?? '')),
@@ -211,11 +216,11 @@ class TreinamentoModel extends BaseModel
         $sql = "SELECT
                 t.*,
                 d.nome AS departamento_nome,
-                d.cliente_id,
+                COALESCE(t.cliente_id, d.cliente_id) AS cliente_id,
                 c.nome_empresa AS unidade_nome
             FROM treinamentos t
             JOIN departamentos d ON d.id = t.departamento_id
-            JOIN clientes c ON c.id = d.cliente_id
+            LEFT JOIN clientes c ON c.id = COALESCE(t.cliente_id, d.cliente_id)
             WHERE t.id = :id";
         $scope = $this->tenantInCondition('c.id', $params, 'trfind');
         if ($scope !== '1=1') {
@@ -762,7 +767,7 @@ class TreinamentoModel extends BaseModel
                 LEFT JOIN clientes c ON c.id = col.cliente_id
                 JOIN departamentos d ON d.id = t.departamento_id
                 WHERE 1=1";
-        $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['d.cliente_id', 'col.cliente_id']);
+        $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['COALESCE(t.cliente_id, d.cliente_id)', 'col.cliente_id']);
         $scope = $this->tenantDepartamentoVisibilityCondition('d', $params, 'trdash');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
@@ -792,7 +797,7 @@ class TreinamentoModel extends BaseModel
                 JOIN clientes c ON c.id = col.cliente_id
                 JOIN departamentos d ON d.id = t.departamento_id
                 WHERE tc.status = :status";
-        $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['d.cliente_id', 'col.cliente_id', 'c.id']);
+        $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['COALESCE(t.cliente_id, d.cliente_id)', 'col.cliente_id', 'c.id']);
         $scope = $this->tenantDepartamentoVisibilityCondition('d', $params, 'trlist');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
@@ -829,7 +834,7 @@ class TreinamentoModel extends BaseModel
                 JOIN clientes c ON c.id = col.cliente_id
                 JOIN departamentos d ON d.id = t.departamento_id
                 WHERE 1=1";
-        $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['d.cliente_id', 'col.cliente_id', 'c.id']);
+        $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['COALESCE(t.cliente_id, d.cliente_id)', 'col.cliente_id', 'c.id']);
         $scope = $this->tenantDepartamentoVisibilityCondition('d', $params, 'tralert');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
@@ -1166,7 +1171,7 @@ class TreinamentoModel extends BaseModel
                 LEFT JOIN treinamentos t ON t.id = ta.treinamento_id
                 LEFT JOIN departamentos d ON d.id = s.departamento_id
                 WHERE 1=1";
-        $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['d.cliente_id', 'col_all.cliente_id'], true);
+        $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['COALESCE(t.cliente_id, d.cliente_id)', 'col_all.cliente_id'], true);
         if (!empty($filters['setor_id'])) {
             $sql .= " AND s.id = :setor_id";
             $params['setor_id'] = (int)$filters['setor_id'];
@@ -1242,10 +1247,10 @@ class TreinamentoModel extends BaseModel
         $sql = '';
         if (!empty($filters['cliente_id'])) {
             $cid = (int)$filters['cliente_id'];
-            $params['cliente_id_dep'] = $cid;
+            $params['cliente_id_treinamento'] = $cid;
             $params['cliente_id_unidade'] = $cid;
             $params['cliente_id_col'] = $cid;
-            $sql .= " AND d.cliente_id = :cliente_id_dep AND ta.unidade_id = :cliente_id_unidade AND (col.id IS NULL OR col.cliente_id = :cliente_id_col)";
+            $sql .= " AND COALESCE(t.cliente_id, d.cliente_id) = :cliente_id_treinamento AND ta.unidade_id = :cliente_id_unidade AND (col.id IS NULL OR col.cliente_id = :cliente_id_col)";
         }
         if (!empty($filters['periodo_inicio'])) {
             $sql .= " AND DATE(ta.data) >= :periodo_inicio";

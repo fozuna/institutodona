@@ -117,7 +117,7 @@ class SetorModel extends BaseModel
         }
         $params = ['cid' => $clienteId];
         $stmt = $this->db->prepare(
-            "SELECT s.id, s.nome, s.departamento_id, d.nome AS departamento
+            "SELECT s.id, s.nome, s.departamento_id, d.nome AS departamento, d.cliente_id
              FROM setores s
              JOIN departamentos d ON d.id = s.departamento_id
              WHERE s.ativo = 1

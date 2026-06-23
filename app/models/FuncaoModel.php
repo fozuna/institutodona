@@ -123,7 +123,7 @@ class FuncaoModel extends BaseModel
         }
         $params = ['cid' => $clienteId];
         $stmt = $this->db->prepare(
-            "SELECT f.id, f.nome, f.setor_id, s.nome AS setor, d.nome AS departamento
+            "SELECT f.id, f.nome, f.setor_id, s.nome AS setor, s.departamento_id, d.nome AS departamento, d.cliente_id
              FROM funcoes f
              JOIN setores s ON s.id = f.setor_id
              JOIN departamentos d ON d.id = s.departamento_id
