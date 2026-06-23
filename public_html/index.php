@@ -523,6 +523,9 @@ switch ($route) {
     case 'treinamentos/show':
         (new TreinamentosController())->show();
         break;
+    case 'treinamentos/catalogoOptionsAjax':
+        (new TreinamentosController())->catalogoOptionsAjax();
+        break;
     case 'treinamentos/eligible_ajax':
         (new TreinamentosController())->eligibleAjax();
         break;

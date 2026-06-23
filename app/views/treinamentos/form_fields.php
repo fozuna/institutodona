@@ -42,6 +42,7 @@
       <?php endforeach; ?>
     </select>
     <?php if (!empty($errors['departamento_id'])): ?><p class="text-xs text-red-600 mt-1"><?= htmlspecialchars($errors['departamento_id']) ?></p><?php endif; ?>
+    <p class="text-xs text-gray-500 mt-1 hidden" id="treinamentosCatalogoStatus"></p>
   </div>
   <div>
     <label class="block text-sm">Departamentos (Filtro)</label>
@@ -120,8 +121,10 @@
     const departamentosFiltro = document.getElementById('treinamentosDepartamentosFiltro');
     const setores = document.getElementById('treinamentosSetores');
     const funcoes = document.getElementById('treinamentosFuncoes');
+    const catalogStatus = document.getElementById('treinamentosCatalogoStatus');
     const catalogEndpoint = root.getAttribute('data-catalog-endpoint') || '';
     if (!cliente || !departamento || !setores || !funcoes) return;
+    let activeRequest = 0;
 
     const normalizeClientId = () => {
       const id = parseInt(cliente.value || '0', 10);
@@ -159,6 +162,28 @@
       });
     };
 
+    const setCatalogStatus = (message, type = 'info') => {
+      if (!catalogStatus) return;
+      catalogStatus.textContent = message || '';
+      catalogStatus.className = 'text-xs mt-1';
+      if (!message) {
+        catalogStatus.classList.add('hidden');
+        return;
+      }
+      if (type === 'error') {
+        catalogStatus.classList.add('text-red-600');
+      } else {
+        catalogStatus.classList.add('text-gray-500');
+      }
+    };
+
+    const setCatalogLoading = (loading) => {
+      departamento.disabled = loading;
+      if (departamentosFiltro) departamentosFiltro.disabled = loading;
+      setores.disabled = loading;
+      funcoes.disabled = loading;
+    };
+
     const selectedIdsFromSelect = (select) => {
       if (!select) return [];
       return Array.from(select.selectedOptions).map((o) => parseInt(o.value || '0', 10)).filter((n) => Number.isFinite(n) && n > 0);
@@ -171,8 +196,8 @@
         const depId = String(opt.getAttribute('data-departamento-id') || '0');
         const isPlaceholder = opt.value === '0';
         const visible = isPlaceholder || set.size === 0 || set.has(depId);
-        opt.hidden = opt.hidden || !visible;
-        opt.disabled = opt.disabled || !visible;
+        opt.hidden = !visible;
+        opt.disabled = !visible;
       });
     };
 
@@ -191,8 +216,8 @@
           visible = depSet.has(depId);
         }
         visible = isPlaceholder || visible;
-        opt.hidden = opt.hidden || !visible;
-        opt.disabled = opt.disabled || !visible;
+        opt.hidden = !visible;
+        opt.disabled = !visible;
       });
     };
 
@@ -229,6 +254,8 @@
     const loadCatalog = async () => {
       const clientId = normalizeClientId();
       if (!catalogEndpoint || clientId <= 0) {
+        setCatalogLoading(false);
+        setCatalogStatus('');
         buildOptions(departamento, [], { placeholder: true });
         buildOptions(departamentosFiltro, []);
         buildOptions(setores, [], { attrs: [{ key: 'departamento_id', name: 'data-departamento-id' }] });
@@ -237,13 +264,28 @@
         return;
       }
 
+      const requestId = ++activeRequest;
+      setCatalogLoading(true);
+      setCatalogStatus('Carregando departamentos da empresa selecionada...');
+
       try {
-        const response = await fetch(catalogEndpoint + '&cliente_id=' + encodeURIComponent(String(clientId)), {
+        const url = new URL(catalogEndpoint, window.location.href);
+        url.searchParams.set('cliente_id', String(clientId));
+        const response = await fetch(url.toString(), {
           headers: {
             'Accept': 'application/json'
           }
         });
+        if (!response.ok) {
+          throw new Error('Falha ao carregar o catálogo da empresa selecionada.');
+        }
         const payload = await response.json();
+        if (requestId !== activeRequest) {
+          return;
+        }
+        if (!payload || !payload.ok) {
+          throw new Error((payload && payload.message) ? payload.message : 'Falha ao carregar o catálogo da empresa selecionada.');
+        }
         const catalogo = payload && payload.ok ? (payload.catalogo || {}) : {};
         buildOptions(departamento, catalogo.departamentos || [], { placeholder: true });
         buildOptions(departamentosFiltro, catalogo.departamentos || []);
@@ -257,8 +299,19 @@
           ]
         });
         apply();
+        setCatalogStatus('');
       } catch (error) {
         console.error('Falha ao carregar catálogo de treinamentos.', error);
+        buildOptions(departamento, [], { placeholder: true });
+        buildOptions(departamentosFiltro, []);
+        buildOptions(setores, [], { attrs: [{ key: 'departamento_id', name: 'data-departamento-id' }] });
+        buildOptions(funcoes, [], { attrs: [{ key: 'setor_id', name: 'data-setor-id' }, { key: 'departamento_id', name: 'data-departamento-id' }] });
+        apply();
+        setCatalogStatus('Não foi possível carregar os departamentos da empresa selecionada.', 'error');
+      } finally {
+        if (requestId === activeRequest) {
+          setCatalogLoading(false);
+        }
       }
     };
 

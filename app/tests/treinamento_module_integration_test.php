@@ -47,11 +47,15 @@ try {
         ->execute(['n' => 'Departamento Treinamento ' . $suffix, 'c' => $clienteId]);
     $departamentoId = (int)$pdo->lastInsertId();
     $departamentoIds[] = $departamentoId;
+    $pdo->prepare('INSERT INTO departamento_clientes (departamento_id, cliente_id) VALUES (:d,:c)')
+        ->execute(['d' => $departamentoId, 'c' => $clienteId]);
 
     $pdo->prepare('INSERT INTO departamentos (nome, cliente_id) VALUES (:n,:c)')
         ->execute(['n' => 'Departamento Treinamento B ' . $suffix, 'c' => $clienteBId]);
     $departamentoBId = (int)$pdo->lastInsertId();
     $departamentoIds[] = $departamentoBId;
+    $pdo->prepare('INSERT INTO departamento_clientes (departamento_id, cliente_id) VALUES (:d,:c)')
+        ->execute(['d' => $departamentoBId, 'c' => $clienteBId]);
 
     $pdo->prepare('INSERT INTO setores (nome, departamento_id) VALUES (:n,:d)')
         ->execute(['n' => 'Setor Treinamento ' . $suffix, 'd' => $departamentoId]);
@@ -111,6 +115,7 @@ try {
         'objetivo' => 'Validar fluxo completo do pilar',
         'publico' => 'Equipe interna',
         'carga_horaria' => '8',
+        'cliente_id' => $clienteId,
         'departamento_id' => $departamentoId,
         'periodicidade' => 'anual',
         'fornecedor' => 'Fornecedor Teste',
@@ -122,11 +127,20 @@ try {
     ]);
     $treinamentoIds[] = $treinamentoId;
 
+    Auth::login([
+        'id' => 9012,
+        'nome' => 'Teste Treinamento B',
+        'email' => 'treinamento.b.' . $suffix . '@test.local',
+        'tipo_acesso' => 'cliente',
+        'id_cliente' => $clienteBId,
+        'allowed_client_ids' => [$clienteBId],
+    ]);
     $treinamentoBId = $treinamentoModel->create([
         'nome' => 'NR Integração B ' . $suffix,
         'objetivo' => 'Validar segregação por empresa',
         'publico' => 'Equipe externa',
         'carga_horaria' => '4',
+        'cliente_id' => $clienteBId,
         'departamento_id' => $departamentoBId,
         'periodicidade' => 'anual',
         'fornecedor' => 'Fornecedor Teste',
@@ -138,9 +152,21 @@ try {
     ]);
     $treinamentoIds[] = $treinamentoBId;
 
+    Auth::login([
+        'id' => 9010,
+        'nome' => 'Teste Treinamento',
+        'email' => 'treinamento.' . $suffix . '@test.local',
+        'tipo_acesso' => 'cliente',
+        'id_cliente' => $clienteId,
+        'allowed_client_ids' => [$clienteId],
+    ]);
+
     $treinamento = $treinamentoModel->find($treinamentoId);
     if (!$treinamento || $treinamento['nome'] !== 'NR Integração ' . $suffix) {
         failFast('Treinamento deveria ser criado e encontrado');
+    }
+    if ($treinamentoBId <= 0) {
+        failFast('Treinamento da empresa B deveria ser criado');
     }
     if (count($treinamento['setor_ids'] ?? []) !== 1 || count($treinamento['funcao_ids'] ?? []) !== 1) {
         failFast('Relacionamentos N:N deveriam ser persistidos');
@@ -148,7 +174,23 @@ try {
     ok('CRUD e relacionamentos do treinamento');
 
     $treinamentoModel->syncColaboradores($treinamentoId, [$colaboradorId, $colaborador2Id, $colaboradorId]);
+    Auth::login([
+        'id' => 9012,
+        'nome' => 'Teste Treinamento B',
+        'email' => 'treinamento.b.' . $suffix . '@test.local',
+        'tipo_acesso' => 'cliente',
+        'id_cliente' => $clienteBId,
+        'allowed_client_ids' => [$clienteBId],
+    ]);
     $treinamentoModel->syncColaboradores($treinamentoBId, [$colaboradorBId]);
+    Auth::login([
+        'id' => 9010,
+        'nome' => 'Teste Treinamento',
+        'email' => 'treinamento.' . $suffix . '@test.local',
+        'tipo_acesso' => 'cliente',
+        'id_cliente' => $clienteId,
+        'allowed_client_ids' => [$clienteId],
+    ]);
     $linked = $treinamentoModel->linkedColaboradores($treinamentoId);
     if (count($linked) !== 2 || ($linked[0]['status'] ?? '') !== 'pendente' || ($linked[1]['status'] ?? '') !== 'pendente') {
         failFast('Vínculo dos colaboradores deveria ser único e iniciar pendente');
@@ -261,15 +303,21 @@ try {
     ]);
 
     $dashA = $treinamentoModel->dashboard(['cliente_id' => $clienteId]);
-    $namesA = json_encode($dashA, JSON_UNESCAPED_UNICODE);
-    if (str_contains($namesA, 'Cliente Treinamento B ' . $suffix) || str_contains($namesA, 'NR Integração B ' . $suffix)) {
+    $labelsA = array_map(
+        static fn(array $row): string => (string)($row['group_label'] ?? ''),
+        (array)($dashA['por_treinamento'] ?? [])
+    );
+    if (in_array('NR Integração B ' . $suffix, $labelsA, true)) {
         failFast('Dashboard filtrado por empresa não deveria incluir dados de outras empresas');
     }
     ok('Dashboard filtrado por empresa sem vazamento');
 
     $dashAll = $treinamentoModel->dashboard([]);
-    $namesAll = json_encode($dashAll, JSON_UNESCAPED_UNICODE);
-    if (!str_contains($namesAll, 'NR Integração ' . $suffix) || !str_contains($namesAll, 'NR Integração B ' . $suffix)) {
+    $labelsAll = array_map(
+        static fn(array $row): string => (string)($row['group_label'] ?? ''),
+        (array)($dashAll['por_treinamento'] ?? [])
+    );
+    if (!in_array('NR Integração ' . $suffix, $labelsAll, true) || !in_array('NR Integração B ' . $suffix, $labelsAll, true)) {
         failFast('Dashboard sem filtro deveria incluir dados de ambas as empresas no contexto do instituto');
     }
     ok('Dashboard sem filtro inclui dados agregados');
