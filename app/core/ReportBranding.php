@@ -22,7 +22,7 @@ final class ReportBranding
             $base['sheet_name'] = self::sanitizeSheetName((string)($documento['sheet_name'] ?? 'Relatorio'));
         }
 
-        return $base;
+        return array_replace($documento, $base);
     }
 
     public static function footerLabel(int $page, int $totalPages, string $generatedAt, string $extra = ''): string

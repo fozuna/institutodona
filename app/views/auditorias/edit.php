@@ -353,7 +353,7 @@
                         <div class="md:col-span-8">
                             <label class="block text-xs">Pergunta de Auditoria</label>
                             <textarea class="border rounded p-2 w-full" rows="3" data-pergunta="${index}">${q.pergunta || ''}</textarea>
-                            <div class="text-xs text-gray-500">${(q.pergunta || '').length}/1000</div>
+                            <div class="text-xs text-gray-500" data-pergunta-count="${index}">${(q.pergunta || '').length}/1000</div>
                         </div>
                         <div class="md:col-span-12">
                             <label class="block text-xs">Referência Esperada</label>
@@ -411,7 +411,15 @@
                     setResponsavelStatus(idx, added > 0 ? 'Responsável(eis) adicionados.' : 'Responsável já informado.');
                 });
             });
-            questoesContainer.querySelectorAll('[data-pergunta]').forEach((el)=>el.addEventListener('input', ()=>{ questoes[Number(el.getAttribute('data-pergunta'))].pergunta = el.value; syncHidden(); renderQuestoes(); }));
+            questoesContainer.querySelectorAll('[data-pergunta]').forEach((el)=>el.addEventListener('input', ()=>{
+                const idx = Number(el.getAttribute('data-pergunta'));
+                questoes[idx].pergunta = el.value;
+                const countEl = questoesContainer.querySelector(`[data-pergunta-count="${idx}"]`);
+                if (countEl) {
+                    countEl.textContent = `${(el.value || '').length}/1000`;
+                }
+                syncHidden();
+            }));
             questoesContainer.querySelectorAll('[data-referencia]').forEach((el)=>el.addEventListener('input', ()=>{ questoes[Number(el.getAttribute('data-referencia'))].referencia_esperada = el.value; syncHidden(); }));
             questoes.forEach((_, index)=>{
                 const selected = questoesContainer.querySelector(`[data-selected-responsaveis="${index}"]`);

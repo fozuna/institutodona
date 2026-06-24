@@ -353,6 +353,32 @@ class AuditoriasController extends BaseController
             $u = $this->usuarios->find($uid);
             $auditor = $u['nome'] ?? $u['name'] ?? null;
         }
+        $totConforme = 0;
+        $totNaoConforme = 0;
+        $totNaoAplica = 0;
+        foreach (($item['questoes'] ?? []) as $questao) {
+            $conformidade = (string)(($respostas[(int)($questao['id'] ?? 0)]['conformidade'] ?? ''));
+            if ($conformidade === 'conforme') {
+                $totConforme++;
+            } elseif ($conformidade === 'nao_conforme') {
+                $totNaoConforme++;
+            } elseif ($conformidade === 'nao_aplica') {
+                $totNaoAplica++;
+            }
+        }
+        $split = AuditoriaModel::percentSplit($totConforme, $totNaoConforme);
+        $pctConforme = number_format((float)$split['conforme'], 2, ',', '.');
+        $pctNaoConforme = number_format((float)$split['nao_conforme'], 2, ',', '.');
+        $pctGeral = isset($item['conformidade_pct']) && $item['conformidade_pct'] !== null
+            ? number_format((float)$item['conformidade_pct'], 2, ',', '.') . '%'
+            : '-';
+        $resumoGeral = trim((string)($item['avaliacao'] ?? ''));
+        $empresaSetor = trim(
+            implode(' · ', array_values(array_filter([
+                trim((string)($item['cliente_nome'] ?? '')),
+                trim((string)($item['setor_nome'] ?? '')),
+            ], static fn(string $value): bool => $value !== '')))
+        );
         $header = [
             'Auditoria' => (string)($item['nome_auditoria'] ?? ''),
             'Empresa' => (string)($item['cliente_nome'] ?? ''),
@@ -362,44 +388,139 @@ class AuditoriasController extends BaseController
             'Data agendada' => DateHelper::formatDate((string)($item['data_auditoria'] ?? '')),
             'Data de finalização' => !empty($item['realizada_at']) ? DateHelper::formatDateTime((string)$item['realizada_at']) : '-',
             'Auditor responsável' => (string)($auditor ?? '-'),
+            'Total de questões' => (string)count($item['questoes'] ?? []),
+            'Conforme' => $totConforme . ' (' . $pctConforme . '%)',
+            'Não conforme' => $totNaoConforme . ' (' . $pctNaoConforme . '%)',
+            'Não se aplica' => (string)$totNaoAplica,
+            'Conformidade geral' => $pctGeral,
+            'Semáforo' => $this->formatSemaforoLabel((string)($item['semaforo'] ?? '')),
+            'Resumo final' => $resumoGeral !== '' ? $resumoGeral : '-',
         ];
         $questions = [];
         foreach (($item['questoes'] ?? []) as $idx => $questao) {
             $resposta = $respostas[(int)$questao['id']] ?? null;
             $anexos = $this->arquivos->listByQuestao($id, (int)$questao['id']);
             $images = [];
+            $anexoLabels = [];
             foreach ($anexos as $a) {
-                $p = (string)($a['path'] ?? '');
                 $mime = strtolower((string)($a['mime'] ?? ''));
-                if ($p !== '' && is_file($p) && preg_match('#^image/(jpeg|png|gif|webp)$#', $mime)) {
-                    $images[] = $p;
+                $name = trim((string)($a['original_name'] ?? ''));
+                $descricao = trim((string)($a['descricao'] ?? ''));
+                if ($name !== '' || $descricao !== '') {
+                    $anexoLabels[] = $descricao !== '' && $name !== ''
+                        ? ($name . ' - ' . $descricao)
+                        : ($name !== '' ? $name : $descricao);
+                }
+                if (preg_match('#^image/(jpeg|png|gif|webp)$#', $mime)) {
+                    $imagePath = $this->resolvePdfImagePath($a);
+                    if ($imagePath !== null) {
+                        $images[] = [
+                            'path' => $imagePath,
+                            'label' => $name !== '' ? $name : ('Anexo ' . (count($images) + 1)),
+                        ];
+                    }
                 }
             }
+            $processos = is_array($questao['processos'] ?? null) ? $questao['processos'] : [];
             $questions[] = [
                 'title' => (string)($questao['pergunta'] ?? ('Questão ' . ($idx + 1))),
                 'rows' => [
-                    'Responsável' => (string)($questao['responsavel_nome'] ?? ''),
-                    'Referência esperada' => (string)($questao['referencia_esperada'] ?? ''),
-                    'Conformidade' => (string)($resposta['conformidade'] ?? 'pendente'),
-                    'Observações' => trim((string)($resposta['observacoes'] ?? '')),
+                    'Responsável' => (string)($questao['responsavel_nome'] ?? '-') ?: '-',
+                    'Referência esperada' => (string)($questao['referencia_esperada'] ?? '-') ?: '-',
+                    'Processos' => !empty($processos) ? implode(', ', array_map('strval', $processos)) : 'Nenhum',
+                    'Conformidade' => $this->formatConformidadeLabel((string)($resposta['conformidade'] ?? 'pendente')),
+                    'Observações' => trim((string)($resposta['observacoes'] ?? '')) ?: '-',
+                    'Anexos cadastrados' => !empty($anexoLabels) ? implode(' | ', $anexoLabels) : 'Nenhum',
                 ],
                 'images' => $images,
             ];
         }
+        $semaforo = trim((string)($item['semaforo'] ?? ''));
+        $semaforoLabel = $this->formatSemaforoLabel($semaforo);
+        $semaforoBadge = match ($semaforo) {
+            'verde' => ['fill' => [220, 252, 231], 'text' => [22, 101, 52]],
+            'amarelo' => ['fill' => [254, 249, 195], 'text' => [133, 77, 14]],
+            'vermelho' => ['fill' => [254, 226, 226], 'text' => [153, 27, 27]],
+            default => ['fill' => [226, 232, 240], 'text' => [71, 85, 105]],
+        };
         $pdf = SimplePdfReport::fromAudit([
-            'report_title' => 'Relatório de Auditoria',
-            'header_subtitle' => 'Documento padronizado do sistema',
-            'logo_position' => 'left',
-            'logo_width' => 108,
+            'header_title' => 'Relatório de Auditoria',
+            'report_title' => (string)($item['nome_auditoria'] ?? 'Auditoria'),
+            'header_subtitle' => $empresaSetor !== '' ? $empresaSetor : 'Documento padronizado do sistema',
+            'show_logo' => false,
             'margins' => ['top' => 18, 'right' => 12, 'bottom' => 14, 'left' => 12],
             'generated_at' => DateHelper::now(),
             'footer_text' => 'Relatório do sistema',
             'header' => $header,
+            'summary_sections' => [
+                [
+                    'columns' => 4,
+                    'items' => [
+                        ['label' => 'Data agendada', 'value' => DateHelper::formatDate((string)($item['data_auditoria'] ?? ''))],
+                        ['label' => 'Status', 'value' => (string)($item['status'] ?? '-')],
+                        ['label' => 'Realizada em', 'value' => !empty($item['realizada_at']) ? DateHelper::formatDateTime((string)$item['realizada_at']) : '-'],
+                        ['label' => 'Total de questões', 'value' => (string)count($item['questoes'] ?? [])],
+                    ],
+                ],
+                [
+                    'columns' => 4,
+                    'items' => [
+                        ['label' => 'Conforme', 'value' => $totConforme . ' (' . $pctConforme . '%)'],
+                        ['label' => 'Não conforme', 'value' => $totNaoConforme . ' (' . $pctNaoConforme . '%)'],
+                        ['label' => 'Não se aplica', 'value' => (string)$totNaoAplica],
+                        [
+                            'label' => 'Semáforo',
+                            'value' => $semaforoLabel,
+                            'badge' => strtoupper($semaforoLabel !== '-' ? $semaforoLabel : 'SEM DADO'),
+                            'badge_fill' => $semaforoBadge['fill'],
+                            'badge_text' => $semaforoBadge['text'],
+                        ],
+                    ],
+                ],
+            ],
+            'detail_rows' => [
+                ['label' => 'Responsáveis', 'value' => !empty($item['responsaveis_nomes']) ? (string)$item['responsaveis_nomes'] : '-'],
+                ['label' => 'Auditor responsável', 'value' => (string)($auditor ?? '-')],
+                ['label' => 'Conformidade geral', 'value' => $pctGeral],
+                ['label' => 'Resumo final', 'value' => $resumoGeral !== '' ? $resumoGeral : '-'],
+            ],
             'questions' => $questions,
         ]);
         header('Content-Type: application/pdf');
         header('Content-Disposition: inline; filename="auditoria-' . $id . '.pdf"');
         echo $pdf;
+    }
+
+    private function resolvePdfImagePath(array $anexo): ?string
+    {
+        foreach (['compressed_path', 'path', 'thumb_path'] as $field) {
+            $path = trim((string)($anexo[$field] ?? ''));
+            if ($path !== '' && is_file($path)) {
+                return $path;
+            }
+        }
+
+        return null;
+    }
+
+    private function formatConformidadeLabel(string $value): string
+    {
+        return match (trim($value)) {
+            'conforme' => 'Conforme',
+            'nao_conforme' => 'Não conforme',
+            'nao_aplica' => 'Não se aplica',
+            default => 'Pendente',
+        };
+    }
+
+    private function formatSemaforoLabel(string $value): string
+    {
+        return match (trim($value)) {
+            'verde' => 'Verde',
+            'amarelo' => 'Amarelo',
+            'vermelho' => 'Vermelho',
+            default => '-',
+        };
     }
 
     public function duplicate(): void
