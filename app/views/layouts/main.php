@@ -388,8 +388,19 @@ $brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
                     <div class="w-1/3"></div>
 
                     <!-- Copy centralizada -->
-                    <div class="w-1/3 text-center">
-                        &copy; <?php echo date('Y'); ?> <?= htmlspecialchars($brandFooter) ?>. Todos os direitos reservados.
+                    <div class="w-1/3 text-center leading-relaxed">
+                        <div>
+                            &copy; <?php echo date('Y'); ?> <?= htmlspecialchars($brandFooter) ?>. Todos os direitos reservados.
+                        </div>
+                        <div>
+                            Desenvolvido por
+                            <a
+                                href="https://traxter.com.br/"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="font-semibold text-brand-brown hover:text-brand-red transition-colors"
+                            >TRAXTER</a>.
+                        </div>
                     </div>
 
                     <!-- Versão alinhada à direita -->

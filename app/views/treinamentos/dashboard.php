@@ -1,4 +1,10 @@
 <?php /** @var array $dashboard */ /** @var array $filters */ /** @var array $clientes */ /** @var array $setores */ /** @var array $tipoTreinamentoOptions */ ?>
+<?php
+$comparativoSetores = array_values((array)($dashboard['setores'] ?? []));
+$alertasSetor = array_values((array)($dashboard['alertas_setor'] ?? []));
+$pendentes = array_values((array)($dashboard['pendentes'] ?? []));
+$concluidos = array_values((array)($dashboard['concluidos'] ?? []));
+?>
 <div class="p-6 space-y-6">
   <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
     <div>
@@ -114,24 +120,49 @@
     </div>
 
     <div class="bg-white shadow rounded p-5">
-      <h2 class="font-semibold mb-3">Comparativo por Setor</h2>
-      <div class="space-y-4">
-        <?php foreach ($dashboard['setores'] ?? [] as $row): ?>
-          <div>
-            <div class="flex justify-between text-sm">
-              <span><?= htmlspecialchars((string)$row['setor_nome']) ?></span>
-              <span><?= number_format((float)$row['percentual_participacao'], 2, ',', '.') ?>%</span>
-            </div>
-            <div class="h-3 bg-gray-100 rounded mt-1 overflow-hidden">
-              <div class="h-3 rounded <?= (float)$row['percentual_participacao'] >= 80 ? 'bg-green-500' : ((float)$row['percentual_participacao'] >= 50 ? 'bg-amber-500' : 'bg-red-500') ?>" style="width: <?= max(0, min(100, (float)$row['percentual_participacao'])) ?>%"></div>
-            </div>
-            <div class="text-xs text-gray-500 mt-1"><?= (int)($row['total_treinados'] ?? 0) ?> treinados • <?= number_format((float)($row['total_horas_treinamento'] ?? 0), 2, ',', '.') ?>h • média <?= number_format((float)($row['media_horas_por_colaborador'] ?? 0), 2, ',', '.') ?>h</div>
-          </div>
-        <?php endforeach; ?>
-        <?php if (empty($dashboard['setores'])): ?>
-          <div class="text-sm text-gray-500">Nenhum totalizador por setor disponível.</div>
-        <?php endif; ?>
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+        <div>
+          <h2 class="font-semibold">Comparativo por Setor</h2>
+          <p class="text-xs text-gray-500"><?= count($comparativoSetores) ?> setor(es) no filtro atual</p>
+        </div>
+        <button type="button" class="dashboard-panel-toggle px-3 py-1 rounded bg-gray-100 text-brand-brown text-sm" data-panel-target="comparativoSetorPanel">Recolher</button>
       </div>
+      <?php if (empty($comparativoSetores)): ?>
+        <div class="text-sm text-gray-500">Nenhum totalizador por setor disponível.</div>
+      <?php else: ?>
+        <div id="comparativoSetorPanel" class="border rounded overflow-auto" style="max-height: 26rem;">
+          <table class="min-w-full text-sm">
+            <thead class="sticky top-0 bg-white border-b text-left">
+              <tr>
+                <th class="p-2">Setor</th>
+                <th class="p-2">Participação</th>
+                <th class="p-2">Treinados</th>
+                <th class="p-2">Horas</th>
+                <th class="p-2">Média</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($comparativoSetores as $row): ?>
+                <tr class="border-b align-top">
+                  <td class="p-2 font-medium"><?= htmlspecialchars((string)$row['setor_nome']) ?></td>
+                  <td class="p-2 min-w-48">
+                    <div class="flex items-center justify-between gap-2 text-xs text-gray-600">
+                      <span><?= (int)($row['total_treinados'] ?? 0) ?> de <?= (int)($row['total_colaboradores_setor'] ?? 0) ?></span>
+                      <span><?= number_format((float)$row['percentual_participacao'], 2, ',', '.') ?>%</span>
+                    </div>
+                    <div class="h-2 bg-gray-100 rounded mt-2 overflow-hidden">
+                      <div class="h-2 rounded <?= (float)$row['percentual_participacao'] >= 80 ? 'bg-green-500' : ((float)$row['percentual_participacao'] >= 50 ? 'bg-amber-500' : 'bg-red-500') ?>" style="width: <?= max(0, min(100, (float)$row['percentual_participacao'])) ?>%"></div>
+                    </div>
+                  </td>
+                  <td class="p-2"><?= (int)($row['total_treinados'] ?? 0) ?></td>
+                  <td class="p-2"><?= number_format((float)($row['total_horas_treinamento'] ?? 0), 2, ',', '.') ?>h</td>
+                  <td class="p-2"><?= number_format((float)($row['media_horas_por_colaborador'] ?? 0), 2, ',', '.') ?>h</td>
+                </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      <?php endif; ?>
     </div>
   </div>
 
@@ -161,16 +192,24 @@
     </div>
 
     <div class="bg-white shadow rounded p-5">
-      <h2 class="font-semibold mb-3">Alertas Automáticos por Setor</h2>
-      <?php if (empty($dashboard['alertas_setor'])): ?>
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+        <div>
+          <h2 class="font-semibold">Alertas Automáticos por Setor</h2>
+          <p class="text-xs text-gray-500"><?= count($alertasSetor) ?> alerta(s) no filtro atual</p>
+        </div>
+        <button type="button" class="dashboard-panel-toggle px-3 py-1 rounded bg-gray-100 text-brand-brown text-sm" data-panel-target="alertasSetorPanel">Recolher</button>
+      </div>
+      <?php if (empty($alertasSetor)): ?>
         <div class="text-sm text-gray-500">Nenhum setor com baixo índice de participação no filtro atual.</div>
       <?php else: ?>
-        <div class="space-y-3">
-          <?php foreach ($dashboard['alertas_setor'] as $row): ?>
+        <div id="alertasSetorPanel" class="space-y-3 overflow-auto pr-1" style="max-height: 26rem;">
+          <?php foreach ($alertasSetor as $row): ?>
             <div class="rounded border border-red-200 bg-red-50 p-3">
-              <div class="font-medium"><?= htmlspecialchars((string)$row['setor_nome']) ?></div>
-              <div class="text-sm text-gray-700">Participação de <?= number_format((float)$row['percentual_participacao'], 2, ',', '.') ?>%</div>
-              <div class="text-xs text-gray-600 mt-1">Total de colaboradores: <?= (int)($row['total_colaboradores_setor'] ?? 0) ?> • treinados: <?= (int)($row['total_treinados'] ?? 0) ?></div>
+              <div class="flex items-start justify-between gap-3">
+                <div class="font-medium"><?= htmlspecialchars((string)$row['setor_nome']) ?></div>
+                <span class="text-xs px-2 py-1 rounded bg-white text-red-700 border border-red-200"><?= number_format((float)$row['percentual_participacao'], 2, ',', '.') ?>%</span>
+              </div>
+              <div class="text-xs text-gray-600 mt-2">Total de colaboradores: <?= (int)($row['total_colaboradores_setor'] ?? 0) ?> • treinados: <?= (int)($row['total_treinados'] ?? 0) ?> • horas: <?= number_format((float)($row['total_horas_treinamento'] ?? 0), 2, ',', '.') ?>h</div>
             </div>
           <?php endforeach; ?>
         </div>
@@ -180,15 +219,21 @@
 
   <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
     <div class="bg-white shadow rounded p-5">
-      <h2 class="font-semibold mb-3">Pendentes</h2>
-      <div class="overflow-auto">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+        <div>
+          <h2 class="font-semibold">Pendentes</h2>
+          <p class="text-xs text-gray-500"><?= count($pendentes) ?> colaborador(es) no filtro atual</p>
+        </div>
+        <button type="button" class="dashboard-panel-toggle px-3 py-1 rounded bg-gray-100 text-brand-brown text-sm" data-panel-target="pendentesPanel">Recolher</button>
+      </div>
+      <div id="pendentesPanel" class="overflow-auto border rounded" style="max-height: 24rem;">
         <table class="min-w-full text-sm">
-          <thead><tr class="border-b text-left"><th class="p-2">Treinamento</th><th class="p-2">Colaborador</th><th class="p-2">Unidade</th></tr></thead>
+          <thead class="sticky top-0 bg-white border-b text-left"><tr><th class="p-2">Treinamento</th><th class="p-2">Colaborador</th><th class="p-2">Unidade</th></tr></thead>
           <tbody>
-            <?php foreach ($dashboard['pendentes'] ?? [] as $row): ?>
+            <?php foreach ($pendentes as $row): ?>
               <tr class="border-b"><td class="p-2"><?= htmlspecialchars($row['treinamento_nome']) ?></td><td class="p-2"><?= htmlspecialchars($row['colaborador_nome']) ?></td><td class="p-2"><?= htmlspecialchars((string)$row['unidade_nome']) ?></td></tr>
             <?php endforeach; ?>
-            <?php if (empty($dashboard['pendentes'])): ?>
+            <?php if (empty($pendentes)): ?>
               <tr><td colspan="3" class="p-4 text-center text-gray-500">Nenhuma pendência ativa.</td></tr>
             <?php endif; ?>
           </tbody>
@@ -196,15 +241,21 @@
       </div>
     </div>
     <div class="bg-white shadow rounded p-5">
-      <h2 class="font-semibold mb-3">Concluídos</h2>
-      <div class="overflow-auto">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+        <div>
+          <h2 class="font-semibold">Concluídos</h2>
+          <p class="text-xs text-gray-500"><?= count($concluidos) ?> colaborador(es) no filtro atual</p>
+        </div>
+        <button type="button" class="dashboard-panel-toggle px-3 py-1 rounded bg-gray-100 text-brand-brown text-sm" data-panel-target="concluidosPanel">Recolher</button>
+      </div>
+      <div id="concluidosPanel" class="overflow-auto border rounded" style="max-height: 24rem;">
         <table class="min-w-full text-sm">
-          <thead><tr class="border-b text-left"><th class="p-2">Treinamento</th><th class="p-2">Colaborador</th><th class="p-2">Unidade</th></tr></thead>
+          <thead class="sticky top-0 bg-white border-b text-left"><tr><th class="p-2">Treinamento</th><th class="p-2">Colaborador</th><th class="p-2">Unidade</th></tr></thead>
           <tbody>
-            <?php foreach ($dashboard['concluidos'] ?? [] as $row): ?>
+            <?php foreach ($concluidos as $row): ?>
               <tr class="border-b"><td class="p-2"><?= htmlspecialchars($row['treinamento_nome']) ?></td><td class="p-2"><?= htmlspecialchars($row['colaborador_nome']) ?></td><td class="p-2"><?= htmlspecialchars((string)$row['unidade_nome']) ?></td></tr>
             <?php endforeach; ?>
-            <?php if (empty($dashboard['concluidos'])): ?>
+            <?php if (empty($concluidos)): ?>
               <tr><td colspan="3" class="p-4 text-center text-gray-500">Nenhuma conclusão registrada.</td></tr>
             <?php endif; ?>
           </tbody>
@@ -244,6 +295,7 @@
       if (!canvas || !rows.length) return;
       const ctx = prepareCanvas(canvas, 320);
       if (!ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       const total = rows.reduce((sum, row) => sum + Number(row.total_presentes || 0), 0);
       const colors = ['#dc2626', '#2563eb', '#16a34a', '#d97706', '#7c3aed', '#0891b2'];
       let start = -Math.PI / 2;
@@ -275,12 +327,18 @@
       if (!canvas || !rows.length) return;
       const ctx = prepareCanvas(canvas, 320);
       if (!ctx) return;
-      const max = Math.max(1, ...rows.map((row) => Number(row.percentual_participacao || 0)));
-      const baseY = 210;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const logicalWidth = canvas.width / (window.devicePixelRatio || 1);
       const left = 30;
-      const width = 42;
-      const gap = 22;
-      rows.slice(0, 6).forEach((row, index) => {
+      const right = 20;
+      const baseY = 210;
+      const availableWidth = Math.max(200, logicalWidth - left - right);
+      const visibleCount = Math.max(4, Math.min(rows.length, Math.floor(availableWidth / 62)));
+      const visibleRows = rows.slice(0, visibleCount);
+      const max = Math.max(1, ...visibleRows.map((row) => Number(row.percentual_participacao || 0)));
+      const gap = visibleRows.length > 1 ? 12 : 0;
+      const width = Math.max(20, Math.min(48, (availableWidth - (gap * Math.max(0, visibleRows.length - 1))) / visibleRows.length));
+      visibleRows.forEach((row, index) => {
         const x = left + index * (width + gap);
         const value = Number(row.percentual_participacao || 0);
         const barHeight = (value / max) * 150;
@@ -291,17 +349,44 @@
         ctx.fillText(String(Math.round(value)) + '%', x, baseY - barHeight - 6);
         ctx.save();
         ctx.translate(x + 4, baseY + 14);
-        ctx.rotate(-0.35);
-        ctx.fillText(String(row.setor_nome || '').slice(0, 18), 0, 0);
+        ctx.rotate(-0.3);
+        ctx.fillText(String(row.setor_nome || '').slice(0, width < 32 ? 10 : 16), 0, 0);
         ctx.restore();
+      });
+      if (rows.length > visibleRows.length) {
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '11px sans-serif';
+        ctx.fillText('Exibindo amostra adaptada à largura. Veja todos os setores na tabela.', 24, 300);
+      }
+    }
+
+    function bindCollapsiblePanels() {
+      document.querySelectorAll('.dashboard-panel-toggle').forEach((button) => {
+        button.addEventListener('click', () => {
+          const targetId = button.getAttribute('data-panel-target');
+          const panel = targetId ? document.getElementById(targetId) : null;
+          if (!panel) return;
+          const isHidden = panel.classList.toggle('hidden');
+          button.textContent = isHidden ? 'Expandir' : 'Recolher';
+        });
       });
     }
 
-    try {
-      if (pieCanvas) drawPie(pieCanvas, JSON.parse(pieCanvas.dataset.chart || '[]'));
-      if (barCanvas) drawBars(barCanvas, JSON.parse(barCanvas.dataset.chart || '[]'));
-    } catch (error) {
-      // no-op
+    function renderCharts() {
+      try {
+        if (pieCanvas) drawPie(pieCanvas, JSON.parse(pieCanvas.dataset.chart || '[]'));
+        if (barCanvas) drawBars(barCanvas, JSON.parse(barCanvas.dataset.chart || '[]'));
+      } catch (error) {
+        // no-op
+      }
     }
+
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(renderCharts, 120);
+    });
+    bindCollapsiblePanels();
+    renderCharts();
   })();
 </script>

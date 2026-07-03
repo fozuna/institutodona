@@ -294,12 +294,23 @@ class DashboardController extends BaseController
         if (Database::tableExists('treinamentos_agenda') && Database::tableExists('treinamentos') && Database::tableExists('treinamento_participantes')) {
             $params = array_merge($inParams, ['dini' => $startDt, 'dfim' => $endDt]);
             $stmt = $pdo->prepare("SELECT
-                    SUM(CASE WHEN ta.data > NOW() THEN 1 ELSE 0 END) AS planejados,
-                    SUM(CASE WHEN ta.data <= NOW() THEN 1 ELSE 0 END) AS realizados,
+                    COUNT(*) AS planejados,
+                    SUM(CASE WHEN agenda_stats.executado = 1 THEN 1 ELSE 0 END) AS realizados,
                     COUNT(*) AS total_sessoes
-                FROM treinamentos_agenda ta
-                WHERE ta.unidade_id {$inSql}
-                  AND ta.data >= :dini AND ta.data <= :dfim");
+                FROM (
+                    SELECT
+                        ta.id,
+                        CASE
+                            WHEN MAX(CASE WHEN tp.presenca = 1 OR tp.certificado_emitido = 1 THEN 1 ELSE 0 END) = 1 THEN 1
+                            WHEN COALESCE(ta.data_fim, ta.data) <= NOW() THEN 1
+                            ELSE 0
+                        END AS executado
+                    FROM treinamentos_agenda ta
+                    LEFT JOIN treinamento_participantes tp ON tp.agenda_id = ta.id
+                    WHERE ta.unidade_id {$inSql}
+                      AND ta.data >= :dini AND ta.data <= :dfim
+                    GROUP BY ta.id, ta.data, ta.data_fim
+                ) agenda_stats");
             $stmt->execute($params);
             $row = $stmt->fetch() ?: null;
             $payload['treinamentos']['planejados'] = (int)($row['planejados'] ?? 0);

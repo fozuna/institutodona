@@ -525,7 +525,7 @@ class TreinamentoModel extends BaseModel
             'por_unidade' => $this->dashboardBy($filters, 'c.id', 'c.nome_empresa'),
             'pendentes' => $this->dashboardListByStatus($filters, 'pendente'),
             'concluidos' => $this->dashboardListByStatus($filters, 'concluido'),
-            'alertas' => $this->pendingAlertsFiltered($filters),
+            'alertas' => $this->pendingAlertsFiltered($filters, false),
             'participacao_treinamento' => $participacao,
             'setores' => $setores,
             'acumulados' => $acumulados,
@@ -883,10 +883,43 @@ class TreinamentoModel extends BaseModel
                 FROM treinamento_colaboradores tc
                 JOIN treinamentos t ON t.id = tc.treinamento_id
                 JOIN colaboradores col ON col.id = tc.colaborador_id
+                LEFT JOIN funcoes f ON f.id = col.funcao_id
+                LEFT JOIN setores s ON s.id = f.setor_id
                 JOIN clientes c ON c.id = col.cliente_id
                 JOIN departamentos d ON d.id = t.departamento_id
                 WHERE tc.status = :status";
         $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['COALESCE(t.cliente_id, d.cliente_id)', 'col.cliente_id', 'c.id']);
+        if (!empty($filters['setor_id'])) {
+            $sql .= " AND s.id = :setor_id";
+            $params['setor_id'] = (int)$filters['setor_id'];
+        }
+        if (!empty($filters['tipo_treinamento'])) {
+            $sql .= " AND t.tipo_treinamento = :tipo_treinamento";
+            $params['tipo_treinamento'] = trim((string)$filters['tipo_treinamento']);
+        }
+        if (!empty($filters['periodo_inicio']) || !empty($filters['periodo_fim']) || !empty($filters['instrutor'])) {
+            $sql .= " AND EXISTS (
+                SELECT 1
+                FROM treinamentos_agenda ta_filter
+                WHERE ta_filter.treinamento_id = t.id";
+            if (!empty($filters['cliente_id'])) {
+                $sql .= " AND ta_filter.unidade_id = :status_agenda_cliente_id";
+                $params['status_agenda_cliente_id'] = (int)$filters['cliente_id'];
+            }
+            if (!empty($filters['periodo_inicio'])) {
+                $sql .= " AND DATE(ta_filter.data) >= :status_periodo_inicio";
+                $params['status_periodo_inicio'] = $filters['periodo_inicio'];
+            }
+            if (!empty($filters['periodo_fim'])) {
+                $sql .= " AND DATE(ta_filter.data) <= :status_periodo_fim";
+                $params['status_periodo_fim'] = $filters['periodo_fim'];
+            }
+            if (!empty($filters['instrutor'])) {
+                $sql .= " AND ta_filter.instrutor LIKE :status_instrutor";
+                $params['status_instrutor'] = '%' . trim((string)$filters['instrutor']) . '%';
+            }
+            $sql .= ")";
+        }
         $scope = $this->tenantDepartamentoVisibilityCondition('d', $params, 'trlist');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
@@ -897,10 +930,12 @@ class TreinamentoModel extends BaseModel
         return $stmt->fetchAll() ?: [];
     }
 
-    private function pendingAlertsFiltered(array $filters): array
+    private function pendingAlertsFiltered(array $filters, bool $refreshStatuses = true): array
     {
         $this->ensureSchema();
-        $this->refreshStatuses();
+        if ($refreshStatuses) {
+            $this->refreshStatuses();
+        }
         $params = [];
         $sql = "SELECT
                     t.id AS treinamento_id,
@@ -908,6 +943,8 @@ class TreinamentoModel extends BaseModel
                     t.periodicidade,
                     tc.colaborador_id,
                     col.nome AS colaborador_nome,
+                    s.id AS setor_id,
+                    s.nome AS setor_nome,
                     c.nome_empresa AS unidade_nome,
                     (
                         SELECT MAX(ta.data)
@@ -915,19 +952,70 @@ class TreinamentoModel extends BaseModel
                         JOIN treinamentos_agenda ta ON ta.id = tp.agenda_id
                         WHERE tp.colaborador_id = tc.colaborador_id
                           AND ta.treinamento_id = tc.treinamento_id
-                          AND (tp.presenca = 1 OR tp.certificado_emitido = 1)
+                          AND (tp.presenca = 1 OR tp.certificado_emitido = 1)";
+        if (!empty($filters['cliente_id'])) {
+            $sql .= " AND ta.unidade_id = :alerta_hist_cliente_id";
+            $params['alerta_hist_cliente_id'] = (int)$filters['cliente_id'];
+        }
+        if (!empty($filters['periodo_inicio'])) {
+            $sql .= " AND DATE(ta.data) >= :alerta_hist_periodo_inicio";
+            $params['alerta_hist_periodo_inicio'] = $filters['periodo_inicio'];
+        }
+        if (!empty($filters['periodo_fim'])) {
+            $sql .= " AND DATE(ta.data) <= :alerta_hist_periodo_fim";
+            $params['alerta_hist_periodo_fim'] = $filters['periodo_fim'];
+        }
+        if (!empty($filters['instrutor'])) {
+            $sql .= " AND ta.instrutor LIKE :alerta_hist_instrutor";
+            $params['alerta_hist_instrutor'] = '%' . trim((string)$filters['instrutor']) . '%';
+        }
+        $sql .= "
                     ) AS ultima_conclusao
                 FROM treinamento_colaboradores tc
                 JOIN treinamentos t ON t.id = tc.treinamento_id
                 JOIN colaboradores col ON col.id = tc.colaborador_id
+                LEFT JOIN funcoes f ON f.id = col.funcao_id
+                LEFT JOIN setores s ON s.id = f.setor_id
                 JOIN clientes c ON c.id = col.cliente_id
                 JOIN departamentos d ON d.id = t.departamento_id
                 WHERE 1=1";
         $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['COALESCE(t.cliente_id, d.cliente_id)', 'col.cliente_id', 'c.id']);
+        if (!empty($filters['setor_id'])) {
+            $sql .= " AND s.id = :setor_id";
+            $params['setor_id'] = (int)$filters['setor_id'];
+        }
+        if (!empty($filters['tipo_treinamento'])) {
+            $sql .= " AND t.tipo_treinamento = :tipo_treinamento";
+            $params['tipo_treinamento'] = trim((string)$filters['tipo_treinamento']);
+        }
+        if (!empty($filters['periodo_inicio']) || !empty($filters['periodo_fim']) || !empty($filters['instrutor'])) {
+            $sql .= " AND EXISTS (
+                SELECT 1
+                FROM treinamentos_agenda ta_filter
+                WHERE ta_filter.treinamento_id = t.id";
+            if (!empty($filters['cliente_id'])) {
+                $sql .= " AND ta_filter.unidade_id = :alerta_agenda_cliente_id";
+                $params['alerta_agenda_cliente_id'] = (int)$filters['cliente_id'];
+            }
+            if (!empty($filters['periodo_inicio'])) {
+                $sql .= " AND DATE(ta_filter.data) >= :alerta_periodo_inicio";
+                $params['alerta_periodo_inicio'] = $filters['periodo_inicio'];
+            }
+            if (!empty($filters['periodo_fim'])) {
+                $sql .= " AND DATE(ta_filter.data) <= :alerta_periodo_fim";
+                $params['alerta_periodo_fim'] = $filters['periodo_fim'];
+            }
+            if (!empty($filters['instrutor'])) {
+                $sql .= " AND ta_filter.instrutor LIKE :alerta_instrutor";
+                $params['alerta_instrutor'] = '%' . trim((string)$filters['instrutor']) . '%';
+            }
+            $sql .= ")";
+        }
         $scope = $this->tenantDepartamentoVisibilityCondition('d', $params, 'tralert');
         if ($scope !== '1=1') {
             $sql .= " AND {$scope}";
         }
+        $sql .= " ORDER BY s.nome, t.nome, col.nome";
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll() ?: [];
