@@ -5,7 +5,7 @@ $alertasSetor = array_values((array)($dashboard['alertas_setor'] ?? []));
 $pendentes = array_values((array)($dashboard['pendentes'] ?? []));
 $concluidos = array_values((array)($dashboard['concluidos'] ?? []));
 ?>
-<div class="p-6 space-y-6">
+<div class="p-6 space-y-6" data-release="training-dashboard-manual-sync-20260703">
   <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
     <div>
       <h1 class="text-2xl font-bold"><?= htmlspecialchars($pageTitle ?? 'Dashboard de Treinamentos') ?></h1>

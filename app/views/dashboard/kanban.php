@@ -271,7 +271,7 @@ $latestItems = array_slice($latestItems, 0, 8);
   @media (max-width:1280px) and (min-width:981px){.dash-kpi-value{font-size:32px}}
 </style>
 
-<div class="dash-view" id="dashboardPremiumRoot" data-total-companies="<?= (int)count($clientes) ?>">
+<div class="dash-view" id="dashboardPremiumRoot" data-total-companies="<?= (int)count($clientes) ?>" data-release="dashboard-manual-sync-20260703">
   <div class="dash-stack">
     <section class="dash-card dash-hero">
       <div class="dash-card-inner">

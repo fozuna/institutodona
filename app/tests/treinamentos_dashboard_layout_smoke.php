@@ -14,6 +14,7 @@ function layout_assert(bool $condition, string $message): void
 }
 
 layout_assert($source !== false, 'Carrega a view do dashboard de treinamentos');
+layout_assert(str_contains($source, 'data-release="training-dashboard-manual-sync-20260703"'), 'Dashboard de treinamentos expõe marcador de release manual para verificação em produção');
 layout_assert(str_contains($source, 'data-panel-target="comparativoSetorPanel"'), 'Comparativo por setor possui controle de collapse');
 layout_assert(str_contains($source, 'id="alertasSetorPanel" class="space-y-3 overflow-auto'), 'Alertas por setor possui contenção com rolagem');
 layout_assert(str_contains($source, 'id="pendentesPanel" class="overflow-auto border rounded"'), 'Pendentes possui contenção com rolagem');

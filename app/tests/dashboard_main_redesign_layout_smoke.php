@@ -15,6 +15,7 @@ function dashboard_assert(bool $condition, string $message): void
 
 dashboard_assert($source !== false, 'Carrega a view principal do dashboard');
 dashboard_assert(str_contains($source, 'id="dashboardPremiumRoot"'), 'Dashboard principal possui raiz premium dedicada');
+dashboard_assert(str_contains($source, 'data-release="dashboard-manual-sync-20260703"'), 'Dashboard principal expõe marcador de release manual para verificação em produção');
 dashboard_assert(str_contains($source, 'Dashboard Operacional'), 'Cabeçalho executivo do dashboard foi renderizado');
 dashboard_assert(str_contains($source, 'id="dashboardFiltersForm"'), 'Card premium de filtros está presente');
 dashboard_assert(str_contains($source, 'dash-card dash-card--filters'), 'Card de filtros possui camada visual dedicada para dropdown');
