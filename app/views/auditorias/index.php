@@ -75,7 +75,8 @@
         <input type="hidden" name="sort_dir" id="sortDir" value="<?= htmlspecialchars($filters['sort_dir'] ?? 'desc') ?>" />
         <div class="md:col-span-2 flex items-end gap-2">
             <button type="submit" id="btnFiltrar" class="px-4 py-2 rounded bg-brand-red text-white">Filtrar</button>
-            <a href="index.php?route=auditorias/index" class="px-4 py-2 rounded bg-gray-200 text-brand-brown">Limpar</a>
+            <a href="index.php?route=auditorias/index" id="auditoriasClearFiltersLink" class="px-4 py-2 rounded bg-gray-200 text-brand-brown">Limpar</a>
+            <button type="button" id="btnRedefinirFiltrosSalvos" class="px-4 py-2 rounded bg-white border border-gray-300 text-brand-brown whitespace-nowrap">Redefinir salvos</button>
         </div>
         <div class="md:col-span-6">
             <div class="h-full border rounded p-3 bg-gray-50">
@@ -277,8 +278,12 @@
         const filtroNome = document.getElementById('filtroNomeTempoReal');
         const filtroCliente = filtroForm.querySelector('[name="cliente"]');
         const filtroDepartamento = document.getElementById('filtroDepartamento');
+        const clearFiltersLink = document.getElementById('auditoriasClearFiltersLink');
+        const clearSavedButton = document.getElementById('btnRedefinirFiltrosSalvos');
+        const storageKey = 'auditorias:index:filters';
+        const trackedFields = ['cliente', 'departamento', 'setor', 'status', 'farol', 'inicio', 'fim', 'q', 'sort_col', 'sort_dir'];
         let debounce = null;
-        const syncDepartamentos = ()=>{
+        function syncDepartamentos() {
             if (!filtroCliente || !filtroDepartamento) return;
             const clienteId = filtroCliente.value;
             Array.from(filtroDepartamento.options).forEach((option, idx)=>{
@@ -290,10 +295,77 @@
                     filtroDepartamento.value = '';
                 }
             });
+        }
+        const readState = ()=>{
+            const state = {};
+            trackedFields.forEach((field)=>{
+                const input = filtroForm.querySelector(`[name="${field}"]`);
+                state[field] = input ? input.value : '';
+            });
+            return state;
         };
+        const applyState = (state)=>{
+            trackedFields.forEach((field)=>{
+                const input = filtroForm.querySelector(`[name="${field}"]`);
+                if (input && Object.prototype.hasOwnProperty.call(state, field)) {
+                    input.value = String(state[field] ?? '');
+                }
+            });
+        };
+        const hasMeaningfulState = (state)=>{
+            return trackedFields.some((field)=>{
+                const value = String(state[field] ?? '');
+                if (field === 'sort_col') {
+                    return value !== '' && value !== 'data';
+                }
+                if (field === 'sort_dir') {
+                    return value !== '' && value !== 'desc';
+                }
+                return value !== '';
+            });
+        };
+        const hasExplicitFilters = ()=>{
+            const params = new URLSearchParams(window.location.search);
+            return trackedFields.some((field)=>{
+                if (!params.has(field)) {
+                    return false;
+                }
+                return params.getAll(field).some((value)=>String(value ?? '') !== '');
+            });
+        };
+        const saveState = ()=>{
+            try {
+                sessionStorage.setItem(storageKey, JSON.stringify(readState()));
+            } catch (e) {
+            }
+        };
+        const clearSavedState = ()=>{
+            try {
+                sessionStorage.removeItem(storageKey);
+            } catch (e) {
+            }
+        };
+        try {
+            if (!hasExplicitFilters()) {
+                const rawState = sessionStorage.getItem(storageKey);
+                if (rawState) {
+                    const parsed = JSON.parse(rawState);
+                    if (parsed && typeof parsed === 'object' && hasMeaningfulState(parsed)) {
+                        applyState(parsed);
+                        syncDepartamentos();
+                        window.requestAnimationFrame(()=>filtroForm.submit());
+                        return;
+                    }
+                }
+            } else {
+                saveState();
+            }
+        } catch (e) {
+        }
         syncDepartamentos();
         filtroCliente?.addEventListener('change', ()=>{
             syncDepartamentos();
+            saveState();
             filtroForm.submit();
         });
         document.querySelectorAll('.sort-link').forEach((el)=>{
@@ -305,17 +377,30 @@
                     sortCol.value = col;
                     sortDir.value = col === 'nome' || col === 'setor' ? 'asc' : 'desc';
                 }
+                saveState();
                 filtroForm.submit();
             });
         });
         filtroNome?.addEventListener('input', ()=>{
             clearTimeout(debounce);
-            debounce = setTimeout(()=>filtroForm.submit(), 450);
+            debounce = setTimeout(()=>{
+                saveState();
+                filtroForm.submit();
+            }, 450);
         });
-        filtroForm.querySelector('[name="farol"]')?.addEventListener('change', ()=>filtroForm.submit());
-        filtroForm.querySelector('[name="departamento"]')?.addEventListener('change', ()=>filtroForm.submit());
-        filtroForm.querySelector('[name="setor"]')?.addEventListener('change', ()=>filtroForm.submit());
+        filtroForm.querySelector('[name="status"]')?.addEventListener('change', ()=>{ saveState(); filtroForm.submit(); });
+        filtroForm.querySelector('[name="farol"]')?.addEventListener('change', ()=>{ saveState(); filtroForm.submit(); });
+        filtroForm.querySelector('[name="departamento"]')?.addEventListener('change', ()=>{ saveState(); filtroForm.submit(); });
+        filtroForm.querySelector('[name="setor"]')?.addEventListener('change', ()=>{ saveState(); filtroForm.submit(); });
+        filtroForm.querySelector('[name="inicio"]')?.addEventListener('change', saveState);
+        filtroForm.querySelector('[name="fim"]')?.addEventListener('change', saveState);
+        clearFiltersLink?.addEventListener('click', clearSavedState);
+        clearSavedButton?.addEventListener('click', ()=>{
+            clearSavedState();
+            window.location.href = 'index.php?route=auditorias/index';
+        });
         filtroForm?.addEventListener('submit', ()=>{
+            saveState();
             btnFiltrar.disabled = true;
             btnFiltrar.textContent = 'Filtrando...';
             skeleton.classList.remove('hidden');

@@ -40,14 +40,25 @@ class TreinamentosController extends BaseController
     {
         $this->requireLogin();
         $filters = [
-            'cliente_id' => (int)($_GET['cliente_id'] ?? 0),
+            'cliente_id' => (int)($this->resolveScopedClienteId((int)($_GET['cliente_id'] ?? 0) ?: null) ?? 0),
             'q' => trim((string)($_GET['q'] ?? '')),
         ];
+        $page = max(1, (int)($_GET['page'] ?? 1));
+        $per = max(5, min(25, (int)($_GET['per'] ?? 10)));
+        $total = $this->model->countIndex($filters);
+        $totalPages = max(1, (int)ceil($total / $per));
+        if ($page > $totalPages) {
+            $page = $totalPages;
+        }
         $this->render('treinamentos/index', [
             'pageTitle' => 'Pilar de Treinamentos',
-            'items' => $this->model->all($filters),
+            'items' => $this->model->paginateIndex($filters, $page, $per),
             'clientes' => $this->clienteOptions(),
             'filters' => $filters,
+            'page' => $page,
+            'per' => $per,
+            'total' => $total,
+            'totalPages' => $totalPages,
         ]);
     }
 

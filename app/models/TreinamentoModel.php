@@ -78,6 +78,25 @@ class TreinamentoModel extends BaseModel
 
     public function all(array $filters = []): array
     {
+        return $this->paginateIndex($filters, 1, 500);
+    }
+
+    public function countIndex(array $filters = []): int
+    {
+        $this->ensureSchema();
+        $params = [];
+        $sql = "SELECT COUNT(*)
+                FROM treinamentos t
+                JOIN departamentos d ON d.id = t.departamento_id
+                LEFT JOIN clientes c ON c.id = COALESCE(t.cliente_id, d.cliente_id)"
+            . $this->indexWhereClause($filters, $params);
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return (int)$stmt->fetchColumn();
+    }
+
+    public function paginateIndex(array $filters = [], int $page = 1, int $perPage = 10): array
+    {
         $this->ensureSchema();
         $params = [];
         $sql = "SELECT
@@ -87,30 +106,31 @@ class TreinamentoModel extends BaseModel
                     c.nome_empresa AS unidade_nome,
                     (SELECT COUNT(*) FROM treinamento_colaboradores tc WHERE tc.treinamento_id = t.id) AS total_colaboradores,
                     (SELECT COUNT(*) FROM treinamento_colaboradores tc WHERE tc.treinamento_id = t.id AND tc.status = 'concluido') AS total_concluidos,
-                    (SELECT COUNT(*) FROM treinamentos_agenda ta WHERE ta.treinamento_id = t.id) AS total_agendamentos
+                    (SELECT COUNT(*) FROM treinamentos_agenda ta WHERE ta.treinamento_id = t.id) AS total_agendamentos,
+                    (
+                        SELECT MIN(ta.data)
+                        FROM treinamentos_agenda ta
+                        WHERE ta.treinamento_id = t.id
+                          AND COALESCE(ta.data_fim, ta.data) >= NOW()
+                    ) AS proxima_agenda_data,
+                    (
+                        SELECT MAX(COALESCE(ta.data_fim, ta.data))
+                        FROM treinamentos_agenda ta
+                        WHERE ta.treinamento_id = t.id
+                    ) AS ultima_agenda_data
                 FROM treinamentos t
                 JOIN departamentos d ON d.id = t.departamento_id
-                LEFT JOIN clientes c ON c.id = COALESCE(t.cliente_id, d.cliente_id)
-                WHERE 1=1";
-
-        if (!empty($filters['cliente_id'])) {
-            $sql .= " AND c.id = :cliente_id";
-            $params['cliente_id'] = (int)$filters['cliente_id'];
-        }
-        if (!empty($filters['q'])) {
-            $sql .= " AND (t.nome LIKE :q OR t.objetivo LIKE :q OR t.fornecedor LIKE :q)";
-            $params['q'] = '%' . trim((string)$filters['q']) . '%';
-        }
-
-        $scope = $this->tenantInCondition('c.id', $params, 'trall');
-        if ($scope !== '1=1') {
-            $sql .= " AND {$scope}";
-        }
-
-        $sql .= " ORDER BY t.nome ASC";
+                LEFT JOIN clientes c ON c.id = COALESCE(t.cliente_id, d.cliente_id)"
+            . $this->indexWhereClause($filters, $params)
+            . " ORDER BY t.nome ASC LIMIT :limit OFFSET :offset";
         $stmt = $this->db->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetchAll() ?: [];
+        foreach ($params as $key => $value) {
+            $stmt->bindValue(':' . $key, $value, is_int($value) ? \PDO::PARAM_INT : \PDO::PARAM_STR);
+        }
+        $stmt->bindValue(':limit', max(1, $perPage), \PDO::PARAM_INT);
+        $stmt->bindValue(':offset', max(0, ($page - 1) * $perPage), \PDO::PARAM_INT);
+        $stmt->execute();
+        return $this->decorateIndexRows($stmt->fetchAll() ?: []);
     }
 
     public function create(array $data): int
@@ -207,6 +227,75 @@ class TreinamentoModel extends BaseModel
             return false;
         }
         return $this->db->prepare('DELETE FROM treinamentos WHERE id = :id')->execute(['id' => $id]);
+    }
+
+    private function indexWhereClause(array $filters, array &$params): string
+    {
+        $sql = " WHERE 1=1";
+        if (!empty($filters['cliente_id'])) {
+            $sql .= " AND c.id = :cliente_id";
+            $params['cliente_id'] = (int)$filters['cliente_id'];
+        }
+        if (!empty($filters['q'])) {
+            $sql .= " AND (t.nome LIKE :q OR t.objetivo LIKE :q OR t.fornecedor LIKE :q)";
+            $params['q'] = '%' . trim((string)$filters['q']) . '%';
+        }
+
+        $scope = $this->tenantInCondition('c.id', $params, 'trall');
+        if ($scope !== '1=1') {
+            $sql .= " AND {$scope}";
+        }
+
+        return $sql;
+    }
+
+    private function decorateIndexRows(array $rows): array
+    {
+        foreach ($rows as &$row) {
+            $totalColaboradores = (int)($row['total_colaboradores'] ?? 0);
+            $totalConcluidos = (int)($row['total_concluidos'] ?? 0);
+            $totalAgendamentos = (int)($row['total_agendamentos'] ?? 0);
+            $progressoPct = $totalColaboradores > 0
+                ? (int)round(($totalConcluidos / $totalColaboradores) * 100)
+                : 0;
+
+            $temProximaAgenda = !empty($row['proxima_agenda_data']);
+            $temHistorico = !empty($row['ultima_agenda_data']);
+
+            if ($totalColaboradores > 0 && $totalConcluidos >= $totalColaboradores) {
+                $statusResumo = 'Concluído';
+                $statusVariant = 'success';
+            } elseif ($temProximaAgenda) {
+                $statusResumo = 'Agendado';
+                $statusVariant = 'warning';
+            } elseif ($totalAgendamentos > 0 || $totalConcluidos > 0) {
+                $statusResumo = 'Em andamento';
+                $statusVariant = 'info';
+            } else {
+                $statusResumo = 'Planejamento';
+                $statusVariant = 'neutral';
+            }
+
+            $row['progresso_pct'] = $progressoPct;
+            $row['progresso_resumo'] = $totalColaboradores > 0
+                ? sprintf('%d/%d concluídos', $totalConcluidos, $totalColaboradores)
+                : 'Sem colaboradores vinculados';
+            $row['status_resumo'] = $statusResumo;
+            $row['status_variant'] = $statusVariant;
+            if ($temProximaAgenda) {
+                $row['data_referencia'] = $row['proxima_agenda_data'];
+                $row['data_referencia_rotulo'] = 'Próxima data';
+            } elseif ($temHistorico) {
+                $row['data_referencia'] = $row['ultima_agenda_data'];
+                $row['data_referencia_rotulo'] = 'Última agenda';
+            } else {
+                $row['data_referencia'] = null;
+                $row['data_referencia_rotulo'] = 'Data';
+            }
+        }
+        unset($row);
+
+        return $rows;
     }
 
     public function find(int $id): ?array

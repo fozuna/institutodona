@@ -32,6 +32,8 @@ class ManuaisController extends BaseController
         $empresaId = (int)($_GET['empresa_id'] ?? 0);
         $departamentoId = (int)($_GET['departamento_id'] ?? 0);
         $nome = trim((string)($_GET['nome'] ?? ''));
+        $sortCol = ManualModel::normalizeSortColumn((string)($_GET['sort_col'] ?? 'data'));
+        $sortDir = ManualModel::normalizeSortDirection((string)($_GET['sort_dir'] ?? 'desc'));
         $empresaId = (int)($this->resolveScopedClienteId($empresaId > 0 ? $empresaId : null) ?? 0);
 
         $clientes = $this->clientes->all();
@@ -40,6 +42,8 @@ class ManuaisController extends BaseController
             'empresa_id' => $empresaId > 0 ? $empresaId : null,
             'departamento_id' => $departamentoId > 0 ? $departamentoId : null,
             'nome' => $nome,
+            'sort_col' => $sortCol,
+            'sort_dir' => $sortDir,
         ];
         $items = $this->manuais->list($filters);
         $isFilial = $empresaId > 0 ? $this->clientes->isFilial($empresaId) : false;
@@ -58,6 +62,8 @@ class ManuaisController extends BaseController
             'selectedEmpresa' => $empresaId,
             'selectedDepartamento' => $departamentoId,
             'searchNome' => $nome,
+            'selectedSortCol' => $sortCol,
+            'selectedSortDir' => $sortDir,
             'canManageManuais' => ManualModel::canManage(),
             'canDeleteManuais' => ManualModel::canDelete(),
             'portalLink' => $empresaId > 0 && ManualModel::canManage() && !empty($_GET['portal_token'])

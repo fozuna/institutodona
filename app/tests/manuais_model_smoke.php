@@ -57,9 +57,52 @@ $id = $model->create([
     'tamanho' => 123,
     'usuario_id' => 1,
 ]);
+$sortPrefix = 'Manual Sort ' . uniqid('', true);
+$sortAId = $model->create([
+    'empresa_id' => $empresaId,
+    'departamento_id' => $departamentoId,
+    'nome' => $sortPrefix . ' A',
+    'descricao' => 'Alpha',
+    'arquivo' => 'storage/manuais/' . $empresaId . '/' . $departamentoId . '/sort-a.pdf',
+    'tipo_arquivo' => 'pdf',
+    'tamanho' => 10,
+    'usuario_id' => 1,
+]);
+$sortZId = $model->create([
+    'empresa_id' => $empresaId,
+    'departamento_id' => $departamentoId,
+    'nome' => $sortPrefix . ' Z',
+    'descricao' => 'Zulu',
+    'arquivo' => 'storage/manuais/' . $empresaId . '/' . $departamentoId . '/sort-z.pdf',
+    'tipo_arquivo' => 'pdf',
+    'tamanho' => 20,
+    'usuario_id' => 1,
+]);
 
 $all = $model->list(['empresa_id' => $empresaId, 'nome' => $prefix]);
 $filtered = $model->list(['empresa_id' => $empresaId, 'departamento_id' => $departamentoId, 'nome' => $prefix]);
+$sortAsc = $model->list([
+    'empresa_id' => $empresaId,
+    'nome' => $sortPrefix,
+    'sort_col' => 'nome',
+    'sort_dir' => 'asc',
+]);
+$sortDesc = $model->list([
+    'empresa_id' => $empresaId,
+    'nome' => $sortPrefix,
+    'sort_col' => 'nome',
+    'sort_dir' => 'desc',
+]);
+$sortDateAsc = $model->list([
+    'empresa_id' => $empresaId,
+    'nome' => $sortPrefix,
+    'sort_col' => 'data',
+    'sort_dir' => 'asc',
+]);
+$sortedNamesAsc = array_values(array_map(static fn(array $row): string => (string)($row['nome'] ?? ''), $sortAsc));
+$sortedNamesDesc = array_values(array_map(static fn(array $row): string => (string)($row['nome'] ?? ''), $sortDesc));
+$sortByNameOk = ($sortedNamesAsc[0] ?? '') === $sortPrefix . ' A' && ($sortedNamesDesc[0] ?? '') === $sortPrefix . ' Z';
+$sortByDateOk = ((int)($sortDateAsc[0]['id'] ?? 0) === $sortAId) && ((int)($sortDateAsc[1]['id'] ?? 0) === $sortZId);
 
 $clientes = new ClienteModel();
 $deps = new DepartamentoModel();
@@ -134,6 +177,8 @@ $linkOk = $model->isLinkedToFilial($manualMatriz, $filialId);
 
 $cleanup = $pdo->prepare('DELETE FROM manuais WHERE id = :id');
 $cleanup->execute(['id' => $id]);
+$cleanup->execute(['id' => $sortAId]);
+$cleanup->execute(['id' => $sortZId]);
  $cleanup->execute(['id' => $manualMatriz]);
  $cleanup->execute(['id' => $manualFilial]);
 if ($createdDepartamento) {
@@ -157,8 +202,10 @@ echo json_encode([
     'filial_sees_local_manual' => $seenLocal,
     'link_exists' => $linkOk,
     'synced_update' => $syncedUpdate,
+    'sort_by_name_ok' => $sortByNameOk,
+    'sort_by_date_ok' => $sortByDateOk,
 ], JSON_UNESCAPED_UNICODE);
 
-if ($id <= 0 || count($all) < 1 || count($filtered) < 1 || !$seenLinked || !$seenLocal || !$linkOk || !$syncedUpdate) {
+if ($id <= 0 || count($all) < 1 || count($filtered) < 1 || !$seenLinked || !$seenLocal || !$linkOk || !$syncedUpdate || !$sortByNameOk || !$sortByDateOk) {
     exit(1);
 }

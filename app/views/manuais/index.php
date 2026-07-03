@@ -3,7 +3,19 @@
 <?php /** @var bool $canManageManuais */ ?>
 <?php /** @var bool $canDeleteManuais */ ?>
 <?php /** @var string $portalLink */ ?>
+<?php /** @var string $selectedSortCol */ ?>
+<?php /** @var string $selectedSortDir */ ?>
 <?php $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/\\'); if ($basePath === '.' || $basePath === '/' || $basePath === '\\') { $basePath = ''; } ?>
+<?php
+$selectedSortCol = $selectedSortCol ?? 'data';
+$selectedSortDir = $selectedSortDir ?? 'desc';
+$sortIndicator = static function (string $column) use ($selectedSortCol, $selectedSortDir): string {
+    if ($selectedSortCol !== $column) {
+        return '↕';
+    }
+    return $selectedSortDir === 'asc' ? '↑' : '↓';
+};
+?>
 <div class="p-6">
   <div class="flex justify-between items-center mb-4">
     <h1 class="text-2xl font-bold text-brand-black">Biblioteca</h1>
@@ -42,8 +54,10 @@
     </div>
   <?php endif; ?>
 
-  <form method="get" action="index.php" class="mb-4 bg-white shadow rounded p-4">
+  <form method="get" action="index.php" id="manualFiltersForm" class="mb-4 bg-white shadow rounded p-4">
     <input type="hidden" name="route" value="manuais/index" />
+    <input type="hidden" name="sort_col" id="manualSortCol" value="<?= htmlspecialchars($selectedSortCol) ?>" />
+    <input type="hidden" name="sort_dir" id="manualSortDir" value="<?= htmlspecialchars($selectedSortDir) ?>" />
     <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
       <div class="md:col-span-4">
         <label class="block text-sm">Empresa</label>
@@ -82,11 +96,36 @@
     <table class="min-w-full">
       <thead>
         <tr class="text-left border-b">
-          <th class="p-3">Nome</th>
-          <th class="p-3">Descrição</th>
-          <th class="p-3">Empresa</th>
-          <th class="p-3">Departamento</th>
-          <th class="p-3">Data</th>
+          <th class="p-3">
+            <button type="button" class="manual-sort-trigger inline-flex items-center gap-2 font-semibold" data-col="nome">
+              <span>Nome</span>
+              <span class="text-xs text-gray-500"><?= $sortIndicator('nome') ?></span>
+            </button>
+          </th>
+          <th class="p-3">
+            <button type="button" class="manual-sort-trigger inline-flex items-center gap-2 font-semibold" data-col="descricao">
+              <span>Descrição</span>
+              <span class="text-xs text-gray-500"><?= $sortIndicator('descricao') ?></span>
+            </button>
+          </th>
+          <th class="p-3">
+            <button type="button" class="manual-sort-trigger inline-flex items-center gap-2 font-semibold" data-col="empresa">
+              <span>Empresa</span>
+              <span class="text-xs text-gray-500"><?= $sortIndicator('empresa') ?></span>
+            </button>
+          </th>
+          <th class="p-3">
+            <button type="button" class="manual-sort-trigger inline-flex items-center gap-2 font-semibold" data-col="departamento">
+              <span>Departamento</span>
+              <span class="text-xs text-gray-500"><?= $sortIndicator('departamento') ?></span>
+            </button>
+          </th>
+          <th class="p-3">
+            <button type="button" class="manual-sort-trigger inline-flex items-center gap-2 font-semibold" data-col="data">
+              <span>Data</span>
+              <span class="text-xs text-gray-500"><?= $sortIndicator('data') ?></span>
+            </button>
+          </th>
           <th class="p-3">Ações</th>
         </tr>
       </thead>
@@ -171,7 +210,10 @@
 
     const empresa = document.getElementById('manualEmpresaFilter');
     const departamento = document.getElementById('manualDepartamentoFilter');
-    if (!empresa || !departamento) return;
+    const filterForm = document.getElementById('manualFiltersForm');
+    const sortCol = document.getElementById('manualSortCol');
+    const sortDir = document.getElementById('manualSortDir');
+    if (!empresa || !departamento || !filterForm || !sortCol || !sortDir) return;
     const sync = function() {
       const empresaId = empresa.value;
       const info = empresaId ? byId[String(empresaId)] : null;
@@ -192,6 +234,18 @@
     };
     empresa.addEventListener('change', sync);
     sync();
+    document.querySelectorAll('.manual-sort-trigger').forEach(function(button) {
+      button.addEventListener('click', function() {
+        const column = button.getAttribute('data-col') || 'data';
+        if (sortCol.value === column) {
+          sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
+        } else {
+          sortCol.value = column;
+          sortDir.value = column === 'data' ? 'desc' : 'asc';
+        }
+        filterForm.submit();
+      });
+    });
 
     const modal = document.getElementById('manualDeleteModal');
     const nameEl = document.getElementById('manualDeleteName');

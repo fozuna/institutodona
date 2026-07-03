@@ -5,6 +5,14 @@ use App\Core\Auth;
 
 class ManualModel extends BaseModel
 {
+    private const SORT_COLUMNS = [
+        'nome' => 'm.nome',
+        'descricao' => 'COALESCE(m.descricao, \'\')',
+        'empresa' => 'c.nome_empresa',
+        'departamento' => 'd.nome',
+        'data' => 'm.created_at',
+    ];
+
     private const ALLOWED_TYPES = [
         'pdf',
         'doc', 'docx',
@@ -112,7 +120,10 @@ class ManualModel extends BaseModel
             $params['nome'] = '%' . trim((string)$filters['nome']) . '%';
         }
 
-        $sql .= ' ORDER BY m.created_at DESC, m.id DESC';
+        $sql .= ' ORDER BY ' . self::orderByClause(
+            self::normalizeSortColumn($filters['sort_col'] ?? null),
+            self::normalizeSortDirection($filters['sort_dir'] ?? null)
+        );
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll();
@@ -150,7 +161,10 @@ class ManualModel extends BaseModel
             $params['nome'] = '%' . trim((string)$filters['nome']) . '%';
         }
 
-        $sql .= ' ORDER BY m.created_at DESC, m.id DESC';
+        $sql .= ' ORDER BY ' . self::orderByClause(
+            self::normalizeSortColumn($filters['sort_col'] ?? null),
+            self::normalizeSortDirection($filters['sort_dir'] ?? null)
+        );
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll();
@@ -380,6 +394,22 @@ class ManualModel extends BaseModel
         return $base;
     }
 
+    public static function sortableColumns(): array
+    {
+        return array_keys(self::SORT_COLUMNS);
+    }
+
+    public static function normalizeSortColumn(?string $value): string
+    {
+        $column = trim((string)$value);
+        return array_key_exists($column, self::SORT_COLUMNS) ? $column : 'data';
+    }
+
+    public static function normalizeSortDirection(?string $value): string
+    {
+        return strtolower(trim((string)$value)) === 'asc' ? 'asc' : 'desc';
+    }
+
     public function portalCount(array $empresaIds, array $filters = []): int
     {
         $this->ensureTable();
@@ -467,6 +497,13 @@ class ManualModel extends BaseModel
         return $sql;
     }
 
+    private static function orderByClause(string $sortCol, string $sortDir): string
+    {
+        $column = self::SORT_COLUMNS[self::normalizeSortColumn($sortCol)] ?? self::SORT_COLUMNS['data'];
+        $direction = self::normalizeSortDirection($sortDir) === 'asc' ? 'ASC' : 'DESC';
+        return $column . ' ' . $direction . ', m.id ' . $direction;
+    }
+
     public static function canManage(): bool
     {
         $role = (string)(Auth::user()['tipo_acesso'] ?? '');
@@ -476,6 +513,6 @@ class ManualModel extends BaseModel
     public static function canDelete(): bool
     {
         $role = (string)(Auth::user()['tipo_acesso'] ?? '');
-        return $role === 'instituto';
+        return $role === 'instituto' || $role === 'cliente_admin';
     }
 }
