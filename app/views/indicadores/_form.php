@@ -6,6 +6,7 @@
 /** @var array $unidades */
 /** @var array $responsaveisSelecionados */
 /** @var array $periodicidades */
+/** @var array $metaTipos */
 /** @var string $submitRoute */
 /** @var string $title */
 /** @var string $backUrl */
@@ -161,6 +162,19 @@ $formatInput = static function ($raw): string {
         <label class="block text-sm font-medium text-gray-700 mb-1"><?= htmlspecialchars($t('indicadores.label.valor')) ?></label>
         <input type="text" inputmode="decimal" name="valor" data-indicador-decimal class="border rounded-lg p-3 w-full <?= $fieldError('valor') ? 'border-red-400' : 'border-gray-300' ?>" value="<?= htmlspecialchars($formatInput($value('valor', ''))) ?>" placeholder="<?= htmlspecialchars($t('indicadores.placeholder.valor')) ?>" required />
         <?php if ($fieldError('valor')): ?><p class="text-sm text-red-600 mt-1"><?= htmlspecialchars($fieldError('valor')) ?></p><?php endif; ?>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1"><?= htmlspecialchars($t('indicadores.label.tipo_meta')) ?></label>
+        <select name="tipo_meta" class="border rounded-lg p-3 w-full <?= $fieldError('tipo_meta') ? 'border-red-400' : 'border-gray-300' ?>" required>
+          <?php foreach ($metaTipos as $metaTipoValue => $metaTipoLabel): ?>
+            <option value="<?= htmlspecialchars($metaTipoValue) ?>" <?= ((string)$value('tipo_meta', 'minimo') === (string)$metaTipoValue) ? 'selected' : '' ?>>
+              <?= htmlspecialchars($metaTipoLabel) ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
+        <?php if ($fieldError('tipo_meta')): ?><p class="text-sm text-red-600 mt-1"><?= htmlspecialchars($fieldError('tipo_meta')) ?></p><?php endif; ?>
+        <p class="text-xs text-gray-500 mt-2"><?= htmlspecialchars($t('indicadores.help.tipo_meta')) ?></p>
       </div>
 
       <div>

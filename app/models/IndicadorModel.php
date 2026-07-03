@@ -7,6 +7,11 @@ use App\Database\Database;
 
 class IndicadorModel extends BaseModel
 {
+    public const META_TIPOS = [
+        'minimo' => 'indicadores.option.tipo_meta.minimo',
+        'maximo' => 'indicadores.option.tipo_meta.maximo',
+    ];
+
     public const PERIODICIDADES = [
         'diaria' => 'indicadores.periodicidade.diaria',
         'semanal' => 'indicadores.periodicidade.semanal',
@@ -47,6 +52,15 @@ class IndicadorModel extends BaseModel
         return $labels;
     }
 
+    public function metaTipos(): array
+    {
+        $labels = [];
+        foreach (self::META_TIPOS as $value => $key) {
+            $labels[$value] = I18n::t($key);
+        }
+        return $labels;
+    }
+
     public function defaultPayload(): array
     {
         return [
@@ -60,6 +74,7 @@ class IndicadorModel extends BaseModel
             'data_inicial' => '',
             'data_final' => '',
             'valor' => '',
+            'tipo_meta' => 'minimo',
             'unidade_medida_id' => 0,
             'valor_minimo' => '',
             'valor_maximo' => '',
@@ -77,6 +92,7 @@ class IndicadorModel extends BaseModel
         $payload['data_inicial'] = trim((string)($payload['data_inicial'] ?? ''));
         $payload['data_final'] = trim((string)($payload['data_final'] ?? ''));
         $payload['valor'] = $this->normalizeDecimal($payload['valor'] ?? null);
+        $payload['tipo_meta'] = $this->normalizeMetaTipo($payload['tipo_meta'] ?? null);
         $payload['unidade_medida_id'] = (int)($payload['unidade_medida_id'] ?? 0);
         $payload['valor_minimo'] = $this->normalizeDecimal($payload['valor_minimo'] ?? null);
         $payload['valor_maximo'] = $this->normalizeDecimal($payload['valor_maximo'] ?? null);
@@ -131,6 +147,12 @@ class IndicadorModel extends BaseModel
 
         if ($data['valor'] === null) {
             $errors['valor'] = I18n::t('indicadores.validation.invalid_number', ['field' => I18n::t('indicadores.label.valor')]);
+        } elseif ((float)$data['valor'] <= 0) {
+            $errors['valor'] = I18n::t('indicadores.validation.positive_number', ['field' => I18n::t('indicadores.label.valor')]);
+        }
+
+        if (!isset(self::META_TIPOS[$data['tipo_meta']])) {
+            $errors['tipo_meta'] = I18n::t('indicadores.validation.required', ['field' => I18n::t('indicadores.label.tipo_meta')]);
         }
 
         $unit = null;
@@ -298,18 +320,29 @@ class IndicadorModel extends BaseModel
         if ($data['cliente_id'] <= 0 || !$this->canAccessClienteId($data['cliente_id']) || !$this->clientes->findActive($data['cliente_id'])) {
             return 0;
         }
+        $columns = [
+            'cliente_id', 'indicador', 'nome', 'departamento_id', 'setor_id', 'periodicidade_tipo',
+            'data_inicial', 'data_final', 'valor',
+        ];
+        $placeholders = [
+            ':cliente_id', ':indicador', ':nome', ':departamento_id', ':setor_id', ':periodicidade_tipo',
+            ':data_inicial', ':data_final', ':valor',
+        ];
+        if ($this->schema['indicadores_tipo_meta']) {
+            $columns[] = 'tipo_meta';
+            $placeholders[] = ':tipo_meta';
+        }
+        $columns = array_merge($columns, [
+            'unidade_medida_id', 'valor_minimo', 'valor_maximo', 'created_at', 'updated_at', 'created_by', 'updated_by',
+        ]);
+        $placeholders = array_merge($placeholders, [
+            ':unidade_medida_id', ':valor_minimo', ':valor_maximo', 'NOW()', 'NOW()', ':created_by', ':updated_by',
+        ]);
         $stmt = $this->db->prepare(
-            'INSERT INTO indicadores (
-                cliente_id, indicador, nome, departamento_id, setor_id, periodicidade_tipo,
-                data_inicial, data_final, valor, unidade_medida_id, valor_minimo, valor_maximo,
-                created_at, updated_at, created_by, updated_by
-            ) VALUES (
-                :cliente_id, :indicador, :nome, :departamento_id, :setor_id, :periodicidade_tipo,
-                :data_inicial, :data_final, :valor, :unidade_medida_id, :valor_minimo, :valor_maximo,
-                NOW(), NOW(), :created_by, :updated_by
-            )'
+            'INSERT INTO indicadores (' . implode(', ', $columns) . ')
+             VALUES (' . implode(', ', $placeholders) . ')'
         );
-        $stmt->execute([
+        $params = [
             'cliente_id' => $data['cliente_id'],
             'indicador' => $data['indicador'],
             'nome' => $data['indicador'],
@@ -324,7 +357,11 @@ class IndicadorModel extends BaseModel
             'valor_maximo' => $data['valor_maximo'],
             'created_by' => $userId > 0 ? $userId : null,
             'updated_by' => $userId > 0 ? $userId : null,
-        ]);
+        ];
+        if ($this->schema['indicadores_tipo_meta']) {
+            $params['tipo_meta'] = $data['tipo_meta'];
+        }
+        $stmt->execute($params);
         $id = (int)$this->db->lastInsertId();
         $this->syncResponsaveis($id, $data['responsavel_ids']);
         $this->eventos->syncForIndicator($this->find($id) ?: array_merge($data, ['id' => $id]), $userId);
@@ -353,23 +390,33 @@ class IndicadorModel extends BaseModel
             'valor_maximo' => $data['valor_maximo'],
             'updated_by' => $userId > 0 ? $userId : null,
         ];
+        $setClauses = [
+            'cliente_id = :cliente_id',
+            'indicador = :indicador',
+            'nome = :nome',
+            'departamento_id = :departamento_id',
+            'setor_id = :setor_id',
+            'periodicidade_tipo = :periodicidade_tipo',
+            'data_inicial = :data_inicial',
+            'data_final = :data_final',
+            'valor = :valor',
+        ];
+        if ($this->schema['indicadores_tipo_meta']) {
+            $params['tipo_meta'] = $data['tipo_meta'];
+            $setClauses[] = 'tipo_meta = :tipo_meta';
+        }
+        $setClauses = array_merge($setClauses, [
+            'unidade_medida_id = :unidade_medida_id',
+            'valor_minimo = :valor_minimo',
+            'valor_maximo = :valor_maximo',
+            'updated_at = NOW()',
+            'updated_by = :updated_by',
+        ]);
         $scope = $this->tenantInCondition('cliente_id', $params, 'indu');
         $stmt = $this->db->prepare(
             'UPDATE indicadores
-             SET cliente_id = :cliente_id,
-                 indicador = :indicador,
-                 nome = :nome,
-                 departamento_id = :departamento_id,
-                 setor_id = :setor_id,
-                 periodicidade_tipo = :periodicidade_tipo,
-                 data_inicial = :data_inicial,
-                 data_final = :data_final,
-                 valor = :valor,
-                 unidade_medida_id = :unidade_medida_id,
-                 valor_minimo = :valor_minimo,
-                 valor_maximo = :valor_maximo,
-                 updated_at = NOW(),
-                 updated_by = :updated_by
+             SET ' . implode(",
+                 ", $setClauses) . '
              WHERE id = :id AND deleted_at IS NULL AND ' . $scope
         );
         $ok = $stmt->execute($params);
@@ -388,6 +435,9 @@ class IndicadorModel extends BaseModel
         }
         $normalized = $this->normalizeDecimal($valor);
         if ($normalized === null) {
+            return false;
+        }
+        if ((float)$normalized <= 0) {
             return false;
         }
         $unit = $this->unidades->findActive((int)$item['unidade_medida_id']);
@@ -475,11 +525,15 @@ class IndicadorModel extends BaseModel
         $respIds = $this->schema['indicador_responsavel_table']
             ? "GROUP_CONCAT(DISTINCT col.id ORDER BY col.nome SEPARATOR ',')"
             : "''";
+        $metaTipoSelect = $this->schema['indicadores_tipo_meta']
+            ? "COALESCE(i.tipo_meta, 'minimo')"
+            : "'minimo'";
         return "SELECT
                 i.*,
                 c.nome_empresa AS cliente_nome,
                 {$departSelect},
                 {$setorSelect},
+                {$metaTipoSelect} AS tipo_meta,
                 {$unidadeNome} AS unidade_nome,
                 {$unidadeSimbolo} AS unidade_simbolo,
                 {$unidadeTipo} AS unidade_tipo,
@@ -623,12 +677,22 @@ class IndicadorModel extends BaseModel
             'indicadores_table' => Database::tableExists('indicadores'),
             'indicadores_deleted_at' => Database::columnExists('indicadores', 'deleted_at'),
             'indicadores_indicador' => Database::columnExists('indicadores', 'indicador'),
+            'indicadores_tipo_meta' => Database::columnExists('indicadores', 'tipo_meta'),
             'indicadores_departamento_id' => Database::columnExists('indicadores', 'departamento_id'),
             'indicadores_setor_id' => Database::columnExists('indicadores', 'setor_id'),
             'indicadores_unidade_medida_id' => Database::columnExists('indicadores', 'unidade_medida_id'),
             'indicador_responsavel_table' => Database::tableExists('indicador_responsavel'),
             'unidades_medida_table' => Database::tableExists('unidades_medida'),
         ];
+    }
+
+    private function normalizeMetaTipo($value): string
+    {
+        $tipo = mb_strtolower(trim((string)$value));
+        if ($tipo === '' || !isset(self::META_TIPOS[$tipo])) {
+            return 'minimo';
+        }
+        return $tipo;
     }
 
     private function legacySearch(array $filters): array

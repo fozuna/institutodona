@@ -2,17 +2,20 @@
 namespace App\Models;
 
 use App\Core\I18n;
+use App\Database\Database;
 use DateInterval;
 use DateTimeImmutable;
 
 class IndicadorEventoModel extends BaseModel
 {
     private UnidadeMedidaModel $unidades;
+    private bool $hasIndicadorTipoMeta = false;
 
     public function __construct()
     {
         parent::__construct();
         $this->unidades = new UnidadeMedidaModel();
+        $this->hasIndicadorTipoMeta = Database::columnExists('indicadores', 'tipo_meta');
     }
 
     public function byCliente(int $clienteId, ?int $ano = null): array
@@ -174,12 +177,17 @@ class IndicadorEventoModel extends BaseModel
                 'periodo_inicio' => $periodStart,
                 'periodo_fim' => $periodEnd >= $periodStart ? $periodEnd : $periodStart,
                 'valor_meta' => (float)($indicator['valor'] ?? 0),
+                'tipo_meta' => (string)($indicator['tipo_meta'] ?? 'minimo'),
                 'updated_by' => $userId > 0 ? $userId : null,
             ];
 
             if (isset($existing[$date])) {
                 $row = $existing[$date];
-                $performance = self::performance((float)$payload['valor_meta'], $row['valor_atingido'] !== null ? (float)$row['valor_atingido'] : null);
+                $performance = self::performance(
+                    (float)$payload['valor_meta'],
+                    $row['valor_atingido'] !== null ? (float)$row['valor_atingido'] : null,
+                    (string)$payload['tipo_meta']
+                );
                 $stmt = $this->db->prepare(
                     'UPDATE indicador_eventos
                      SET periodo_inicio = :periodo_inicio,
@@ -205,7 +213,7 @@ class IndicadorEventoModel extends BaseModel
                 continue;
             }
 
-            $performance = self::performance((float)$payload['valor_meta'], null);
+            $performance = self::performance((float)$payload['valor_meta'], null, (string)$payload['tipo_meta']);
             $stmt = $this->db->prepare(
                 'INSERT INTO indicador_eventos (
                     indicador_id, cliente_id, data_evento, periodo_inicio, periodo_fim,
@@ -288,7 +296,11 @@ class IndicadorEventoModel extends BaseModel
             }
         }
 
-        $performance = self::performance((float)$event['valor_meta'], (float)$normalized);
+        $performance = self::performance(
+            (float)$event['valor_meta'],
+            (float)$normalized,
+            (string)($event['tipo_meta'] ?? 'minimo')
+        );
         $params = [
             'id' => $id,
             'valor_atingido' => $normalized,
@@ -338,8 +350,9 @@ class IndicadorEventoModel extends BaseModel
         ];
     }
 
-    public static function performance(float $meta, ?float $atingido): array
+    public static function performance(float $meta, ?float $atingido, string $tipoMeta = 'minimo'): array
     {
+        $tipoMeta = $tipoMeta === 'maximo' ? 'maximo' : 'minimo';
         if ($atingido === null) {
             return [
                 'percentual' => null,
@@ -350,23 +363,44 @@ class IndicadorEventoModel extends BaseModel
             ];
         }
 
-        $percentual = $meta > 0 ? round(($atingido / $meta) * 100, 2) : null;
-        if ($percentual !== null && $percentual >= 100) {
+        if ($meta <= 0) {
+            return [
+                'percentual' => null,
+                'status' => 'nao_atingida',
+                'label' => I18n::t('indicadores.meta.missed'),
+                'class' => 'bg-red-100 text-red-700',
+                'icon' => 'x-circle',
+            ];
+        }
+
+        if ($tipoMeta === 'maximo') {
+            $percentual = round(($meta / max($atingido, 0.0001)) * 100, 2);
+            if ($atingido <= $meta) {
+                return [
+                    'percentual' => min(100.0, $percentual),
+                    'status' => 'atingida',
+                    'label' => I18n::t('indicadores.meta.hit'),
+                    'class' => 'bg-green-100 text-green-700',
+                    'icon' => 'check-circle',
+                ];
+            }
+            return [
+                'percentual' => $percentual,
+                'status' => 'nao_atingida',
+                'label' => I18n::t('indicadores.meta.missed'),
+                'class' => 'bg-red-100 text-red-700',
+                'icon' => 'x-circle',
+            ];
+        }
+
+        $percentual = round(($atingido / $meta) * 100, 2);
+        if ($atingido >= $meta) {
             return [
                 'percentual' => $percentual,
                 'status' => 'atingida',
                 'label' => I18n::t('indicadores.meta.hit'),
                 'class' => 'bg-green-100 text-green-700',
                 'icon' => 'check-circle',
-            ];
-        }
-        if ($percentual !== null && $percentual >= 80) {
-            return [
-                'percentual' => $percentual,
-                'status' => 'parcial',
-                'label' => I18n::t('indicadores.meta.partial'),
-                'class' => 'bg-amber-100 text-amber-700',
-                'icon' => 'alert-circle',
             ];
         }
         return [
@@ -380,9 +414,13 @@ class IndicadorEventoModel extends BaseModel
 
     private function baseSelect(): string
     {
+        $metaTipoSelect = $this->hasIndicadorTipoMeta
+            ? "COALESCE(i.tipo_meta, 'minimo') AS tipo_meta,"
+            : "'minimo' AS tipo_meta,";
         return "SELECT
                 ie.*,
                 i.indicador,
+                {$metaTipoSelect}
                 i.periodicidade_tipo,
                 i.unidade_medida_id,
                 um.nome AS unidade_nome,
@@ -401,7 +439,11 @@ class IndicadorEventoModel extends BaseModel
 
     private function decorate(array $row): array
     {
-        $performance = self::performance((float)($row['valor_meta'] ?? 0), $row['valor_atingido'] !== null ? (float)$row['valor_atingido'] : null);
+        $performance = self::performance(
+            (float)($row['valor_meta'] ?? 0),
+            $row['valor_atingido'] !== null ? (float)$row['valor_atingido'] : null,
+            (string)($row['tipo_meta'] ?? 'minimo')
+        );
         $row['meta_status_key'] = $performance['status'];
         $row['meta_status_label'] = $performance['label'];
         $row['meta_status_class'] = $performance['class'];

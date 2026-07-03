@@ -42,7 +42,14 @@ ok('Consultor respeita escopo de módulos permitidos');
 $clienteAdmin = userRole('cliente_admin');
 if (!AccessControl::canAccessRoute('departamentos/create', 'GET', $clienteAdmin)
     || !AccessControl::canAccessRoute('departamentos/delete', 'POST', $clienteAdmin)
-    || !AccessControl::canAccessRoute('avaliacoes/store', 'POST', $clienteAdmin)) {
+    || !AccessControl::canAccessRoute('avaliacoes/store', 'POST', $clienteAdmin)
+    || !AccessControl::canAccessRoute('manuais/index', 'GET', $clienteAdmin)
+    || !AccessControl::canAccessRoute('cronograma/store', 'POST', $clienteAdmin)
+    || !AccessControl::canAccessRoute('planoacao/updateTask', 'POST', $clienteAdmin)
+    || !AccessControl::canAccessRoute('tarefas/delete', 'POST', $clienteAdmin)
+    || !AccessControl::canAccessRoute('agenda/index', 'GET', $clienteAdmin)
+    || !AccessControl::canAccessRoute('reunioes/store', 'POST', $clienteAdmin)
+    || !AccessControl::canAccessRoute('usuarios/delete', 'GET', $clienteAdmin)) {
     failFast('Cliente admin deveria possuir CRUD completo nos módulos permitidos');
 }
 if (AccessControl::canAccessRoute('clientes/index', 'GET', $clienteAdmin)
@@ -58,10 +65,17 @@ if (!AccessControl::canAccessRoute('departamentos/edit', 'GET', $clienteEditor)
     failFast('Cliente editor deveria acessar leitura e escrita sem exclusão');
 }
 if (AccessControl::canAccessRoute('departamentos/delete', 'POST', $clienteEditor)
+    || AccessControl::canAccessRoute('manuais/index', 'GET', $clienteEditor)
+    || AccessControl::canAccessRoute('cronograma/index', 'GET', $clienteEditor)
+    || AccessControl::canAccessRoute('planoacao/index', 'GET', $clienteEditor)
+    || AccessControl::canAccessRoute('tarefas/index', 'GET', $clienteEditor)
+    || AccessControl::canAccessRoute('agenda/index', 'GET', $clienteEditor)
+    || AccessControl::canAccessRoute('reunioes/index', 'GET', $clienteEditor)
+    || AccessControl::canAccessRoute('usuarios/index', 'GET', $clienteEditor)
     || AccessControl::canDeleteRoute('avaliacoes/delete-ajax', 'POST', $clienteEditor)) {
     failFast('Cliente editor não deveria possuir exclusão');
 }
-ok('Cliente editor bloqueia exclusão');
+ok('Cliente editor bloqueia exclusão e módulos exclusivos de Cliente Admin');
 
 $reader = userRole('reader');
 if (!AccessControl::canAccessRoute('avaliacoes/index', 'GET', $reader)
@@ -70,11 +84,18 @@ if (!AccessControl::canAccessRoute('avaliacoes/index', 'GET', $reader)
 }
 if (AccessControl::canAccessRoute('avaliacoes/create', 'GET', $reader)
     || AccessControl::canAccessRoute('departamentos/edit', 'GET', $reader)
+    || AccessControl::canAccessRoute('manuais/index', 'GET', $reader)
+    || AccessControl::canAccessRoute('cronograma/index', 'GET', $reader)
+    || AccessControl::canAccessRoute('planoacao/index', 'GET', $reader)
+    || AccessControl::canAccessRoute('tarefas/index', 'GET', $reader)
+    || AccessControl::canAccessRoute('agenda/index', 'GET', $reader)
+    || AccessControl::canAccessRoute('reunioes/index', 'GET', $reader)
+    || AccessControl::canAccessRoute('usuarios/index', 'GET', $reader)
     || AccessControl::canAccessRoute('avaliacoes/store', 'POST', $reader)
     || AccessControl::canAccessRoute('avaliacoes/delete-ajax', 'POST', $reader)) {
     failFast('Cliente leitor não deveria acessar ações de escrita');
 }
-ok('Cliente leitor permanece somente leitura');
+ok('Cliente leitor permanece somente leitura e sem acesso aos módulos de Cliente Admin');
 
 if (AccessControl::defaultHomeRoute($instituto) !== 'dashboard/index') {
     failFast('Home do Instituto deveria ser o dashboard');

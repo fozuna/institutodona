@@ -1122,6 +1122,7 @@ class IndicadoresController extends BaseController
             'unidades' => $this->unidades->activeAll(),
             'responsaveisSelecionados' => $selectedResponsaveis,
             'periodicidades' => $this->model->periodicidades(),
+            'metaTipos' => $this->model->metaTipos(),
             'i18n' => I18n::class,
         ]);
     }
@@ -1139,6 +1140,7 @@ class IndicadoresController extends BaseController
             'data_inicial' => $_POST['data_inicial'] ?? '',
             'data_final' => $_POST['data_final'] ?? '',
             'valor' => $_POST['valor'] ?? '',
+            'tipo_meta' => $_POST['tipo_meta'] ?? 'minimo',
             'unidade_medida_id' => $_POST['unidade_medida_id'] ?? 0,
             'valor_minimo' => $_POST['valor_minimo'] ?? '',
             'valor_maximo' => $_POST['valor_maximo'] ?? '',

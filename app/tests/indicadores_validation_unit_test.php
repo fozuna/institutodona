@@ -31,6 +31,12 @@ try {
     $runner->applyAll();
 } catch (\RuntimeException $e) {
     echo "WARN: {$e->getMessage()}\n";
+    try {
+        $runner->repairChecksumMismatches();
+        $runner->applyAll();
+    } catch (\Throwable $inner) {
+        echo "WARN: {$inner->getMessage()}\n";
+    }
 }
 
 $pdo = Database::getConnection();
@@ -117,6 +123,7 @@ $baseData = [
     'data_inicial' => '2026-01-01',
     'data_final' => '2026-12-31',
     'valor' => '85',
+    'tipo_meta' => 'minimo',
     'unidade_medida_id' => $unitPercent,
     'valor_minimo' => '70',
     'valor_maximo' => '95',
@@ -136,6 +143,7 @@ assert_true($indicadorId > 0, 'Criou indicador com responsáveis');
 
 $created = $indicadores->find($indicadorId);
 assert_true(!empty($created['responsavel_ids']) && in_array($responsavelId, $created['responsavel_ids'], true), 'Persistiu responsáveis na tabela associativa');
+assert_true(($created['tipo_meta'] ?? '') === 'minimo', 'Persistiu tipo de meta minimo no indicador');
 assert_true(($created['control_status_key'] ?? '') === 'normal', 'Classificou valor dentro da faixa de controle');
 $createdEvents = $indicadorEventos->byIndicador($indicadorId);
 assert_true(count($createdEvents) === 12, 'Gerou eventos mensais do indicador da data inicial até a data final');
@@ -162,7 +170,13 @@ $negativePercentageErrors = $indicadores->validate(array_merge($baseData, [
     'indicador' => 'Indicador Percentual Negativo ' . $suffix,
     'valor' => '-15',
 ]));
-assert_true($negativePercentageErrors === [], 'Aceita percentual negativo no cadastro do indicador');
+assert_true(isset($negativePercentageErrors['valor']), 'Bloqueia meta negativa no cadastro do indicador');
+
+$zeroReferenceErrors = $indicadores->validate(array_merge($baseData, [
+    'indicador' => 'Indicador Referencia Zero ' . $suffix,
+    'valor' => '0',
+]));
+assert_true(isset($zeroReferenceErrors['valor']), 'Bloqueia meta com valor zero');
 
 $percentageErrors = $indicadores->validate(array_merge($baseData, [
     'indicador' => 'Indicador Percentual ' . $suffix,
@@ -199,17 +213,17 @@ assert_true($outOfRangeId > 0, 'Permite salvar indicador fora da faixa para gera
 assert_true(($indicadores->find($outOfRangeId)['control_status_key'] ?? '') === 'high', 'Classifica indicador acima do máximo');
 assert_true($indicadorEventos->updateAchievedValue((int)$createdEvents[0]['id'], '68', 1, 'Resultado parcial'), 'Atualiza valor atingido em evento do indicador');
 $updatedEvent = $indicadorEventos->find((int)$createdEvents[0]['id']);
-assert_true(($updatedEvent['meta_status_key'] ?? '') === 'parcial', 'Calcula status parcial para cumprimento entre 80 e 99%');
+assert_true(($updatedEvent['meta_status_key'] ?? '') === 'nao_atingida', 'Calcula status não atingido quando valor fica abaixo do mínimo');
 assert_true((float)($updatedEvent['percentual_cumprimento'] ?? 0) === 80.0, 'Calcula percentual de cumprimento do evento');
 assert_true($indicadorEventos->updateAchievedValue((int)$createdEvents[2]['id'], '68,50', 1, 'Decimais pt-BR'), 'Atualiza evento aceitando decimal com vírgula');
 $updatedEventComma = $indicadorEventos->find((int)$createdEvents[2]['id']);
 assert_true($updatedEventComma !== null && abs((float)($updatedEventComma['valor_atingido'] ?? 0) - 68.5) < 0.0001, 'Persistiu valor com vírgula corretamente');
 assert_true(!$indicadorEventos->updateAchievedValue((int)$createdEvents[3]['id'], '10,0,0', 1, 'Inválido'), 'Rejeita formato com múltiplas vírgulas');
 assert_true(!$indicadorEventos->updateAchievedValue((int)$createdEvents[4]['id'], '110', 1, 'Percentual inválido'), 'Rejeita percentual acima de 100 no evento');
-assert_true($indicadorEventos->updateAchievedValue((int)$createdEvents[5]['id'], '-10', 1, 'Percentual negativo'), 'Aceita percentual negativo no evento');
-assert_true((float)($indicadorEventos->find((int)$createdEvents[5]['id'])['valor_atingido'] ?? 0) === -10.0, 'Persistiu valor negativo no evento');
+assert_true($indicadorEventos->updateAchievedValue((int)$createdEvents[5]['id'], '-10', 1, 'Percentual negativo'), 'Aceita valor negativo no evento quando o valor medido assim exigir');
+assert_true(($indicadorEventos->find((int)$createdEvents[5]['id'])['meta_status_key'] ?? '') === 'nao_atingida', 'Valor negativo no evento continua classificado como abaixo do mínimo');
 assert_true($indicadorEventos->updateAchievedValue((int)$createdEvents[1]['id'], '85', 1, 'Meta atendida'), 'Atualiza evento com meta atingida');
-assert_true(($indicadorEventos->find((int)$createdEvents[1]['id'])['meta_status_key'] ?? '') === 'atingida', 'Marca meta atingida quando valor supera 100%');
+assert_true(($indicadorEventos->find((int)$createdEvents[1]['id'])['meta_status_key'] ?? '') === 'atingida', 'Marca meta atingida quando valor alcança o mínimo configurado');
 
 $integerIndicadorId = $indicadores->create(array_merge($baseData, [
     'indicador' => 'Indicador Evento Inteiro ' . $suffix,
@@ -237,6 +251,52 @@ assert_true(!empty($moneyEvents), 'Gerou eventos para indicador monetário');
 assert_true($indicadorEventos->updateAchievedValue((int)$moneyEvents[0]['id'], '6495', 1, 'Valor monetário sem separador'), 'Aceita evento monetário com número simples');
 assert_true(abs((float)($indicadorEventos->find((int)$moneyEvents[0]['id'])['valor_atingido'] ?? 0) - 6495.0) < 0.0001, 'Persistiu valor monetário corretamente');
 
+$maximoIndicadorId = $indicadores->create(array_merge($baseData, [
+    'indicador' => 'Indicador Teto Maximo ' . $suffix,
+    'tipo_meta' => 'maximo',
+    'valor' => '40',
+    'valor_minimo' => null,
+    'valor_maximo' => null,
+]), 1);
+assert_true($maximoIndicadorId > 0, 'Cria indicador com tipo de meta teto máximo permitido');
+$maximo = $indicadores->find($maximoIndicadorId);
+assert_true(($maximo['tipo_meta'] ?? '') === 'maximo', 'Persistiu tipo de meta maximo');
+$maximoEvents = $indicadorEventos->byIndicador($maximoIndicadorId);
+assert_true(!empty($maximoEvents), 'Gerou eventos para indicador com teto máximo');
+assert_true($indicadorEventos->updateAchievedValue((int)$maximoEvents[0]['id'], '35', 1, 'Dentro do teto'), 'Permite lançar valor abaixo do teto máximo');
+assert_true(($indicadorEventos->find((int)$maximoEvents[0]['id'])['meta_status_key'] ?? '') === 'atingida', 'Valor abaixo do teto máximo fica com status bom');
+assert_true($indicadorEventos->updateAchievedValue((int)$maximoEvents[1]['id'], '45', 1, 'Acima do teto'), 'Permite lançar valor acima do teto máximo');
+assert_true(($indicadorEventos->find((int)$maximoEvents[1]['id'])['meta_status_key'] ?? '') === 'nao_atingida', 'Valor acima do teto máximo fica com status ruim');
+
+$legacyIndicadorNome = 'Indicador Legado ' . $suffix;
+$legacyStmt = $pdo->prepare('INSERT INTO indicadores
+    (cliente_id, indicador, nome, departamento_id, setor_id, periodicidade_tipo, data_inicial, data_final, valor, unidade_medida_id, valor_minimo, valor_maximo, created_at, updated_at)
+    VALUES
+    (:cliente_id, :indicador, :nome, :departamento_id, :setor_id, :periodicidade_tipo, :data_inicial, :data_final, :valor, :unidade_medida_id, :valor_minimo, :valor_maximo, NOW(), NOW())');
+$legacyStmt->execute([
+    'cliente_id' => $clienteId,
+    'indicador' => $legacyIndicadorNome,
+    'nome' => $legacyIndicadorNome,
+    'departamento_id' => $departamentoId,
+    'setor_id' => $setorId,
+    'periodicidade_tipo' => 'mensal',
+    'data_inicial' => '2026-01-01',
+    'data_final' => '2026-12-31',
+    'valor' => '50',
+    'unidade_medida_id' => $unitPercent,
+    'valor_minimo' => null,
+    'valor_maximo' => null,
+]);
+$legacyIndicadorId = (int)$pdo->lastInsertId();
+assert_true($legacyIndicadorId > 0, 'Cria indicador legado sem informar tipo de meta explicitamente');
+$legacy = $indicadores->find($legacyIndicadorId);
+assert_true(($legacy['tipo_meta'] ?? '') === 'minimo', 'Indicador legado assume o tipo minimo para manter retrocompatibilidade');
+$indicadorEventos->syncForIndicator($legacy ?: ['id' => $legacyIndicadorId], 1);
+$legacyEvents = $indicadorEventos->byIndicador($legacyIndicadorId);
+assert_true(!empty($legacyEvents), 'Gera eventos para indicador legado');
+assert_true($indicadorEventos->updateAchievedValue((int)$legacyEvents[0]['id'], '45', 1, 'Legado abaixo da meta'), 'Permite lançar valor em indicador legado');
+assert_true(($indicadorEventos->find((int)$legacyEvents[0]['id'])['meta_status_key'] ?? '') === 'nao_atingida', 'Indicador legado continua usando a regra original de mínimo');
+
 $deleted = $indicadores->softDelete($indicadorId, 1);
 assert_true($deleted, 'Aplica soft delete no indicador');
 assert_true($indicadorEventos->find((int)$createdEvents[0]['id']) === null, 'Oculta eventos do indicador após soft delete');
@@ -246,8 +306,7 @@ assert_true($duplicateAfterDelete === [], 'Soft delete libera novo cadastro com 
 
 assert_true($indicadores->updateValor($outOfRangeId, '88', 1), 'Atualiza valor lançado do indicador');
 assert_true((float)($indicadores->find($outOfRangeId)['valor'] ?? 0) === 88.0, 'Persistiu atualização do valor lançado');
-assert_true($indicadores->updateValor($outOfRangeId, '-12', 1), 'Aceita atualização negativa do valor lançado');
-assert_true((float)($indicadores->find($outOfRangeId)['valor'] ?? 0) === -12.0, 'Persistiu atualização negativa do indicador');
+assert_true(!$indicadores->updateValor($outOfRangeId, '-12', 1), 'Bloqueia atualização negativa da meta do indicador');
 assert_true($indicadores->update($outOfRangeId, array_merge($indicadores->find($outOfRangeId) ?: [], [
     'cliente_id' => $clienteId,
     'cliente_nome' => 'Cliente Indicadores ' . $suffix,
@@ -258,7 +317,8 @@ assert_true($indicadores->update($outOfRangeId, array_merge($indicadores->find($
     'periodicidade_tipo' => 'mensal',
     'data_inicial' => '2026-01-01',
     'data_final' => '2026-12-31',
-    'valor' => '-12',
+    'valor' => '72',
+    'tipo_meta' => 'minimo',
     'unidade_medida_id' => $unitPercent,
     'valor_minimo' => '60',
     'valor_maximo' => '90',

@@ -1,0 +1,11 @@
+SELECT COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME = 'indicadores'
+  AND COLUMN_NAME = 'tipo_meta';
+
+SELECT INDEX_NAME
+FROM information_schema.STATISTICS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME = 'indicadores'
+  AND INDEX_NAME = 'idx_indicadores_tipo_meta';

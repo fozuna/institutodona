@@ -20,10 +20,10 @@ if (!Auth::isClienteAdmin() || !Auth::isCliente() || Auth::isReader()) {
     failFast('Perfil cliente_admin não foi identificado corretamente');
 }
 ok('Perfil cliente_admin reconhecido');
-if (!ManualModel::canManage() || ManualModel::canDelete()) {
+if (!ManualModel::canManage() || !ManualModel::canDelete()) {
     failFast('Permissões de manuais para cliente_admin divergentes');
 }
-ok('Permissões de manuais para cliente_admin (editar ok, excluir bloqueado)');
+ok('Permissões de manuais para cliente_admin (editar/excluir ok)');
 
 Auth::login([
     'id' => 12,

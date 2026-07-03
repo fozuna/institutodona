@@ -145,7 +145,7 @@ class PlanoAcaoController extends BaseController
 
     public function create(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $clientes = (new ClienteModel())->all();
         $selectedCliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : null;
         $statusFilters = $_GET['status'] ?? [];
@@ -193,7 +193,7 @@ class PlanoAcaoController extends BaseController
     public function store(): void
     {
         try {
-            $this->requireRole('instituto');
+            $this->requireClienteAdminAccess();
             $csrf = $_POST['csrf'] ?? null;
             if (!Security::verifyCsrf($csrf)) { 
                 http_response_code(400); 
@@ -264,7 +264,7 @@ class PlanoAcaoController extends BaseController
 
     public function updateTask(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
         
@@ -320,7 +320,7 @@ class PlanoAcaoController extends BaseController
     public function updateAction(): void
     {
         try {
-            $this->requireRole('instituto');
+            $this->requireClienteAdminAccess();
             $csrf = $_POST['csrf'] ?? null;
             if (!Security::verifyCsrf($csrf)) {
                 http_response_code(400);
@@ -353,7 +353,7 @@ class PlanoAcaoController extends BaseController
 
     public function delete(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) {
             http_response_code(400);
@@ -380,7 +380,7 @@ class PlanoAcaoController extends BaseController
 
     public function upsertMetric(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
         $taskId = (int)($_POST['task_id'] ?? 0);
@@ -397,7 +397,7 @@ class PlanoAcaoController extends BaseController
 
     public function addCheck(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
         $taskId = (int)($_POST['task_id'] ?? 0);
@@ -408,7 +408,7 @@ class PlanoAcaoController extends BaseController
 
     public function createAction(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
         $taskId = (int)($_POST['task_id'] ?? 0);
@@ -428,7 +428,7 @@ class PlanoAcaoController extends BaseController
 
     public function importForm(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $enabled = getenv('PLANOACAO_IMPORT_ENABLED') === '1';
         $flagPath = __DIR__ . '/../../storage/imports/planoacao_import_done.flag';
         $alreadyRun = is_file($flagPath);
@@ -446,7 +446,7 @@ class PlanoAcaoController extends BaseController
 
     public function importRun(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') || (isset($_GET['ajax']) && $_GET['ajax'] === '1');
         $enabled = getenv('PLANOACAO_IMPORT_ENABLED') === '1';
         $flagDir = __DIR__ . '/../../storage/imports';

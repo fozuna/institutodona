@@ -35,7 +35,7 @@ class CronogramaController extends BaseController
 
     public function index(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $cid = (int)($_GET['id_cliente'] ?? 0);
         $order = $this->buildCronogramaOrder();
         $items = $cid ? $this->cronogramas->byCliente($cid, $order) : $this->cronogramas->all($order);
@@ -50,7 +50,7 @@ class CronogramaController extends BaseController
 
     public function create(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $clientes = (new ClienteModel())->all();
         $pref = (int)($_GET['id_cliente'] ?? 0);
         $this->render('cronograma/create', ['clientes' => $clientes, 'pref' => $pref]);
@@ -58,7 +58,7 @@ class CronogramaController extends BaseController
 
     public function store(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
         $data = [
@@ -77,7 +77,7 @@ class CronogramaController extends BaseController
 
     public function edit(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $id = (int)($_GET['id'] ?? 0);
         $crono = $this->cronogramas->find($id);
         if (!$crono) {
@@ -95,7 +95,7 @@ class CronogramaController extends BaseController
 
     public function update(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
         $id = (int)($_POST['id'] ?? 0);
@@ -112,7 +112,7 @@ class CronogramaController extends BaseController
 
     public function delete(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) {
             http_response_code(400);
@@ -160,7 +160,7 @@ class CronogramaController extends BaseController
 
     public function duplicate(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) {
             http_response_code(400);
@@ -213,7 +213,7 @@ class CronogramaController extends BaseController
 
     public function toggleAtivo(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) {
             http_response_code(400);
@@ -246,14 +246,14 @@ class CronogramaController extends BaseController
 
     public function selectCliente(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $clientes = (new ClienteModel())->all();
         $this->render('cronograma/select_cliente', ['clientes' => $clientes]);
     }
 
     public function show(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $id = (int)($_GET['id'] ?? 0);
         $crono = $this->cronogramas->find($id);
         $statusFilter = CronogramaTrafficLight::normalizeFilter($_GET['status_filter'] ?? 'todos');
@@ -314,7 +314,7 @@ class CronogramaController extends BaseController
 
     public function addEvento(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
         $idCronograma = (int)($_POST['id_cronograma'] ?? 0);
@@ -365,7 +365,7 @@ class CronogramaController extends BaseController
 
     public function ataDownload(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $id = (int)($_GET['id_evento'] ?? 0);
         $ev = $this->eventos->find($id);
         if (!$ev) {
@@ -393,7 +393,7 @@ class CronogramaController extends BaseController
 
     public function ataUpload(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
 
@@ -538,7 +538,7 @@ class CronogramaController extends BaseController
 
     public function anexosUpload(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
 
@@ -644,7 +644,7 @@ class CronogramaController extends BaseController
 
     public function anexoDownload(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $id = (int)($_GET['id_anexo'] ?? 0);
         $anexo = $this->eventos->anexoFind($id);
         if (!$anexo || !empty($anexo['deleted_at'])) {
@@ -677,7 +677,7 @@ class CronogramaController extends BaseController
 
     public function anexoDelete(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
 
@@ -861,7 +861,7 @@ class CronogramaController extends BaseController
 
     public function toggleStatus(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) {
             http_response_code(400);
@@ -916,7 +916,7 @@ class CronogramaController extends BaseController
 
     public function addEventoForm(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $id = (int)($_GET['id'] ?? 0);
         $crono = $this->cronogramas->find($id);
         $pilares = (new PilarModel())->all();
@@ -931,7 +931,7 @@ class CronogramaController extends BaseController
 
     public function eventoDrawer(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $idEvento = (int)($_GET['id_evento'] ?? 0);
         $idCronograma = (int)($_GET['id_cronograma'] ?? 0);
         $scope = (string)($_GET['escopo'] ?? 'evento');
@@ -966,7 +966,7 @@ class CronogramaController extends BaseController
 
     public function updateEvento(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) { http_response_code(400); echo 'CSRF inválido'; return; }
         $id = (int)($_POST['id_evento'] ?? 0);
@@ -1086,7 +1086,7 @@ class CronogramaController extends BaseController
 
     public function deleteEvento(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
         $src = $_SERVER['REQUEST_METHOD'] === 'POST' ? $_POST : $_GET;
         $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {

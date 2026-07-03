@@ -26,6 +26,7 @@ Reestruturar o módulo de `Indicadores` para suportar:
   - `data_inicial`
   - `data_final`
   - `valor`
+- `tipo_meta`
   - `unidade_medida_id`
   - `valor_minimo`
   - `valor_maximo`
@@ -71,16 +72,25 @@ Reestruturar o módulo de `Indicadores` para suportar:
 - `data_inicial <= data_final`
 - `unidade_medida_id` deve existir e estar ativa
 - `valor` percentual aceita somente `0..100`
+- `valor` usado como parâmetro de referência da meta deve ser positivo (`> 0`)
 - `valor` inteiro aceita somente números inteiros
 - `valor_minimo < valor_maximo`
 - valor fora da faixa não bloqueia gravação; apenas aciona alerta visual
 - cada indicador materializa eventos recorrentes em `indicador_eventos` do início ao fim do período
 - cada evento recebe `valor_meta` por snapshot do indicador e aceita `valor_atingido`
-- `percentual_cumprimento = (valor_atingido / valor_meta) * 100`
+- `tipo_meta` aceita `minimo|maximo` e default `minimo` para retrocompatibilidade
+- para `tipo_meta = minimo`:
+  - `atingida` quando `valor_atingido >= valor_meta`
+  - `nao_atingida` quando `valor_atingido < valor_meta`
+- para `tipo_meta = maximo`:
+  - `atingida` quando `valor_atingido <= valor_meta`
+  - `nao_atingida` quando `valor_atingido > valor_meta`
+- `percentual_cumprimento` segue a referência da regra ativa:
+  - `minimo`: `(valor_atingido / valor_meta) * 100`
+  - `maximo`: `100` quando dentro do teto e `ROUND((valor_meta / valor_atingido) * 100, 2)` quando excedido
 - status de meta:
-  - `atingida` quando `>= 100%`
-  - `parcial` quando `>= 80% e < 100%`
-  - `nao_atingida` quando `< 80%`
+  - `atingida` quando respeita a regra do tipo de meta
+  - `nao_atingida` quando viola a regra do tipo de meta
   - `pendente` quando ainda não houve lançamento
 
 ## Endpoints RESTful usados pelo módulo
@@ -137,9 +147,22 @@ Reestruturar o módulo de `Indicadores` para suportar:
 - `data_inicial`: `Y-m-d`, obrigatório
 - `data_final`: `Y-m-d`, obrigatório
 - `valor`: `decimal`, obrigatório
+- `tipo_meta`: `string`, obrigatório, default `minimo`
 - `unidade_medida_id`: `int`, obrigatório
 - `valor_minimo`: `decimal|null`, opcional em par
 - `valor_maximo`: `decimal|null`, opcional em par
+
+## Exemplos de uso
+
+- `Mínimo a ser atingido`
+  - meta de produção mínima: `valor = 85`
+  - se o período lançar `90`, o status fica `atingida`
+  - se o período lançar `70`, o status fica `nao_atingida`
+
+- `Teto máximo permitido`
+  - meta de desperdício máximo: `valor = 5`
+  - se o período lançar `4`, o status fica `atingida`
+  - se o período lançar `7`, o status fica `nao_atingida`
 
 ## Internacionalização
 
@@ -163,9 +186,11 @@ Reestruturar o módulo de `Indicadores` para suportar:
 
 - `app/tests/indicadores_validation_unit_test.php`
   - valida payload base
+  - valida persistência e fallback do `tipo_meta`
   - bloqueia duplicidade por cliente
   - valida intervalo de datas
   - valida limites mínimo/máximo
+  - valida meta positiva
   - valida tipo percentual
   - valida tipo inteiro
   - valida compatibilidade setor/departamento
@@ -173,11 +198,13 @@ Reestruturar o módulo de `Indicadores` para suportar:
   - valida soft delete
   - valida atualização de valor
   - valida geração automática de eventos recorrentes
-  - valida cálculo de cumprimento e status da meta
+  - valida cálculo de cumprimento e status da meta para `minimo`, `maximo` e legados
 
 - `app/tests/indicadores_update_valor_ajax_integration_test.php`
-  - cria indicador temporário, atualiza valor via endpoint AJAX e valida persistência
+  - cria indicador temporário, atualiza valor via endpoint AJAX, valida persistência e bloqueia meta negativa
 - `app/tests/indicadores_delete_ajax_integration_test.php`
   - cria indicador temporário, exclui via endpoint AJAX e valida soft delete
+- `app/tests/indicadores_form_tipo_meta_smoke.php`
+  - valida presença do novo campo no formulário e consistência visual do layout responsivo
 - `app/tests/indicadores_charts_pdf_force_missing_unit_test.php`
   - força indisponibilidade do Dompdf e valida retorno 503 amigável

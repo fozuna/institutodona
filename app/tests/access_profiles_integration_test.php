@@ -94,10 +94,10 @@ if (strpos($r12, 'ALLOWED') === false) {
 ok('Instituto mantém acesso total');
 
 $r13 = runProbe('usuarios/delete', 'GET', 'cliente_admin');
-if (stripos($r13, 'você não possui permissão para acessar este recurso') === false) {
-    failFast('Cliente admin não deveria escalar privilégio para usuários');
+if (strpos($r13, 'ALLOWED') === false) {
+    failFast('Cliente admin deveria conseguir gerenciar usuários vinculados ao cliente');
 }
-ok('Escalada de privilégio para usuários é bloqueada');
+ok('Cliente admin acessa gerenciamento de usuários do cliente');
 
 $r14 = runProbe('departamentos/index', 'GET', 'consultor', '1', 'cliente=2');
 if (stripos($r14, 'este recurso não pertence à sua empresa') === false) {
@@ -140,5 +140,47 @@ if (stripos($r20, 'perfil não permite executar esta ação') === false) {
     failFast('Cliente editor deveria ser bloqueado em exclusão via API/POST');
 }
 ok('Cliente editor bloqueado em exclusão via API/POST');
+
+$r21 = runProbe('cronograma/index', 'GET', 'cliente');
+if (stripos($r21, 'acesso restrito ao perfil cliente admin da empresa') === false) {
+    failFast('Cliente editor deveria ser bloqueado no cronograma');
+}
+ok('Cliente editor bloqueado no cronograma');
+
+$r22 = runProbe('planoacao/index', 'GET', 'reader');
+if (stripos($r22, 'acesso restrito ao perfil cliente admin da empresa') === false) {
+    failFast('Cliente leitor deveria ser bloqueado em plano de ação');
+}
+ok('Cliente leitor bloqueado em plano de ação');
+
+$r23 = runProbe('tarefas/index', 'GET', 'cliente');
+if (stripos($r23, 'acesso restrito ao perfil cliente admin da empresa') === false) {
+    failFast('Cliente editor deveria ser bloqueado em tarefas');
+}
+ok('Cliente editor bloqueado em tarefas');
+
+$r24 = runProbe('agenda/index', 'GET', 'reader');
+if (stripos($r24, 'acesso restrito ao perfil cliente admin da empresa') === false) {
+    failFast('Cliente leitor deveria ser bloqueado em agenda');
+}
+ok('Cliente leitor bloqueado em agenda');
+
+$r25 = runProbe('manuais/index', 'GET', 'cliente');
+if (stripos($r25, 'acesso restrito ao perfil cliente admin da empresa') === false) {
+    failFast('Cliente editor deveria ser bloqueado na biblioteca de manuais');
+}
+ok('Cliente editor bloqueado na biblioteca de manuais');
+
+$r26 = runProbe('reunioes/index', 'GET', 'reader');
+if (stripos($r26, 'acesso restrito ao perfil cliente admin da empresa') === false) {
+    failFast('Cliente leitor deveria ser bloqueado em reuniões');
+}
+ok('Cliente leitor bloqueado em reuniões');
+
+$r27 = runProbe('usuarios/index', 'GET', 'cliente');
+if (stripos($r27, 'acesso restrito ao perfil cliente admin da empresa') === false) {
+    failFast('Cliente editor deveria ser bloqueado no gerenciamento de usuários');
+}
+ok('Cliente editor bloqueado no gerenciamento de usuários');
 
 echo "All access profile integration tests passed.\n";

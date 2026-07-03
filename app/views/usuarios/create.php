@@ -1,4 +1,4 @@
-<?php use App\Core\Security; /** @var array $clientes */ /** @var array $consultores */ /** @var array $selectedClientes */ ?>
+<?php use App\Core\Security; /** @var array $clientes */ /** @var array $consultores */ /** @var array $selectedClientes */ /** @var array $allowedRoles */ /** @var bool $canLinkConsultor */ ?>
 <div class="p-6 max-w-xl">
     <h1 class="text-2xl font-bold mb-4"><?= htmlspecialchars($pageTitle ?? 'Novo Usuário') ?></h1>
     <form method="post" action="index.php?route=usuarios/store" class="space-y-4">
@@ -18,11 +18,9 @@
         <div>
             <label class="block text-sm">Perfil</label>
             <select name="tipo_acesso" class="border rounded p-2 w-64">
-                <option value="cliente_admin">Cliente Admin</option>
-                <option value="cliente">Cliente Editor</option>
-                <option value="reader">Cliente Leitor</option>
-                <option value="consultor">Consultor</option>
-                <option value="instituto">Instituto</option>
+                <?php foreach (($allowedRoles ?? []) as $roleValue => $roleLabel): ?>
+                    <option value="<?= htmlspecialchars((string)$roleValue) ?>"><?= htmlspecialchars((string)$roleLabel) ?></option>
+                <?php endforeach; ?>
             </select>
         </div>
         <div>
@@ -44,6 +42,7 @@
             </select>
             <p class="text-xs text-gray-500 mt-1">Selecione uma ou mais empresas. Matrizes propagam acesso para filiais ativas e não restritas.</p>
         </div>
+        <?php if (!empty($canLinkConsultor)): ?>
         <div>
             <label class="block text-sm">Vincular Consultor (opcional)</label>
             <select name="id_consultor" class="border rounded p-2 w-full">
@@ -53,6 +52,7 @@
                 <?php endforeach; ?>
             </select>
         </div>
+        <?php endif; ?>
         <div class="flex items-center gap-3">
             <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">Salvar</button>
             <button class="px-4 py-2 rounded bg-gray-200 text-brand-brown" type="button" onclick="history.back()">Cancelar</button>

@@ -93,7 +93,7 @@ $brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
                     $canSetores = $user && \App\Core\AccessControl::canAccessRoute('setores/index', 'GET', $user);
                     $canFuncoes = $user && \App\Core\AccessControl::canAccessRoute('funcoes/index', 'GET', $user);
                     $canColaboradores = $user && \App\Core\AccessControl::canAccessRoute('colaboradores/index', 'GET', $user);
-                    $hasPessoasMenu = $canTreinamentos;
+                    $hasPessoasMenu = $canTreinamentos || $canUsuarios;
                     $hasProcessosMenu = $canBiblioteca || $canAuditorias || $canReunioes || $canCoaching || $canProcessos;
                     $hasResultadosMenu = $canIndicadores;
                     $hasCadastrosMenu = $canClientes || $canUsuarios || $canConsultores || $canPilares || $canDepartamentos || $canSetores || $canFuncoes || $canColaboradores;
@@ -119,6 +119,9 @@ $brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
                         <div class="submenu-panel <?= $isPessoasActive ? '' : 'hidden' ?>" data-submenu-panel="pessoas">
                             <?php if ($canTreinamentos): ?>
                             <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'treinamentos/')===0?'is-active':'' ?>" href="index.php?route=treinamentos/index" title="Treinamentos"><span data-feather="award" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Treinamentos</span></a>
+                            <?php endif; ?>
+                            <?php if ($canUsuarios): ?>
+                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'usuarios/')===0?'is-active':'' ?>" href="index.php?route=usuarios/index" title="Usuários"><span data-feather="user" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Usuários</span></a>
                             <?php endif; ?>
                         </div>
                     </div>

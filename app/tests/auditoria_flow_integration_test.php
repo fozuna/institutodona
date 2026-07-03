@@ -36,9 +36,15 @@ try {
     $insDep->execute(['n' => 'Dep A ' . $suffix, 'cid' => $clienteA]);
     $depA = (int)$pdo->lastInsertId();
     $depIds[] = $depA;
+    $pdo->prepare('INSERT INTO departamento_clientes (departamento_id, cliente_id) VALUES (:d,:c)')
+        ->execute(['d' => $depA, 'c' => $clienteA]);
+    $pdo->prepare('INSERT INTO departamento_clientes (departamento_id, cliente_id) VALUES (:d,:c)')
+        ->execute(['d' => $depA, 'c' => $filialA1]);
     $insDep->execute(['n' => 'Dep B ' . $suffix, 'cid' => $clienteB]);
     $depB = (int)$pdo->lastInsertId();
     $depIds[] = $depB;
+    $pdo->prepare('INSERT INTO departamento_clientes (departamento_id, cliente_id) VALUES (:d,:c)')
+        ->execute(['d' => $depB, 'c' => $clienteB]);
 
     $insSet = $pdo->prepare('INSERT INTO setores (nome, departamento_id) VALUES (:n,:did)');
     $insSet->execute(['n' => 'Setor A ' . $suffix, 'did' => $depA]);

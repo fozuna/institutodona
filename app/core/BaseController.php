@@ -107,6 +107,21 @@ class BaseController
         }
     }
 
+    protected function requireClienteAdminAccess(bool $json = false): void
+    {
+        $this->requireLogin();
+        $actual = (string)($_SESSION['user']['tipo_acesso'] ?? '');
+        if ($actual === 'instituto' || $actual === 'cliente_admin') {
+            return;
+        }
+        $this->denyAccess(
+            AccessControl::clientAdminOnlyMessage(),
+            (string)($_GET['route'] ?? ''),
+            $this->routeClienteCandidate(),
+            $json
+        );
+    }
+
     private function hasRole(string $role): bool
     {
         $actual = (string)($_SESSION['user']['tipo_acesso'] ?? '');

@@ -100,6 +100,7 @@ $_POST = [
     'data_inicial' => date('Y-m-01'),
     'data_final' => date('Y-m-t'),
     'valor' => '10',
+    'tipo_meta' => 'minimo',
     'unidade_medida_id' => (string)$unidadeId,
     'valor_minimo' => '0',
     'valor_maximo' => '100',
@@ -130,6 +131,11 @@ if ((int)$createdRow['cliente_id'] !== $clienteId) {
     failFast('cliente_id não persistiu via store. Atual=' . json_encode($createdRow['cliente_id']));
 }
 ok('Store persistiu cliente_id corretamente');
+$freshStore = (new IndicadorModel())->find((int)$createdRow['id']);
+if (($freshStore['tipo_meta'] ?? '') !== 'minimo') {
+    failFast('tipo_meta não persistiu com default minimo via store');
+}
+ok('Store persistiu tipo_meta corretamente');
 $cleanup['indicador_ids'][] = (int)$createdRow['id'];
 
 $stmt = $pdo->prepare('SELECT COUNT(*) FROM indicadores WHERE indicador = :nome');
@@ -150,6 +156,7 @@ $_POST = [
     'data_inicial' => date('Y-m-01'),
     'data_final' => date('Y-m-t'),
     'valor' => '10',
+    'tipo_meta' => 'minimo',
     'unidade_medida_id' => (string)$unidadeId,
     'valor_minimo' => '0',
     'valor_maximo' => '100',
@@ -179,6 +186,7 @@ $payload = [
     'data_inicial' => date('Y-m-01'),
     'data_final' => date('Y-m-t'),
     'valor' => '10',
+    'tipo_meta' => 'minimo',
     'unidade_medida_id' => $unidadeId,
     'valor_minimo' => '0',
     'valor_maximo' => '100',
@@ -226,17 +234,17 @@ ob_start();
 (new IndicadoresController())->updateValorAjax();
 $outNegative = ob_get_clean();
 $payloadNegative = json_decode((string)$outNegative, true);
-if (!is_array($payloadNegative) || empty($payloadNegative['ok'])) {
-    failFast('Resposta negativa inválida: ' . $outNegative);
+if (!is_array($payloadNegative) || !empty($payloadNegative['ok'])) {
+    failFast('Update com meta negativa deveria falhar: ' . $outNegative);
 }
-ok('Resposta ok para valor negativo');
+ok('Update AJAX bloqueia meta negativa');
 
 $freshNegative = $model->find($indicadorId);
 if (!$freshNegative) failFast('Indicador não encontrado após update negativo');
-if (abs((float)$freshNegative['valor'] - (-12.75)) > 0.0001) {
-    failFast('Valor negativo não persistiu. Atual: ' . json_encode($freshNegative['valor']));
+if (abs((float)$freshNegative['valor'] - 25.50) > 0.0001) {
+    failFast('Valor deveria permanecer inalterado após rejeitar meta negativa. Atual: ' . json_encode($freshNegative['valor']));
 }
-ok('Persistência negativa ok');
+ok('Update inválido não altera a meta persistida');
 
 echo "All indicadores updateValorAjax integration tests passed.\n";
 ob_end_flush();

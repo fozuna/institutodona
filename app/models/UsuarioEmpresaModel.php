@@ -40,7 +40,9 @@ class UsuarioEmpresaModel extends BaseModel
         if ($usuarioId <= 0) {
             return [];
         }
-        $selectedClientes = array_values(array_unique(array_filter(array_map('intval', $selectedClientes), fn(int $id): bool => $id > 0)));
+        $selectedClientes = array_values(array_unique(array_filter(array_map('intval', $selectedClientes), function (int $id): bool {
+            return $id > 0 && $this->canAccessClienteId($id);
+        })));
         $final = [];
         foreach ($selectedClientes as $rootId) {
             $desc = \App\Core\TenantScopeResolver::descendantsInclusive($rootId);

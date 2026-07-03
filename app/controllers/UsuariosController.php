@@ -1,6 +1,8 @@
 <?php
 namespace App\Controllers;
 
+use App\Core\AccessControl;
+use App\Core\Auth;
 use App\Core\BaseController;
 use App\Core\Security;
 use App\Models\UsuarioModel;
@@ -11,6 +13,18 @@ use App\Models\UsuarioEmpresaModel;
 class UsuariosController extends BaseController
 {
     private const CLIENT_SCOPED_ROLES = ['cliente', 'cliente_admin', 'reader', 'consultor'];
+    private const CLIENT_ADMIN_MANAGEABLE_ROLES = [
+        'cliente_admin' => 'Cliente Admin',
+        'cliente' => 'Cliente Editor',
+        'reader' => 'Cliente Leitor',
+    ];
+    private const INSTITUTO_MANAGEABLE_ROLES = [
+        'cliente_admin' => 'Cliente Admin',
+        'cliente' => 'Cliente Editor',
+        'reader' => 'Cliente Leitor',
+        'consultor' => 'Consultor',
+        'instituto' => 'Instituto',
+    ];
     private UsuarioModel $usuarios;
     private ClienteModel $clientes;
     private ConsultorModel $consultores;
@@ -26,7 +40,7 @@ class UsuariosController extends BaseController
 
     public function index(): void
     {
-        $this->requireLogin();
+        $this->requireClienteAdminAccess();
         $items = $this->usuarios->all();
         // Enriquecer com pertencimento
         $mapClientes = [];
@@ -57,15 +71,21 @@ class UsuariosController extends BaseController
 
     public function create(): void
     {
-        $this->requireLogin();
+        $this->requireClienteAdminAccess();
         $clientes = $this->clientes->all();
-        $consultores = $this->consultores->all();
-        $this->render('usuarios/create', ['clientes' => $clientes, 'consultores' => $consultores, 'selectedClientes' => []]);
+        $consultores = self::canManageConsultorLinks() ? $this->consultores->all() : [];
+        $this->render('usuarios/create', [
+            'clientes' => $clientes,
+            'consultores' => $consultores,
+            'selectedClientes' => [],
+            'allowedRoles' => self::allowedManageRoles(),
+            'canLinkConsultor' => self::canManageConsultorLinks(),
+        ]);
     }
 
     public function store(): void
     {
-        $this->requireLogin();
+        $this->requireClienteAdminAccess();
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) {
             http_response_code(400);
@@ -77,17 +97,23 @@ class UsuariosController extends BaseController
         $senha = $_POST['senha'] ?? '';
         $tipo = $_POST['tipo_acesso'] ?? 'cliente_admin';
         $platformAccess = (string)($_POST['platform_access'] ?? 'WEB_PWA');
-        $selectedClientes = $this->parseSelectedClientes($_POST);
+        $selectedClientes = $this->filterAccessibleClientes($this->parseSelectedClientes($_POST));
         $idConsultor = $_POST['id_consultor'] ?? null;
         if (!$nome || !$email || !$senha) {
             http_response_code(400);
             echo 'Campos obrigatórios faltando';
             return;
         }
+        if (!array_key_exists($tipo, self::allowedManageRoles())) {
+            $this->denyAccess(AccessControl::clientAdminOnlyMessage(), (string)($_GET['route'] ?? ''), null);
+        }
         if (!in_array($platformAccess, ['WEB', 'PWA', 'WEB_PWA'], true)) {
             http_response_code(400);
             echo 'Platform access inválido';
             return;
+        }
+        if (!self::canManageConsultorLinks() && !empty($idConsultor)) {
+            $this->denyAccess(AccessControl::clientAdminOnlyMessage(), (string)($_GET['route'] ?? ''), null);
         }
         if (in_array($tipo, self::CLIENT_SCOPED_ROLES, true) && empty($selectedClientes)) {
             http_response_code(400);
@@ -127,21 +153,29 @@ class UsuariosController extends BaseController
 
     public function edit(): void
     {
-        $this->requireLogin();
+        $this->requireClienteAdminAccess();
         $id = (int)($_GET['id'] ?? 0);
         $item = $this->usuarios->find($id);
         $clientes = $this->clientes->all();
-        $consultores = $this->consultores->all();
+        $consultores = self::canManageConsultorLinks() ? $this->consultores->all() : [];
         $selectedClientes = $item ? $this->usuarioEmpresas->selectedForUser((int)$item['id']) : [];
         if (empty($selectedClientes) && !empty($item['id_cliente'])) {
             $selectedClientes = [(int)$item['id_cliente']];
         }
-        $this->render('usuarios/edit', ['item' => $item, 'clientes' => $clientes, 'consultores' => $consultores, 'selectedClientes' => $selectedClientes]);
+        $selectedClientes = $this->filterAccessibleClientes($selectedClientes);
+        $this->render('usuarios/edit', [
+            'item' => $item,
+            'clientes' => $clientes,
+            'consultores' => $consultores,
+            'selectedClientes' => $selectedClientes,
+            'allowedRoles' => self::allowedManageRoles(),
+            'canLinkConsultor' => self::canManageConsultorLinks(),
+        ]);
     }
 
     public function update(): void
     {
-        $this->requireLogin();
+        $this->requireClienteAdminAccess();
         $csrf = $_POST['csrf'] ?? null;
         if (!Security::verifyCsrf($csrf)) {
             http_response_code(400);
@@ -153,8 +187,11 @@ class UsuariosController extends BaseController
         $email = trim($_POST['email'] ?? '');
         $tipo = $_POST['tipo_acesso'] ?? 'cliente_admin';
         $platformAccess = (string)($_POST['platform_access'] ?? 'WEB_PWA');
-        $selectedClientes = $this->parseSelectedClientes($_POST);
+        $selectedClientes = $this->filterAccessibleClientes($this->parseSelectedClientes($_POST));
         $senha = $_POST['senha'] ?? null;
+        if (!array_key_exists($tipo, self::allowedManageRoles())) {
+            $this->denyAccess(AccessControl::clientAdminOnlyMessage(), (string)($_GET['route'] ?? ''), null);
+        }
         if (!in_array($platformAccess, ['WEB', 'PWA', 'WEB_PWA'], true)) {
             http_response_code(400);
             echo 'Platform access inválido';
@@ -188,10 +225,23 @@ class UsuariosController extends BaseController
 
     public function delete(): void
     {
-        $this->requireLogin();
+        $this->requireClienteAdminAccess();
         $id = (int)($_GET['id'] ?? 0);
         $this->usuarios->delete($id);
         header('Location: index.php?route=usuarios/index');
+    }
+
+    public static function allowedManageRoles(?array $user = null): array
+    {
+        $role = AccessControl::currentRole($user ?? Auth::user() ?? []);
+        return $role === 'instituto'
+            ? self::INSTITUTO_MANAGEABLE_ROLES
+            : self::CLIENT_ADMIN_MANAGEABLE_ROLES;
+    }
+
+    public static function canManageConsultorLinks(?array $user = null): bool
+    {
+        return AccessControl::currentRole($user ?? Auth::user() ?? []) === 'instituto';
     }
 
     private function parseSelectedClientes(array $payload): array
@@ -206,5 +256,14 @@ class UsuariosController extends BaseController
         $selected = array_values(array_unique(array_filter(array_map('intval', $selected), fn(int $id): bool => $id > 0)));
         sort($selected);
         return $selected;
+    }
+
+    private function filterAccessibleClientes(array $clienteIds): array
+    {
+        $clienteIds = array_values(array_unique(array_filter(array_map('intval', $clienteIds), function (int $id): bool {
+            return $id > 0 && $this->canAccessCliente($id);
+        })));
+        sort($clienteIds);
+        return $clienteIds;
     }
 }

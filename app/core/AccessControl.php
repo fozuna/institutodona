@@ -7,6 +7,7 @@ final class AccessControl
     private const CADASTROS_MODULE = 'cadastros';
     private const AVALIACOES_MODULE = 'avaliacoes';
     private const OPERACIONAL_MODULE = 'operacional';
+    private const CLIENT_ADMIN_MODULE = 'client_admin';
     private const ADMIN_MODULE = 'admin';
 
     private const PUBLIC_ROUTES = [
@@ -26,22 +27,22 @@ final class AccessControl
         'funcoes' => self::CADASTROS_MODULE,
         'colaboradores' => self::CADASTROS_MODULE,
         'clientes' => self::ADMIN_MODULE,
-        'usuarios' => self::ADMIN_MODULE,
+        'usuarios' => self::CLIENT_ADMIN_MODULE,
         'consultores' => self::ADMIN_MODULE,
         'pilares' => self::ADMIN_MODULE,
         'metodologias' => self::ADMIN_MODULE,
         'aplicacoes' => self::ADMIN_MODULE,
         'dashboard' => self::ADMIN_MODULE,
         'indicadores' => self::OPERACIONAL_MODULE,
-        'agenda' => self::OPERACIONAL_MODULE,
-        'cronograma' => self::OPERACIONAL_MODULE,
-        'planoacao' => self::OPERACIONAL_MODULE,
-        'tarefas' => self::OPERACIONAL_MODULE,
-        'manuais' => self::ADMIN_MODULE,
-        'biblioteca' => self::ADMIN_MODULE,
+        'agenda' => self::CLIENT_ADMIN_MODULE,
+        'cronograma' => self::CLIENT_ADMIN_MODULE,
+        'planoacao' => self::CLIENT_ADMIN_MODULE,
+        'tarefas' => self::CLIENT_ADMIN_MODULE,
+        'manuais' => self::CLIENT_ADMIN_MODULE,
+        'biblioteca' => self::CLIENT_ADMIN_MODULE,
         'auditorias' => self::OPERACIONAL_MODULE,
         'treinamentos' => self::ADMIN_MODULE,
-        'reunioes' => self::ADMIN_MODULE,
+        'reunioes' => self::CLIENT_ADMIN_MODULE,
         'coaching' => self::OPERACIONAL_MODULE,
         'processos' => self::OPERACIONAL_MODULE,
         'logs' => self::ADMIN_MODULE,
@@ -117,7 +118,7 @@ final class AccessControl
             'delete' => true,
         ],
         'cliente_admin' => [
-            'modules' => [self::CADASTROS_MODULE, self::AVALIACOES_MODULE, self::OPERACIONAL_MODULE, self::PUBLIC_MODULE],
+            'modules' => [self::CADASTROS_MODULE, self::AVALIACOES_MODULE, self::OPERACIONAL_MODULE, self::CLIENT_ADMIN_MODULE, self::PUBLIC_MODULE],
             'view' => true,
             'write' => true,
             'delete' => true,
@@ -269,6 +270,9 @@ final class AccessControl
             return 'Este recurso não pertence à sua empresa.';
         }
         $module = self::moduleForRoute($route);
+        if ($module === self::CLIENT_ADMIN_MODULE && !self::canAccessModule($module, $user)) {
+            return self::clientAdminOnlyMessage();
+        }
         if (!self::canAccessModule($module, $user)) {
             return 'Você não possui permissão para acessar este recurso.';
         }
@@ -280,9 +284,16 @@ final class AccessControl
             return 'Seu perfil não permite executar esta ação.';
         }
         if ($action === 'write') {
-            return 'Você não possui permissão para acessar este recurso.';
+            return $module === self::CLIENT_ADMIN_MODULE
+                ? self::clientAdminOnlyMessage()
+                : 'Você não possui permissão para acessar este recurso.';
         }
         return 'Acesso negado.';
+    }
+
+    public static function clientAdminOnlyMessage(): string
+    {
+        return 'Acesso restrito ao perfil Cliente Admin da empresa.';
     }
 
     public static function frontendMatrix(?array $user = null): array
