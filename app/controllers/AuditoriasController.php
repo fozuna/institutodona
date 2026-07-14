@@ -893,6 +893,12 @@ class AuditoriasController extends BaseController
         if ($auditoriaId <= 0 || $questaoId <= 0) {
             echo json_encode(['success' => true, 'items' => []], JSON_UNESCAPED_UNICODE); return;
         }
+        $auditoria = $this->auditorias->find($auditoriaId);
+        if (!$auditoria || !$this->canAccessCliente((int)$auditoria['cliente_id'])) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => 'Sem permissão'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
         $items = $this->arquivos->listByQuestao($auditoriaId, $questaoId);
         $out = [];
         foreach ($items as $it) {
