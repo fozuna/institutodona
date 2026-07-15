@@ -27,7 +27,7 @@
       </div>
     <?php endif; ?>
 
-    <form method="get" action="index.php" class="bg-white shadow rounded p-4 mb-4">
+    <form method="get" action="<?= $basePath ?>/index.php" class="bg-white shadow rounded p-4 mb-4">
       <input type="hidden" name="route" value="manuais/portal" />
       <input type="hidden" name="token" value="<?= htmlspecialchars((string)$portalToken) ?>" />
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -58,7 +58,7 @@
       <div class="mt-4 flex justify-end gap-2">
         <?php if (empty($lockedFilters)): ?>
           <button type="submit" class="px-4 py-2 rounded bg-red-600 text-white">Filtrar</button>
-          <a href="index.php?route=manuais/portal&token=<?= urlencode((string)$portalToken) ?>" class="px-4 py-2 rounded bg-gray-200 text-gray-800">Limpar</a>
+          <a href="<?= $basePath ?>/index.php?route=manuais/portal&token=<?= urlencode((string)$portalToken) ?>" class="px-4 py-2 rounded bg-gray-200 text-gray-800">Limpar</a>
         <?php endif; ?>
       </div>
     </form>
@@ -111,7 +111,7 @@
               'data_ate' => $dataAte !== '' ? $dataAte : null,
             ]);
           ?>
-          <a href="index.php?<?= $query ?>" class="px-3 py-2 rounded <?= $p === $page ? 'bg-red-600 text-white' : 'bg-white text-gray-800 shadow' ?>"><?= $p ?></a>
+          <a href="<?= $basePath ?>/index.php?<?= $query ?>" class="px-3 py-2 rounded <?= $p === $page ? 'bg-red-600 text-white' : 'bg-white text-gray-800 shadow' ?>"><?= $p ?></a>
         <?php endfor; ?>
       </div>
     <?php endif; ?>
