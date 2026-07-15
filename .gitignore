@@ -11,3 +11,4 @@ storage/
 .vercel/
 public/teste_conexao.php
 /institutodona.sql
+public/*.sql

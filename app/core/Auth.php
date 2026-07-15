@@ -28,6 +28,9 @@ class Auth
             'selected_client_ids' => $scopeIds,
             'unrestricted_access' => ($user['tipo_acesso'] ?? null) === 'instituto',
         ];
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_regenerate_id(true);
+        }
     }
 
     public static function refreshScope(): void
