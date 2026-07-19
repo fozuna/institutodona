@@ -1,5 +1,5 @@
 // EspaÃ§o para scripts da UI; mantido mÃ­nimo nesta entrega
-console.log('SIS+ - UI carregada');
+console.log('VIVA+ DIGITAL - UI carregada');
 document.addEventListener('DOMContentLoaded', function () {
   var normalize = function (s) {
     return (s || '').replace(/\s+/g, ' ').trim();

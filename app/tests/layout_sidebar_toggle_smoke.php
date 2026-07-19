@@ -25,7 +25,7 @@ foreach ([
     'aria-label="Recolher menu lateral"',
     'app-topbar',
     'sidebar-brand',
-    'SIS+',
+    'VIVA+ DIGITAL',
 ] as $needle) {
     if (!str_contains($html, $needle)) {
         failFast('Layout deveria conter: ' . $needle);

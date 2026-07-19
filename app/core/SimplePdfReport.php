@@ -531,7 +531,7 @@ class SimplePdfReport
         $kids = implode(' ', array_map(fn($id)=>$id . ' 0 R', $pageObjIds));
         $objects[2] = "2 0 obj << /Type /Pages /Kids [{$kids}] /Count " . count($pageObjIds) . " >> endobj";
         $title = self::escapePdfText((string)($data['report_title'] ?? 'Relatório'));
-        $producer = self::escapePdfText('SIS+ PDF UTF-8');
+        $producer = self::escapePdfText(AppBrand::PRODUCER . ' PDF UTF-8');
         $objects[3] = "3 0 obj << /Title ({$title}) /Producer ({$producer}) >> endobj";
         $objects[$fontRegularId] = "{$fontRegularId} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> endobj";
         $objects[$fontBoldId] = "{$fontBoldId} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >> endobj";

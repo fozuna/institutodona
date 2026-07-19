@@ -1,6 +1,7 @@
 <?php
 namespace App\Services;
 
+use App\Core\AppBrand;
 use App\Models\ClienteModel;
 
 class PublicAvaliacaoContextResolver
@@ -121,13 +122,13 @@ class PublicAvaliacaoContextResolver
     {
         $host = $this->normalizeHost($host);
         if ($host === '' || $host === 'localhost' || preg_match('/^\d+\.\d+\.\d+\.\d+$/', $host)) {
-            return 'SIS+';
+            return AppBrand::displayName();
         }
 
         $firstLabel = explode('.', $host)[0] ?? '';
         $firstLabel = str_replace(['-', '_'], ' ', trim($firstLabel));
         if ($firstLabel === '') {
-            return 'SIS+';
+            return AppBrand::displayName();
         }
 
         $parts = preg_split('/\s+/', $firstLabel) ?: [];
@@ -139,7 +140,7 @@ class PublicAvaliacaoContextResolver
             return mb_convert_case($part, MB_CASE_TITLE, 'UTF-8');
         }, $parts);
         $empresa = trim(implode(' ', array_filter($parts)));
-        return $empresa !== '' ? $empresa : 'SIS+';
+        return $empresa !== '' ? $empresa : AppBrand::displayName();
     }
 }
 
