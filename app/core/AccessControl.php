@@ -10,6 +10,21 @@ final class AccessControl
     private const CLIENT_ADMIN_MODULE = 'client_admin';
     private const ADMIN_MODULE = 'admin';
 
+    /**
+     * Cadastros estruturais do sistema: mesmo estando em modulos que o
+     * Cliente Admin acessa (cadastros/client_admin, compartilhados com
+     * Colaboradores, Agenda, Cronograma etc.), estas rotas permanecem
+     * de uso exclusivo dos perfis administrativos internos.
+     */
+    private const CLIENT_ADMIN_FORBIDDEN_PREFIXES = [
+        'usuarios',
+        'consultores',
+        'pilares',
+        'departamentos',
+        'setores',
+        'funcoes',
+    ];
+
     private const PUBLIC_ROUTES = [
         'auth/login',
         'auth/dologin',
@@ -214,6 +229,9 @@ final class AccessControl
         if ($role === 'instituto') {
             return true;
         }
+        if ($role === 'cliente_admin' && in_array(self::routePrefix($route), self::CLIENT_ADMIN_FORBIDDEN_PREFIXES, true)) {
+            return false;
+        }
 
         $module = self::moduleForRoute($route);
         if ($module === self::PUBLIC_MODULE) {
@@ -223,6 +241,16 @@ final class AccessControl
             return false;
         }
         return self::permissionForAction(self::actionForRoute($route, $method), $user);
+    }
+
+    private static function routePrefix(string $route): string
+    {
+        $parts = explode('/', strtolower(trim($route)));
+        $prefix = $parts[0] ?? '';
+        if ($prefix === 'pwa') {
+            return $parts[1] ?? '';
+        }
+        return $prefix;
     }
 
     public static function moduleForRoute(string $route): string

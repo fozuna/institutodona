@@ -40,23 +40,48 @@ if (AccessControl::canAccessRoute('indicadores/index', 'GET', $consultor)
 ok('Consultor respeita escopo de módulos permitidos');
 
 $clienteAdmin = userRole('cliente_admin');
-if (!AccessControl::canAccessRoute('departamentos/create', 'GET', $clienteAdmin)
-    || !AccessControl::canAccessRoute('departamentos/delete', 'POST', $clienteAdmin)
-    || !AccessControl::canAccessRoute('avaliacoes/store', 'POST', $clienteAdmin)
+if (!AccessControl::canAccessRoute('avaliacoes/store', 'POST', $clienteAdmin)
     || !AccessControl::canAccessRoute('manuais/index', 'GET', $clienteAdmin)
     || !AccessControl::canAccessRoute('cronograma/store', 'POST', $clienteAdmin)
     || !AccessControl::canAccessRoute('planoacao/updateTask', 'POST', $clienteAdmin)
     || !AccessControl::canAccessRoute('tarefas/delete', 'POST', $clienteAdmin)
     || !AccessControl::canAccessRoute('agenda/index', 'GET', $clienteAdmin)
     || !AccessControl::canAccessRoute('reunioes/store', 'POST', $clienteAdmin)
-    || !AccessControl::canAccessRoute('usuarios/delete', 'GET', $clienteAdmin)) {
-    failFast('Cliente admin deveria possuir CRUD completo nos módulos permitidos');
+    || !AccessControl::canAccessRoute('indicadores/index', 'GET', $clienteAdmin)
+    || !AccessControl::canAccessRoute('auditorias/index', 'GET', $clienteAdmin)
+    || !AccessControl::canAccessRoute('colaboradores/create', 'GET', $clienteAdmin)
+    || !AccessControl::canAccessRoute('colaboradores/delete', 'POST', $clienteAdmin)) {
+    failFast('Cliente admin deveria possuir CRUD completo nos módulos operacionais/permitidos');
 }
 if (AccessControl::canAccessRoute('clientes/index', 'GET', $clienteAdmin)
     || AccessControl::canAccessRoute('dashboard/index', 'GET', $clienteAdmin)) {
     failFast('Cliente admin não deveria acessar módulos restritos ao Instituto');
 }
 ok('Cliente admin respeita limites administrativos');
+
+if (AccessControl::canAccessRoute('usuarios/index', 'GET', $clienteAdmin)
+    || AccessControl::canAccessRoute('usuarios/create', 'GET', $clienteAdmin)
+    || AccessControl::canAccessRoute('usuarios/store', 'POST', $clienteAdmin)
+    || AccessControl::canAccessRoute('usuarios/edit', 'GET', $clienteAdmin)
+    || AccessControl::canAccessRoute('usuarios/update', 'POST', $clienteAdmin)
+    || AccessControl::canAccessRoute('usuarios/delete', 'GET', $clienteAdmin)
+    || AccessControl::canAccessRoute('consultores/index', 'GET', $clienteAdmin)
+    || AccessControl::canAccessRoute('consultores/store', 'POST', $clienteAdmin)
+    || AccessControl::canAccessRoute('pilares/index', 'GET', $clienteAdmin)
+    || AccessControl::canAccessRoute('pilares/store', 'POST', $clienteAdmin)
+    || AccessControl::canAccessRoute('departamentos/index', 'GET', $clienteAdmin)
+    || AccessControl::canAccessRoute('departamentos/create', 'GET', $clienteAdmin)
+    || AccessControl::canAccessRoute('departamentos/store', 'POST', $clienteAdmin)
+    || AccessControl::canAccessRoute('departamentos/edit', 'GET', $clienteAdmin)
+    || AccessControl::canAccessRoute('departamentos/update', 'POST', $clienteAdmin)
+    || AccessControl::canAccessRoute('departamentos/delete', 'POST', $clienteAdmin)
+    || AccessControl::canAccessRoute('setores/index', 'GET', $clienteAdmin)
+    || AccessControl::canAccessRoute('setores/delete', 'POST', $clienteAdmin)
+    || AccessControl::canAccessRoute('funcoes/index', 'GET', $clienteAdmin)
+    || AccessControl::canAccessRoute('funcoes/delete', 'POST', $clienteAdmin)) {
+    failFast('Cliente admin não deveria acessar cadastros estruturais do sistema (usuários, consultores, pilares, departamentos, setores, funções)');
+}
+ok('Cliente admin é bloqueado dos cadastros estruturais do sistema (usuários/consultores/pilares/departamentos/setores/funções)');
 
 $clienteEditor = userRole('cliente');
 if (!AccessControl::canAccessRoute('departamentos/edit', 'GET', $clienteEditor)
