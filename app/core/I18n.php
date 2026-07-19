@@ -51,6 +51,7 @@ class I18n
             'indicadores.help.tipo_meta' => 'Escolha se a meta representa um mínimo a alcançar ou um teto máximo permitido para o valor apurado.',
             'indicadores.help.meta_eventos' => 'Cada ocorrência materializa uma meta do indicador e pode receber o valor atingido do período.',
             'indicadores.option.select' => 'Selecione',
+            'indicadores.option.select_all' => 'Todos',
             'indicadores.option.none' => 'Nenhum',
             'indicadores.option.tipo_meta.minimo' => 'Mínimo a ser atingido',
             'indicadores.option.tipo_meta.maximo' => 'Teto máximo permitido',

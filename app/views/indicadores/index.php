@@ -80,6 +80,17 @@ $viewMode = $viewMode ?? 'cards';
           <label class="block text-sm font-medium text-gray-700 mb-1">Data final</label>
           <input type="date" name="date_end" value="<?= htmlspecialchars($dateEnd) ?>" class="border border-gray-300 rounded-lg p-3 w-full" id="indicadoresDateEnd" />
         </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1"><?= htmlspecialchars($t('indicadores.label.setor')) ?></label>
+          <select name="setor" class="border border-gray-300 rounded-lg p-3 w-full" id="indicadoresSetorSelect" <?= $cliente ? '' : 'disabled' ?>>
+            <option value=""><?= htmlspecialchars($t('indicadores.option.select_all')) ?></option>
+            <?php foreach (($setores ?? []) as $s): ?>
+              <option value="<?= (int)$s['id'] ?>" <?= ((int)($setorId ?? 0) === (int)$s['id']) ? 'selected' : '' ?>>
+                <?= htmlspecialchars(($s['departamento'] ?? '') !== '' ? ($s['departamento'] . ' — ' . $s['nome']) : $s['nome']) ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+        </div>
         <div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end sm:col-span-3">
           <button class="px-4 py-3 rounded-lg bg-brand-red text-white w-full sm:w-auto btn-with-icon" type="submit" id="indicadoresSearchBtn" aria-label="<?= htmlspecialchars($t('indicadores.action.filter')) ?>" title="<?= htmlspecialchars($t('indicadores.action.filter')) ?>">
             <span data-feather="filter"></span>
@@ -130,6 +141,7 @@ $viewMode = $viewMode ?? 'cards';
     const nameInput = document.getElementById('indicadoresNameInput');
     const dateStart = document.getElementById('indicadoresDateStart');
     const dateEnd = document.getElementById('indicadoresDateEnd');
+    const setorSelect = document.getElementById('indicadoresSetorSelect');
     const datalist = document.getElementById('indicadoresNameSuggestions');
     let searchTimer = null;
     let suggestTimer = null;
@@ -246,6 +258,35 @@ $viewMode = $viewMode ?? 'cards';
       }
     };
 
+    const refreshSetores = async () => {
+      if (!setorSelect || !clienteSelect) return;
+      const cliente = clienteSelect.value || '';
+      if (!cliente) {
+        setorSelect.innerHTML = '<option value="">Todos</option>';
+        setorSelect.value = '';
+        setorSelect.disabled = true;
+        return;
+      }
+      try {
+        const params = new URLSearchParams({ route: 'indicadores/apiSetoresByCliente', cliente_id: cliente });
+        const response = await fetch(`index.php?${params.toString()}`, {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        if (!response.ok) return;
+        const payload = await response.json();
+        if (!payload || !payload.success || !Array.isArray(payload.items)) return;
+        setorSelect.innerHTML = '<option value="">Todos</option>';
+        payload.items.forEach((item) => {
+          const opt = document.createElement('option');
+          opt.value = String(item.id);
+          opt.textContent = item.departamento ? `${item.departamento} — ${item.nome}` : item.nome;
+          setorSelect.appendChild(opt);
+        });
+        setorSelect.disabled = false;
+      } catch (e) {
+      }
+    };
+
     const scheduleSearch = () => {
       if (searchTimer) clearTimeout(searchTimer);
       searchTimer = setTimeout(doSearch, 450);
@@ -268,7 +309,14 @@ $viewMode = $viewMode ?? 'cards';
         doSearch();
       });
     }
-    [clienteSelect, dateStart, dateEnd].forEach((el) => {
+    if (clienteSelect) {
+      clienteSelect.addEventListener('change', () => {
+        if (setorSelect) setorSelect.value = '';
+        refreshSetores();
+        scheduleSearch();
+      });
+    }
+    [dateStart, dateEnd, setorSelect].forEach((el) => {
       if (!el) return;
       el.addEventListener('change', scheduleSearch);
     });

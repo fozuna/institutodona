@@ -46,6 +46,7 @@ class IndicadoresController extends BaseController
         $q = trim((string)($_GET['q'] ?? ''));
         $dateStart = trim((string)($_GET['date_start'] ?? ''));
         $dateEnd = trim((string)($_GET['date_end'] ?? ''));
+        $setorId = (int)($_GET['setor'] ?? 0);
         $view = strtolower(trim((string)($_GET['view'] ?? '')));
         $viewMode = in_array($view, ['cards', 'list'], true) ? $view : 'cards';
 
@@ -61,8 +62,14 @@ class IndicadoresController extends BaseController
             $dateEnd = '';
         }
 
+        $setores = $cliente > 0 ? $this->setores->activeByCliente($cliente) : [];
+        if ($setorId > 0 && !in_array($setorId, array_map(static fn(array $s): int => (int)$s['id'], $setores), true)) {
+            $setorId = 0;
+        }
+
         $items = $this->model->search([
             'cliente_id' => $cliente > 0 ? $cliente : 0,
+            'setor_id' => $setorId,
             'q' => $q,
             'date_start' => $dateStart,
             'date_end' => $dateEnd,
@@ -89,6 +96,8 @@ class IndicadoresController extends BaseController
             'q' => $q,
             'dateStart' => $dateStart,
             'dateEnd' => $dateEnd,
+            'setores' => $setores,
+            'setorId' => $setorId,
             'viewMode' => $viewMode,
             'i18n' => I18n::class,
         ]);
@@ -950,6 +959,18 @@ class IndicadoresController extends BaseController
             return;
         }
         echo json_encode(['success' => true, 'items' => $this->departamentos->activeByCliente($cliente)], JSON_UNESCAPED_UNICODE);
+    }
+
+    public function apiSetoresByCliente(): void
+    {
+        $this->requireLogin();
+        header('Content-Type: application/json; charset=utf-8');
+        $cliente = (int)($this->resolveScopedClienteId((int)($_GET['cliente_id'] ?? 0)) ?? 0);
+        if ($cliente <= 0) {
+            echo json_encode(['success' => true, 'items' => []], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        echo json_encode(['success' => true, 'items' => $this->setores->activeByCliente($cliente)], JSON_UNESCAPED_UNICODE);
     }
 
     public function apiSetores(): void
