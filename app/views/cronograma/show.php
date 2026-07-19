@@ -45,6 +45,16 @@
       <?php if (!empty($crono['nome'])): ?><div class="text-sm text-gray-600">Nome: <?= htmlspecialchars($crono['nome']) ?></div><?php endif; ?>
     </div>
     <div class="flex items-center gap-2">
+      <?php
+        $gridPdfQuery = http_build_query(array_filter([
+            'route' => 'cronograma/grid_pdf',
+            'id' => (int)$crono['id'],
+            'status_filter' => $statusFilter !== 'todos' ? $statusFilter : null,
+            'grid_sort' => $gridOrder['column'] ?? null,
+            'grid_dir' => $gridOrder['direction'] ?? null,
+        ], static fn($v): bool => $v !== null && $v !== ''));
+      ?>
+      <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?<?= $gridPdfQuery ?>" target="_blank">Imprimir / PDF</a>
       <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=cronograma/addEventoForm&id=<?= (int)$crono['id'] ?>">Adicionar evento</a>
       <a class="px-3 py-2 rounded bg-brand-brown text-white" href="index.php?route=clientes/show&id=<?= (int)($crono['id_cliente'] ?? 0) ?>">Voltar</a>
     </div>

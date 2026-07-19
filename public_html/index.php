@@ -283,6 +283,9 @@ switch ($route) {
     case 'cronograma/show':
         (new CronogramaController())->show();
         break;
+    case 'cronograma/grid_pdf':
+        (new CronogramaController())->gridPdf();
+        break;
     case 'cronograma/delete':
         (new CronogramaController())->delete();
         break;

@@ -3,6 +3,9 @@ namespace App\Controllers;
 
 use App\Core\BaseController;
 use App\Core\CronogramaTrafficLight;
+use App\Core\DateHelper;
+use App\Core\PdfSupport;
+use App\Core\ReportBranding;
 use App\Core\Security;
 use App\Core\AuditLogger;
 use App\Models\CronogramaModel;
@@ -310,6 +313,100 @@ class CronogramaController extends BaseController
             'flashSuccess' => $this->takeFlash('flash_success'),
             'flashError' => $this->takeFlash('flash_error'),
         ]);
+    }
+
+    public function gridPdf(): void
+    {
+        $this->requireClienteAdminAccess();
+        $id = (int)($_GET['id'] ?? 0);
+        $crono = $this->cronogramas->find($id);
+        if (!$crono) {
+            http_response_code(404);
+            echo 'Cronograma não encontrado.';
+            return;
+        }
+        if (!PdfSupport::isDompdfAvailable()) {
+            $errorId = PdfSupport::newErrorId();
+            AuditLogger::log('pdf_unavailable', 'cronograma', $id, [
+                'error_id' => $errorId,
+                'route' => 'cronograma/gridPdf',
+                'reason' => 'dompdf_missing',
+                'diagnostics' => PdfSupport::dompdfDiagnostics(),
+            ]);
+            http_response_code(503);
+            echo PdfSupport::missingDompdfMessage() . ' Código: ' . $errorId;
+            return;
+        }
+
+        $statusFilter = CronogramaTrafficLight::normalizeFilter($_GET['status_filter'] ?? 'todos');
+        $gridOrder = $this->buildGridOrder();
+        $allEvents = $this->eventos->byCronograma($id);
+        $annotatedEvents = $this->annotateEvents($allEvents);
+        $grid = $this->buildGrid($annotatedEvents);
+        $grid = $this->filterGridByTraffic($grid, $statusFilter);
+        $grid = $this->sortGridRows($grid, $gridOrder);
+
+        $subtitleParts = array_values(array_filter([
+            trim((string)($crono['cliente'] ?? '')),
+            !empty($crono['ano']) ? ('Ano ' . (int)$crono['ano']) : null,
+            !empty($crono['nome']) ? (string)$crono['nome'] : null,
+        ]));
+        $branding = ReportBranding::aplicarBrandingRelatorio('pdf', [
+            'report_title' => 'Cronograma Anual',
+            'header_title' => 'Cronograma Anual',
+            'header_subtitle' => !empty($subtitleParts) ? implode(' · ', $subtitleParts) : 'Grade anual de atividades',
+            'logo_position' => 'left',
+            'logo_width' => 100,
+            'margins' => ['top' => 12, 'right' => 10, 'bottom' => 14, 'left' => 10],
+            'footer_text' => 'Relatório do sistema',
+            'generated_at' => DateHelper::now(),
+        ]);
+
+        ob_start();
+        require __DIR__ . '/../views/cronograma/grid_pdf.php';
+        $html = (string)ob_get_clean();
+
+        if (!empty($_GET['preview'])) {
+            header('Content-Type: text/html; charset=utf-8');
+            echo $html;
+            return;
+        }
+
+        $options = new \Dompdf\Options();
+        $options->set('isRemoteEnabled', false);
+        $options->set('isHtml5ParserEnabled', true);
+        $options->set('isPhpEnabled', false);
+        $options->set('defaultFont', 'DejaVu Sans');
+        $options->set('dpi', 120);
+        $options->setChroot(dirname(__DIR__, 2));
+
+        $dompdf = new \Dompdf\Dompdf($options);
+        $dompdf->setPaper('A4', 'landscape');
+        $dompdf->loadHtml($html, 'UTF-8');
+        $dompdf->render();
+        $pdf = (string)$dompdf->output();
+
+        AuditLogger::log('pdf_export', 'cronograma', $id, [
+            'via' => 'grid_pdf',
+            'status_filter' => $statusFilter,
+            'grid_order' => $gridOrder,
+            'rows' => count($grid),
+        ]);
+
+        $filename = 'cronograma_' . $id . '_' . date('Ymd_His') . '.pdf';
+        if (PHP_SAPI !== 'cli') {
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+        }
+        header('Content-Type: application/pdf');
+        header('X-Content-Type-Options: nosniff');
+        header('Content-Transfer-Encoding: binary');
+        header('Cache-Control: private, max-age=0, must-revalidate');
+        header('Pragma: public');
+        header('Content-Length: ' . strlen($pdf));
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        echo $pdf;
     }
 
     public function addEvento(): void
