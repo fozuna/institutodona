@@ -16,6 +16,12 @@ $pdfUrl = 'index.php?' . http_build_query([
     'month_end' => $monthEnd,
     'clientes' => $clienteIds,
 ]);
+$resumoMesUrl = 'index.php?' . http_build_query([
+    'route' => 'dashboard/resumo_mes',
+    'month_start' => $monthStart,
+    'month_end' => $monthEnd,
+    'clientes' => $clienteIds,
+]);
 
 if (!function_exists('dash_icon')) {
     function dash_icon(string $name): string
@@ -358,6 +364,7 @@ $latestItems = array_slice($latestItems, 0, 8);
           <div class="dash-actions" style="grid-column: span 3;">
             <button class="dash-btn" type="submit" id="dashboardApplyBtn"><?= dash_icon('filter') ?><span id="dashboardApplyLabel">Aplicar filtros</span></button>
             <a href="<?= htmlspecialchars($pdfUrl) ?>" target="_blank" rel="noopener" id="dashboardPdfLink" class="dash-btn-ghost"><?= dash_icon('download') ?><span>Exportar PDF</span></a>
+            <a href="<?= htmlspecialchars($resumoMesUrl) ?>" id="dashboardResumoMesLink" class="dash-btn-ghost"><?= dash_icon('calendar') ?><span>Resumo do Mês</span></a>
           </div>
         </form>
 
