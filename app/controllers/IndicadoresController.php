@@ -233,6 +233,15 @@ class IndicadoresController extends BaseController
         $this->requireLogin();
         $cliente = (int)($this->resolveScopedClienteId(isset($_GET['cliente']) ? (int)$_GET['cliente'] : null) ?? 0);
         $filters = $this->readEventoFilters($cliente);
+        if ($cliente > 0 && !$filters['period_ok'] && !$filters['has_explicit']) {
+            $defaultPeriod = $this->validatePeriodoApuracao(date('Y-m-01'), date('Y-m-t'));
+            if ($defaultPeriod['ok']) {
+                $filters['periodo_inicio'] = $defaultPeriod['inicio'];
+                $filters['periodo_fim'] = $defaultPeriod['fim'];
+                $filters['period_ok'] = true;
+                $filters['period_error'] = '';
+            }
+        }
         $indicadorId = (int)($filters['indicador_id'] ?? 0);
         $clientes = $this->clientes->all();
         $items = [];

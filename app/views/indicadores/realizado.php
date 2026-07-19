@@ -295,7 +295,7 @@ $renderTable = static function (array $items, int $cliente, int $indicadorId, st
     [periodoInicioInput, periodoFimInput].forEach((el) => {
       if (!el) return;
       el.addEventListener('change', () => refreshList());
-    }
+    });
     if (limparBtn) {
       limparBtn.addEventListener('click', () => {
         if (indicadorSelect) indicadorSelect.value = '0';
