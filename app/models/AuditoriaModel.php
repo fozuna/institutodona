@@ -1045,6 +1045,101 @@ class AuditoriaModel extends BaseModel
         }
     }
 
+    /**
+     * Atualiza somente as observações por questão de uma auditoria já finalizada
+     * (fluxo "Editar Observações"). Calcula o diff antes de abrir transação: se
+     * nenhuma observação realmente mudou, retorna sucesso com updated=0 sem tocar
+     * em lock_version, histórico ou log — evitando registros fantasmas.
+     *
+     * @param array<int,string> $observacoesPorQuestao questao_id => novo texto
+     * @return array{ok: bool, updated: int}
+     */
+    public function updateObservacoesRealizada(int $id, array $observacoesPorQuestao, int $userId, ?string $prevUpdatedAt = null, ?int $prevLockVersion = null): array
+    {
+        $this->ensureTables();
+        $this->lastError = null;
+        $current = $this->find($id);
+        if (!$current || (string)($current['status'] ?? '') !== 'Realizada') {
+            $this->lastError = 'not_found';
+            return ['ok' => false, 'updated' => 0];
+        }
+        $clienteId = (int)($current['cliente_id'] ?? 0);
+        if ($clienteId <= 0 || (!$this->canBypassScope() && !$this->canAccessClienteId($clienteId))) {
+            $this->lastError = 'scope';
+            return ['ok' => false, 'updated' => 0];
+        }
+
+        $old = $this->respostasByAuditoria($id);
+        $changes = [];
+        foreach ($observacoesPorQuestao as $qid => $newObs) {
+            $qid = (int)$qid;
+            if ($qid <= 0 || !isset($old[$qid])) {
+                continue;
+            }
+            $oldObs = trim((string)($old[$qid]['observacoes'] ?? ''));
+            $newObsTrim = trim((string)$newObs);
+            if ($oldObs === $newObsTrim) {
+                continue;
+            }
+            $changes[$qid] = ['old' => $oldObs, 'new' => $newObsTrim];
+        }
+
+        if (empty($changes)) {
+            return ['ok' => true, 'updated' => 0];
+        }
+
+        try {
+            if (!$this->db->beginTransaction()) {
+                $this->lastError = 'exception';
+                return ['ok' => false, 'updated' => 0];
+            }
+        } catch (\Throwable $e) {
+            $this->lastError = 'exception';
+            return ['ok' => false, 'updated' => 0];
+        }
+
+        try {
+            $params = ['id' => $id, 'updated_by' => $userId];
+            if ($prevLockVersion !== null) {
+                $params['prev_lock_version'] = $prevLockVersion;
+                $concurrency = ' AND lock_version = :prev_lock_version';
+            } elseif ($prevUpdatedAt !== null) {
+                $params['prev'] = $prevUpdatedAt;
+                $concurrency = ' AND updated_at = :prev';
+            } else {
+                $concurrency = '';
+            }
+            $scope = $this->hasScopeRestriction() ? (' AND ' . $this->tenantInCondition('cliente_id', $params, 'audobs')) : '';
+            $lockStmt = $this->db->prepare("UPDATE auditorias
+                SET updated_by = :updated_by, lock_version = lock_version + 1
+                WHERE id = :id AND deleted_at IS NULL AND status = 'Realizada'$scope$concurrency");
+            $lockStmt->execute($params);
+            if ($lockStmt->rowCount() <= 0) {
+                $this->safeRollback();
+                $this->lastError = $this->detectWriteConflict($id, $prevUpdatedAt, $prevLockVersion);
+                return ['ok' => false, 'updated' => 0];
+            }
+
+            $this->saveHistorySnapshot($id, $userId);
+
+            $stmtUp = $this->db->prepare('UPDATE auditoria_avaliacoes SET observacoes = :obs, updated_by = :uid, updated_at = NOW() WHERE auditoria_id = :aid AND questao_id = :qid');
+            $stmtLog = $this->db->prepare('INSERT INTO auditoria_avaliacoes_log (auditoria_id, questao_id, old_observacoes, new_observacoes, updated_by) VALUES (:aid, :qid, :old, :new, :uid)');
+            $updated = 0;
+            foreach ($changes as $qid => $diff) {
+                $stmtUp->execute(['obs' => $diff['new'], 'uid' => $userId, 'aid' => $id, 'qid' => $qid]);
+                $stmtLog->execute(['aid' => $id, 'qid' => $qid, 'old' => $diff['old'], 'new' => $diff['new'], 'uid' => $userId]);
+                $updated++;
+            }
+
+            $this->db->commit();
+            return ['ok' => true, 'updated' => $updated];
+        } catch (\Throwable $e) {
+            $this->safeRollback();
+            $this->lastError = 'exception';
+            return ['ok' => false, 'updated' => 0];
+        }
+    }
+
     public function autosaveAvaliacoes(int $auditoriaId, array $avaliacoes, int $userId): bool
     {
         $this->ensureTables();

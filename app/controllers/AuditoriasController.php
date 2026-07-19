@@ -804,48 +804,29 @@ class AuditoriasController extends BaseController
                 $map[$qid] = $obs;
             }
         }
-        $old = $this->auditorias->respostasByAuditoria($id);
         $userId = (int)($_SESSION['user']['id'] ?? 0);
-        $updated = 0;
-        try {
-            $this->auditorias->db->beginTransaction();
-            $concurrencyParams = ['id' => $id, 'updated_by' => $userId];
-            if ($prevLockVersion !== null) {
-                $concurrencyParams['prev_lock_version'] = $prevLockVersion;
-                $concurrency = ' AND lock_version = :prev_lock_version';
-            } elseif ($prevUpdatedAt !== '') {
-                $concurrencyParams['prev'] = $prevUpdatedAt;
-                $concurrency = ' AND updated_at = :prev';
-            } else {
-                $concurrency = '';
-            }
-            $lockStmt = $this->auditorias->db->prepare("UPDATE auditorias SET updated_by = :updated_by, lock_version = lock_version + 1 WHERE id = :id AND deleted_at IS NULL$concurrency");
-            $lockStmt->execute($concurrencyParams);
-            if ($lockStmt->rowCount() <= 0) {
-                try { if ($this->auditorias->db->inTransaction()) $this->auditorias->db->rollBack(); } catch (\Throwable $e2) {}
-                $_SESSION['flash_error'] = 'Este registro foi alterado por outro usuário. Recarregue antes de salvar.';
-                $this->redirect('index.php?route=auditorias/editar_realizada&id=' . $id);
-                return;
-            }
-            $this->auditorias->saveHistorySnapshot($id, $userId);
-            $stmtUp = $this->auditorias->db->prepare('UPDATE auditoria_avaliacoes SET observacoes = :obs, updated_by = :uid, updated_at = NOW() WHERE auditoria_id = :aid AND questao_id = :qid');
-            $stmtLog = $this->auditorias->db->prepare('INSERT INTO auditoria_avaliacoes_log (auditoria_id, questao_id, old_observacoes, new_observacoes, updated_by) VALUES (:aid, :qid, :old, :new, :uid)');
-            foreach ($map as $qid => $newObs) {
-                $oldObs = trim((string)($old[$qid]['observacoes'] ?? ''));
-                if ($oldObs === $newObs) continue;
-                $stmtUp->execute(['obs' => $newObs, 'uid' => $userId, 'aid' => $id, 'qid' => $qid]);
-                $stmtLog->execute(['aid' => $id, 'qid' => $qid, 'old' => $oldObs, 'new' => $newObs, 'uid' => $userId]);
-                $updated++;
-            }
-            $this->auditorias->db->commit();
-        } catch (\Throwable $e) {
-            try { if ($this->auditorias->db->inTransaction()) $this->auditorias->db->rollBack(); } catch (\Throwable $e2) {}
-            $_SESSION['flash_error'] = 'Erro ao atualizar observações.';
-            $this->redirect('index.php?route=auditorias/show&id=' . $id);
+        $result = $this->auditorias->updateObservacoesRealizada(
+            $id,
+            $map,
+            $userId,
+            $prevUpdatedAt !== '' ? $prevUpdatedAt : null,
+            $prevLockVersion
+        );
+        if (!$result['ok']) {
+            $reason = (string)($this->auditorias->getLastError() ?? '');
+            $_SESSION['flash_error'] = $reason === 'concurrency_conflict'
+                ? 'Este registro foi alterado por outro usuário. Recarregue antes de salvar.'
+                : 'Não foi possível atualizar as observações.';
+            $this->redirect('index.php?route=auditorias/editar_realizada&id=' . $id);
             return;
         }
+        $updated = (int)($result['updated'] ?? 0);
         AuditLogger::log('auditoria_edit_realizada', 'auditoria', $id, ['updated' => $updated]);
-        $_SESSION['flash_success'] = 'Observações atualizadas com sucesso.';
+        if ($updated > 0) {
+            $_SESSION['flash_success'] = 'Observações atualizadas com sucesso.';
+        } else {
+            $_SESSION['flash_error'] = 'Nenhuma alteração foi detectada nas observações.';
+        }
         $this->redirect('index.php?route=auditorias/show&id=' . $id);
     }
 
