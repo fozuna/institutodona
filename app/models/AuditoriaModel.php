@@ -520,8 +520,15 @@ class AuditoriaModel extends BaseModel
             $params[$prefix . '_fim'] = (string)$filters['fim'];
         }
         if (!empty($filters['q'])) {
-            $where[] = '(a.nome_auditoria LIKE :' . $prefix . '_q OR a.pergunta LIKE :' . $prefix . '_q OR c.nome_empresa LIKE :' . $prefix . '_q OR s.nome LIKE :' . $prefix . '_q OR d.nome LIKE :' . $prefix . '_q)';
-            $params[$prefix . '_q'] = '%' . trim((string)$filters['q']) . '%';
+            $qValue = '%' . trim((string)$filters['q']) . '%';
+            $qColumns = ['a.nome_auditoria', 'a.pergunta', 'c.nome_empresa', 's.nome', 'd.nome'];
+            $qConditions = [];
+            foreach ($qColumns as $i => $column) {
+                $holder = $prefix . '_q' . $i;
+                $qConditions[] = $column . ' LIKE :' . $holder;
+                $params[$holder] = $qValue;
+            }
+            $where[] = '(' . implode(' OR ', $qConditions) . ')';
         }
         return $where;
     }
