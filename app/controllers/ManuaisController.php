@@ -747,7 +747,18 @@ class ManuaisController extends BaseController
             'usuario_id' => (int)($_SESSION['user']['id'] ?? 0),
         ]);
         $_SESSION['flash_success'] = 'Link do portal gerado com sucesso.';
-        header('Location: index.php?route=manuais/index&empresa_id=' . $empresaId . '&portal_token=' . $token);
+        $redirectParams = [
+            'route' => 'manuais/index',
+            'empresa_id' => $empresaId,
+            'portal_token' => $token,
+        ];
+        if ($departamentoId > 0) {
+            $redirectParams['departamento_id'] = $departamentoId;
+        }
+        if ($q !== '') {
+            $redirectParams['nome'] = $q;
+        }
+        header('Location: index.php?' . http_build_query($redirectParams));
     }
 
     private function startPortalSession(string $token): ?array
