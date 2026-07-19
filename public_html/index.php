@@ -436,6 +436,12 @@ switch ($route) {
     case 'auditorias/relatorio_pdf':
         (new AuditoriasController())->relatorioPdf();
         break;
+    case 'auditorias/relatorio_executivo':
+        (new AuditoriasController())->relatorioExecutivo();
+        break;
+    case 'auditorias/relatorio_executivo_pdf':
+        (new AuditoriasController())->relatorioExecutivoPdf();
+        break;
     case 'auditorias/duplicate':
         (new AuditoriasController())->duplicate();
         break;

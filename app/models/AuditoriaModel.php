@@ -323,6 +323,171 @@ class AuditoriaModel extends BaseModel
         ];
     }
 
+    /**
+     * Consolida dados para o relatório executivo de fechamento: quantidade de
+     * auditorias realizadas no período/filtros, totais conforme/não conforme,
+     * agrupamento por área (setor), lista de não conformidades com observação
+     * e observações adicionais registradas em itens conforme/não se aplica.
+     */
+    public function executiveReportData(array $filters): array
+    {
+        $this->ensureTables();
+        $empty = [
+            'total_auditorias' => 0,
+            'total_itens' => 0,
+            'total_conforme' => 0,
+            'total_nao_conforme' => 0,
+            'total_nao_aplica' => 0,
+            'conformidade_pct_media' => null,
+            'por_area' => [],
+            'nao_conformidades' => [],
+            'observacoes_adicionais' => [],
+        ];
+        if (!$this->canBypassScope() && count($this->tenantClientIds()) === 0) {
+            return $empty;
+        }
+
+        $where = ["a.deleted_at IS NULL", "a.status = 'Realizada'", 'a.conformidade_pct IS NOT NULL'];
+        $params = [];
+        $where = array_merge($where, $this->buildListFilterConditions($filters, $params, 'exec'));
+        if ($this->hasScopeRestriction()) {
+            $where[] = $this->tenantInCondition('a.cliente_id', $params, 'audexec');
+        }
+        $whereSql = implode(' AND ', $where);
+
+        $sql = "SELECT a.id AS auditoria_id, a.nome_auditoria, a.data_auditoria, a.conformidade_pct, a.semaforo,
+                       c.nome_empresa AS cliente_nome,
+                       s.nome AS setor_nome,
+                       COALESCE(d.nome, 'Não informado') AS departamento_nome,
+                       q.id AS questao_id, q.pergunta, q.ordem,
+                       av.conformidade, av.observacoes
+                FROM auditorias a
+                JOIN clientes c ON c.id = a.cliente_id
+                JOIN setores s ON s.id = a.setor_id
+                LEFT JOIN departamentos d ON d.id = s.departamento_id
+                JOIN auditoria_questoes q ON q.auditoria_id = a.id
+                LEFT JOIN auditoria_avaliacoes av ON av.auditoria_id = a.id AND av.questao_id = q.id
+                WHERE $whereSql
+                ORDER BY s.nome, a.data_auditoria, a.id, q.ordem, q.id";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+
+        $auditoriasVistas = [];
+        $auditoriaConformidadePct = [];
+        $questaoIndexPorAuditoria = [];
+        $areas = [];
+        $naoConformidades = [];
+        $observacoesAdicionais = [];
+        $totalConforme = 0;
+        $totalNaoConforme = 0;
+        $totalNaoAplica = 0;
+
+        foreach ($stmt->fetchAll() as $row) {
+            $auditoriaId = (int)$row['auditoria_id'];
+            $setorNome = (string)$row['setor_nome'];
+            if (!isset($auditoriasVistas[$auditoriaId])) {
+                $auditoriasVistas[$auditoriaId] = true;
+                $auditoriaConformidadePct[$auditoriaId] = $row['conformidade_pct'] !== null ? (float)$row['conformidade_pct'] : null;
+            }
+            if (!isset($areas[$setorNome])) {
+                $areas[$setorNome] = [
+                    'setor_nome' => $setorNome,
+                    'departamento_nome' => (string)$row['departamento_nome'],
+                    'auditoria_ids' => [],
+                    'conforme' => 0,
+                    'nao_conforme' => 0,
+                    'nao_aplica' => 0,
+                ];
+            }
+            $areas[$setorNome]['auditoria_ids'][$auditoriaId] = true;
+
+            $questaoIndexPorAuditoria[$auditoriaId] = ($questaoIndexPorAuditoria[$auditoriaId] ?? 0) + 1;
+            $questaoNumero = $questaoIndexPorAuditoria[$auditoriaId];
+            $observacao = trim((string)($row['observacoes'] ?? ''));
+
+            $conformidade = (string)($row['conformidade'] ?? '');
+            if ($conformidade === 'conforme') {
+                $totalConforme++;
+                $areas[$setorNome]['conforme']++;
+                if ($observacao !== '') {
+                    $observacoesAdicionais[] = [
+                        'setor_nome' => $setorNome,
+                        'departamento_nome' => (string)$row['departamento_nome'],
+                        'cliente_nome' => (string)$row['cliente_nome'],
+                        'auditoria_id' => $auditoriaId,
+                        'auditoria_nome' => (string)$row['nome_auditoria'],
+                        'data_auditoria' => (string)$row['data_auditoria'],
+                        'questao_numero' => $questaoNumero,
+                        'pergunta' => (string)$row['pergunta'],
+                        'conformidade' => 'Conforme',
+                        'observacao' => $observacao,
+                    ];
+                }
+            } elseif ($conformidade === 'nao_conforme') {
+                $totalNaoConforme++;
+                $areas[$setorNome]['nao_conforme']++;
+                $naoConformidades[] = [
+                    'setor_nome' => $setorNome,
+                    'departamento_nome' => (string)$row['departamento_nome'],
+                    'cliente_nome' => (string)$row['cliente_nome'],
+                    'auditoria_id' => $auditoriaId,
+                    'auditoria_nome' => (string)$row['nome_auditoria'],
+                    'data_auditoria' => (string)$row['data_auditoria'],
+                    'questao_numero' => $questaoNumero,
+                    'pergunta' => (string)$row['pergunta'],
+                    'observacao' => $observacao,
+                ];
+            } elseif ($conformidade === 'nao_aplica') {
+                $totalNaoAplica++;
+                $areas[$setorNome]['nao_aplica']++;
+                if ($observacao !== '') {
+                    $observacoesAdicionais[] = [
+                        'setor_nome' => $setorNome,
+                        'departamento_nome' => (string)$row['departamento_nome'],
+                        'cliente_nome' => (string)$row['cliente_nome'],
+                        'auditoria_id' => $auditoriaId,
+                        'auditoria_nome' => (string)$row['nome_auditoria'],
+                        'data_auditoria' => (string)$row['data_auditoria'],
+                        'questao_numero' => $questaoNumero,
+                        'pergunta' => (string)$row['pergunta'],
+                        'conformidade' => 'Não se aplica',
+                        'observacao' => $observacao,
+                    ];
+                }
+            }
+        }
+
+        $porArea = [];
+        foreach ($areas as $area) {
+            $totalAreaAuditorias = count($area['auditoria_ids']);
+            $split = self::percentSplit($area['conforme'], $area['nao_conforme']);
+            $porArea[] = [
+                'setor_nome' => $area['setor_nome'],
+                'departamento_nome' => $area['departamento_nome'],
+                'total_auditorias' => $totalAreaAuditorias,
+                'conforme' => $area['conforme'],
+                'nao_conforme' => $area['nao_conforme'],
+                'nao_aplica' => $area['nao_aplica'],
+                'conformidade_pct' => $split['conforme'],
+            ];
+        }
+
+        $pctValues = array_values(array_filter($auditoriaConformidadePct, static fn($v): bool => $v !== null));
+        $conformidadePctMedia = !empty($pctValues) ? array_sum($pctValues) / count($pctValues) : null;
+
+        return [
+            'total_auditorias' => count($auditoriasVistas),
+            'total_itens' => $totalConforme + $totalNaoConforme + $totalNaoAplica,
+            'total_conforme' => $totalConforme,
+            'total_nao_conforme' => $totalNaoConforme,
+            'total_nao_aplica' => $totalNaoAplica,
+            'conformidade_pct_media' => $conformidadePctMedia,
+            'por_area' => $porArea,
+            'nao_conformidades' => $naoConformidades,
+            'observacoes_adicionais' => $observacoesAdicionais,
+        ];
+    }
+
     private function buildListFilterConditions(array $filters, array &$params, string $prefix): array
     {
         $where = [];

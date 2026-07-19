@@ -8,9 +8,12 @@
 <div class="p-6">
     <div class="flex items-center justify-between mb-4">
         <h1 class="text-2xl font-bold">Auditorias</h1>
-        <?php if (!empty($canManage)): ?>
-            <a href="index.php?route=auditorias/create" class="px-4 py-2 rounded bg-brand-red text-white">Cadastrar Nova Auditoria</a>
-        <?php endif; ?>
+        <div class="flex items-center gap-2">
+            <a href="index.php?route=auditorias/relatorio_executivo" class="px-4 py-2 rounded bg-gray-200 text-brand-brown">Relatório Executivo</a>
+            <?php if (!empty($canManage)): ?>
+                <a href="index.php?route=auditorias/create" class="px-4 py-2 rounded bg-brand-red text-white">Cadastrar Nova Auditoria</a>
+            <?php endif; ?>
+        </div>
     </div>
 
     <form method="get" action="index.php" id="filtroAuditoriasForm" class="bg-white shadow rounded p-4 mb-4 grid grid-cols-1 md:grid-cols-12 gap-3">

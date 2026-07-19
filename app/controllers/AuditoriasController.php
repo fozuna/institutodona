@@ -8,6 +8,8 @@ use App\Core\Auth;
 use App\Core\BaseController;
 use App\Core\DateHelper;
 use App\Core\JwtService;
+use App\Core\PdfSupport;
+use App\Core\ReportBranding;
 use App\Core\Security;
 use App\Core\SimplePdfReport;
 use App\Models\AuditoriaModel;
@@ -489,6 +491,150 @@ class AuditoriasController extends BaseController
         header('Content-Type: application/pdf');
         header('Content-Disposition: inline; filename="auditoria-' . $id . '.pdf"');
         echo $pdf;
+    }
+
+    public function relatorioExecutivo(): void
+    {
+        $this->requireLogin();
+        $filters = $this->collectFilters();
+        $data = $this->auditorias->executiveReportData($filters);
+        $resumoExecutivo = $this->buildResumoExecutivo($data, $filters);
+        $clientes = $this->clientesCached();
+        $departamentos = !empty($filters['cliente']) ? $this->departamentosCached((int)$filters['cliente']) : $this->departamentosCached(0);
+        $setores = !empty($filters['cliente']) ? $this->setoresCached((int)$filters['cliente']) : [];
+        AuditLogger::log('auditoria_relatorio_executivo', 'auditoria', null, [
+            'filters' => $filters,
+            'total_auditorias' => $data['total_auditorias'],
+        ]);
+        $this->render('auditorias/relatorio_executivo', [
+            'data' => $data,
+            'resumoExecutivo' => $resumoExecutivo,
+            'filters' => $filters,
+            'clientes' => $clientes,
+            'departamentos' => $departamentos,
+            'setores' => $setores,
+        ]);
+    }
+
+    public function relatorioExecutivoPdf(): void
+    {
+        $this->requireLogin();
+        if (!PdfSupport::isDompdfAvailable()) {
+            $errorId = PdfSupport::newErrorId();
+            AuditLogger::log('pdf_unavailable', 'auditoria', null, [
+                'error_id' => $errorId,
+                'route' => 'auditorias/relatorioExecutivoPdf',
+                'reason' => 'dompdf_missing',
+                'diagnostics' => PdfSupport::dompdfDiagnostics(),
+            ]);
+            http_response_code(503);
+            echo PdfSupport::missingDompdfMessage() . ' Código: ' . $errorId;
+            return;
+        }
+
+        $filters = $this->collectFilters();
+        $data = $this->auditorias->executiveReportData($filters);
+        $resumoExecutivo = $this->buildResumoExecutivo($data, $filters);
+
+        $subtitleParts = array_values(array_filter([
+            $filters['inicio'] ? ('De ' . DateHelper::formatDate((string)$filters['inicio'])) : null,
+            $filters['fim'] ? ('até ' . DateHelper::formatDate((string)$filters['fim'])) : null,
+        ]));
+        $branding = ReportBranding::aplicarBrandingRelatorio('pdf', [
+            'report_title' => 'Relatório Executivo de Fechamento de Auditorias',
+            'header_title' => 'Relatório Executivo de Fechamento de Auditorias',
+            'header_subtitle' => !empty($subtitleParts) ? implode(' ', $subtitleParts) : 'Consolidado do período avaliado',
+            'logo_position' => 'left',
+            'logo_width' => 108,
+            'margins' => ['top' => 14, 'right' => 12, 'bottom' => 14, 'left' => 12],
+            'footer_text' => 'Relatório do sistema',
+            'generated_at' => DateHelper::now(),
+        ]);
+
+        ob_start();
+        require __DIR__ . '/../views/auditorias/relatorio_executivo_pdf.php';
+        $html = (string)ob_get_clean();
+
+        if (!empty($_GET['preview'])) {
+            header('Content-Type: text/html; charset=utf-8');
+            echo $html;
+            return;
+        }
+
+        $options = new \Dompdf\Options();
+        $options->set('isRemoteEnabled', false);
+        $options->set('isHtml5ParserEnabled', true);
+        $options->set('isPhpEnabled', false);
+        $options->set('defaultFont', 'DejaVu Sans');
+        $options->set('dpi', 120);
+        $options->setChroot(dirname(__DIR__, 2));
+
+        $dompdf = new \Dompdf\Dompdf($options);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->loadHtml($html, 'UTF-8');
+        $dompdf->render();
+        $pdf = (string)$dompdf->output();
+
+        AuditLogger::log('pdf_export', 'auditoria', null, [
+            'via' => 'relatorio_executivo',
+            'filters' => $filters,
+            'total_auditorias' => $data['total_auditorias'],
+        ]);
+
+        $filename = 'relatorio_executivo_auditorias_' . date('Ymd_His') . '.pdf';
+        if (PHP_SAPI !== 'cli') {
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+        }
+        header('Content-Type: application/pdf');
+        header('X-Content-Type-Options: nosniff');
+        header('Content-Transfer-Encoding: binary');
+        header('Cache-Control: private, max-age=0, must-revalidate');
+        header('Pragma: public');
+        header('Content-Length: ' . strlen($pdf));
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        echo $pdf;
+    }
+
+    private function buildResumoExecutivo(array $data, array $filters): string
+    {
+        $totalAuditorias = (int)($data['total_auditorias'] ?? 0);
+        if ($totalAuditorias === 0) {
+            return 'Não foram encontradas auditorias realizadas para o período e os filtros selecionados.';
+        }
+        $inicio = !empty($filters['inicio']) ? DateHelper::formatDate((string)$filters['inicio']) : null;
+        $fim = !empty($filters['fim']) ? DateHelper::formatDate((string)$filters['fim']) : null;
+        if ($inicio && $fim) {
+            $periodoTexto = 'no período de ' . $inicio . ' a ' . $fim;
+        } elseif ($inicio) {
+            $periodoTexto = 'a partir de ' . $inicio;
+        } elseif ($fim) {
+            $periodoTexto = 'até ' . $fim;
+        } else {
+            $periodoTexto = 'no período avaliado';
+        }
+
+        $totalItens = (int)($data['total_itens'] ?? 0);
+        $totalConforme = (int)($data['total_conforme'] ?? 0);
+        $totalNaoConforme = (int)($data['total_nao_conforme'] ?? 0);
+        $pctMedia = $data['conformidade_pct_media'] ?? null;
+        $pctTexto = $pctMedia !== null ? number_format((float)$pctMedia, 2, ',', '.') . '%' : 'não apurada';
+        $totalAreas = count($data['por_area'] ?? []);
+
+        $texto = 'Segue o fechamento das auditorias realizadas ' . $periodoTexto . '. '
+            . 'Foram realizadas ' . $totalAuditorias . ' auditoria(s), abrangendo ' . $totalAreas . ' área(s), '
+            . 'totalizando ' . $totalItens . ' item(ns) avaliado(s), dos quais ' . $totalConforme . ' conforme(s) e '
+            . $totalNaoConforme . ' não conforme(s), com conformidade média de ' . $pctTexto . '. ';
+
+        if ($totalNaoConforme > 0) {
+            $texto .= 'Abaixo, um resumo consolidado por área com as respectivas observações registradas pelos '
+                . 'responsáveis, para orientar a geração dos planos de ação.';
+        } else {
+            $texto .= 'Não foram identificadas não conformidades no período avaliado.';
+        }
+
+        return $texto;
     }
 
     private function resolvePdfImagePath(array $anexo): ?string
