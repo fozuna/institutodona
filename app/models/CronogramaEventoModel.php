@@ -224,7 +224,7 @@ class CronogramaEventoModel extends BaseModel
             FROM cronograma_eventos ce
             JOIN cronogramas cr ON cr.id = ce.id_cronograma
             WHERE ce.id_cronograma = :id AND $scope
-            ORDER BY COALESCE(ce.evento_pai_id, ce.id), ce.data, ce.id";
+            ORDER BY ce.data, ce.id";
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll();
