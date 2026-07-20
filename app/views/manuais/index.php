@@ -15,53 +15,66 @@ $sortIndicator = static function (string $column) use ($selectedSortCol, $select
     }
     return $selectedSortDir === 'asc' ? '↑' : '↓';
 };
+$hasActiveFilters = ($selectedEmpresa > 0) || ($selectedDepartamento > 0) || ($searchNome !== '');
 ?>
 <div class="p-6">
-  <div class="flex justify-between items-center mb-4">
-    <h1 class="text-2xl font-bold text-brand-black">Biblioteca</h1>
+  <div class="flex items-center justify-between mb-4">
+    <h1 class="text-xl font-semibold text-slate-900">Biblioteca</h1>
     <div class="flex items-center gap-2">
       <?php if ($canManageManuais): ?>
-        <a class="px-3 py-2 rounded bg-brand-red text-white" href="index.php?route=manuais/create<?= $selectedEmpresa > 0 ? '&empresa_id=' . (int)$selectedEmpresa : '' ?>">Novo Item</a>
+        <a class="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-brand-red px-3 text-sm font-medium text-white hover:brightness-95" href="index.php?route=manuais/create<?= $selectedEmpresa > 0 ? '&empresa_id=' . (int)$selectedEmpresa : '' ?>" title="Novo Item" aria-label="Novo Item">
+          <span data-feather="plus" class="h-4 w-4"></span>
+          <span>Novo Item</span>
+        </a>
       <?php endif; ?>
-      <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="javascript:history.back()">Voltar</a>
+      <a class="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-600 hover:bg-slate-50" href="javascript:history.back()" title="Voltar" aria-label="Voltar">
+        <span data-feather="arrow-left" class="h-4 w-4"></span>
+        <span>Voltar</span>
+      </a>
     </div>
   </div>
 
   <?php if ($canManageManuais && $selectedEmpresa > 0): ?>
-    <div class="bg-white shadow rounded p-4 mb-4">
-      <div class="flex items-center justify-between">
+    <div class="rounded-lg border border-slate-200 bg-white p-4 mb-4 shadow-sm">
+      <div class="flex items-center justify-between gap-3">
         <div>
-          <div class="font-semibold">Portal público da biblioteca</div>
-          <div class="text-sm text-gray-600">Gere um link seguro para o cliente acessar somente os itens autorizados.</div>
+          <div class="text-sm font-semibold text-slate-900">Portal público da biblioteca</div>
+          <div class="text-xs text-slate-500 mt-0.5">Gere um link seguro para o cliente acessar somente os itens autorizados.</div>
         </div>
         <form method="post" action="index.php?route=manuais/generatePortalLink">
           <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
           <input type="hidden" name="empresa_id" value="<?= (int)$selectedEmpresa ?>" />
           <input type="hidden" name="departamento_id" value="<?= (int)$selectedDepartamento ?>" />
           <input type="hidden" name="q" value="<?= htmlspecialchars($searchNome) ?>" />
-          <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">Gerar link</button>
+          <button class="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-brand-red px-3 text-sm font-medium text-white hover:brightness-95 whitespace-nowrap" type="submit">
+            <span data-feather="link" class="h-4 w-4"></span>
+            <span>Gerar link</span>
+          </button>
         </form>
       </div>
       <?php if (!empty($portalLink)): ?>
         <div class="mt-3">
-          <label class="block text-sm mb-1">Link</label>
+          <label class="mb-1 block text-xs font-medium text-slate-600">Link</label>
           <div class="flex items-center gap-2">
-            <input type="text" readonly class="border rounded p-2 w-full" id="portalLinkInput" value="<?= htmlspecialchars($portalLink) ?>" />
-            <button type="button" class="px-3 py-2 rounded bg-gray-200 text-brand-brown" id="copyPortalLinkBtn">Copiar</button>
+            <input type="text" readonly class="h-9 rounded-md border border-slate-300 px-3 text-sm w-full" id="portalLinkInput" value="<?= htmlspecialchars($portalLink) ?>" />
+            <button type="button" class="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 whitespace-nowrap" id="copyPortalLinkBtn">
+              <span data-feather="copy" class="h-4 w-4"></span>
+              <span>Copiar</span>
+            </button>
           </div>
         </div>
       <?php endif; ?>
     </div>
   <?php endif; ?>
 
-  <form method="get" action="index.php" id="manualFiltersForm" class="mb-4 bg-white shadow rounded p-4">
+  <form method="get" action="index.php" id="manualFiltersForm" class="mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
     <input type="hidden" name="route" value="manuais/index" />
     <input type="hidden" name="sort_col" id="manualSortCol" value="<?= htmlspecialchars($selectedSortCol) ?>" />
     <input type="hidden" name="sort_dir" id="manualSortDir" value="<?= htmlspecialchars($selectedSortDir) ?>" />
-    <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
-      <div class="md:col-span-4">
-        <label class="block text-sm">Empresa</label>
-        <select name="empresa_id" id="manualEmpresaFilter" class="border rounded p-2 w-full">
+    <div class="flex flex-wrap items-end gap-3">
+      <div class="w-full sm:w-auto sm:flex-1 sm:min-w-[180px]">
+        <label class="mb-1 block text-xs font-medium text-slate-600">Empresa</label>
+        <select name="empresa_id" id="manualEmpresaFilter" class="h-9 w-full rounded-md border border-slate-300 px-3 text-sm">
           <option value="">-- Todas --</option>
           <?php foreach ($clientes as $c): ?>
             <option value="<?= (int)$c['id'] ?>" <?= $selectedEmpresa === (int)$c['id'] ? 'selected' : '' ?>>
@@ -70,9 +83,9 @@ $sortIndicator = static function (string $column) use ($selectedSortCol, $select
           <?php endforeach; ?>
         </select>
       </div>
-      <div class="md:col-span-4">
-        <label class="block text-sm">Departamento</label>
-        <select name="departamento_id" id="manualDepartamentoFilter" class="border rounded p-2 w-full">
+      <div class="w-full sm:w-auto sm:flex-1 sm:min-w-[180px]">
+        <label class="mb-1 block text-xs font-medium text-slate-600">Departamento</label>
+        <select name="departamento_id" id="manualDepartamentoFilter" class="h-9 w-full rounded-md border border-slate-300 px-3 text-sm">
           <option value="">-- Todos --</option>
           <?php foreach ($departamentos as $d): ?>
             <option value="<?= (int)$d['id'] ?>" data-empresa="<?= (int)$d['cliente_id'] ?>" <?= $selectedDepartamento === (int)$d['id'] ? 'selected' : '' ?>>
@@ -81,87 +94,110 @@ $sortIndicator = static function (string $column) use ($selectedSortCol, $select
           <?php endforeach; ?>
         </select>
       </div>
-      <div class="md:col-span-4">
-        <label class="block text-sm">Nome</label>
-        <input type="text" name="nome" value="<?= htmlspecialchars($searchNome) ?>" maxlength="255" class="border rounded p-2 w-full" />
+      <div class="w-full sm:w-auto sm:flex-1 sm:min-w-[200px]">
+        <label class="mb-1 block text-xs font-medium text-slate-600">Nome</label>
+        <input type="text" name="nome" value="<?= htmlspecialchars($searchNome) ?>" maxlength="255" class="h-9 w-full rounded-md border border-slate-300 px-3 text-sm" />
       </div>
-    </div>
-    <div class="mt-4 flex items-center gap-2 justify-end">
-      <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">Filtrar</button>
-      <a class="px-4 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?route=manuais/index">Limpar</a>
+      <div class="flex items-center gap-2">
+        <button class="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-brand-red px-3 text-sm font-medium text-white hover:brightness-95" type="submit">
+          <span data-feather="filter" class="h-4 w-4"></span>
+          <span>Filtrar</span>
+        </button>
+        <a class="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-600 hover:bg-slate-50" href="index.php?route=manuais/index">
+          <span data-feather="x-circle" class="h-4 w-4"></span>
+          <span>Limpar</span>
+        </a>
+      </div>
     </div>
   </form>
 
-  <div class="bg-white shadow rounded overflow-x-auto">
-    <table class="min-w-full">
+  <div class="bg-white shadow rounded-lg overflow-x-auto">
+    <table class="min-w-full text-sm">
       <thead>
-        <tr class="text-left border-b">
-          <th class="p-3">
-            <button type="button" class="manual-sort-trigger inline-flex items-center gap-2 font-semibold" data-col="nome">
+        <tr class="text-left border-b border-slate-200">
+          <th class="w-[20%] px-3 py-3">
+            <button type="button" class="manual-sort-trigger inline-flex items-center gap-1 text-xs font-semibold text-slate-600" data-col="nome">
               <span>Nome</span>
-              <span class="text-xs text-gray-500"><?= $sortIndicator('nome') ?></span>
+              <span class="text-[11px] leading-none text-slate-400"><?= $sortIndicator('nome') ?></span>
             </button>
           </th>
-          <th class="p-3">
-            <button type="button" class="manual-sort-trigger inline-flex items-center gap-2 font-semibold" data-col="descricao">
+          <th class="w-[38%] px-3 py-3">
+            <button type="button" class="manual-sort-trigger inline-flex items-center gap-1 text-xs font-semibold text-slate-600" data-col="descricao">
               <span>Descrição</span>
-              <span class="text-xs text-gray-500"><?= $sortIndicator('descricao') ?></span>
+              <span class="text-[11px] leading-none text-slate-400"><?= $sortIndicator('descricao') ?></span>
             </button>
           </th>
-          <th class="p-3">
-            <button type="button" class="manual-sort-trigger inline-flex items-center gap-2 font-semibold" data-col="empresa">
+          <th class="w-[14%] px-3 py-3">
+            <button type="button" class="manual-sort-trigger inline-flex items-center gap-1 text-xs font-semibold text-slate-600" data-col="empresa">
               <span>Empresa</span>
-              <span class="text-xs text-gray-500"><?= $sortIndicator('empresa') ?></span>
+              <span class="text-[11px] leading-none text-slate-400"><?= $sortIndicator('empresa') ?></span>
             </button>
           </th>
-          <th class="p-3">
-            <button type="button" class="manual-sort-trigger inline-flex items-center gap-2 font-semibold" data-col="departamento">
+          <th class="w-[12%] px-3 py-3">
+            <button type="button" class="manual-sort-trigger inline-flex items-center gap-1 text-xs font-semibold text-slate-600" data-col="departamento">
               <span>Departamento</span>
-              <span class="text-xs text-gray-500"><?= $sortIndicator('departamento') ?></span>
+              <span class="text-[11px] leading-none text-slate-400"><?= $sortIndicator('departamento') ?></span>
             </button>
           </th>
-          <th class="p-3">
-            <button type="button" class="manual-sort-trigger inline-flex items-center gap-2 font-semibold" data-col="data">
+          <th class="w-[9%] px-3 py-3">
+            <button type="button" class="manual-sort-trigger inline-flex items-center gap-1 text-xs font-semibold text-slate-600" data-col="data">
               <span>Data</span>
-              <span class="text-xs text-gray-500"><?= $sortIndicator('data') ?></span>
+              <span class="text-[11px] leading-none text-slate-400"><?= $sortIndicator('data') ?></span>
             </button>
           </th>
-          <th class="p-3">Ações</th>
+          <th class="w-[7%] px-3 py-3 text-right text-xs font-semibold text-slate-600">Ações</th>
         </tr>
       </thead>
       <tbody>
         <?php if (empty($items)): ?>
           <tr>
-            <td class="p-4 text-sm text-gray-600" colspan="6">Nenhum item encontrado para os filtros selecionados.</td>
+            <td class="px-3 py-10" colspan="6">
+              <div class="flex flex-col items-center justify-center gap-2 text-center">
+                <span data-feather="inbox" class="h-6 w-6 text-slate-300"></span>
+                <p class="text-sm text-slate-500">Nenhum documento encontrado para os filtros selecionados.</p>
+                <?php if ($hasActiveFilters): ?>
+                  <a href="index.php?route=manuais/index" class="mt-1 inline-flex h-8 items-center rounded-md border border-slate-300 px-3 text-xs font-medium text-slate-600 hover:bg-slate-50">Limpar filtros</a>
+                <?php endif; ?>
+              </div>
+            </td>
           </tr>
         <?php else: ?>
           <?php foreach ($items as $manual): ?>
-            <tr class="border-b">
-              <td class="p-3 font-medium"><?= htmlspecialchars($manual['nome']) ?></td>
-              <td class="p-3"><?= htmlspecialchars((string)($manual['descricao'] ?? '—')) ?></td>
-              <td class="p-3"><?= htmlspecialchars($manual['empresa_nome']) ?></td>
-              <td class="p-3"><?= htmlspecialchars($manual['departamento_nome']) ?></td>
-              <td class="p-3"><?= htmlspecialchars(date('d/m/Y H:i', strtotime((string)$manual['created_at']))) ?></td>
-              <td class="p-3">
-                <div class="flex flex-wrap items-center gap-2">
-                  <a class="px-3 py-2 rounded bg-brand-red text-white inline-flex items-center gap-2" href="<?= $basePath ?>/biblioteca/download/<?= (int)$manual['id'] ?>">
-                    <span data-feather="download"></span>
-                    <span>Baixar</span>
+            <tr class="border-b border-slate-100 transition-colors hover:bg-slate-50">
+              <td class="px-3 py-3 align-top">
+                <div class="line-clamp-2 text-sm font-semibold leading-5 text-slate-900" title="<?= htmlspecialchars($manual['nome']) ?>"><?= htmlspecialchars($manual['nome']) ?></div>
+              </td>
+              <td class="px-3 py-3 align-top">
+                <div class="line-clamp-2 max-w-md text-sm leading-5 text-slate-600"><?= htmlspecialchars((string)($manual['descricao'] ?? '—')) ?></div>
+              </td>
+              <td class="px-3 py-3 align-top">
+                <div class="max-w-[180px] truncate text-xs font-medium text-slate-600" title="<?= htmlspecialchars($manual['empresa_nome']) ?>"><?= htmlspecialchars($manual['empresa_nome']) ?></div>
+              </td>
+              <td class="px-3 py-3 align-top">
+                <div class="max-w-[160px] truncate text-xs font-medium text-slate-600" title="<?= htmlspecialchars($manual['departamento_nome']) ?>"><?= htmlspecialchars($manual['departamento_nome']) ?></div>
+              </td>
+              <td class="px-3 py-3 align-top whitespace-nowrap text-xs leading-5 text-slate-500">
+                <?= htmlspecialchars(date('d/m/Y', strtotime((string)$manual['created_at']))) ?><br />
+                <?= htmlspecialchars(date('H:i', strtotime((string)$manual['created_at']))) ?>
+              </td>
+              <td class="px-3 py-3 align-top">
+                <div class="flex items-center justify-end gap-1">
+                  <a class="icon-action inline-flex h-10 w-10 sm:h-8 sm:w-8 items-center justify-center rounded-md text-brand-red" href="<?= $basePath ?>/biblioteca/download/<?= (int)$manual['id'] ?>" title="Baixar documento" aria-label="Baixar documento">
+                    <span data-feather="download" class="h-4 w-4"></span>
                   </a>
                   <?php if ($canManageManuais): ?>
-                    <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown inline-flex items-center gap-2" href="index.php?route=manuais/edit&id=<?= (int)$manual['id'] ?>">
-                      <span data-feather="edit-2"></span>
-                      <span>Editar</span>
+                    <a class="icon-action inline-flex h-10 w-10 sm:h-8 sm:w-8 items-center justify-center rounded-md text-brand-pink" href="index.php?route=manuais/edit&id=<?= (int)$manual['id'] ?>" title="Editar documento" aria-label="Editar documento">
+                      <span data-feather="edit-2" class="h-4 w-4"></span>
                     </a>
                   <?php endif; ?>
                   <?php if ($canDeleteManuais): ?>
                     <button type="button"
-                            class="px-3 py-2 rounded bg-white border border-red-300 text-red-700 inline-flex items-center gap-2"
+                            class="icon-action inline-flex h-10 w-10 sm:h-8 sm:w-8 items-center justify-center rounded-md text-brand-brown"
                             data-manual-delete
                             data-id="<?= (int)$manual['id'] ?>"
-                            data-nome="<?= htmlspecialchars($manual['nome']) ?>">
-                      <span data-feather="trash-2"></span>
-                      <span>Excluir</span>
+                            data-nome="<?= htmlspecialchars($manual['nome']) ?>"
+                            title="Excluir documento" aria-label="Excluir documento">
+                      <span data-feather="trash-2" class="h-4 w-4"></span>
                     </button>
                   <?php endif; ?>
                 </div>
