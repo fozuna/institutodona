@@ -873,10 +873,10 @@ class TreinamentosController extends BaseController
             if (!$this->departamentoBelongsToCliente((int)$payload['departamento_id'], $clienteId)) {
                 $errors['departamento_id'] = 'Departamento inválido para a empresa selecionada.';
             }
-            if (!empty($payload['setor_ids']) && !$this->setoresBelongToCliente($payload['setor_ids'], $clienteId, (int)$payload['departamento_id'])) {
+            if (!empty($payload['setor_ids']) && !$this->setoresBelongToCliente($payload['setor_ids'], $clienteId)) {
                 $errors['setor_ids'] = 'Existem setores que não pertencem à empresa selecionada.';
             }
-            if (!empty($payload['funcao_ids']) && !$this->funcoesBelongToCliente($payload['funcao_ids'], $clienteId, (int)$payload['departamento_id'])) {
+            if (!empty($payload['funcao_ids']) && !$this->funcoesBelongToCliente($payload['funcao_ids'], $clienteId)) {
                 $errors['funcao_ids'] = 'Existem funções que não pertencem à empresa selecionada.';
             }
         }
@@ -1000,48 +1000,49 @@ class TreinamentosController extends BaseController
         return $this->departamentosModel->findActive($departamentoId, $clienteId) !== null;
     }
 
-    private function setoresBelongToCliente(array $setorIds, int $clienteId, int $departamentoId = 0): bool
+    /**
+     * Um treinamento pode aplicar-se a setores de VÁRIOS departamentos da MESMA empresa
+     * (ver campo "Departamentos (Filtro)" no formulário). Por isso o escopo de validação
+     * é a empresa (cliente_id) inteira, e não apenas o departamento_id principal do
+     * treinamento — restringir ao departamento único bloqueava seleções legítimas e
+     * ainda descrevia o erro como "não pertence à empresa", o que era enganoso.
+     */
+    private function setoresBelongToCliente(array $setorIds, int $clienteId): bool
     {
         $setorIds = array_values(array_unique(array_filter(array_map('intval', $setorIds))));
-        if (empty($setorIds) || $clienteId <= 0) {
+        if (empty($setorIds)) {
             return true;
         }
-        if (!$this->canAccessCliente($clienteId)) {
+        if ($clienteId <= 0 || !$this->canAccessCliente($clienteId)) {
             return false;
         }
+        $allowed = [];
+        foreach ($this->setoresModel->activeByCliente($clienteId) as $row) {
+            $allowed[(int)($row['id'] ?? 0)] = true;
+        }
         foreach ($setorIds as $id) {
-            $row = $this->setoresModel->findActive($id, $departamentoId);
-            if (!$row) {
-                return false;
-            }
-            if (!$this->departamentoBelongsToCliente((int)($row['departamento_id'] ?? 0), $clienteId)) {
+            if (!isset($allowed[$id])) {
                 return false;
             }
         }
         return true;
     }
 
-    private function funcoesBelongToCliente(array $funcaoIds, int $clienteId, int $departamentoId = 0): bool
+    private function funcoesBelongToCliente(array $funcaoIds, int $clienteId): bool
     {
         $funcaoIds = array_values(array_unique(array_filter(array_map('intval', $funcaoIds))));
-        if (empty($funcaoIds) || $clienteId <= 0) {
+        if (empty($funcaoIds)) {
             return true;
         }
-        if (!$this->canAccessCliente($clienteId)) {
+        if ($clienteId <= 0 || !$this->canAccessCliente($clienteId)) {
             return false;
         }
+        $allowed = [];
+        foreach ($this->funcoesModel->activeByCliente($clienteId) as $row) {
+            $allowed[(int)($row['id'] ?? 0)] = true;
+        }
         foreach ($funcaoIds as $id) {
-            $row = $this->funcoesModel->find($id);
-            if (!$row) {
-                return false;
-            }
-            if ((int)($row['departamento_id'] ?? 0) !== $departamentoId) {
-                return false;
-            }
-            if (!$this->departamentoBelongsToCliente($departamentoId, $clienteId)) {
-                return false;
-            }
-            if (array_key_exists('ativo', $row) && (int)($row['ativo'] ?? 1) !== 1) {
+            if (!isset($allowed[$id])) {
                 return false;
             }
         }

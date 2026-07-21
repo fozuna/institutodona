@@ -28,33 +28,43 @@ class TreinamentoModel extends BaseModel
     }
 
     /**
+     * Um treinamento pode aplicar-se a setores de vários departamentos da MESMA empresa
+     * (campo "Departamentos (Filtro)" no formulário), então o escopo correto de validação
+     * é a empresa (cliente_id), não o departamento_id principal do treinamento. Usa
+     * activeByCliente() para reaproveitar a mesma regra (ativo=1 + visibilidade
+     * matriz/filial) que já popula os selects do formulário.
+     *
      * @param array<int> $ids
      * @return array<int>
      */
-    private function validSetorIdsForDepartamento(array $ids, int $departamentoId): array
+    private function validSetorIdsForCliente(array $ids, int $clienteId): array
     {
-        $valid = [];
-        foreach (array_values(array_unique(array_filter(array_map('intval', $ids)))) as $id) {
-            if ($this->setorBelongsToCatalogCliente($id, null, $departamentoId)) {
-                $valid[] = $id;
-            }
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if (empty($ids) || $clienteId <= 0) {
+            return [];
         }
-        return $valid;
+        $allowed = [];
+        foreach ((new \App\Models\SetorModel())->activeByCliente($clienteId) as $row) {
+            $allowed[(int)($row['id'] ?? 0)] = true;
+        }
+        return array_values(array_filter($ids, static fn(int $id): bool => isset($allowed[$id])));
     }
 
     /**
      * @param array<int> $ids
      * @return array<int>
      */
-    private function validFuncaoIdsForDepartamento(array $ids, int $departamentoId): array
+    private function validFuncaoIdsForCliente(array $ids, int $clienteId): array
     {
-        $valid = [];
-        foreach (array_values(array_unique(array_filter(array_map('intval', $ids)))) as $id) {
-            if ($this->funcaoBelongsToCatalogCliente($id, null, null, $departamentoId)) {
-                $valid[] = $id;
-            }
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if (empty($ids) || $clienteId <= 0) {
+            return [];
         }
-        return $valid;
+        $allowed = [];
+        foreach ((new \App\Models\FuncaoModel())->activeByCliente($clienteId) as $row) {
+            $allowed[(int)($row['id'] ?? 0)] = true;
+        }
+        return array_values(array_filter($ids, static fn(int $id): bool => isset($allowed[$id])));
     }
 
     public static function periodicidadeOptions(): array
@@ -143,8 +153,8 @@ class TreinamentoModel extends BaseModel
         }
         $requestedSetorIds = array_values(array_unique(array_filter(array_map('intval', (array)($data['setor_ids'] ?? [])))));
         $requestedFuncaoIds = array_values(array_unique(array_filter(array_map('intval', (array)($data['funcao_ids'] ?? [])))));
-        $setorIds = $this->validSetorIdsForDepartamento($requestedSetorIds, $departamentoId);
-        $funcaoIds = $this->validFuncaoIdsForDepartamento($requestedFuncaoIds, $departamentoId);
+        $setorIds = $this->validSetorIdsForCliente($requestedSetorIds, $clienteId);
+        $funcaoIds = $this->validFuncaoIdsForCliente($requestedFuncaoIds, $clienteId);
         if (count($setorIds) !== count($requestedSetorIds) || count($funcaoIds) !== count($requestedFuncaoIds)) {
             return 0;
         }
@@ -183,8 +193,8 @@ class TreinamentoModel extends BaseModel
         }
         $requestedSetorIds = array_values(array_unique(array_filter(array_map('intval', (array)($data['setor_ids'] ?? [])))));
         $requestedFuncaoIds = array_values(array_unique(array_filter(array_map('intval', (array)($data['funcao_ids'] ?? [])))));
-        $setorIds = $this->validSetorIdsForDepartamento($requestedSetorIds, $departamentoId);
-        $funcaoIds = $this->validFuncaoIdsForDepartamento($requestedFuncaoIds, $departamentoId);
+        $setorIds = $this->validSetorIdsForCliente($requestedSetorIds, $clienteId);
+        $funcaoIds = $this->validFuncaoIdsForCliente($requestedFuncaoIds, $clienteId);
         if (count($setorIds) !== count($requestedSetorIds) || count($funcaoIds) !== count($requestedFuncaoIds)) {
             return false;
         }

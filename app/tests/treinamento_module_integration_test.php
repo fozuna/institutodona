@@ -173,6 +173,72 @@ try {
     }
     ok('CRUD e relacionamentos do treinamento');
 
+    // Isolamento multiempresa: um treinamento pode aplicar-se a setores/funções de VÁRIOS
+    // departamentos da MESMA empresa (campo "Departamentos (Filtro)" no formulário), mas
+    // nunca de outra empresa. Cobre a regressão corrigida (falso-positivo entre departamentos
+    // da mesma empresa) e o caso de segurança real (rejeição de setor/função de outra empresa).
+    $pdo->prepare('INSERT INTO departamentos (nome, cliente_id) VALUES (:n,:c)')
+        ->execute(['n' => 'Departamento Treinamento 2 ' . $suffix, 'c' => $clienteId]);
+    $departamento2Id = (int)$pdo->lastInsertId();
+    $departamentoIds[] = $departamento2Id;
+    $pdo->prepare('INSERT INTO departamento_clientes (departamento_id, cliente_id) VALUES (:d,:c)')
+        ->execute(['d' => $departamento2Id, 'c' => $clienteId]);
+
+    $pdo->prepare('INSERT INTO setores (nome, departamento_id) VALUES (:n,:d)')
+        ->execute(['n' => 'Setor Treinamento 2 ' . $suffix, 'd' => $departamento2Id]);
+    $setor2Id = (int)$pdo->lastInsertId();
+    $setorIds[] = $setor2Id;
+
+    $pdo->prepare('INSERT INTO funcoes (nome, setor_id) VALUES (:n,:s)')
+        ->execute(['n' => 'Funcao Treinamento 2 ' . $suffix, 's' => $setor2Id]);
+    $funcao2Id = (int)$pdo->lastInsertId();
+    $funcaoIds[] = $funcao2Id;
+
+    $updatedSameEmpresa = $treinamentoModel->update($treinamentoId, [
+        'nome' => 'NR Integração ' . $suffix,
+        'objetivo' => 'Validar fluxo completo do pilar',
+        'publico' => 'Equipe interna',
+        'carga_horaria' => '8',
+        'cliente_id' => $clienteId,
+        'departamento_id' => $departamentoId,
+        'periodicidade' => 'anual',
+        'fornecedor' => 'Fornecedor Teste',
+        'tipo_treinamento' => 'Integracao',
+        'template_certificado' => 'Template de teste',
+        'assinatura_responsavel' => 'Gestor de Teste',
+        'setor_ids' => [$setorId, $setor2Id],
+        'funcao_ids' => [$funcaoId, $funcao2Id],
+    ]);
+    $treinamentoAfterMultiDept = $treinamentoModel->find($treinamentoId);
+    if (!$updatedSameEmpresa
+        || count($treinamentoAfterMultiDept['setor_ids'] ?? []) !== 2
+        || count($treinamentoAfterMultiDept['funcao_ids'] ?? []) !== 2
+    ) {
+        failFast('Setores/funções de outro departamento da MESMA empresa deveriam ser aceitos (isolamento é por empresa, não por departamento único)');
+    }
+    ok('Aceita setores/funções de múltiplos departamentos da mesma empresa');
+
+    $rejectedCrossTenant = $treinamentoModel->update($treinamentoId, [
+        'nome' => 'NR Integração ' . $suffix,
+        'objetivo' => 'Validar fluxo completo do pilar',
+        'publico' => 'Equipe interna',
+        'carga_horaria' => '8',
+        'cliente_id' => $clienteId,
+        'departamento_id' => $departamentoId,
+        'periodicidade' => 'anual',
+        'fornecedor' => 'Fornecedor Teste',
+        'tipo_treinamento' => 'Integracao',
+        'template_certificado' => 'Template de teste',
+        'assinatura_responsavel' => 'Gestor de Teste',
+        'setor_ids' => [$setorId, $setorBId],
+        'funcao_ids' => [$funcaoId],
+    ]);
+    $treinamentoAfterCrossTenantAttempt = $treinamentoModel->find($treinamentoId);
+    if ($rejectedCrossTenant !== false || count($treinamentoAfterCrossTenantAttempt['setor_ids'] ?? []) !== 2) {
+        failFast('Setor de outra empresa (Cliente B) deveria ser rejeitado integralmente, sem gravar vínculo parcial');
+    }
+    ok('Rejeita integralmente setor/função de outra empresa (sem vínculo parcial)');
+
     $treinamentoModel->syncColaboradores($treinamentoId, [$colaboradorId, $colaborador2Id, $colaboradorId]);
     Auth::login([
         'id' => 9012,
