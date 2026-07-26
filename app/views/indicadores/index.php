@@ -103,22 +103,20 @@ $viewMode = $viewMode ?? 'cards';
           <div class="flex-1"></div>
           <div class="text-xs text-gray-500 flex items-center" id="indicadoresLoading" style="display:none;">Carregando…</div>
         </div>
-        <?php if ($cliente): ?>
-          <div class="sm:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <a class="px-4 py-3 rounded-lg bg-brand-brown text-white text-center btn-with-icon" href="index.php?route=indicadores/realizado&cliente=<?= (int)$cliente ?>" aria-label="<?= htmlspecialchars($t('indicadores.action.value')) ?>" title="<?= htmlspecialchars($t('indicadores.action.value')) ?>">
-              <span data-feather="edit-3"></span>
-              <?= htmlspecialchars($t('indicadores.action.value')) ?>
-            </a>
-            <a class="px-4 py-3 rounded-lg bg-brand-brown text-white text-center btn-with-icon" href="index.php?route=indicadores/painel&cliente=<?= (int)$cliente ?>&ano=<?= (int)date('Y') ?>" aria-label="<?= htmlspecialchars($t('indicadores.action.dashboard')) ?>" title="<?= htmlspecialchars($t('indicadores.action.dashboard')) ?>">
-              <span data-feather="grid"></span>
-              <?= htmlspecialchars($t('indicadores.action.dashboard')) ?>
-            </a>
-            <a class="px-4 py-3 rounded-lg bg-brand-brown text-white text-center btn-with-icon" href="index.php?route=indicadores/charts&cliente=<?= (int)$cliente ?>" aria-label="<?= htmlspecialchars($t('indicadores.action.charts')) ?>" title="<?= htmlspecialchars($t('indicadores.action.charts')) ?>">
-              <span data-feather="bar-chart-2"></span>
-              <?= htmlspecialchars($t('indicadores.action.charts')) ?>
-            </a>
-          </div>
-        <?php endif; ?>
+        <div class="sm:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <a class="px-4 py-3 rounded-lg bg-brand-brown text-white text-center btn-with-icon" href="index.php?route=indicadores/realizado<?= $cliente ? '&cliente=' . (int)$cliente : '' ?>" aria-label="<?= htmlspecialchars($t('indicadores.action.value')) ?>" title="<?= htmlspecialchars($t('indicadores.action.value')) ?>">
+            <span data-feather="edit-3"></span>
+            <?= htmlspecialchars($t('indicadores.action.value')) ?>
+          </a>
+          <a class="px-4 py-3 rounded-lg bg-brand-brown text-white text-center btn-with-icon" href="index.php?route=indicadores/painel<?= $cliente ? '&cliente=' . (int)$cliente : '' ?>&ano=<?= (int)date('Y') ?>" aria-label="<?= htmlspecialchars($t('indicadores.action.dashboard')) ?>" title="<?= htmlspecialchars($t('indicadores.action.dashboard')) ?>">
+            <span data-feather="grid"></span>
+            <?= htmlspecialchars($t('indicadores.action.dashboard')) ?>
+          </a>
+          <a class="px-4 py-3 rounded-lg bg-brand-brown text-white text-center btn-with-icon" href="index.php?route=indicadores/charts<?= $cliente ? '&cliente=' . (int)$cliente : '' ?>" aria-label="<?= htmlspecialchars($t('indicadores.action.charts')) ?>" title="<?= htmlspecialchars($t('indicadores.action.charts')) ?>">
+            <span data-feather="bar-chart-2"></span>
+            <?= htmlspecialchars($t('indicadores.action.charts')) ?>
+          </a>
+        </div>
       </div>
     </form>
   </div>
