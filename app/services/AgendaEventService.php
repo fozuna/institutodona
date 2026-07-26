@@ -81,25 +81,26 @@ final class AgendaEventService
         return $grouped;
     }
 
-    public function eventsForRange(string $startDate, string $endDate, string $type = 'all'): array
+    public function eventsForRange(string $startDate, string $endDate, string $type = 'all', ?int $clienteId = null): array
     {
         $type = self::normalizeTypeFilter($type);
+        $clienteId = $clienteId !== null && $clienteId > 0 ? $clienteId : null;
         $events = [];
         if ($type === 'all' || $type === 'planoacao') {
-            $events = array_merge($events, $this->fetchPlanoTaskEvents($startDate, $endDate));
-            $events = array_merge($events, $this->fetchPlanoActionEvents($startDate, $endDate));
+            $events = array_merge($events, $this->fetchPlanoTaskEvents($startDate, $endDate, $clienteId));
+            $events = array_merge($events, $this->fetchPlanoActionEvents($startDate, $endDate, $clienteId));
         }
         if ($type === 'all' || $type === 'auditoria') {
-            $events = array_merge($events, $this->fetchAuditoriaEvents($startDate, $endDate));
+            $events = array_merge($events, $this->fetchAuditoriaEvents($startDate, $endDate, $clienteId));
         }
         if ($type === 'all' || $type === 'treinamento') {
-            $events = array_merge($events, $this->fetchTreinamentoEvents($startDate, $endDate));
+            $events = array_merge($events, $this->fetchTreinamentoEvents($startDate, $endDate, $clienteId));
         }
         if ($type === 'all' || $type === 'cronograma') {
-            $events = array_merge($events, $this->fetchCronogramaEvents($startDate, $endDate));
+            $events = array_merge($events, $this->fetchCronogramaEvents($startDate, $endDate, $clienteId));
         }
         if ($type === 'all' || $type === 'indicador') {
-            $events = array_merge($events, $this->fetchIndicadorEvents($startDate, $endDate));
+            $events = array_merge($events, $this->fetchIndicadorEvents($startDate, $endDate, $clienteId));
         }
 
         usort($events, static function (array $a, array $b): int {
@@ -111,7 +112,7 @@ final class AgendaEventService
         return $events;
     }
 
-    private function fetchPlanoTaskEvents(string $startDate, string $endDate): array
+    private function fetchPlanoTaskEvents(string $startDate, string $endDate, ?int $clienteId = null): array
     {
         if (!Database::tableExists('pdca_tasks')) {
             return [];
@@ -122,6 +123,10 @@ final class AgendaEventService
         $scope = $this->tenantCondition('t.id_cliente', $params, 'agt');
         if ($scope !== null) {
             $where[] = $scope;
+        }
+        $clienteFilter = $this->clienteFilterCondition('t.id_cliente', $clienteId, $params, 'agt_cli');
+        if ($clienteFilter !== null) {
+            $where[] = $clienteFilter;
         }
 
         $sql = "SELECT
@@ -184,7 +189,7 @@ final class AgendaEventService
         }, $stmt->fetchAll() ?: []);
     }
 
-    private function fetchPlanoActionEvents(string $startDate, string $endDate): array
+    private function fetchPlanoActionEvents(string $startDate, string $endDate, ?int $clienteId = null): array
     {
         if (!Database::tableExists('pdca_actions')) {
             return [];
@@ -195,6 +200,10 @@ final class AgendaEventService
         $scope = $this->tenantCondition('t.id_cliente', $params, 'aga');
         if ($scope !== null) {
             $where[] = $scope;
+        }
+        $clienteFilter = $this->clienteFilterCondition('t.id_cliente', $clienteId, $params, 'aga_cli');
+        if ($clienteFilter !== null) {
+            $where[] = $clienteFilter;
         }
 
         $sql = "SELECT
@@ -245,7 +254,7 @@ final class AgendaEventService
         }, $stmt->fetchAll() ?: []);
     }
 
-    private function fetchAuditoriaEvents(string $startDate, string $endDate): array
+    private function fetchAuditoriaEvents(string $startDate, string $endDate, ?int $clienteId = null): array
     {
         if (!Database::tableExists('auditorias')) {
             return [];
@@ -259,6 +268,10 @@ final class AgendaEventService
         $scope = $this->tenantCondition('a.cliente_id', $params, 'agu');
         if ($scope !== null) {
             $where[] = $scope;
+        }
+        $clienteFilter = $this->clienteFilterCondition('a.cliente_id', $clienteId, $params, 'agu_cli');
+        if ($clienteFilter !== null) {
+            $where[] = $clienteFilter;
         }
 
         $sql = "SELECT
@@ -317,7 +330,7 @@ final class AgendaEventService
         }, $stmt->fetchAll() ?: []);
     }
 
-    private function fetchTreinamentoEvents(string $startDate, string $endDate): array
+    private function fetchTreinamentoEvents(string $startDate, string $endDate, ?int $clienteId = null): array
     {
         if (!Database::tableExists('treinamentos_agenda') || !Database::tableExists('treinamentos')) {
             return [];
@@ -330,6 +343,10 @@ final class AgendaEventService
         $scope = $this->tenantCondition('ta.unidade_id', $params, 'agttr');
         if ($scope !== null) {
             $where[] = $scope;
+        }
+        $clienteFilter = $this->clienteFilterCondition('ta.unidade_id', $clienteId, $params, 'agttr_cli');
+        if ($clienteFilter !== null) {
+            $where[] = $clienteFilter;
         }
 
         $sql = "SELECT
@@ -404,7 +421,7 @@ final class AgendaEventService
         }, $stmt->fetchAll() ?: []);
     }
 
-    private function fetchCronogramaEvents(string $startDate, string $endDate): array
+    private function fetchCronogramaEvents(string $startDate, string $endDate, ?int $clienteId = null): array
     {
         if (!Database::tableExists('cronograma_eventos') || !Database::tableExists('cronogramas')) {
             return [];
@@ -418,6 +435,10 @@ final class AgendaEventService
         $scope = $this->tenantCondition('cr.id_cliente', $params, 'agcr');
         if ($scope !== null) {
             $where[] = $scope;
+        }
+        $clienteFilter = $this->clienteFilterCondition('cr.id_cliente', $clienteId, $params, 'agcr_cli');
+        if ($clienteFilter !== null) {
+            $where[] = $clienteFilter;
         }
 
         $sql = "SELECT
@@ -477,7 +498,7 @@ final class AgendaEventService
         }, $stmt->fetchAll() ?: []);
     }
 
-    private function fetchIndicadorEvents(string $startDate, string $endDate): array
+    private function fetchIndicadorEvents(string $startDate, string $endDate, ?int $clienteId = null): array
     {
         if (!Database::tableExists('indicador_eventos') || !Database::tableExists('indicadores')) {
             return [];
@@ -488,6 +509,10 @@ final class AgendaEventService
         $scope = $this->tenantCondition('ie.cliente_id', $params, 'agind');
         if ($scope !== null) {
             $where[] = $scope;
+        }
+        $clienteFilter = $this->clienteFilterCondition('ie.cliente_id', $clienteId, $params, 'agind_cli');
+        if ($clienteFilter !== null) {
+            $where[] = $clienteFilter;
         }
 
         $sql = "SELECT
@@ -574,5 +599,14 @@ final class AgendaEventService
             $params[$key] = (int)$id;
         }
         return $column . ' IN (' . implode(',', $holders) . ')';
+    }
+
+    private function clienteFilterCondition(string $column, ?int $clienteId, array &$params, string $key): ?string
+    {
+        if ($clienteId === null || $clienteId <= 0) {
+            return null;
+        }
+        $params[$key] = $clienteId;
+        return $column . ' = :' . $key;
     }
 }

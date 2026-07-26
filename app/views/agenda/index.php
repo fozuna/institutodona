@@ -6,11 +6,15 @@ $prev = $calendar['prev'] ?? ['year' => date('Y'), 'month' => date('n'), 'label'
 $next = $calendar['next'] ?? ['year' => date('Y'), 'month' => date('n'), 'label' => ''];
 $currentTitle = (string)($calendar['title'] ?? 'Agenda');
 $filter = $eventType ?? 'all';
+$clientesAgenda = is_array($clientes ?? null) ? $clientes : [];
+$clienteIdAgenda = (int)($clienteId ?? 0);
+$clienteQs = $clienteIdAgenda > 0 ? '&cliente=' . $clienteIdAgenda : '';
 ?>
 <div class="p-6" id="agendaApp"
      data-start="<?= htmlspecialchars((string)($calendar['start'] ?? '')) ?>"
      data-end="<?= htmlspecialchars((string)($calendar['end'] ?? '')) ?>"
      data-filter="<?= htmlspecialchars($filter) ?>"
+     data-cliente="<?= $clienteIdAgenda ?>"
      data-api="index.php?route=agenda/api_events">
   <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
     <div>
@@ -18,15 +22,21 @@ $filter = $eventType ?? 'all';
       <p class="text-sm text-gray-600">Calendário visual com eventos sincronizados de Planos de Ação, Auditorias, Treinamentos, Cronograma e Indicadores.</p>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?route=agenda/index&year=<?= (int)$prev['year'] ?>&month=<?= (int)$prev['month'] ?>&type=<?= urlencode($filter) ?>">◀ <?= htmlspecialchars((string)$prev['label']) ?></a>
+      <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?route=agenda/index&year=<?= (int)$prev['year'] ?>&month=<?= (int)$prev['month'] ?>&type=<?= urlencode($filter) ?><?= $clienteQs ?>">◀ <?= htmlspecialchars((string)$prev['label']) ?></a>
       <div class="px-3 py-2 font-semibold"><?= htmlspecialchars($currentTitle) ?></div>
-      <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?route=agenda/index&year=<?= (int)$next['year'] ?>&month=<?= (int)$next['month'] ?>&type=<?= urlencode($filter) ?>"><?= htmlspecialchars((string)$next['label']) ?> ▶</a>
+      <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?route=agenda/index&year=<?= (int)$next['year'] ?>&month=<?= (int)$next['month'] ?>&type=<?= urlencode($filter) ?><?= $clienteQs ?>"><?= htmlspecialchars((string)$next['label']) ?> ▶</a>
     </div>
   </div>
 
   <div class="bg-white shadow rounded p-4 mb-4">
     <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-      <div class="flex flex-wrap gap-2" id="agendaFilters">
+      <div class="flex flex-wrap items-center gap-2" id="agendaFilters">
+        <select id="agendaClienteSelect" class="px-3 py-2 rounded border text-sm bg-white text-brand-brown border-gray-300">
+          <option value="0">Todos os clientes</option>
+          <?php foreach ($clientesAgenda as $c): ?>
+            <option value="<?= (int)$c['id'] ?>" <?= $clienteIdAgenda === (int)$c['id'] ? 'selected' : '' ?>><?= htmlspecialchars((string)($c['nome_empresa'] ?? '')) ?></option>
+          <?php endforeach; ?>
+        </select>
         <?php foreach (['all' => 'Todos', 'planoacao' => 'Planos de Acao', 'auditoria' => 'Auditorias', 'treinamento' => 'Treinamentos', 'cronograma' => 'Cronograma', 'indicador' => 'Indicadores'] as $key => $label): ?>
           <button type="button"
                   class="agenda-filter px-3 py-2 rounded border text-sm <?= $filter === $key ? 'bg-brand-pink text-white border-brand-pink' : 'bg-white text-brand-brown border-gray-300' ?>"
@@ -142,6 +152,8 @@ $filter = $eventType ?? 'all';
     const start = app.dataset.start;
     const end = app.dataset.end;
     let activeFilter = app.dataset.filter || 'all';
+    let activeCliente = app.dataset.cliente || '0';
+    const clienteSelect = document.getElementById('agendaClienteSelect');
     let grouped = <?= json_encode($eventsByDate, JSON_UNESCAPED_UNICODE) ?>;
     const refreshStatus = document.getElementById('agendaRefreshStatus');
     const grid = document.getElementById('agendaGrid');
@@ -219,7 +231,7 @@ $filter = $eventType ?? 'all';
 
     const fetchEvents = ()=>{
       updateRefreshStatus('Atualizando...');
-      fetch(apiUrl + '&start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end) + '&type=' + encodeURIComponent(activeFilter), {
+      fetch(apiUrl + '&start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end) + '&type=' + encodeURIComponent(activeFilter) + '&cliente=' + encodeURIComponent(activeCliente), {
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
       })
         .then((r)=>r.json())
@@ -249,6 +261,20 @@ $filter = $eventType ?? 'all';
         window.history.replaceState({}, '', url.toString());
         fetchEvents();
       });
+    });
+
+    clienteSelect?.addEventListener('change', ()=>{
+      activeCliente = clienteSelect.value || '0';
+      app.dataset.cliente = activeCliente;
+      const url = new URL(window.location.href);
+      url.searchParams.set('route', 'agenda/index');
+      if (activeCliente === '0') {
+        url.searchParams.delete('cliente');
+      } else {
+        url.searchParams.set('cliente', activeCliente);
+      }
+      window.history.replaceState({}, '', url.toString());
+      fetchEvents();
     });
 
     grid.addEventListener('click', (e)=>{
