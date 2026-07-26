@@ -220,6 +220,12 @@ class IndicadorModel extends BaseModel
             $where[] = 'i.setor_id = :setor_id';
         }
 
+        $departamentoId = (int)($filters['departamento_id'] ?? 0);
+        if ($departamentoId > 0 && $this->schema['indicadores_departamento_id']) {
+            $params['departamento_id'] = $departamentoId;
+            $where[] = 'i.departamento_id = :departamento_id';
+        }
+
         $q = trim((string)($filters['q'] ?? ''));
         if ($q !== '') {
             $nameColumn = $this->schema['indicadores_indicador'] ? 'i.indicador' : 'i.nome';
@@ -719,6 +725,11 @@ class IndicadorModel extends BaseModel
         if ($setorId > 0 && $this->schema['indicadores_setor_id']) {
             $params['setor_id'] = $setorId;
             $where[] = 'i.setor_id = :setor_id';
+        }
+        $departamentoId = (int)($filters['departamento_id'] ?? 0);
+        if ($departamentoId > 0 && $this->schema['indicadores_departamento_id']) {
+            $params['departamento_id'] = $departamentoId;
+            $where[] = 'i.departamento_id = :departamento_id';
         }
         $q = trim((string)($filters['q'] ?? ''));
         if ($q !== '') {

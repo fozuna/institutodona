@@ -4,6 +4,8 @@ $indicadorId = (int)($indicadorId ?? 0);
 $periodoInicio = (string)($periodoInicio ?? '');
 $periodoFim = (string)($periodoFim ?? '');
 $indicadores = is_array($indicadores ?? null) ? $indicadores : [];
+$departamentos = is_array($departamentos ?? null) ? $departamentos : [];
+$departamentoId = (int)($departamentoId ?? 0);
 ?>
 <div class="p-4 md:p-6 space-y-6">
   <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -26,26 +28,35 @@ $indicadores = is_array($indicadores ?? null) ? $indicadores : [];
   <div class="bg-white shadow rounded-xl p-4">
     <form method="get" action="index.php" class="grid grid-cols-1 md:grid-cols-6 gap-4">
       <input type="hidden" name="route" value="indicadores/charts" />
-      <div class="md:col-span-4">
+      <div class="md:col-span-3">
         <label class="block text-sm font-medium text-gray-700 mb-1"><?= htmlspecialchars($t('indicadores.label.cliente')) ?></label>
-        <select name="cliente" class="border border-gray-300 rounded-lg p-3 w-full">
+        <select name="cliente" id="indicadoresChartsClienteSelect" class="border border-gray-300 rounded-lg p-3 w-full">
           <option value=""><?= htmlspecialchars($t('indicadores.option.select')) ?></option>
           <?php foreach ($clientes as $c): ?>
             <option value="<?= (int)$c['id'] ?>" <?= ($cliente === (int)$c['id']) ? 'selected' : '' ?>><?= htmlspecialchars($c['nome_empresa']) ?></option>
           <?php endforeach; ?>
         </select>
       </div>
-      <div class="md:col-span-2 flex items-end">
-        <button class="px-4 py-3 rounded-lg bg-brand-red text-white w-full" type="submit"><?= htmlspecialchars($t('indicadores.action.filter')) ?></button>
-      </div>
       <div class="md:col-span-3">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
+        <select name="departamento_id" id="indicadoresChartsDepartamentoSelect" class="border border-gray-300 rounded-lg p-3 w-full" <?= $cliente ? '' : 'disabled' ?>>
+          <option value="0">Todos os departamentos</option>
+          <?php foreach ($departamentos as $dep): ?>
+            <option value="<?= (int)$dep['id'] ?>" <?= $departamentoId === (int)$dep['id'] ? 'selected' : '' ?>><?= htmlspecialchars((string)($dep['nome'] ?? '')) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="md:col-span-4">
         <label class="block text-sm font-medium text-gray-700 mb-1"><?= htmlspecialchars($t('indicadores.label.indicador')) ?></label>
-        <select name="indicador_id" class="border border-gray-300 rounded-lg p-3 w-full" <?= $cliente ? '' : 'disabled' ?>>
+        <select name="indicador_id" id="indicadoresChartsIndicadorSelect" class="border border-gray-300 rounded-lg p-3 w-full" <?= $cliente ? '' : 'disabled' ?>>
           <option value="0"><?= htmlspecialchars($t('indicadores.option.none')) ?></option>
           <?php foreach ($indicadores as $ind): ?>
             <option value="<?= (int)$ind['id'] ?>" <?= $indicadorId === (int)$ind['id'] ? 'selected' : '' ?>><?= htmlspecialchars((string)($ind['indicador'] ?? $ind['nome'] ?? '')) ?></option>
           <?php endforeach; ?>
         </select>
+      </div>
+      <div class="md:col-span-2 flex items-end">
+        <button class="px-4 py-3 rounded-lg bg-brand-red text-white w-full" type="submit"><?= htmlspecialchars($t('indicadores.action.filter')) ?></button>
       </div>
       <div class="md:col-span-3">
         <label class="block text-sm font-medium text-gray-700 mb-1"><?= htmlspecialchars($t('indicadores.label.periodo_apuracao')) ?></label>
@@ -404,6 +415,65 @@ $indicadores = is_array($indicadores ?? null) ? $indicadores : [];
     const clearBtn = document.getElementById('indicadoresChartsClear');
     const form = document.querySelector('form[action="index.php"][method="get"]');
     const indicadorSelect = form?.querySelector('select[name="indicador_id"]');
+    const clienteSelect = document.getElementById('indicadoresChartsClienteSelect');
+    const departamentoSelect = document.getElementById('indicadoresChartsDepartamentoSelect');
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    async function refreshDepartamentos() {
+      if (!departamentoSelect || !clienteSelect) return;
+      const cliente = clienteSelect.value || '';
+      const current = departamentoSelect.value;
+      if (!cliente) {
+        departamentoSelect.innerHTML = '<option value="0">Todos os departamentos</option>';
+        departamentoSelect.disabled = true;
+        return;
+      }
+      try {
+        const params = new URLSearchParams({ route: 'indicadores/apiDepartamentos', cliente_id: cliente });
+        const response = await fetch(`index.php?${params.toString()}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        const payload = await response.json().catch(() => null);
+        const items = (payload && payload.success && Array.isArray(payload.items)) ? payload.items : [];
+        const options = ['<option value="0">Todos os departamentos</option>'].concat(
+          items.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.nome)}</option>`)
+        );
+        departamentoSelect.innerHTML = options.join('');
+        departamentoSelect.value = items.some((item) => String(item.id) === current) ? current : '0';
+        departamentoSelect.disabled = false;
+      } catch (e) {
+      }
+    }
+
+    async function refreshIndicadores() {
+      if (!indicadorSelect || !clienteSelect) return;
+      const cliente = clienteSelect.value || '';
+      const current = indicadorSelect.value;
+      if (!cliente) {
+        indicadorSelect.innerHTML = '<option value="0">Nenhum</option>';
+        indicadorSelect.disabled = true;
+        return;
+      }
+      try {
+        const params = new URLSearchParams({ route: 'indicadores/apiIndicadoresByCliente', cliente_id: cliente, departamento_id: departamentoSelect?.value || '0' });
+        const response = await fetch(`index.php?${params.toString()}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        const payload = await response.json().catch(() => null);
+        const items = (payload && payload.success && Array.isArray(payload.items)) ? payload.items : [];
+        const options = ['<option value="0">Nenhum</option>'].concat(
+          items.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.nome)}</option>`)
+        );
+        indicadorSelect.innerHTML = options.join('');
+        indicadorSelect.value = items.some((item) => String(item.id) === current) ? current : '0';
+        indicadorSelect.disabled = false;
+      } catch (e) {
+      }
+    }
 
     function setMsg(text) {
       if (!msg) return;
@@ -446,5 +516,12 @@ $indicadores = is_array($indicadores ?? null) ? $indicadores : [];
         form?.submit();
       });
     }
+
+    clienteSelect?.addEventListener('change', () => {
+      if (departamentoSelect) departamentoSelect.value = '0';
+      refreshDepartamentos();
+      refreshIndicadores();
+    });
+    departamentoSelect?.addEventListener('change', refreshIndicadores);
   })();
 </script>

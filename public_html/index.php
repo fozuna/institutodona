@@ -187,6 +187,9 @@ switch ($route) {
     case 'indicadores/apiSetoresByCliente':
         (new \App\Controllers\IndicadoresController())->apiSetoresByCliente();
         break;
+    case 'indicadores/apiIndicadoresByCliente':
+        (new \App\Controllers\IndicadoresController())->apiIndicadoresByCliente();
+        break;
     case 'indicadores/apiResponsaveis':
         (new \App\Controllers\IndicadoresController())->apiResponsaveis();
         break;

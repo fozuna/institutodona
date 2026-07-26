@@ -186,12 +186,17 @@ class IndicadoresController extends BaseController
         $filters = $this->readEventoFilters($cliente);
         $indicadorId = (int)($filters['indicador_id'] ?? 0);
         $clientes = $this->clientes->all();
+        $departamentos = $cliente ? $this->departamentos->activeByCliente($cliente) : [];
+        $departamentoId = (int)($_GET['departamento_id'] ?? 0);
+        if ($departamentoId > 0 && !in_array($departamentoId, array_column($departamentos, 'id'), true)) {
+            $departamentoId = 0;
+        }
         $eventos = [];
         if ($cliente > 0) {
             if (!$filters['period_ok']) {
                 $_SESSION['flash_error'] = $filters['period_error'] ?: 'Selecione um período de apuração válido.';
             } else {
-                $eventos = $this->eventos->searchByCliente($cliente, $filters);
+                $eventos = $this->eventos->searchByCliente($cliente, array_merge($filters, ['departamento_id' => $departamentoId]));
             }
         }
         $series = [];
@@ -223,11 +228,13 @@ class IndicadoresController extends BaseController
             usort($serie['points'], static fn(array $a, array $b): int => strcmp((string)$a['date'], (string)$b['date']));
         }
         unset($serie);
-        $indicadores = $cliente ? $this->model->byCliente($cliente) : [];
+        $indicadores = $cliente ? $this->model->search(['cliente_id' => $cliente, 'departamento_id' => $departamentoId]) : [];
         $this->render('indicadores/charts', [
             'pageTitle' => I18n::t('indicadores.title.charts'),
             'cliente' => $cliente,
             'clientes' => $clientes,
+            'departamentos' => $departamentos,
+            'departamentoId' => $departamentoId,
             'series' => $series,
             'indicadorId' => $indicadorId,
             'periodoInicio' => (string)($filters['periodo_inicio'] ?? ''),
@@ -983,6 +990,30 @@ class IndicadoresController extends BaseController
             return;
         }
         echo json_encode(['success' => true, 'items' => $this->setores->activeByDepartamento($departamento)], JSON_UNESCAPED_UNICODE);
+    }
+
+    public function apiIndicadoresByCliente(): void
+    {
+        $this->requireLogin();
+        header('Content-Type: application/json; charset=utf-8');
+        $cliente = (int)($this->resolveScopedClienteId((int)($_GET['cliente_id'] ?? 0)) ?? 0);
+        if ($cliente <= 0) {
+            echo json_encode(['success' => true, 'items' => []], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $departamentoId = (int)($_GET['departamento_id'] ?? 0);
+        if ($departamentoId > 0) {
+            $departamentosVisiveis = array_column($this->departamentos->activeByCliente($cliente), 'id');
+            if (!in_array($departamentoId, $departamentosVisiveis, true)) {
+                $departamentoId = 0;
+            }
+        }
+        $indicadores = $this->model->search(['cliente_id' => $cliente, 'departamento_id' => $departamentoId]);
+        $items = array_map(static fn(array $row): array => [
+            'id' => (int)$row['id'],
+            'nome' => (string)($row['indicador'] ?? $row['nome'] ?? ''),
+        ], $indicadores);
+        echo json_encode(['success' => true, 'items' => $items], JSON_UNESCAPED_UNICODE);
     }
 
     public function apiResponsaveis(): void

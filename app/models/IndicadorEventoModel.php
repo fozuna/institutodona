@@ -59,6 +59,12 @@ class IndicadorEventoModel extends BaseModel
             $where[] = 'ie.indicador_id = :iid';
         }
 
+        $departamentoId = isset($filters['departamento_id']) ? (int)$filters['departamento_id'] : 0;
+        if ($departamentoId > 0 && Database::columnExists('indicadores', 'departamento_id')) {
+            $params['dep'] = $departamentoId;
+            $where[] = 'i.departamento_id = :dep';
+        }
+
         $periodoInicio = trim((string)($filters['periodo_inicio'] ?? ''));
         $periodoFim = trim((string)($filters['periodo_fim'] ?? ''));
         if ($periodoInicio !== '' && $periodoFim !== '') {
