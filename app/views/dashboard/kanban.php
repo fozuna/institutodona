@@ -44,23 +44,24 @@ if (!function_exists('dash_icon')) {
     function dash_icon(string $name): string
     {
         $icons = [
-            'spark' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/></svg>',
-            'calendar' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 2v4M16 2v4"/><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 10h18"/></svg>',
-            'company' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 10h.01"/><path d="M9 14h.01"/><path d="M15 10h.01"/><path d="M15 14h.01"/></svg>',
-            'refresh' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>',
-            'filter' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>',
-            'download' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>',
-            'cronograma' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="9"/></svg>',
-            'biblioteca' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 17A2.5 2.5 0 0 0 4 14.5V5a2 2 0 0 1 2-2h14v18H6.5Z"/></svg>',
-            'auditoria' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
-            'indicadores' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19h16"/><path d="M7 16V8"/><path d="M12 16V5"/><path d="M17 16v-3"/></svg>',
-            'plano' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h4v7H5z"/><path d="M10 8h4v11h-4z"/><path d="M15 5h4v14h-4z"/></svg>',
-            'treinamentos' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m22 10-10-5L2 10l10 5 10-5Z"/><path d="M6 12.5v4.5c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5"/></svg>',
-            'table' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M9 4v16"/><path d="M15 4v16"/></svg>',
-            'search' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
-            'empty' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M8 10h8"/><path d="M8 14h5"/></svg>',
+            'spark' => 'zap',
+            'calendar' => 'calendar',
+            'company' => 'briefcase',
+            'refresh' => 'refresh-cw',
+            'filter' => 'filter',
+            'download' => 'download',
+            'cronograma' => 'clock',
+            'biblioteca' => 'book-open',
+            'auditoria' => 'check-circle',
+            'indicadores' => 'bar-chart-2',
+            'plano' => 'activity',
+            'treinamentos' => 'award',
+            'table' => 'columns',
+            'search' => 'search',
+            'empty' => 'inbox',
         ];
-        return $icons[$name] ?? $icons['spark'];
+        $slug = $icons[$name] ?? $icons['spark'];
+        return '<span data-feather="' . htmlspecialchars($slug, ENT_QUOTES) . '" aria-hidden="true"></span>';
     }
 }
 
@@ -156,7 +157,7 @@ $latestItems = array_slice($latestItems, 0, 8);
   .dash-chip-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
   .dash-chip,.dash-badge{display:inline-flex;align-items:center;gap:8px;border-radius:999px}
   .dash-chip{padding:8px 12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:600}
-  .dash-chip svg,.dash-btn svg,.dash-search svg,.dash-empty-icon svg{width:16px;height:16px;display:block}
+  .dash-chip svg,.dash-btn svg,.dash-btn-ghost svg,.dash-muted svg,.dash-search svg,.dash-empty-icon svg{width:16px;height:16px;display:block;flex-shrink:0}
   .dash-mini{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.12);border-radius:22px;padding:20px;display:grid;gap:12px}
   .dash-mini h2{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.7)}
   .dash-mini-row{display:grid;gap:6px}
