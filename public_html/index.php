@@ -547,6 +547,15 @@ switch ($route) {
     case 'treinamentos/add_colaboradores':
         (new TreinamentosController())->addColaboradores();
         break;
+    case 'treinamentos/extra_colaboradores_ajax':
+        (new TreinamentosController())->extraColaboradoresAjax();
+        break;
+    case 'treinamentos/add_participante_extra':
+        (new TreinamentosController())->addParticipanteExtra();
+        break;
+    case 'treinamentos/remove_participante_extra':
+        (new TreinamentosController())->removeParticipanteExtra();
+        break;
     case 'treinamentos/export_selecionados':
         (new TreinamentosController())->exportSelecionados();
         break;

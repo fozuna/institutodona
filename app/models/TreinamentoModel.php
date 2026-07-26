@@ -375,7 +375,8 @@ class TreinamentoModel extends BaseModel
         $params = ['treinamento_id' => $treinamentoId];
         $sql = "DELETE FROM treinamento_colaboradores
                 WHERE treinamento_id = :treinamento_id
-                  AND status = 'pendente'";
+                  AND status = 'pendente'
+                  AND origem <> 'extra'";
         if (!empty($selectedIds)) {
             $holders = [];
             foreach ($selectedIds as $index => $colaboradorId) {
@@ -405,6 +406,97 @@ class TreinamentoModel extends BaseModel
             'treinamento_id' => $treinamentoId,
             'colaborador_id' => $colaboradorId,
         ]);
+    }
+
+    /**
+     * Adiciona um participante extra ao treinamento: um colaborador que não faz
+     * parte do público-alvo automático (departamento/setor/função configurados),
+     * mas pertence à mesma empresa. Persistido com origem='extra' para não ser
+     * removido pelo sync de público principal (syncSelectedColaboradores) nem
+     * confundido com ele na listagem.
+     */
+    public function addParticipanteExtra(int $treinamentoId, int $colaboradorId): array
+    {
+        $this->ensureSchema();
+        $treinamento = $this->find($treinamentoId);
+        if (!$treinamento) {
+            return ['ok' => false, 'error' => 'Treinamento não encontrado.'];
+        }
+        $clienteId = (int)($treinamento['cliente_id'] ?? 0);
+        $validIds = $this->filterColaboradoresByCliente($clienteId, [$colaboradorId]);
+        if (empty($validIds)) {
+            return ['ok' => false, 'error' => 'Colaborador não pertence à mesma empresa do treinamento ou está inativo.'];
+        }
+        $stmt = $this->db->prepare("SELECT status, origem FROM treinamento_colaboradores
+            WHERE treinamento_id = :treinamento_id AND colaborador_id = :colaborador_id");
+        $stmt->execute(['treinamento_id' => $treinamentoId, 'colaborador_id' => $colaboradorId]);
+        $existing = $stmt->fetch();
+        if ($existing) {
+            return ['ok' => false, 'error' => 'Este colaborador já é participante do treinamento.'];
+        }
+        $insert = $this->db->prepare("INSERT INTO treinamento_colaboradores (treinamento_id, colaborador_id, status, origem)
+            VALUES (:treinamento_id, :colaborador_id, 'pendente', 'extra')");
+        $insert->execute(['treinamento_id' => $treinamentoId, 'colaborador_id' => $colaboradorId]);
+        return ['ok' => true, 'error' => null];
+    }
+
+    public function removeParticipanteExtra(int $treinamentoId, int $colaboradorId): bool
+    {
+        $this->ensureSchema();
+        if (!$this->find($treinamentoId)) {
+            return false;
+        }
+        $stmt = $this->db->prepare("DELETE FROM treinamento_colaboradores
+            WHERE treinamento_id = :treinamento_id
+              AND colaborador_id = :colaborador_id
+              AND origem = 'extra'");
+        $stmt->execute(['treinamento_id' => $treinamentoId, 'colaborador_id' => $colaboradorId]);
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Busca colaboradores para adicionar como participante extra: filtra apenas
+     * por empresa e status ativo, SEM intersectar com o setor/função configurados
+     * no treinamento (diferente de eligibleColaboradoresForTraining, usada pelo
+     * público-alvo principal) - propositalmente, para permitir escolher alguém
+     * de outro setor/departamento da mesma empresa.
+     */
+    public function searchColaboradoresParaExtra(int $clienteId, string $q, int $treinamentoId = 0, int $limit = 20): array
+    {
+        $this->ensureSchema();
+        if ($clienteId <= 0) {
+            return [];
+        }
+        $q = trim($q);
+        $params = ['cid' => $clienteId];
+        $where = ['col.cliente_id = :cid'];
+        if (Database::columnExists('colaboradores', 'ativo')) {
+            $where[] = 'col.ativo = 1';
+        }
+        if ($q !== '') {
+            $where[] = '(LOWER(col.nome) LIKE :q1 OR LOWER(col.email) LIKE :q2)';
+            $params['q1'] = '%' . mb_strtolower($q) . '%';
+            $params['q2'] = '%' . mb_strtolower($q) . '%';
+        }
+        if ($treinamentoId > 0) {
+            $where[] = 'NOT EXISTS (
+                SELECT 1 FROM treinamento_colaboradores tc
+                WHERE tc.treinamento_id = :treinamento_id AND tc.colaborador_id = col.id
+            )';
+            $params['treinamento_id'] = $treinamentoId;
+        }
+        $limit = max(1, min(50, $limit));
+        $sql = "SELECT col.id, col.nome, col.email, f.nome AS funcao_nome, s.nome AS setor_nome, d.nome AS departamento_nome
+                FROM colaboradores col
+                LEFT JOIN funcoes f ON f.id = col.funcao_id
+                LEFT JOIN setores s ON s.id = f.setor_id
+                LEFT JOIN departamentos d ON d.id = s.departamento_id
+                WHERE " . implode(' AND ', $where) . "
+                ORDER BY col.nome
+                LIMIT {$limit}";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll() ?: [];
     }
 
     public function linkedColaboradores(int $treinamentoId, ?string $status = null): array

@@ -227,6 +227,30 @@
           </div>
         </form>
 
+        <div class="mt-6 border-t pt-5" id="treinamentosExtrasSection" data-treinamento-id="<?= (int)$item['id'] ?>">
+          <h3 class="text-base font-semibold mb-1">Participantes extras</h3>
+          <p class="text-xs text-gray-500 mb-3">Colaboradores adicionados individualmente ao treinamento, mesmo pertencendo a outro setor ou departamento - desde que da mesma empresa. Não altera o público-alvo principal definido acima.</p>
+          <input type="hidden" id="treinamentosExtraCsrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+          <div class="relative mb-3">
+            <input type="text" id="treinamentosExtraSearch" class="border rounded p-2 w-full" placeholder="Buscar colaborador por nome ou e-mail..." autocomplete="off" />
+            <div id="treinamentosExtraResults" class="hidden absolute z-10 bg-white border rounded shadow-lg mt-1 w-full max-h-64 overflow-auto"></div>
+          </div>
+          <div id="treinamentosExtraMsg" class="hidden text-sm rounded px-3 py-2 mb-3"></div>
+          <ul id="treinamentosExtraList" class="space-y-2">
+            <?php $extraLinked = array_values(array_filter($linked, static fn(array $row): bool => ($row['origem'] ?? 'publico_alvo') === 'extra')); ?>
+            <?php foreach ($extraLinked as $row): ?>
+              <li class="flex items-center justify-between border rounded p-2" data-extra-item data-colaborador-id="<?= (int)$row['colaborador_id'] ?>">
+                <div>
+                  <div class="font-medium text-sm"><?= htmlspecialchars($row['colaborador_nome']) ?></div>
+                  <div class="text-xs text-gray-500"><?= htmlspecialchars((string)($row['setor_nome'] ?? '—')) ?> <?= !empty($row['funcao_nome']) ? '• ' . htmlspecialchars((string)$row['funcao_nome']) : '' ?></div>
+                </div>
+                <button type="button" class="text-red-600 text-xs hover:underline" data-extra-remove data-colaborador-id="<?= (int)$row['colaborador_id'] ?>">Remover</button>
+              </li>
+            <?php endforeach; ?>
+          </ul>
+          <p class="text-xs text-gray-500 mt-2" id="treinamentosExtraEmpty" <?= !empty($extraLinked) ? 'style="display:none"' : '' ?>>Nenhum participante extra adicionado.</p>
+        </div>
+
         <script>
           (function () {
             const form = document.getElementById('treinamentosEligibleForm');
@@ -455,6 +479,144 @@
                 });
               });
             }
+          })();
+        </script>
+
+        <script>
+          (function () {
+            const section = document.getElementById('treinamentosExtrasSection');
+            if (!section) return;
+            const treinamentoId = section.dataset.treinamentoId;
+            const searchInput = document.getElementById('treinamentosExtraSearch');
+            const resultsBox = document.getElementById('treinamentosExtraResults');
+            const list = document.getElementById('treinamentosExtraList');
+            const emptyMsg = document.getElementById('treinamentosExtraEmpty');
+            const msgBox = document.getElementById('treinamentosExtraMsg');
+            const csrf = document.getElementById('treinamentosExtraCsrf')?.value || '';
+            let debounceTimer = null;
+
+            function escapeHtml(value) {
+              return String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[ch]));
+            }
+
+            function showMessage(text, isError) {
+              if (!msgBox) return;
+              if (!text) {
+                msgBox.classList.add('hidden');
+                msgBox.textContent = '';
+                return;
+              }
+              msgBox.textContent = text;
+              msgBox.className = 'text-sm rounded px-3 py-2 mb-3 ' + (isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700');
+            }
+
+            function hideResults() {
+              if (resultsBox) {
+                resultsBox.classList.add('hidden');
+                resultsBox.innerHTML = '';
+              }
+            }
+
+            async function search(q) {
+              const params = new URLSearchParams({ route: 'treinamentos/extra_colaboradores_ajax', id: treinamentoId, q });
+              try {
+                const res = await fetch('index.php?' + params.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                const payload = await res.json();
+                if (!payload || !payload.ok || !Array.isArray(payload.items)) {
+                  hideResults();
+                  return;
+                }
+                if (!payload.items.length) {
+                  resultsBox.innerHTML = '<div class="p-3 text-sm text-gray-500">Nenhum colaborador encontrado.</div>';
+                  resultsBox.classList.remove('hidden');
+                  return;
+                }
+                resultsBox.innerHTML = payload.items.map((c) => {
+                  const label = [c.setor_nome, c.funcao_nome].filter(Boolean).join(' • ') || '—';
+                  return '<button type="button" class="w-full text-left p-2 hover:bg-gray-50 border-b" data-add-extra data-id="' + escapeHtml(c.id) + '" data-nome="' + escapeHtml(c.nome) + '" data-setor="' + escapeHtml(label) + '">'
+                    + '<div class="text-sm font-medium">' + escapeHtml(c.nome) + '</div>'
+                    + '<div class="text-xs text-gray-500">' + escapeHtml(label) + '</div>'
+                    + '</button>';
+                }).join('');
+                resultsBox.classList.remove('hidden');
+              } catch (err) {
+                hideResults();
+              }
+            }
+
+            searchInput?.addEventListener('input', () => {
+              const q = searchInput.value.trim();
+              if (debounceTimer) clearTimeout(debounceTimer);
+              if (q.length < 2) {
+                hideResults();
+                return;
+              }
+              debounceTimer = setTimeout(() => search(q), 350);
+            });
+
+            document.addEventListener('click', (e) => {
+              if (!resultsBox || !searchInput) return;
+              if (!resultsBox.contains(e.target) && e.target !== searchInput) {
+                hideResults();
+              }
+            });
+
+            resultsBox?.addEventListener('click', async (e) => {
+              const btn = e.target.closest('[data-add-extra]');
+              if (!btn) return;
+              showMessage('', false);
+              try {
+                const res = await fetch('index.php?route=treinamentos/add_participante_extra', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+                  body: new URLSearchParams({ csrf, treinamento_id: treinamentoId, colaborador_id: btn.dataset.id }),
+                });
+                const payload = await res.json();
+                if (!payload || !payload.ok) {
+                  showMessage((payload && payload.error) ? payload.error : 'Não foi possível adicionar o participante.', true);
+                  return;
+                }
+                if (emptyMsg) emptyMsg.style.display = 'none';
+                const li = document.createElement('li');
+                li.className = 'flex items-center justify-between border rounded p-2';
+                li.setAttribute('data-extra-item', '');
+                li.setAttribute('data-colaborador-id', btn.dataset.id);
+                li.innerHTML = '<div><div class="font-medium text-sm">' + escapeHtml(btn.dataset.nome) + '</div>'
+                  + '<div class="text-xs text-gray-500">' + escapeHtml(btn.dataset.setor) + '</div></div>'
+                  + '<button type="button" class="text-red-600 text-xs hover:underline" data-extra-remove data-colaborador-id="' + escapeHtml(btn.dataset.id) + '">Remover</button>';
+                list.appendChild(li);
+                searchInput.value = '';
+                hideResults();
+                showMessage('Participante extra adicionado.', false);
+              } catch (err) {
+                showMessage('Falha de comunicação ao adicionar participante.', true);
+              }
+            });
+
+            list?.addEventListener('click', async (e) => {
+              const btn = e.target.closest('[data-extra-remove]');
+              if (!btn) return;
+              showMessage('', false);
+              try {
+                const res = await fetch('index.php?route=treinamentos/remove_participante_extra', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+                  body: new URLSearchParams({ csrf, treinamento_id: treinamentoId, colaborador_id: btn.dataset.colaboradorId }),
+                });
+                const payload = await res.json();
+                if (!payload || !payload.ok) {
+                  showMessage('Não foi possível remover o participante.', true);
+                  return;
+                }
+                const li = btn.closest('[data-extra-item]');
+                li?.remove();
+                if (list && !list.querySelector('[data-extra-item]') && emptyMsg) {
+                  emptyMsg.style.display = '';
+                }
+              } catch (err) {
+                showMessage('Falha de comunicação ao remover participante.', true);
+              }
+            });
           })();
         </script>
       </div>

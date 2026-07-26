@@ -251,6 +251,60 @@ class TreinamentosController extends BaseController
         echo json_encode(['ok' => true, 'count' => count($rows), 'html' => $html], JSON_UNESCAPED_UNICODE);
     }
 
+    public function extraColaboradoresAjax(): void
+    {
+        $this->requireManagePermission();
+        header('Content-Type: application/json; charset=utf-8');
+        $treinamentoId = (int)($_GET['id'] ?? 0);
+        $item = $treinamentoId > 0 ? $this->model->find($treinamentoId) : null;
+        if (!$item) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'message' => 'Treinamento não encontrado.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $q = trim((string)($_GET['q'] ?? ''));
+        $results = $this->model->searchColaboradoresParaExtra((int)($item['cliente_id'] ?? 0), $q, $treinamentoId);
+        echo json_encode(['ok' => true, 'items' => $results], JSON_UNESCAPED_UNICODE);
+    }
+
+    public function addParticipanteExtra(): void
+    {
+        $this->requireManagePermission();
+        header('Content-Type: application/json; charset=utf-8');
+        if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'message' => 'CSRF inválido.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $treinamentoId = (int)($_POST['treinamento_id'] ?? 0);
+        $colaboradorId = (int)($_POST['colaborador_id'] ?? 0);
+        if ($treinamentoId <= 0 || $colaboradorId <= 0) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'message' => 'Dados inválidos.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $result = $this->model->addParticipanteExtra($treinamentoId, $colaboradorId);
+        if (!$result['ok']) {
+            http_response_code(422);
+        }
+        echo json_encode($result, JSON_UNESCAPED_UNICODE);
+    }
+
+    public function removeParticipanteExtra(): void
+    {
+        $this->requireManagePermission();
+        header('Content-Type: application/json; charset=utf-8');
+        if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'message' => 'CSRF inválido.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $treinamentoId = (int)($_POST['treinamento_id'] ?? 0);
+        $colaboradorId = (int)($_POST['colaborador_id'] ?? 0);
+        $removed = $this->model->removeParticipanteExtra($treinamentoId, $colaboradorId);
+        echo json_encode(['ok' => $removed], JSON_UNESCAPED_UNICODE);
+    }
+
     public function addColaboradores(): void
     {
         $this->requireManagePermission();
@@ -565,8 +619,17 @@ class TreinamentosController extends BaseController
             return;
         }
         $agendaId = (int)($_POST['agenda_id'] ?? 0);
+        $agenda = $this->agendaModel->find($agendaId);
+        if (!$agenda) {
+            $_SESSION['flash_error'] = 'Agendamento não encontrado.';
+            $this->redirect('index.php?route=treinamentos/index');
+            return;
+        }
+        $treinamento = $this->model->find((int)($agenda['treinamento_id'] ?? 0));
         $ids = $_POST['colaborador_ids'] ?? [];
-        $this->agendaModel->syncParticipants($agendaId, is_array($ids) ? $ids : [$ids]);
+        $ids = is_array($ids) ? $ids : [$ids];
+        $validIds = $this->model->filterColaboradoresByCliente((int)($treinamento['cliente_id'] ?? 0), $ids);
+        $this->agendaModel->syncParticipants($agendaId, $validIds);
         $_SESSION['flash_success'] = 'Participantes adicionados ao agendamento.';
         $this->redirect('index.php?route=treinamentos/presenca&agenda_id=' . $agendaId);
     }
