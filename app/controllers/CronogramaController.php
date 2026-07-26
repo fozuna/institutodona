@@ -1428,20 +1428,30 @@ class CronogramaController extends BaseController
         $column = $order['column'] ?? 'data';
         $direction = ($order['direction'] ?? 'asc') === 'desc' ? -1 : 1;
         $collator = class_exists('Collator') ? new \Collator('pt_BR') : null;
-        usort($events, static function (array $a, array $b) use ($column, $direction, $collator): int {
-            $left = $a[$column] ?? '';
-            $right = $b[$column] ?? '';
+        $compareText = static function ($left, $right) use ($collator): int {
+            return $collator ? $collator->compare((string)$left, (string)$right) : strcasecmp((string)$left, (string)$right);
+        };
+        usort($events, static function (array $a, array $b) use ($column, $direction, $compareText): int {
             if ($column === 'data') {
-                $result = strcmp((string)$left, (string)$right);
-            } elseif ($collator) {
-                $result = $collator->compare((string)$left, (string)$right);
+                $dataA = (string)($a['data'] ?? '');
+                $dataB = (string)($b['data'] ?? '');
+                $emptyA = $dataA === '';
+                $emptyB = $dataB === '';
+                if ($emptyA !== $emptyB) {
+                    // Eventos sem data ficam sempre no final, independente da direção escolhida.
+                    return $emptyA ? 1 : -1;
+                }
+                $result = strcmp($dataA, $dataB) * $direction;
             } else {
-                $result = strcasecmp((string)$left, (string)$right);
+                $result = $compareText($a[$column] ?? '', $b[$column] ?? '') * $direction;
             }
             if ($result === 0) {
-                $result = strcmp((string)($a['data'] ?? ''), (string)($b['data'] ?? ''));
+                $result = $compareText($a['atividade'] ?? '', $b['atividade'] ?? '');
             }
-            return $result * $direction;
+            if ($result === 0) {
+                $result = ((int)($a['id'] ?? 0)) <=> ((int)($b['id'] ?? 0));
+            }
+            return $result;
         });
         return $events;
     }
