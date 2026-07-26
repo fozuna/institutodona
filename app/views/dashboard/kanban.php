@@ -7,6 +7,23 @@ $totalsByStatus = is_array($totalsByStatus ?? null) ? $totalsByStatus : [];
 
 $monthStart = (string)($filters['month_start'] ?? '');
 $monthEnd = (string)($filters['month_end'] ?? '');
+
+$dashMonthNames = [
+    '01' => 'Janeiro', '02' => 'Fevereiro', '03' => 'Março', '04' => 'Abril',
+    '05' => 'Maio', '06' => 'Junho', '07' => 'Julho', '08' => 'Agosto',
+    '09' => 'Setembro', '10' => 'Outubro', '11' => 'Novembro', '12' => 'Dezembro',
+];
+$dashSplitMonth = static function (string $value) use (&$dashMonthNames): array {
+    if (preg_match('/^(\d{4})-(\d{2})$/', $value, $m) && isset($dashMonthNames[$m[2]])) {
+        return ['year' => $m[1], 'month' => $m[2]];
+    }
+    return ['year' => date('Y'), 'month' => date('m')];
+};
+$dashMonthStartParts = $dashSplitMonth($monthStart);
+$dashMonthEndParts = $dashSplitMonth($monthEnd);
+$dashYearMin = min((int)date('Y') - 5, (int)$dashMonthStartParts['year'], (int)$dashMonthEndParts['year']);
+$dashYearMax = max((int)date('Y') + 1, (int)$dashMonthStartParts['year'], (int)$dashMonthEndParts['year']);
+
 $clienteIds = is_array($filters['cliente_ids'] ?? null) ? array_values(array_map('intval', $filters['cliente_ids'])) : [];
 $selectedCount = $clienteIds ? count($clienteIds) : count($clientes);
 $selectedLabel = $clienteIds ? (count($clienteIds) . ' empresa(s) selecionada(s)') : 'Todas as empresas';
@@ -159,6 +176,8 @@ $latestItems = array_slice($latestItems, 0, 8);
   .dash-filter-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:end}
   .dash-field{display:grid;gap:6px;position:relative}
   .dash-field label{font-size:12px;font-weight:700;color:#64748b}
+  .dash-month-picker{display:flex;gap:8px;flex-wrap:wrap}
+  .dash-month-picker select{flex:1;min-width:96px}
   .dash-input,.dash-multi-summary{width:100%;min-height:52px;border:1px solid #dbe3ee;border-radius:16px;background:#fff;padding:14px 16px;font-size:15px;color:#0f172a;transition:border-color .18s ease,box-shadow .18s ease}
   .dash-input:focus,.dash-multi[open] .dash-multi-summary{outline:none;border-color:rgba(37,99,235,.42);box-shadow:0 0 0 4px rgba(37,99,235,.08)}
   .dash-multi{position:relative;z-index:20}
@@ -327,13 +346,37 @@ $latestItems = array_slice($latestItems, 0, 8);
           <input type="hidden" name="route" value="dashboard/index" />
 
           <div class="dash-field" style="grid-column: span 2;">
-            <label for="dashboardMonthStart">Mês inicial</label>
-            <input type="month" id="dashboardMonthStart" name="month_start" class="dash-input" required value="<?= htmlspecialchars($monthStart) ?>">
+            <label for="dashboardMonthStartMonth">Mês inicial</label>
+            <div class="dash-month-picker">
+              <select id="dashboardMonthStartMonth" class="dash-input" aria-label="Mês inicial - mês">
+                <?php foreach ($dashMonthNames as $num => $label): ?>
+                  <option value="<?= $num ?>" <?= $num === $dashMonthStartParts['month'] ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                <?php endforeach; ?>
+              </select>
+              <select id="dashboardMonthStartYear" class="dash-input" aria-label="Mês inicial - ano">
+                <?php for ($y = $dashYearMin; $y <= $dashYearMax; $y++): ?>
+                  <option value="<?= $y ?>" <?= (string)$y === $dashMonthStartParts['year'] ? 'selected' : '' ?>><?= $y ?></option>
+                <?php endfor; ?>
+              </select>
+            </div>
+            <input type="hidden" id="dashboardMonthStart" name="month_start" value="<?= htmlspecialchars($monthStart) ?>">
           </div>
 
           <div class="dash-field" style="grid-column: span 2;">
-            <label for="dashboardMonthEnd">Mês final</label>
-            <input type="month" id="dashboardMonthEnd" name="month_end" class="dash-input" required value="<?= htmlspecialchars($monthEnd) ?>">
+            <label for="dashboardMonthEndMonth">Mês final</label>
+            <div class="dash-month-picker">
+              <select id="dashboardMonthEndMonth" class="dash-input" aria-label="Mês final - mês">
+                <?php foreach ($dashMonthNames as $num => $label): ?>
+                  <option value="<?= $num ?>" <?= $num === $dashMonthEndParts['month'] ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                <?php endforeach; ?>
+              </select>
+              <select id="dashboardMonthEndYear" class="dash-input" aria-label="Mês final - ano">
+                <?php for ($y = $dashYearMin; $y <= $dashYearMax; $y++): ?>
+                  <option value="<?= $y ?>" <?= (string)$y === $dashMonthEndParts['year'] ? 'selected' : '' ?>><?= $y ?></option>
+                <?php endfor; ?>
+              </select>
+            </div>
+            <input type="hidden" id="dashboardMonthEnd" name="month_end" value="<?= htmlspecialchars($monthEnd) ?>">
           </div>
 
           <div class="dash-field" style="grid-column: span 5;">
@@ -593,6 +636,10 @@ $latestItems = array_slice($latestItems, 0, 8);
     const form = document.getElementById('dashboardFiltersForm');
     const monthStart = document.getElementById('dashboardMonthStart');
     const monthEnd = document.getElementById('dashboardMonthEnd');
+    const monthStartMonthSel = document.getElementById('dashboardMonthStartMonth');
+    const monthStartYearSel = document.getElementById('dashboardMonthStartYear');
+    const monthEndMonthSel = document.getElementById('dashboardMonthEndMonth');
+    const monthEndYearSel = document.getElementById('dashboardMonthEndYear');
     const errorBox = document.getElementById('dashboardFilterError');
     const loading = document.getElementById('dashboardLoading');
     const summary = document.getElementById('dashboardEmpresasSummary');
@@ -1057,6 +1104,19 @@ $latestItems = array_slice($latestItems, 0, 8);
     form?.querySelectorAll('input[name="clientes[]"]').forEach((input) => {
       input.addEventListener('change', updateSelectedLabels);
     });
+    function syncMonthField(hiddenInput, monthSel, yearSel) {
+      if (!hiddenInput || !monthSel || !yearSel) return;
+      const value = `${yearSel.value}-${monthSel.value}`;
+      if (hiddenInput.value !== value) {
+        hiddenInput.value = value;
+        hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
+    monthStartMonthSel?.addEventListener('change', () => syncMonthField(monthStart, monthStartMonthSel, monthStartYearSel));
+    monthStartYearSel?.addEventListener('change', () => syncMonthField(monthStart, monthStartMonthSel, monthStartYearSel));
+    monthEndMonthSel?.addEventListener('change', () => syncMonthField(monthEnd, monthEndMonthSel, monthEndYearSel));
+    monthEndYearSel?.addEventListener('change', () => syncMonthField(monthEnd, monthEndMonthSel, monthEndYearSel));
+
     monthStart?.addEventListener('change', updatePdfLink);
     monthEnd?.addEventListener('change', updatePdfLink);
 
