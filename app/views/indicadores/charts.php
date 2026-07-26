@@ -112,14 +112,10 @@ $departamentoId = (int)($departamentoId ?? 0);
           $payload = $seriesItem['points'] ?? [];
           $lastPoint = !empty($payload) ? $payload[count($payload) - 1] : null;
           $metaAtual = $lastPoint ? \App\Core\ValueFormatter::byUnit($lastPoint['meta'], $seriesItem['unit']) : '—';
-          $atingidos = array_values(array_filter(array_map(static fn(array $p): ?float => $p['achieved'] === null ? null : (float)$p['achieved'], $payload), static fn($v): bool => $v !== null));
-          $useAvg = $periodoInicio === '' && $periodoFim === '' && !empty($atingidos);
-          $avgAtingido = $useAvg ? (array_sum($atingidos) / count($atingidos)) : null;
-          $atingidoAtual = $useAvg
-              ? \App\Core\ValueFormatter::byUnit($avgAtingido, $seriesItem['unit'])
-              : (($lastPoint && $lastPoint['achieved'] !== null)
-                  ? \App\Core\ValueFormatter::byUnit($lastPoint['achieved'], $seriesItem['unit'])
-                  : '—');
+          $percentuaisPeriodo = array_values(array_filter(array_map(static fn(array $p): ?float => $p['percentual'] === null ? null : (float)$p['percentual'], $payload), static fn($v): bool => $v !== null));
+          $atingidoAtual = !empty($percentuaisPeriodo)
+              ? \App\Core\ValueFormatter::percent(array_sum($percentuaisPeriodo) / count($percentuaisPeriodo))
+              : '—';
           $trendKey = $seriesItem['trend']['trend'] === 'alta'
             ? 'indicadores.meta.trend.up'
             : ($seriesItem['trend']['trend'] === 'queda' ? 'indicadores.meta.trend.down' : 'indicadores.meta.trend.stable');
@@ -140,7 +136,7 @@ $departamentoId = (int)($departamentoId ?? 0);
               <div class="text-gray-500">Meta</div>
               <div class="font-semibold text-base"><?= htmlspecialchars($metaAtual) ?></div>
             </div>
-            <div class="rounded-lg bg-gray-50 p-3">
+            <div class="rounded-lg bg-gray-50 p-3" title="Média do percentual de cumprimento no período filtrado">
               <div class="text-gray-500">Atingido</div>
               <div class="font-semibold text-base"><?= htmlspecialchars($atingidoAtual) ?></div>
             </div>
