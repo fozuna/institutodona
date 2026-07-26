@@ -9,6 +9,7 @@ use App\Core\AuditLogger;
 use App\Core\ReportBranding;
 use App\Models\ClienteModel;
 use App\Models\AplicacaoModel;
+use App\Models\DepartamentoModel;
 use App\Database\Database;
 use App\Services\DashboardPdfService;
 use DateTimeImmutable;
@@ -17,11 +18,13 @@ class DashboardController extends BaseController
 {
     private ClienteModel $clientes;
     private AplicacaoModel $aplicacoes;
+    private DepartamentoModel $departamentos;
 
     public function __construct()
     {
         $this->clientes = new ClienteModel();
         $this->aplicacoes = new AplicacaoModel();
+        $this->departamentos = new DepartamentoModel();
     }
 
     public function index(): void
@@ -65,7 +68,26 @@ class DashboardController extends BaseController
             'totalsByStatus' => $totalsByStatus,
             'user' => $user,
             'filters' => $filters,
+            'departamentos' => $this->departamentosVisiveis($filters['cliente_ids']),
         ]);
+    }
+
+    public function apiDepartamentos(): void
+    {
+        $this->requireLogin();
+        $clienteIds = [];
+        if (isset($_GET['clientes']) && is_array($_GET['clientes'])) {
+            $clienteIds = array_values(array_filter(array_map('intval', $_GET['clientes'])));
+        }
+        $clienteIds = $this->scopeClienteIds($clienteIds);
+        $departamentos = array_map(static fn(array $row): array => [
+            'id' => (int)$row['id'],
+            'nome' => (string)$row['nome'],
+            'cliente' => (string)($row['cliente'] ?? ''),
+        ], $this->departamentosVisiveis($clienteIds));
+
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => true, 'departamentos' => $departamentos], JSON_UNESCAPED_UNICODE);
     }
 
     public function metrics(): void
@@ -257,6 +279,7 @@ class DashboardController extends BaseController
             return ['ok' => false, 'message' => (string)($filters['period_error'] ?? 'Período inválido.')];
         }
         $clienteIds = $filters['cliente_ids'];
+        $departamentoId = (int)($filters['departamento_id'] ?? 0);
         $range = $this->rangeFromMonths($filters['month_start'], $filters['month_end']);
         $startDate = $range['start_date'];
         $endDate = $range['end_date'];
@@ -279,6 +302,7 @@ class DashboardController extends BaseController
                 'month_start' => $filters['month_start'],
                 'month_end' => $filters['month_end'],
                 'cliente_ids' => $clienteIds,
+                'departamento_id' => $departamentoId,
                 'start_date' => $startDate,
                 'end_date' => $endDate,
                 'end_effective' => $endEffective,
@@ -354,9 +378,14 @@ class DashboardController extends BaseController
 
         if (Database::tableExists('manuais')) {
             $params = array_merge($inParams, ['dini' => $startDt, 'dfim' => $endDt]);
+            $depFilter = '';
+            if ($departamentoId > 0) {
+                $depFilter = ' AND m.departamento_id = :dep';
+                $params['dep'] = $departamentoId;
+            }
             $stmt = $pdo->prepare("SELECT COUNT(*) FROM manuais m
                 WHERE m.empresa_id {$inSql}
-                  AND m.created_at >= :dini AND m.created_at <= :dfim");
+                  AND m.created_at >= :dini AND m.created_at <= :dfim{$depFilter}");
             $stmt->execute($params);
             $payload['biblioteca']['total_itens'] = (int)$stmt->fetchColumn();
         }
@@ -381,13 +410,20 @@ class DashboardController extends BaseController
 
         if (Database::tableExists('auditorias')) {
             $params = array_merge($inParams, ['dini' => $startDate, 'dfim' => $endDate]);
+            $depJoin = '';
+            $depFilter = '';
+            if ($departamentoId > 0 && Database::tableExists('setores')) {
+                $depJoin = ' JOIN setores s ON s.id = a.setor_id';
+                $depFilter = ' AND s.departamento_id = :dep';
+                $params['dep'] = $departamentoId;
+            }
             $stmt = $pdo->prepare("SELECT COUNT(*) AS total, AVG(a.conformidade_pct) AS media
-                FROM auditorias a
+                FROM auditorias a{$depJoin}
                 WHERE a.deleted_at IS NULL
                   AND a.status = 'Realizada'
                   AND a.conformidade_pct IS NOT NULL
                   AND a.cliente_id {$inSql}
-                  AND a.data_auditoria >= :dini AND a.data_auditoria <= :dfim");
+                  AND a.data_auditoria >= :dini AND a.data_auditoria <= :dfim{$depFilter}");
             $stmt->execute($params);
             $row = $stmt->fetch() ?: null;
             $payload['auditorias']['total_realizadas'] = (int)($row['total'] ?? 0);
@@ -396,13 +432,20 @@ class DashboardController extends BaseController
 
         if (Database::tableExists('indicador_eventos')) {
             $params = array_merge($inParams, ['dini' => $startDate, 'dfim' => $endDate]);
+            $depJoin = '';
+            $depFilter = '';
+            if ($departamentoId > 0 && Database::tableExists('indicadores') && Database::columnExists('indicadores', 'departamento_id')) {
+                $depJoin = ' JOIN indicadores i ON i.id = ie.indicador_id';
+                $depFilter = ' AND i.departamento_id = :dep';
+                $params['dep'] = $departamentoId;
+            }
             $stmt = $pdo->prepare("SELECT COUNT(*) AS total, AVG(ie.percentual_cumprimento) AS media
-                FROM indicador_eventos ie
+                FROM indicador_eventos ie{$depJoin}
                 WHERE ie.deleted_at IS NULL
                   AND ie.cliente_id {$inSql}
                   AND ie.periodo_inicio <= :dfim
                   AND ie.periodo_fim >= :dini
-                  AND ie.percentual_cumprimento IS NOT NULL");
+                  AND ie.percentual_cumprimento IS NOT NULL{$depFilter}");
             $stmt->execute($params);
             $row = $stmt->fetch() ?: null;
             $payload['indicadores']['total_eventos'] = (int)($row['total'] ?? 0);
@@ -411,6 +454,11 @@ class DashboardController extends BaseController
 
         if (Database::tableExists('treinamentos_agenda') && Database::tableExists('treinamentos') && Database::tableExists('treinamento_participantes')) {
             $params = array_merge($inParams, ['dini' => $startDt, 'dfim' => $endDt]);
+            $depFilter = '';
+            if ($departamentoId > 0) {
+                $depFilter = ' AND t.departamento_id = :dep';
+                $params['dep'] = $departamentoId;
+            }
             $stmt = $pdo->prepare("SELECT
                     COUNT(*) AS planejados,
                     SUM(CASE WHEN agenda_stats.executado = 1 THEN 1 ELSE 0 END) AS realizados,
@@ -424,9 +472,10 @@ class DashboardController extends BaseController
                             ELSE 0
                         END AS executado
                     FROM treinamentos_agenda ta
+                    JOIN treinamentos t ON t.id = ta.treinamento_id
                     LEFT JOIN treinamento_participantes tp ON tp.agenda_id = ta.id
                     WHERE ta.unidade_id {$inSql}
-                      AND ta.data >= :dini AND ta.data <= :dfim
+                      AND ta.data >= :dini AND ta.data <= :dfim{$depFilter}
                     GROUP BY ta.id, ta.data, ta.data_fim
                 ) agenda_stats");
             $stmt->execute($params);
@@ -444,7 +493,7 @@ class DashboardController extends BaseController
                 JOIN treinamentos t ON t.id = ta.treinamento_id
                 LEFT JOIN treinamento_participantes tp ON tp.agenda_id = ta.id
                 WHERE ta.unidade_id {$inSql}
-                  AND ta.data >= :dini AND ta.data <= :dfim
+                  AND ta.data >= :dini AND ta.data <= :dfim{$depFilter}
                 GROUP BY t.id, t.nome
                 ORDER BY total_inscritos DESC, t.nome
                 LIMIT 10");
@@ -712,19 +761,13 @@ class DashboardController extends BaseController
         } elseif (!empty($stored['cliente_ids']) && is_array($stored['cliente_ids'])) {
             $clienteIds = array_values(array_filter(array_map('intval', $stored['cliente_ids'])));
         }
+        $clienteIds = $this->scopeClienteIds($clienteIds);
 
-        if (!Auth::isInstituto()) {
-            $allowed = Auth::allowedClientIds();
-            $clienteIds = array_values(array_intersect($clienteIds, $allowed));
-            if (empty($clienteIds) && !empty($allowed)) {
-                $clienteIds = [(int)$allowed[0]];
-            }
-        } else {
-            $all = array_values(array_filter(array_map('intval', array_column($this->clientes->all(), 'id'))));
-            if (!empty($clienteIds)) {
-                $clienteIds = array_values(array_intersect($clienteIds, $all));
-            } else {
-                $clienteIds = $all;
+        $departamentoId = (int)($_GET['departamento_id'] ?? ($stored['departamento_id'] ?? 0));
+        if ($departamentoId > 0) {
+            $departamentosVisiveis = array_column($this->departamentosVisiveis($clienteIds), 'id');
+            if (!in_array($departamentoId, $departamentosVisiveis, true)) {
+                $departamentoId = 0;
             }
         }
 
@@ -733,15 +776,43 @@ class DashboardController extends BaseController
             'month_start' => $monthStart,
             'month_end' => $monthEnd,
             'cliente_ids' => $clienteIds,
+            'departamento_id' => $departamentoId,
         ];
 
         return [
             'month_start' => $monthStart,
             'month_end' => $monthEnd,
             'cliente_ids' => $clienteIds,
+            'departamento_id' => $departamentoId,
             'period_ok' => $period['ok'],
             'period_error' => $period['error'],
         ];
+    }
+
+    private function scopeClienteIds(array $clienteIds): array
+    {
+        if (!Auth::isInstituto()) {
+            $allowed = Auth::allowedClientIds();
+            $clienteIds = array_values(array_intersect($clienteIds, $allowed));
+            if (empty($clienteIds) && !empty($allowed)) {
+                $clienteIds = [(int)$allowed[0]];
+            }
+            return $clienteIds;
+        }
+        $all = array_values(array_filter(array_map('intval', array_column($this->clientes->all(), 'id'))));
+        if (!empty($clienteIds)) {
+            return array_values(array_intersect($clienteIds, $all));
+        }
+        return $all;
+    }
+
+    private function departamentosVisiveis(array $clienteIds): array
+    {
+        if (empty($clienteIds)) {
+            return [];
+        }
+        $rows = $this->departamentos->allByClientes($clienteIds);
+        return array_values(array_filter($rows, static fn(array $row): bool => (int)($row['ativo'] ?? 0) === 1));
     }
 
     private function validateMonthRange(string $start, string $end): array

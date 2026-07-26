@@ -4,6 +4,8 @@ $filters = is_array($filters ?? null) ? $filters : [];
 $kanbanData = is_array($kanbanData ?? null) ? $kanbanData : [];
 $stats = is_array($stats ?? null) ? $stats : [];
 $totalsByStatus = is_array($totalsByStatus ?? null) ? $totalsByStatus : [];
+$departamentos = is_array($departamentos ?? null) ? $departamentos : [];
+$departamentoId = (int)($filters['departamento_id'] ?? 0);
 
 $monthStart = (string)($filters['month_start'] ?? '');
 $monthEnd = (string)($filters['month_end'] ?? '');
@@ -380,7 +382,7 @@ $latestItems = array_slice($latestItems, 0, 8);
             <input type="hidden" id="dashboardMonthEnd" name="month_end" value="<?= htmlspecialchars($monthEnd) ?>">
           </div>
 
-          <div class="dash-field" style="grid-column: span 5;">
+          <div class="dash-field" style="grid-column: span 3;">
             <label>Empresas</label>
             <details class="dash-multi" id="dashboardEmpresasDetails">
               <summary class="dash-multi-summary">
@@ -403,6 +405,17 @@ $latestItems = array_slice($latestItems, 0, 8);
                 </div>
               </div>
             </details>
+          </div>
+
+          <div class="dash-field" style="grid-column: span 2;">
+            <label for="dashboardDepartamentoSelect">Departamento</label>
+            <select name="departamento_id" id="dashboardDepartamentoSelect" class="dash-input">
+              <option value="">Todos os departamentos</option>
+              <?php foreach ($departamentos as $dep): ?>
+                <option value="<?= (int)$dep['id'] ?>" <?= (int)$dep['id'] === $departamentoId ? 'selected' : '' ?>><?= htmlspecialchars((string)($dep['nome'] ?? '')) ?></option>
+              <?php endforeach; ?>
+            </select>
+            <small class="dash-muted">Não afeta Cronograma, Plano de Ação e Tarefas.</small>
           </div>
 
           <div class="dash-actions" style="grid-column: span 3;">
@@ -655,6 +668,7 @@ $latestItems = array_slice($latestItems, 0, 8);
     const btnAll = document.getElementById('dashboardEmpresasAll');
     const btnNone = document.getElementById('dashboardEmpresasNone');
     const companyDetails = document.getElementById('dashboardEmpresasDetails');
+    const departamentoSelect = document.getElementById('dashboardDepartamentoSelect');
 
     const dash = {
       cronPct: document.getElementById('dashCronPct'),
@@ -752,11 +766,36 @@ $latestItems = array_slice($latestItems, 0, 8);
       params.set('route', 'dashboard/pdf');
       params.set('month_start', String(monthStart?.value || ''));
       params.set('month_end', String(monthEnd?.value || ''));
+      const departamentoValue = String(departamentoSelect?.value || '').trim();
+      if (departamentoValue) params.set('departamento_id', departamentoValue);
       Array.from(form.querySelectorAll('input[name="clientes[]"]:checked')).forEach((el) => {
         const value = String(el.value || '').trim();
         if (value) params.append('clientes[]', value);
       });
       pdfLink.href = 'index.php?' + params.toString();
+    }
+
+    async function loadDepartamentos() {
+      if (!departamentoSelect || !form) return;
+      const params = new URLSearchParams();
+      params.set('route', 'dashboard/apiDepartamentos');
+      Array.from(form.querySelectorAll('input[name="clientes[]"]:checked')).forEach((el) => {
+        const value = String(el.value || '').trim();
+        if (value) params.append('clientes[]', value);
+      });
+      const currentValue = departamentoSelect.value;
+      try {
+        const response = await fetch(`index.php?${params.toString()}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        const json = await response.json().catch(() => null);
+        const list = (json && json.ok && Array.isArray(json.departamentos)) ? json.departamentos : [];
+        const options = ['<option value="">Todos os departamentos</option>'].concat(
+          list.map((d) => `<option value="${escapeHtml(String(d.id))}">${escapeHtml(String(d.nome || ''))}</option>`)
+        );
+        departamentoSelect.innerHTML = options.join('');
+        departamentoSelect.value = list.some((d) => String(d.id) === currentValue) ? currentValue : '';
+      } catch (error) {
+        /* mantém a lista atual em caso de falha de rede */
+      }
     }
 
     function validateMonths() {
@@ -1095,16 +1134,22 @@ $latestItems = array_slice($latestItems, 0, 8);
     btnAll?.addEventListener('click', () => {
       form?.querySelectorAll('input[name="clientes[]"]').forEach((input) => { input.checked = true; });
       updateSelectedLabels();
+      loadDepartamentos();
     });
 
     btnNone?.addEventListener('click', () => {
       form?.querySelectorAll('input[name="clientes[]"]').forEach((input) => { input.checked = false; });
       updateSelectedLabels();
+      loadDepartamentos();
     });
 
     form?.querySelectorAll('input[name="clientes[]"]').forEach((input) => {
-      input.addEventListener('change', updateSelectedLabels);
+      input.addEventListener('change', () => {
+        updateSelectedLabels();
+        loadDepartamentos();
+      });
     });
+    departamentoSelect?.addEventListener('change', updatePdfLink);
     function syncMonthField(hiddenInput, monthSel, yearSel) {
       if (!hiddenInput || !monthSel || !yearSel) return;
       const value = `${yearSel.value}-${monthSel.value}`;
