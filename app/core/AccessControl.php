@@ -56,7 +56,7 @@ final class AccessControl
         'manuais' => self::CLIENT_ADMIN_MODULE,
         'biblioteca' => self::CLIENT_ADMIN_MODULE,
         'auditorias' => self::OPERACIONAL_MODULE,
-        'treinamentos' => self::ADMIN_MODULE,
+        'treinamentos' => self::CLIENT_ADMIN_MODULE,
         'reunioes' => self::CLIENT_ADMIN_MODULE,
         'coaching' => self::OPERACIONAL_MODULE,
         'processos' => self::OPERACIONAL_MODULE,

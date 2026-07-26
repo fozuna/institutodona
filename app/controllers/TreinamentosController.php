@@ -1388,7 +1388,7 @@ class TreinamentosController extends BaseController
 
     private function requireManagePermission(): void
     {
-        $this->requireRole('instituto');
+        $this->requireClienteAdminAccess();
     }
 
     private function sendBinaryPdf(string $filename, string $binary, bool $download): void
