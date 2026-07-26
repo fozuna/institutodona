@@ -45,4 +45,13 @@ foreach ($spanMatches[1] as $attrs) {
     assert_true(strpos($attrs, 'aria-hidden="true"') !== false, 'Ícone decorativo do Dashboard é marcado aria-hidden (evita duplicidade com o texto visível adjacente)');
 }
 
+assert_true(strpos($html, '<span>Aplicar filtros</span>') === false, 'Botão "Aplicar filtros" é minimalista: só ícone, sem texto visível ao lado');
+assert_true(strpos($html, 'id="dashboardApplyBtn" title="Aplicar filtros" aria-label="Aplicar filtros"') !== false, 'Botão "Aplicar filtros" expõe o rótulo via title/aria-label (tooltip no hover)');
+assert_true(strpos($html, '<span>Exportar PDF</span>') === false, 'Link "Exportar PDF" é minimalista: só ícone, sem texto visível ao lado');
+assert_true(strpos($html, 'id="dashboardPdfLink" class="dash-btn-ghost" title="Exportar PDF" aria-label="Exportar PDF"') !== false, 'Link "Exportar PDF" expõe o rótulo via title/aria-label (tooltip no hover)');
+assert_true(strpos($html, '<span>Resumo do Mês</span>') === false, 'Link "Resumo do Mês" é minimalista: só ícone, sem texto visível ao lado');
+assert_true(strpos($html, 'id="dashboardResumoMesLink" class="dash-btn-ghost" title="Resumo do Mês" aria-label="Resumo do Mês"') !== false, 'Link "Resumo do Mês" expõe o rótulo via title/aria-label (tooltip no hover)');
+assert_true(strpos($html, '<span>Atualizar agora</span>') === false, 'Botão "Atualizar agora" é minimalista: só ícone, sem texto visível ao lado');
+assert_true(strpos($html, 'id="dashboardRefreshBtn" title="Atualizar agora" aria-label="Atualizar agora"') !== false, 'Botão "Atualizar agora" expõe o rótulo via title/aria-label (tooltip no hover)');
+
 echo "Dashboard icons Feather standardization regression tests passed.\n";
