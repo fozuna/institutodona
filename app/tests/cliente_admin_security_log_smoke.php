@@ -19,10 +19,13 @@ $out = [];
 @exec($cmd . ' 2>&1', $out);
 $response = trim(implode("\n", $out));
 
-if (stripos($response, 'acesso restrito ao perfil cliente admin da empresa') === false) {
-    failFast('A negativa padronizada não foi retornada pelo probe');
+// A negação de acesso agora é ocultada como página 404 personalizada (não
+// revela mais o motivo real ao usuário) - o texto da mensagem interna
+// continua existindo, mas só dentro do log de auditoria (verificado abaixo).
+if (strpos($response, 'ALLOWED') !== false || strpos($response, 'Conteúdo não encontrado') === false) {
+    failFast('A negativa oculta (404 personalizado) não foi retornada pelo probe');
 }
-ok('Negativa padronizada retornada pelo probe');
+ok('Negativa de acesso ocultada como página 404 personalizada');
 
 $after = is_file($logFile) ? file($logFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) : [];
 if (count($after) <= count($before)) {

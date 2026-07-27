@@ -55,10 +55,13 @@ if (stripos($outInstituto, 'Acesso restrito') !== false || stripos($outInstituto
 }
 ok('Instituto continua com acesso normal (sem regressão)');
 
+// A negação de acesso agora é ocultada como página 404 personalizada (não
+// revela mais o motivo real "Acesso restrito ao perfil Cliente Admin" ao
+// usuário) - o critério de bloqueio passa a ser a página genérica de 404.
 $outCliente = runManageProbe('cliente');
-if (stripos($outCliente, 'Acesso restrito ao perfil Cliente Admin') === false) {
-    failFast('Perfil "cliente" comum deveria continuar bloqueado de criar/movimentar treinamentos');
+if (stripos($outCliente, 'Acesso restrito ao perfil Cliente Admin') !== false || stripos($outCliente, 'Conteúdo não encontrado') === false) {
+    failFast('Perfil "cliente" comum deveria continuar bloqueado de criar/movimentar treinamentos (oculto como 404)');
 }
-ok('Perfil "cliente" comum (não admin) continua bloqueado de movimentar treinamentos, como esperado');
+ok('Perfil "cliente" comum (não admin) continua bloqueado de movimentar treinamentos, oculto como 404');
 
 echo "Treinamentos cliente admin access regression tests passed.\n";

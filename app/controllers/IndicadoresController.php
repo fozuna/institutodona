@@ -1213,11 +1213,4 @@ class IndicadoresController extends BaseController
         return (int)($_SESSION['user']['id'] ?? 0);
     }
 
-    private function isAjaxRequest(): bool
-    {
-        if ((string)($_GET['ajax'] ?? '') === '1') {
-            return true;
-        }
-        return strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
-    }
 }

@@ -63,6 +63,51 @@ class BaseController
         return strpos($route, 'pwa/') === 0;
     }
 
+    protected function isAjaxRequest(): bool
+    {
+        if (strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest') {
+            return true;
+        }
+        return isset($_GET['ajax']) && (string)$_GET['ajax'] === '1';
+    }
+
+    /**
+     * Rotas que nunca devem ser guardadas como "última página válida" para o
+     * botão de retorno da 404: login/logout, downloads/exports/PDFs e
+     * endpoints de API/AJAX não representam uma página HTML navegável.
+     */
+    private const LAST_ROUTE_EXCLUDED_KEYWORDS = [
+        'ajax', 'api_', 'download', 'export', 'pdf', 'logout', 'dologin',
+    ];
+
+    private function trackLastValidRoute(string $route): void
+    {
+        if ($route === '') {
+            return;
+        }
+        $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+        if ($method !== 'GET') {
+            return;
+        }
+        if ($this->isAjaxRequest() || $this->isPwaRequest()) {
+            return;
+        }
+        if ($route === 'auth/login') {
+            return;
+        }
+        $routeLower = strtolower($route);
+        foreach (self::LAST_ROUTE_EXCLUDED_KEYWORDS as $keyword) {
+            if (strpos($routeLower, $keyword) !== false) {
+                return;
+            }
+        }
+        $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        if ($uri === '' || strpos($uri, '://') !== false) {
+            return;
+        }
+        $_SESSION['last_valid_route'] = $uri;
+    }
+
     protected function requireLogin(): void
     {
         if (!isset($_SESSION['user'])) {
@@ -78,6 +123,7 @@ class BaseController
         Auth::refreshScope();
         $route = (string)($_GET['route'] ?? '');
         $this->authorizeRoute($route);
+        $this->trackLastValidRoute($route);
         $routeForAudit = $route ?: null;
         $clienteCandidate = null;
         if (isset($_GET['cliente'])) {
@@ -103,7 +149,7 @@ class BaseController
     {
         $this->requireLogin();
         if (!$this->hasRole($role)) {
-            $this->denyAccess('Você não possui permissão para acessar este recurso.', (string)($_GET['route'] ?? ''), $this->routeClienteCandidate());
+            $this->denyAccess('Você não possui permissão para acessar este recurso.', (string)($_GET['route'] ?? ''), $this->routeClienteCandidate(), $this->isAjaxRequest());
         }
     }
 
@@ -118,7 +164,7 @@ class BaseController
             AccessControl::clientAdminOnlyMessage(),
             (string)($_GET['route'] ?? ''),
             $this->routeClienteCandidate(),
-            $json
+            $json || $this->isAjaxRequest()
         );
     }
 
@@ -143,6 +189,7 @@ class BaseController
         if ($route === '' || Auth::isInstituto()) {
             return;
         }
+        $json = $json || $this->isAjaxRequest();
         $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
         $clienteCandidate = $this->routeClienteCandidate();
         if (!AccessControl::canAccessRoute($route, $method)) {
@@ -178,8 +225,15 @@ class BaseController
         return (int)$ids[0];
     }
 
+    /**
+     * Nega acesso (RBAC/tenant) SEM revelar ao usuário que o recurso existe:
+     * responde com a mesma página/contrato de "não encontrado" (404). O motivo
+     * real ($message) é registrado apenas no log interno de auditoria, nunca
+     * exibido - conforme a regra de negócio de ocultação de recursos.
+     */
     protected function denyAccess(string $message = 'Acesso negado.', ?string $route = null, ?int $clienteId = null, bool $json = false): void
     {
+        $errorId = bin2hex(random_bytes(5));
         AuditLogger::log('access_denied', 'auth', null, [
             'route' => $route ?? ($_GET['route'] ?? null),
             'cliente_id' => $clienteId,
@@ -188,17 +242,132 @@ class BaseController
             'ip' => $_SERVER['REMOTE_ADDR'] ?? null,
             'resultado' => 'negado',
             'mensagem' => $message,
+            'hidden_as' => '404',
+            'error_id' => $errorId,
             'platform' => $this->isPwaRequest() ? 'PWA' : 'WEB',
         ]);
-        http_response_code(403);
+        $this->respondNotFound($json);
+    }
+
+    /**
+     * Responde "não encontrado" para um recurso que genuinamente não existe
+     * (Cenário 1: rota/registro inexistente) - mesmo contrato de denyAccess(),
+     * sem gerar log de negação de acesso (não é uma tentativa de acesso indevido).
+     */
+    protected function renderNotFound(bool $json = false): void
+    {
+        $this->respondNotFound($json);
+    }
+
+    private function respondNotFound(bool $json): void
+    {
+        http_response_code(404);
         if ($json) {
             header('Content-Type: application/json; charset=utf-8');
-            echo json_encode(['success' => false, 'message' => $message], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['success' => false, 'message' => 'Recurso não encontrado.'], JSON_UNESCAPED_UNICODE);
             exit;
         }
-        $_SESSION['flash_error'] = $message;
-        echo $message;
+        $this->render('errors/404', [
+            'pageTitle' => 'Conteúdo não encontrado',
+            'backUrl' => $this->resolveSafeBackUrl(),
+        ]);
         exit;
+    }
+
+    /**
+     * Resolve a URL segura para o botão "Voltar" da página 404, seguindo a
+     * ordem: (1) última rota interna válida registrada em sessão, (2) Referer
+     * interno e seguro, (3) Dashboard (autenticado) ou Login (anônimo).
+     * Nunca confia em URLs absolutas/externas - previne open redirect.
+     */
+    protected function resolveSafeBackUrl(): string
+    {
+        $user = $_SESSION['user'] ?? null;
+        $fallback = $user ? 'index.php?route=dashboard/index' : 'index.php?route=auth/login';
+        $currentUri = (string)($_SERVER['REQUEST_URI'] ?? '');
+
+        $candidates = [];
+        $lastValid = $_SESSION['last_valid_route'] ?? '';
+        if (is_string($lastValid) && $lastValid !== '') {
+            $candidates[] = $lastValid;
+        }
+        $referer = (string)($_SERVER['HTTP_REFERER'] ?? '');
+        if ($referer !== '') {
+            $safeReferer = $this->extractSafeInternalUri($referer);
+            if ($safeReferer !== null) {
+                $candidates[] = $safeReferer;
+            }
+        }
+
+        foreach ($candidates as $uri) {
+            if ($this->isUsableReturnUri($uri, $currentUri, $user)) {
+                return $uri;
+            }
+        }
+        return $fallback;
+    }
+
+    /**
+     * Extrai um caminho relativo seguro de uma URL de Referer, somente se ela
+     * apontar para o mesmo host desta requisição. Rejeita qualquer URL externa,
+     * "//", "javascript:", "data:" ou outro esquema/host diferente.
+     */
+    private function extractSafeInternalUri(string $referer): ?string
+    {
+        if ($referer === '' || strpos($referer, '//') === 0) {
+            return null;
+        }
+        $scheme = strtolower((string)(parse_url($referer, PHP_URL_SCHEME) ?? ''));
+        if ($scheme !== '' && !in_array($scheme, ['http', 'https'], true)) {
+            return null;
+        }
+        $refererHost = (string)(parse_url($referer, PHP_URL_HOST) ?? '');
+        $currentHost = (string)($_SERVER['HTTP_HOST'] ?? '');
+        if ($refererHost === '' || $currentHost === '' || strcasecmp($refererHost, $currentHost) !== 0) {
+            return null;
+        }
+        $path = (string)(parse_url($referer, PHP_URL_PATH) ?? '');
+        $query = parse_url($referer, PHP_URL_QUERY);
+        if ($path === '') {
+            return null;
+        }
+        return $path . ($query ? '?' . $query : '');
+    }
+
+    /**
+     * Valida se uma URI candidata pode ser oferecida como retorno: precisa ser
+     * diferente da URL atual, apontar para uma rota reconhecida, não ser uma
+     * página de erro/login/logout, e o usuário atual precisa continuar
+     * autorizado a acessá-la agora (revalidação de RBAC/módulo).
+     */
+    private function isUsableReturnUri(string $uri, string $currentUri, ?array $user): bool
+    {
+        if ($uri === '' || strpos($uri, '://') !== false || strpos($uri, '//') === 0) {
+            return false;
+        }
+        $lower = strtolower($uri);
+        if (strpos($lower, 'javascript:') === 0 || strpos($lower, 'data:') === 0) {
+            return false;
+        }
+        if ($currentUri !== '' && $uri === $currentUri) {
+            return false;
+        }
+        $query = parse_url($uri, PHP_URL_QUERY);
+        if (!$query) {
+            return false;
+        }
+        parse_str($query, $params);
+        $route = strtolower((string)($params['route'] ?? ''));
+        if ($route === '' || in_array($route, ['auth/login', 'auth/logout', 'auth/dologin'], true)) {
+            return false;
+        }
+        if (strpos($route, 'ajax') !== false || strpos($route, 'api_') !== false) {
+            return false;
+        }
+        if (!AccessControl::canAccessRoute($route, 'GET', $user)) {
+            return false;
+        }
+        return true;
     }
 
     private function routeClienteCandidate(): ?int

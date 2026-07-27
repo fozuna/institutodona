@@ -35,6 +35,7 @@ use App\Controllers\ReunioesController;
 use App\Controllers\CoachingController;
 use App\Controllers\ProcessosController;
 use App\Controllers\PwaController;
+use App\Controllers\ErrorController;
 
 $migrationRunner = new MigrationRunner();
 $currentMigrationFingerprint = $migrationRunner->currentFingerprint();
@@ -970,6 +971,6 @@ switch ($route) {
             (new PwaController())->dashboard();
             break;
         }
-        (new DashboardController())->index();
+        (new ErrorController())->notFound();
         break;
 }
