@@ -289,6 +289,18 @@ $renderTable = static function (array $items, int $cliente, int $indicadorId, st
       }
     }
 
+    if (clienteSelect) {
+      clienteSelect.addEventListener('change', () => {
+        if (!form) return;
+        // Troca de empresa: limpa indicador e período da empresa anterior
+        // e recarrega a página inteira, pois o servidor precisa recalcular
+        // a lista de indicadores e os estados dos campos para a nova empresa.
+        if (indicadorSelect) indicadorSelect.value = '0';
+        if (periodoInicioInput) periodoInicioInput.value = '';
+        if (periodoFimInput) periodoFimInput.value = '';
+        form.submit();
+      });
+    }
     if (indicadorSelect) {
       indicadorSelect.addEventListener('change', () => refreshList());
     }
@@ -304,6 +316,9 @@ $renderTable = static function (array $items, int $cliente, int $indicadorId, st
     }
     if (form) {
       form.addEventListener('submit', (e) => {
+        // Sem empresa/lista carregada ainda: deixa o submit nativo (GET)
+        // navegar e recarregar a página com o cliente escolhido.
+        if (!clienteSelect || !clienteSelect.value || !listWrap) return;
         e.preventDefault();
         refreshList();
       });
