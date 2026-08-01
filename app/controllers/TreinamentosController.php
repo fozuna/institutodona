@@ -283,7 +283,14 @@ class TreinamentosController extends BaseController
             echo json_encode(['ok' => false, 'message' => 'Dados inválidos.'], JSON_UNESCAPED_UNICODE);
             return;
         }
-        $result = $this->model->addParticipanteExtra($treinamentoId, $colaboradorId);
+        try {
+            $result = $this->model->addParticipanteExtra($treinamentoId, $colaboradorId);
+        } catch (\Throwable $e) {
+            error_log('[treinamentos_add_participante_extra_failed] treinamento_id=' . $treinamentoId . ' ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'message' => 'Não foi possível adicionar o participante.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
         if (!$result['ok']) {
             http_response_code(422);
         }
@@ -301,7 +308,14 @@ class TreinamentosController extends BaseController
         }
         $treinamentoId = (int)($_POST['treinamento_id'] ?? 0);
         $colaboradorId = (int)($_POST['colaborador_id'] ?? 0);
-        $removed = $this->model->removeParticipanteExtra($treinamentoId, $colaboradorId);
+        try {
+            $removed = $this->model->removeParticipanteExtra($treinamentoId, $colaboradorId);
+        } catch (\Throwable $e) {
+            error_log('[treinamentos_remove_participante_extra_failed] treinamento_id=' . $treinamentoId . ' ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'message' => 'Não foi possível remover o participante.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
         echo json_encode(['ok' => $removed], JSON_UNESCAPED_UNICODE);
     }
 
@@ -323,13 +337,25 @@ class TreinamentosController extends BaseController
         $ids = $_POST['colaborador_ids'] ?? [];
         $ids = is_array($ids) ? $ids : [$ids];
         $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if (empty($ids)) {
+            $_SESSION['flash_error'] = 'Selecione ao menos um colaborador para continuar.';
+            $this->redirect('index.php?route=treinamentos/show&id=' . $treinamentoId);
+            return;
+        }
         $validIds = $this->model->filterColaboradoresByCliente((int)($treinamento['cliente_id'] ?? 0), $ids);
         if (count($validIds) !== count($ids)) {
             $_SESSION['flash_error'] = 'Existem colaboradores inválidos para a unidade do treinamento.';
             $this->redirect('index.php?route=treinamentos/show&id=' . $treinamentoId);
             return;
         }
-        $this->model->syncSelectedColaboradores($treinamentoId, $validIds);
+        try {
+            $this->model->syncSelectedColaboradores($treinamentoId, $validIds);
+        } catch (\Throwable $e) {
+            error_log('[treinamentos_add_colaboradores_failed] treinamento_id=' . $treinamentoId . ' ' . $e->getMessage());
+            $_SESSION['flash_error'] = 'Não foi possível salvar os participantes. Tente novamente.';
+            $this->redirect('index.php?route=treinamentos/show&id=' . $treinamentoId);
+            return;
+        }
         $_SESSION['flash_success'] = 'Lista pré-cadastrada do treinamento atualizada.';
         $this->redirect('index.php?route=treinamentos/show&id=' . $treinamentoId);
     }
