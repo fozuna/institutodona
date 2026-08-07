@@ -45,6 +45,7 @@ class SimplePdfReport
         $pdf->drawHeader($data);
         $pdf->drawSummary($data);
         $pdf->drawQuestions($data);
+        $pdf->drawResumoVisual($data);
         return $pdf->build($data);
     }
 
@@ -309,6 +310,137 @@ class SimplePdfReport
             $this->cursorY -= ($needed + 10);
             $qn++;
         }
+    }
+
+    private function drawResumoVisual(array $data): void
+    {
+        $chart = is_array($data['chart_summary'] ?? null) ? $data['chart_summary'] : [];
+        if (empty($chart)) {
+            return;
+        }
+        $conforme = (int)($chart['conforme'] ?? 0);
+        $naoConforme = (int)($chart['nao_conforme'] ?? 0);
+        $naoAplica = (int)($chart['nao_aplica'] ?? 0);
+        $total = $conforme + $naoConforme + $naoAplica;
+        $pctGeral = isset($chart['conformidade_pct']) && $chart['conformidade_pct'] !== null ? (float)$chart['conformidade_pct'] : null;
+        $semaforo = (string)($chart['semaforo'] ?? '');
+
+        $this->addPage();
+        $this->drawBlockTitle('Resultado Visual da Auditoria');
+
+        $cardW = $this->pageWidth - ($this->marginX * 2);
+        $cardH = 210.0;
+        $this->ensureSpace($cardH + 10);
+        $topY = $this->cursorY;
+        $this->drawRect($this->marginX, $topY, $cardW, $cardH, [255, 255, 255], [226, 232, 240], 0.8);
+
+        $cx = $this->marginX + 110.0;
+        $cy = $topY - ($cardH / 2);
+        $outerR = 72.0;
+        $innerR = 42.0;
+
+        $segments = [
+            ['value' => $conforme, 'color' => [34, 197, 94], 'label' => 'Conforme'],
+            ['value' => $naoConforme, 'color' => [239, 68, 68], 'label' => 'Não conforme'],
+            ['value' => $naoAplica, 'color' => [148, 163, 184], 'label' => 'Não se aplica'],
+        ];
+
+        if ($total > 0) {
+            $this->drawDonutChart($cx, $cy, $outerR, $innerR, $segments, $total);
+        } else {
+            $this->drawCircleFilled($cx, $cy, $outerR, [226, 232, 240]);
+            $this->drawCircleFilled($cx, $cy, $innerR, [255, 255, 255]);
+        }
+
+        $centerLabel = $pctGeral !== null
+            ? number_format($pctGeral, 0, ',', '.') . '%'
+            : ($total > 0 ? number_format(($conforme / $total) * 100, 0, ',', '.') . '%' : '—');
+        $labelW = $this->estimateWidth($centerLabel, 16);
+        $this->writeColoredText($cx - ($labelW / 2), $cy - 5, $centerLabel, 16, true, [17, 24, 39]);
+        $subLabel = 'conformidade';
+        $subW = $this->estimateWidth($subLabel, 8);
+        $this->writeColoredText($cx - ($subW / 2), $cy - 18, $subLabel, 8, false, [100, 116, 139]);
+
+        $legendX = $this->marginX + 210.0;
+        $legendY = $topY - 30.0;
+        foreach ($segments as $seg) {
+            $pct = $total > 0 ? (((float)$seg['value']) / $total) * 100 : 0.0;
+            $this->drawRect($legendX, $legendY + 8, 10, 10, $seg['color'], $seg['color'], 0.1);
+            $this->writeColoredText($legendX + 16, $legendY, (string)$seg['label'], 10, true, [17, 24, 39]);
+            $this->writeColoredText($legendX + 16, $legendY - 13, $seg['value'] . ' item(ns) · ' . number_format($pct, 1, ',', '.') . '%', 9, false, [100, 116, 139]);
+            $legendY -= 40.0;
+        }
+
+        $barX = $legendX;
+        $barW = ($this->marginX + $cardW) - $barX - 14.0;
+        $barY = $topY - $cardH + 44.0;
+        $this->writeColoredText($barX, $barY + 16, 'Conformidade geral', 9, true, [100, 116, 139]);
+        $barColor = match ($semaforo) {
+            'verde' => [34, 197, 94],
+            'amarelo' => [234, 179, 8],
+            'vermelho' => [239, 68, 68],
+            default => [148, 163, 184],
+        };
+        $this->drawRect($barX, $barY, $barW, 14, [241, 245, 249], [226, 232, 240], 0.6);
+        $fillPct = $pctGeral !== null ? max(0.0, min(100.0, $pctGeral)) : 0.0;
+        $fillW = $barW * ($fillPct / 100);
+        if ($fillW > 0.5) {
+            $this->drawRect($barX, $barY, $fillW, 14, $barColor, $barColor, 0.1);
+        }
+
+        $this->cursorY -= ($cardH + 12);
+    }
+
+    private function drawDonutChart(float $cx, float $cy, float $outerR, float $innerR, array $segments, int $total): void
+    {
+        $angleAcc = 0.0;
+        $startAngle = M_PI / 2;
+        foreach ($segments as $seg) {
+            $value = (float)($seg['value'] ?? 0);
+            if ($value <= 0) {
+                continue;
+            }
+            $sweep = ($value / $total) * 2 * M_PI;
+            $from = $startAngle - $angleAcc;
+            $to = $from - $sweep;
+            $color = is_array($seg['color'] ?? null) ? $seg['color'] : [148, 163, 184];
+            $this->drawPieSlice($cx, $cy, $outerR, $from, $to, $color);
+            $angleAcc += $sweep;
+        }
+        $this->drawCircleFilled($cx, $cy, $innerR, [255, 255, 255]);
+    }
+
+    private function drawPieSlice(float $cx, float $cy, float $radius, float $fromAngle, float $toAngle, array $rgb): void
+    {
+        $sweep = abs($toAngle - $fromAngle);
+        $steps = max(1, (int)ceil($sweep / (M_PI / 24)));
+        $fill = $this->pdfRgb($rgb);
+        $content = "{$fill} rg ";
+        $content .= sprintf('%.2F %.2F m ', $cx + $radius * cos($fromAngle), $cy + $radius * sin($fromAngle));
+        for ($i = 1; $i <= $steps; $i++) {
+            $t = $fromAngle + (($toAngle - $fromAngle) * $i / $steps);
+            $content .= sprintf('%.2F %.2F l ', $cx + $radius * cos($t), $cy + $radius * sin($t));
+        }
+        $content .= sprintf('%.2F %.2F l f', $cx, $cy);
+        $page = $this->page();
+        $page['content'] .= $content . "\n";
+        $this->setPage($page);
+    }
+
+    private function drawCircleFilled(float $cx, float $cy, float $radius, array $rgb): void
+    {
+        $steps = 48;
+        $fill = $this->pdfRgb($rgb);
+        $content = "{$fill} rg ";
+        $content .= sprintf('%.2F %.2F m ', $cx + $radius, $cy);
+        for ($i = 1; $i <= $steps; $i++) {
+            $t = (2 * M_PI) * $i / $steps;
+            $content .= sprintf('%.2F %.2F l ', $cx + $radius * cos($t), $cy + $radius * sin($t));
+        }
+        $content .= 'f';
+        $page = $this->page();
+        $page['content'] .= $content . "\n";
+        $this->setPage($page);
     }
 
     private function drawCardGrid(array $items, int $columns = 4): void

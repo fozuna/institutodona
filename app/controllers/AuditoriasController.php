@@ -487,6 +487,13 @@ class AuditoriasController extends BaseController
                 ['label' => 'Resumo final', 'value' => $resumoGeral !== '' ? $resumoGeral : '-'],
             ],
             'questions' => $questions,
+            'chart_summary' => [
+                'conforme' => $totConforme,
+                'nao_conforme' => $totNaoConforme,
+                'nao_aplica' => $totNaoAplica,
+                'conformidade_pct' => isset($item['conformidade_pct']) && $item['conformidade_pct'] !== null ? (float)$item['conformidade_pct'] : null,
+                'semaforo' => $semaforo,
+            ],
         ]);
         header('Content-Type: application/pdf');
         header('Content-Disposition: inline; filename="auditoria-' . $id . '.pdf"');
