@@ -139,7 +139,9 @@ class ManualModel extends BaseModel
         }
         $params = [
             'empresa_id' => $empresaId,
+            'empresa_id2' => $empresaId,
             'matriz_id' => $matrizId,
+            'matriz_id2' => $matrizId,
         ];
         $sql = "SELECT m.id, m.empresa_id, m.departamento_id, m.nome, m.descricao, m.arquivo, m.tipo_arquivo, m.tamanho, m.usuario_id, m.created_at,
                        c.nome_empresa AS empresa_nome, d.nome AS departamento_nome, u.nome AS usuario_nome,
@@ -148,8 +150,8 @@ class ManualModel extends BaseModel
                 JOIN clientes c ON c.id = m.empresa_id
                 JOIN departamentos d ON d.id = m.departamento_id
                 LEFT JOIN usuarios u ON u.id = m.usuario_id
-                WHERE (m.empresa_id = :empresa_id OR (m.empresa_id = :matriz_id AND EXISTS (
-                    SELECT 1 FROM manual_filial_links l WHERE l.manual_id = m.id AND l.filial_id = :empresa_id
+                WHERE (m.empresa_id = :empresa_id OR (m.empresa_id = :matriz_id2 AND EXISTS (
+                    SELECT 1 FROM manual_filial_links l WHERE l.manual_id = m.id AND l.filial_id = :empresa_id2
                 )))";
 
         if (!empty($filters['departamento_id'])) {
@@ -483,8 +485,10 @@ class ManualModel extends BaseModel
             $sql .= ' AND m.departamento_id = :' . $prefix . '_dep';
         }
         if (!empty($filters['q'])) {
-            $params[$prefix . '_q'] = '%' . trim((string)$filters['q']) . '%';
-            $sql .= ' AND (m.nome LIKE :' . $prefix . '_q OR m.descricao LIKE :' . $prefix . '_q)';
+            $term = '%' . trim((string)$filters['q']) . '%';
+            $params[$prefix . '_q_nome'] = $term;
+            $params[$prefix . '_q_desc'] = $term;
+            $sql .= ' AND (m.nome LIKE :' . $prefix . '_q_nome OR m.descricao LIKE :' . $prefix . '_q_desc)';
         }
         if (!empty($filters['data_de'])) {
             $params[$prefix . '_de'] = (string)$filters['data_de'] . ' 00:00:00';
