@@ -94,7 +94,7 @@ class ClientesController extends BaseController
         $matrizId = isset($_POST['matriz_id']) ? (int)$_POST['matriz_id'] : null;
         $data['is_matriz'] = $tipo === 'matriz' ? 1 : 0;
         $data['matriz_id'] = $tipo === 'filial' ? $matrizId : null;
-        
+
         // Mantém logo atual por padrão
         $data['logo_path'] = $current['logo_path'];
 
@@ -114,7 +114,28 @@ class ClientesController extends BaseController
                 }
             }
         }
-        if ($id) { $this->clientes->update($id, $data); \App\Core\AuditLogger::log('update', 'cliente', $id, $data); }
+
+        if (!$id) { header('Location: index.php?route=clientes/index'); return; }
+
+        $currentAtivo = (int)($current['ativo'] ?? 1);
+        $desiredAtivo = isset($_POST['ativo']) ? ((int)$_POST['ativo'] === 1 ? 1 : 0) : $currentAtivo;
+        $statusReason = trim((string)($_POST['status_reason'] ?? ''));
+
+        if ($currentAtivo !== $desiredAtivo) {
+            $userId = (int)($_SESSION['user']['id'] ?? 0);
+            $res = $this->clientes->updateWithStatusAudit($id, $data, $desiredAtivo, $userId, $statusReason, $_SERVER['REMOTE_ADDR'] ?? null, $_SERVER['HTTP_USER_AGENT'] ?? null);
+            if (empty($res['ok'])) {
+                $_SESSION['flash_error'] = (string)($res['message'] ?? 'Não foi possível alterar o status do cliente.');
+                header('Location: index.php?route=clientes/edit&id=' . $id);
+                return;
+            }
+            \App\Core\AuditLogger::log('update', 'cliente', $id, $data + ['ativo' => $desiredAtivo]);
+            $_SESSION['flash_success'] = (string)($res['message'] ?? 'Cliente atualizado com sucesso.');
+        } else {
+            $this->clientes->update($id, $data);
+            \App\Core\AuditLogger::log('update', 'cliente', $id, $data);
+            $_SESSION['flash_success'] = 'Cliente atualizado com sucesso.';
+        }
         header('Location: index.php?route=clientes/index');
     }
 

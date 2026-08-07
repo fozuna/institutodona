@@ -33,7 +33,7 @@ final class CoachingController extends BaseController
     public function create(): void
     {
         $this->requireLogin();
-        $clientes = $this->clientes->all();
+        $clientes = $this->clientes->allActive();
         $this->render('coaching/create', ['clientes' => $clientes]);
     }
 

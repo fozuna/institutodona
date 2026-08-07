@@ -33,7 +33,7 @@ final class TarefasController extends BaseController
     public function create(): void
     {
         $this->requireLogin();
-        $clientes = $this->clientes->all();
+        $clientes = $this->clientes->allActive();
         $this->render('tarefas/create', ['clientes' => $clientes]);
     }
 

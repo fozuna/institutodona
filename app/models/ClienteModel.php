@@ -102,22 +102,45 @@ class ClienteModel extends BaseModel
         return $stmt->fetchAll();
     }
 
+    public function allActive(): array
+    {
+        $this->ensureColumns();
+        [$scopeCond, $params] = $this->scopedParams('caa');
+        $hasAtivo = \App\Database\Database::columnExists('clientes', 'ativo');
+        $whereAtivo = $hasAtivo ? ' AND ativo = 1' : '';
+        try {
+            $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato, logo_path, dominio_publico, is_matriz, matriz_id FROM clientes WHERE $scopeCond$whereAtivo ORDER BY nome_empresa");
+            $stmt->execute($params);
+        } catch (\PDOException $e) {
+            try {
+                $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato, is_matriz, matriz_id FROM clientes WHERE $scopeCond$whereAtivo ORDER BY nome_empresa");
+                $stmt->execute($params);
+            } catch (\PDOException $eMid) {
+                $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato FROM clientes WHERE $scopeCond$whereAtivo ORDER BY nome_empresa");
+                $stmt->execute($params);
+            }
+        }
+        return $stmt->fetchAll();
+    }
+
     public function find(int $id): ?array
     {
         if (!$this->canAccessClienteId($id)) {
             return null;
         }
         $this->ensureColumns();
+        $hasAtivo = \App\Database\Database::columnExists('clientes', 'ativo');
+        $ativoCol = $hasAtivo ? ', ativo' : '';
         try {
-            $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path, dominio_publico, is_matriz, matriz_id FROM clientes WHERE id = :id');
+            $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path, dominio_publico, is_matriz, matriz_id' . $ativoCol . ' FROM clientes WHERE id = :id');
         } catch (\PDOException $e) {
             try {
-                $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, is_matriz, matriz_id FROM clientes WHERE id = :id');
+                $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, is_matriz, matriz_id' . $ativoCol . ' FROM clientes WHERE id = :id');
             } catch (\PDOException $eMid) {
                 try {
-                $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path, dominio_publico FROM clientes WHERE id = :id');
+                $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato, logo_path, dominio_publico' . $ativoCol . ' FROM clientes WHERE id = :id');
                 } catch (\PDOException $e2) {
-                    $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato FROM clientes WHERE id = :id');
+                    $stmt = $this->db->prepare('SELECT id, nome_empresa, CNPJ, contato' . $ativoCol . ' FROM clientes WHERE id = :id');
                 }
             }
         }
@@ -216,20 +239,222 @@ class ClienteModel extends BaseModel
         return $stmt->execute(['id' => $id]);
     }
 
+    public function changeAtivoWithAudit(int $id, int $newAtivo, int $userId, string $reason, ?string $ip = null, ?string $userAgent = null): array
+    {
+        $this->ensureColumns();
+        if (!\App\Database\Database::columnExists('clientes', 'ativo')) {
+            return ['ok' => false, 'message' => 'Coluna de status (ativo) não encontrada.'];
+        }
+        if (!\App\Database\Database::tableExists('cliente_status_logs')) {
+            return ['ok' => false, 'message' => 'Tabela de auditoria de status (cliente_status_logs) não encontrada.'];
+        }
+        $id = (int)$id;
+        $newAtivo = $newAtivo ? 1 : 0;
+        $userId = (int)$userId;
+        $reason = trim($reason);
+        if ($reason === '' || mb_strlen($reason) < 5) {
+            return ['ok' => false, 'message' => 'Justificativa obrigatória (mínimo 5 caracteres).'];
+        }
+        if (!$this->canAccessClienteId($id)) {
+            return ['ok' => false, 'message' => 'Cliente não encontrado.'];
+        }
+
+        try {
+            $this->db->beginTransaction();
+            $stmt = $this->db->prepare('SELECT id, matriz_id, ativo FROM clientes WHERE id = :id FOR UPDATE');
+            $stmt->execute(['id' => $id]);
+            $current = $stmt->fetch();
+            if (!$current) {
+                $this->db->rollBack();
+                return ['ok' => false, 'message' => 'Cliente não encontrado.'];
+            }
+            $oldAtivo = (int)($current['ativo'] ?? 1);
+            if ($oldAtivo === $newAtivo) {
+                $this->db->rollBack();
+                return ['ok' => true, 'message' => 'Nenhuma alteração de status necessária.'];
+            }
+
+            if ($newAtivo === 0) {
+                $blocks = $this->deactivationBlocks($id);
+                if (!empty($blocks)) {
+                    $this->db->rollBack();
+                    return ['ok' => false, 'message' => implode(' ', $blocks)];
+                }
+            } else {
+                $matrizId = (int)($current['matriz_id'] ?? 0);
+                if ($matrizId > 0) {
+                    $stmtMz = $this->db->prepare('SELECT ativo FROM clientes WHERE id = :id LIMIT 1');
+                    $stmtMz->execute(['id' => $matrizId]);
+                    $mzAtivo = $stmtMz->fetchColumn();
+                    if ($mzAtivo !== false && (int)$mzAtivo !== 1) {
+                        $this->db->rollBack();
+                        return ['ok' => false, 'message' => 'Não é possível ativar a filial: a matriz está inativa.'];
+                    }
+                }
+            }
+
+            $stmtUp = $this->db->prepare('UPDATE clientes SET ativo = :a WHERE id = :id');
+            $ok = $stmtUp->execute(['a' => $newAtivo, 'id' => $id]);
+            if (!$ok) {
+                $this->db->rollBack();
+                return ['ok' => false, 'message' => 'Não foi possível atualizar o status do cliente.'];
+            }
+
+            $stmtLog = $this->db->prepare('INSERT INTO cliente_status_logs (cliente_id, old_ativo, new_ativo, justificativa, changed_by, ip, user_agent) VALUES (:cid, :old, :new, :j, :uid, :ip, :ua)');
+            $stmtLog->execute([
+                'cid' => $id,
+                'old' => $oldAtivo,
+                'new' => $newAtivo,
+                'j' => $reason,
+                'uid' => $userId > 0 ? $userId : null,
+                'ip' => $ip !== null && trim($ip) !== '' ? mb_substr($ip, 0, 45) : null,
+                'ua' => $userAgent !== null && trim($userAgent) !== '' ? mb_substr($userAgent, 0, 255) : null,
+            ]);
+
+            $this->db->commit();
+            return ['ok' => true, 'message' => $newAtivo === 1 ? 'Cliente ativado com sucesso.' : 'Cliente inativado com sucesso.'];
+        } catch (\Throwable $e) {
+            try { if ($this->db->inTransaction()) $this->db->rollBack(); } catch (\Throwable $e2) {}
+            return ['ok' => false, 'message' => 'Erro interno ao atualizar status.'];
+        }
+    }
+
+    public function updateWithStatusAudit(int $id, array $data, int $newAtivo, int $userId, string $reason, ?string $ip = null, ?string $userAgent = null): array
+    {
+        $this->ensureColumns();
+        if (!\App\Database\Database::columnExists('clientes', 'ativo')) {
+            return ['ok' => false, 'message' => 'Coluna de status (ativo) não encontrada.'];
+        }
+        if (!\App\Database\Database::tableExists('cliente_status_logs')) {
+            return ['ok' => false, 'message' => 'Tabela de auditoria de status (cliente_status_logs) não encontrada.'];
+        }
+        $id = (int)$id;
+        $newAtivo = $newAtivo ? 1 : 0;
+        $userId = (int)$userId;
+        $reason = trim($reason);
+        if ($reason === '' || mb_strlen($reason) < 5) {
+            return ['ok' => false, 'message' => 'Justificativa obrigatória (mínimo 5 caracteres).'];
+        }
+        if (!$this->canAccessClienteId($id)) {
+            return ['ok' => false, 'message' => 'Cliente não encontrado.'];
+        }
+
+        try {
+            $this->db->beginTransaction();
+            $stmt = $this->db->prepare('SELECT id, matriz_id, ativo FROM clientes WHERE id = :id FOR UPDATE');
+            $stmt->execute(['id' => $id]);
+            $current = $stmt->fetch();
+            if (!$current) {
+                $this->db->rollBack();
+                return ['ok' => false, 'message' => 'Cliente não encontrado.'];
+            }
+            $oldAtivo = (int)($current['ativo'] ?? 1);
+            if ($oldAtivo === $newAtivo) {
+                $this->db->rollBack();
+                return ['ok' => false, 'message' => 'Status não alterado.'];
+            }
+
+            if ($newAtivo === 0) {
+                $blocks = $this->deactivationBlocks($id);
+                if (!empty($blocks)) {
+                    $this->db->rollBack();
+                    return ['ok' => false, 'message' => implode(' ', $blocks)];
+                }
+            } else {
+                $matrizId = (int)($current['matriz_id'] ?? 0);
+                if ($matrizId > 0) {
+                    $stmtMz = $this->db->prepare('SELECT ativo FROM clientes WHERE id = :id LIMIT 1');
+                    $stmtMz->execute(['id' => $matrizId]);
+                    $mzAtivo = $stmtMz->fetchColumn();
+                    if ($mzAtivo !== false && (int)$mzAtivo !== 1) {
+                        $this->db->rollBack();
+                        return ['ok' => false, 'message' => 'Não é possível ativar a filial: a matriz está inativa.'];
+                    }
+                }
+            }
+
+            $data['ativo'] = $newAtivo;
+            $payload = $this->clienteWritePayload($data);
+            $assignments = array_map(static fn(string $column): string => $column . ' = :' . $column, array_keys($payload));
+            $payload['id'] = $id;
+            $stmtUp = $this->db->prepare('UPDATE clientes SET ' . implode(', ', $assignments) . ' WHERE id = :id');
+            $ok = $stmtUp->execute($payload);
+            if (!$ok) {
+                $this->db->rollBack();
+                return ['ok' => false, 'message' => 'Não foi possível salvar o cliente.'];
+            }
+
+            $stmtLog = $this->db->prepare('INSERT INTO cliente_status_logs (cliente_id, old_ativo, new_ativo, justificativa, changed_by, ip, user_agent) VALUES (:cid, :old, :new, :j, :uid, :ip, :ua)');
+            $stmtLog->execute([
+                'cid' => $id,
+                'old' => $oldAtivo,
+                'new' => $newAtivo,
+                'j' => $reason,
+                'uid' => $userId > 0 ? $userId : null,
+                'ip' => $ip !== null && trim($ip) !== '' ? mb_substr($ip, 0, 45) : null,
+                'ua' => $userAgent !== null && trim($userAgent) !== '' ? mb_substr($userAgent, 0, 255) : null,
+            ]);
+
+            $this->db->commit();
+            return ['ok' => true, 'message' => $newAtivo === 1 ? 'Cliente ativado com sucesso.' : 'Cliente inativado com sucesso.'];
+        } catch (\Throwable $e) {
+            try { if ($this->db->inTransaction()) $this->db->rollBack(); } catch (\Throwable $e2) {}
+            return ['ok' => false, 'message' => 'Erro interno ao salvar cliente.'];
+        }
+    }
+
+    private function deactivationBlocks(int $clienteId): array
+    {
+        $blocks = [];
+        $clienteId = (int)$clienteId;
+        if ($clienteId <= 0) {
+            return ['Cliente inválido.'];
+        }
+
+        if (\App\Database\Database::tableExists('tarefas') && \App\Database\Database::columnExists('tarefas', 'status')) {
+            $stmt = $this->db->prepare("SELECT COUNT(*) FROM tarefas WHERE cliente_id = :id AND status <> 'Finalizado'");
+            $stmt->execute(['id' => $clienteId]);
+            if ((int)$stmt->fetchColumn() > 0) {
+                $blocks[] = 'Não é possível inativar: existem tarefas em aberto vinculadas ao cliente.';
+            }
+        }
+        if (\App\Database\Database::tableExists('reunioes') && \App\Database\Database::columnExists('reunioes', 'status')) {
+            $stmt = $this->db->prepare("SELECT COUNT(*) FROM reunioes WHERE cliente_id = :id AND status <> 'Finalizado'");
+            $stmt->execute(['id' => $clienteId]);
+            if ((int)$stmt->fetchColumn() > 0) {
+                $blocks[] = 'Não é possível inativar: existem reuniões em aberto vinculadas ao cliente.';
+            }
+        }
+        if (\App\Database\Database::tableExists('auditorias')) {
+            $cond = "status <> 'Realizada'";
+            if (\App\Database\Database::columnExists('auditorias', 'deleted_at')) {
+                $cond .= ' AND deleted_at IS NULL';
+            }
+            $stmt = $this->db->prepare("SELECT COUNT(*) FROM auditorias WHERE cliente_id = :id AND $cond");
+            $stmt->execute(['id' => $clienteId]);
+            if ((int)$stmt->fetchColumn() > 0) {
+                $blocks[] = 'Não é possível inativar: existem auditorias abertas vinculadas ao cliente.';
+            }
+        }
+        return $blocks;
+    }
+
     public function matrizes(): array
     {
         $this->ensureColumns();
         [$scopeCond, $params] = $this->scopedParams('cm');
         $where = 'is_matriz = 1 AND ' . $scopeCond;
+        $hasAtivo = \App\Database\Database::columnExists('clientes', 'ativo');
+        $ativoCol = $hasAtivo ? ', ativo' : '';
         try {
-            $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato, logo_path, is_matriz, matriz_id FROM clientes WHERE $where ORDER BY nome_empresa");
+            $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato, logo_path, is_matriz, matriz_id$ativoCol FROM clientes WHERE $where ORDER BY nome_empresa");
             $stmt->execute($params);
         } catch (\PDOException $e) {
             try {
-                $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato, logo_path FROM clientes WHERE $where ORDER BY nome_empresa");
+                $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato, logo_path$ativoCol FROM clientes WHERE $where ORDER BY nome_empresa");
                 $stmt->execute($params);
             } catch (\PDOException $e2) {
-                $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato FROM clientes WHERE $where ORDER BY nome_empresa");
+                $stmt = $this->db->prepare("SELECT id, nome_empresa, CNPJ, contato$ativoCol FROM clientes WHERE $where ORDER BY nome_empresa");
                 $stmt->execute($params);
             }
         }

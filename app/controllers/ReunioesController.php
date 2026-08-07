@@ -33,7 +33,7 @@ final class ReunioesController extends BaseController
     public function create(): void
     {
         $this->requireLogin();
-        $clientes = $this->clientes->all();
+        $clientes = $this->clientes->allActive();
         $this->render('reunioes/create', ['clientes' => $clientes]);
     }
 

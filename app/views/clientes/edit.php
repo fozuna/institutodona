@@ -48,6 +48,19 @@
                   </div>
                 <?php endif; ?>
             </div>
+            <div>
+                <label class="block text-sm">Status do cliente</label>
+                <?php $curAtivo = isset($item['ativo']) ? (int)$item['ativo'] : 1; ?>
+                <select name="ativo" id="clienteAtivo" class="border rounded p-2 w-48" data-initial="<?= $curAtivo ?>">
+                    <option value="1" <?= $curAtivo === 1 ? 'selected' : '' ?>>Ativo</option>
+                    <option value="0" <?= $curAtivo !== 1 ? 'selected' : '' ?>>Inativo</option>
+                </select>
+                <div class="text-xs text-gray-500 mt-1">A inativação exige justificativa e pode ser bloqueada por tarefas, reuniões ou auditorias em aberto vinculadas ao cliente. Cliente inativo deixa de aparecer nos formulários de novo lançamento.</div>
+            </div>
+            <div id="clienteStatusReasonWrap" class="hidden">
+                <label class="block text-sm">Justificativa (obrigatória para ativar/inativar)</label>
+                <textarea name="status_reason" id="clienteStatusReason" class="border rounded p-2 w-full" rows="3" placeholder="Descreva o motivo (mínimo 5 caracteres)."></textarea>
+            </div>
             <div class="flex items-center gap-3">
                 <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">Salvar</button>
                 <button class="px-4 py-2 rounded bg-gray-200 text-brand-brown" type="button" onclick="history.back()">Cancelar</button>
@@ -55,3 +68,22 @@
         </form>
     <?php endif; ?>
 </div>
+<script>
+  (function () {
+    const ativo = document.getElementById('clienteAtivo');
+    const reasonWrap = document.getElementById('clienteStatusReasonWrap');
+    const reason = document.getElementById('clienteStatusReason');
+    if (!ativo || !reasonWrap || !reason) return;
+
+    const toggleReason = () => {
+      const initial = String(ativo.getAttribute('data-initial') || '1');
+      const current = String(ativo.value || '1');
+      const show = current !== initial;
+      reasonWrap.classList.toggle('hidden', !show);
+      reason.required = show;
+      if (!show) reason.value = '';
+    };
+    ativo.addEventListener('change', toggleReason);
+    toggleReason();
+  })();
+</script>
