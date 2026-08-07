@@ -134,13 +134,14 @@ $renderTable = static function (array $items, int $cliente, int $indicadorId, st
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
             <label class="block text-xs font-medium text-gray-600 mb-1">Início</label>
-            <input type="date" name="periodo_inicio" id="indicadoresPeriodoInicio" class="border border-gray-300 rounded-lg p-3 w-full" value="<?= htmlspecialchars($periodoInicio) ?>" <?= $cliente ? 'required' : 'disabled' ?> />
+            <input type="date" name="periodo_inicio" id="indicadoresPeriodoInicio" class="border border-gray-300 rounded-lg p-3 w-full" value="<?= htmlspecialchars($periodoInicio) ?>" <?= $cliente ? '' : 'disabled' ?> />
           </div>
           <div>
             <label class="block text-xs font-medium text-gray-600 mb-1">Fim</label>
-            <input type="date" name="periodo_fim" id="indicadoresPeriodoFim" class="border border-gray-300 rounded-lg p-3 w-full" value="<?= htmlspecialchars($periodoFim) ?>" <?= $cliente ? 'required' : 'disabled' ?> />
+            <input type="date" name="periodo_fim" id="indicadoresPeriodoFim" class="border border-gray-300 rounded-lg p-3 w-full" value="<?= htmlspecialchars($periodoFim) ?>" <?= $cliente ? '' : 'disabled' ?> />
           </div>
         </div>
+        <p class="mt-1 text-xs text-gray-500">Deixe em branco para ver todo o histórico.</p>
       </div>
       <div class="md:col-span-6">
         <div id="indicadoresFiltroErro" class="hidden rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
@@ -252,8 +253,12 @@ $renderTable = static function (array $items, int $cliente, int $indicadorId, st
     function validatePeriodo() {
       const ini = String(periodoInicioInput?.value || '').trim();
       const fim = String(periodoFimInput?.value || '').trim();
+      if (!ini && !fim) {
+        setMsg('');
+        return { ok: true, ini: '', fim: '' };
+      }
       if (!ini || !fim) {
-        setMsg('Período de apuração é obrigatório. Selecione data de início e fim.');
+        setMsg('Informe as duas datas do período, ou deixe ambas em branco para ver todo o histórico.');
         return { ok: false, ini: '', fim: '' };
       }
       if (fim < ini) {

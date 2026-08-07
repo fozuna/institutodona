@@ -19,7 +19,7 @@ $indicadores = is_array($indicadores ?? null) ? $indicadores : [];
     </div>
     <div class="flex flex-col sm:flex-row gap-2">
       <?php
-        $canPdf = $cliente && $periodoInicio !== '' && $periodoFim !== '';
+        $canPdf = (bool)$cliente;
         $pdfHref = 'index.php?route=indicadores/painelPdf'
           . '&cliente=' . (int)$cliente
           . '&ano=' . (int)$ano
@@ -72,13 +72,14 @@ $indicadores = is_array($indicadores ?? null) ? $indicadores : [];
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
             <label class="block text-xs font-medium text-gray-600 mb-1">Início</label>
-            <input type="date" name="periodo_inicio" id="indicadoresPainelPeriodoInicio" class="border border-gray-300 rounded-lg p-3 w-full" value="<?= htmlspecialchars($periodoInicio) ?>" <?= $cliente ? 'required' : 'disabled' ?> />
+            <input type="date" name="periodo_inicio" id="indicadoresPainelPeriodoInicio" class="border border-gray-300 rounded-lg p-3 w-full" value="<?= htmlspecialchars($periodoInicio) ?>" <?= $cliente ? '' : 'disabled' ?> />
           </div>
           <div>
             <label class="block text-xs font-medium text-gray-600 mb-1">Fim</label>
-            <input type="date" name="periodo_fim" id="indicadoresPainelPeriodoFim" class="border border-gray-300 rounded-lg p-3 w-full" value="<?= htmlspecialchars($periodoFim) ?>" <?= $cliente ? 'required' : 'disabled' ?> />
+            <input type="date" name="periodo_fim" id="indicadoresPainelPeriodoFim" class="border border-gray-300 rounded-lg p-3 w-full" value="<?= htmlspecialchars($periodoFim) ?>" <?= $cliente ? '' : 'disabled' ?> />
           </div>
         </div>
+        <p class="mt-1 text-xs text-gray-500">Deixe em branco para ver todo o histórico.</p>
       </div>
       <div class="md:col-span-3 flex items-end">
         <button class="px-4 py-3 rounded-lg bg-brand-red text-white w-full" type="submit"><?= htmlspecialchars($t('indicadores.action.filter')) ?></button>
@@ -183,8 +184,12 @@ $indicadores = is_array($indicadores ?? null) ? $indicadores : [];
     function validatePeriodo() {
       const vIni = String(ini?.value || '').trim();
       const vFim = String(fim?.value || '').trim();
+      if (!vIni && !vFim) {
+        setMsg('');
+        return true;
+      }
       if (!vIni || !vFim) {
-        setMsg('Período de apuração é obrigatório. Selecione data de início e fim.');
+        setMsg('Informe as duas datas do período, ou deixe ambas em branco para ver todo o histórico.');
         return false;
       }
       if (vFim < vIni) {

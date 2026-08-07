@@ -249,7 +249,12 @@ class IndicadoresController extends BaseController
         $this->requireLogin();
         $cliente = (int)($this->resolveScopedClienteId(isset($_GET['cliente']) ? (int)$_GET['cliente'] : null) ?? 0);
         $filters = $this->readEventoFilters($cliente);
-        if ($cliente > 0 && !$filters['period_ok'] && !$filters['has_explicit']) {
+        if (
+            $cliente > 0
+            && !$filters['has_explicit']
+            && trim((string)($filters['periodo_inicio'] ?? '')) === ''
+            && trim((string)($filters['periodo_fim'] ?? '')) === ''
+        ) {
             $defaultPeriod = $this->validatePeriodoApuracao(date('Y-m-01'), date('Y-m-t'));
             if ($defaultPeriod['ok']) {
                 $filters['periodo_inicio'] = $defaultPeriod['inicio'];
@@ -259,7 +264,7 @@ class IndicadoresController extends BaseController
             }
         }
         $indicadorId = (int)($filters['indicador_id'] ?? 0);
-        $clientes = $this->clientes->all();
+        $clientes = $this->clientes->allActive();
         $items = [];
         if ($cliente > 0) {
             if (!$filters['period_ok']) {
@@ -1064,6 +1069,7 @@ class IndicadoresController extends BaseController
             $_SESSION[$key][$clienteId] = $storedReset;
             $out = $default;
             $out['has_explicit'] = true;
+            $out['period_ok'] = true;
             return $out;
         }
 
@@ -1092,12 +1098,20 @@ class IndicadoresController extends BaseController
     {
         $inicio = trim($inicio);
         $fim = trim($fim);
+        if ($inicio === '' && $fim === '') {
+            return [
+                'ok' => true,
+                'inicio' => '',
+                'fim' => '',
+                'error' => '',
+            ];
+        }
         if ($inicio === '' || $fim === '') {
             return [
                 'ok' => false,
                 'inicio' => '',
                 'fim' => '',
-                'error' => 'Período de apuração é obrigatório. Selecione data de início e fim.',
+                'error' => 'Informe as duas datas do período, ou deixe ambas em branco para ver todo o histórico.',
             ];
         }
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $inicio) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fim)) {

@@ -88,7 +88,7 @@ $badgeStyleByKey = static function (string $key): array {
       <?php if (!empty($branding['header_subtitle'])): ?>
         <div class="subtitle muted"><?= $e((string)$branding['header_subtitle']) ?></div>
       <?php endif; ?>
-      <p class="meta-line muted">Empresa: <strong><?= $e($clienteNome !== '' ? $clienteNome : '—') ?></strong> · Ano: <strong><?= $ano > 0 ? $ano : '—' ?></strong> · Período: <strong><?= $e($periodoInicio) ?></strong> até <strong><?= $e($periodoFim) ?></strong><?= $indicadorNome !== '' ? ' · Indicador: <strong>' . $e($indicadorNome) . '</strong>' : '' ?></p>
+      <p class="meta-line muted">Empresa: <strong><?= $e($clienteNome !== '' ? $clienteNome : '—') ?></strong> · Ano: <strong><?= $ano > 0 ? $ano : '—' ?></strong> · Período: <strong><?= ($periodoInicio !== '' && $periodoFim !== '') ? ($e($periodoInicio) . '</strong> até <strong>' . $e($periodoFim)) : 'Todo o histórico' ?></strong><?= $indicadorNome !== '' ? ' · Indicador: <strong>' . $e($indicadorNome) . '</strong>' : '' ?></p>
     </div>
   </div>
 
