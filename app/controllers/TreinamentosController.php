@@ -651,6 +651,11 @@ class TreinamentosController extends BaseController
             $this->redirect('index.php?route=treinamentos/index');
             return;
         }
+        if (!empty($agenda['encerrada_em'])) {
+            $_SESSION['flash_error'] = 'Turma encerrada; não é possível adicionar novos participantes.';
+            $this->redirect('index.php?route=treinamentos/presenca&agenda_id=' . $agendaId);
+            return;
+        }
         $treinamento = $this->model->find((int)($agenda['treinamento_id'] ?? 0));
         $ids = $_POST['colaborador_ids'] ?? [];
         $ids = is_array($ids) ? $ids : [$ids];
@@ -677,6 +682,31 @@ class TreinamentosController extends BaseController
             $_POST['observacao'] ?? []
         );
         $_SESSION['flash_success'] = 'Lista de presença atualizada.';
+        $this->redirect('index.php?route=treinamentos/presenca&agenda_id=' . $agendaId);
+    }
+
+    public function closeAgenda(): void
+    {
+        $this->requireManagePermission();
+        if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+        $agendaId = (int)($_POST['agenda_id'] ?? 0);
+        $agenda = $this->agendaModel->find($agendaId);
+        if (!$agenda) {
+            $_SESSION['flash_error'] = 'Agendamento não encontrado.';
+            $this->redirect('index.php?route=treinamentos/index');
+            return;
+        }
+        if (!empty($agenda['encerrada_em'])) {
+            $_SESSION['flash_error'] = 'Esta turma já está encerrada.';
+            $this->redirect('index.php?route=treinamentos/presenca&agenda_id=' . $agendaId);
+            return;
+        }
+        $this->agendaModel->closeAgenda($agendaId);
+        $_SESSION['flash_success'] = 'Turma encerrada com sucesso. Participantes sem presença registrada foram contabilizados como não participantes.';
         $this->redirect('index.php?route=treinamentos/presenca&agenda_id=' . $agendaId);
     }
 

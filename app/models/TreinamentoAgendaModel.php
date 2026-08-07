@@ -276,6 +276,30 @@ class TreinamentoAgendaModel extends BaseModel
         (new TreinamentoModel())->refreshStatuses((int)$agenda['treinamento_id']);
     }
 
+    public function closeAgenda(int $agendaId): bool
+    {
+        $this->ensureSchema();
+        $agenda = $this->find($agendaId);
+        if (!$agenda || !empty($agenda['encerrada_em'])) {
+            return false;
+        }
+        $userId = (int)($_SESSION['user']['id'] ?? 0) ?: null;
+        $stmt = $this->db->prepare("UPDATE treinamentos_agenda
+            SET encerrada_em = NOW(), encerrada_por = :encerrada_por
+            WHERE id = :id AND encerrada_em IS NULL");
+        $stmt->execute(['encerrada_por' => $userId, 'id' => $agendaId]);
+        if ($stmt->rowCount() === 0) {
+            return false;
+        }
+        $this->audit('turma_encerrada', [
+            'treinamento_id' => (int)$agenda['treinamento_id'],
+            'agenda_id' => $agendaId,
+            'encerrada_por' => $userId,
+        ]);
+        (new TreinamentoModel())->refreshStatuses((int)$agenda['treinamento_id']);
+        return true;
+    }
+
     public function issueCertificate(int $agendaId, int $colaboradorId, ?string $arquivo = null): ?array
     {
         $this->ensureSchema();

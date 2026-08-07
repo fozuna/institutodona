@@ -7,6 +7,17 @@
       <p class="text-xs text-gray-500 mt-1">Presença confirmada e certificado emitido possuem status independentes.</p>
     </div>
     <div class="flex flex-wrap items-center gap-2">
+      <?php if (!empty($agenda['encerrada_em'])): ?>
+        <span class="px-3 py-2 rounded bg-gray-800 text-white text-sm">
+          Turma Encerrada em <?= htmlspecialchars(\App\Core\DateHelper::formatDateTime((string)$agenda['encerrada_em'])) ?>
+        </span>
+      <?php else: ?>
+        <form method="post" action="index.php?route=treinamentos/close_agenda" onsubmit="return confirm('Encerrar esta turma? Participantes sem presença confirmada serão contabilizados como não participantes e não será mais possível adicionar novos participantes a esta turma. Esta ação não pode ser desfeita.');">
+          <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+          <input type="hidden" name="agenda_id" value="<?= (int)$agenda['id'] ?>" />
+          <button class="px-4 py-2 rounded bg-yellow-100 text-yellow-800 border border-yellow-300" type="submit">Encerrar Turma</button>
+        </form>
+      <?php endif; ?>
       <a class="px-4 py-2 rounded bg-red-100 text-red-700" href="index.php?route=treinamentos/presenca_pdf&agenda_id=<?= (int)$agenda['id'] ?>">Baixar PDF da Lista</a>
       <a class="px-4 py-2 rounded bg-gray-200 text-brand-brown" href="index.php?route=treinamentos/show&id=<?= (int)($agenda['treinamento_id'] ?? 0) ?>">Voltar ao Treinamento</a>
     </div>
@@ -18,6 +29,7 @@
     <div class="bg-white shadow rounded p-4"><div class="text-xs text-gray-500 uppercase">Certificados Emitidos</div><div class="text-2xl font-bold"><?= count(array_filter($participants, static fn(array $row): bool => !empty($row['certificado_emitido']))) ?></div></div>
   </div>
 
+  <?php if (empty($agenda['encerrada_em'])): ?>
   <div class="bg-white shadow rounded p-5">
     <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
       <div>
@@ -41,10 +53,20 @@
       <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">Adicionar Selecionados</button>
     </form>
   </div>
+  <?php else: ?>
+  <div class="bg-white shadow rounded p-5 text-sm text-gray-500">
+    Turma encerrada — não é possível adicionar novos participantes.
+  </div>
+  <?php endif; ?>
 
   <form method="post" action="index.php?route=treinamentos/save_presence" class="bg-white shadow rounded p-5">
     <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
     <input type="hidden" name="agenda_id" value="<?= (int)$agenda['id'] ?>" />
+    <?php if (!empty($agenda['encerrada_em'])): ?>
+      <div class="mb-4 px-4 py-2 rounded bg-yellow-50 text-yellow-800 text-sm border border-yellow-200">
+        Esta turma está encerrada. Você ainda pode corrigir registros de presença já lançados, mas novos participantes não podem ser adicionados.
+      </div>
+    <?php endif; ?>
     <div class="overflow-auto">
       <table class="min-w-full text-sm">
         <thead>

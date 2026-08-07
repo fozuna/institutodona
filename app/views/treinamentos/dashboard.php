@@ -4,6 +4,7 @@ $comparativoSetores = array_values((array)($dashboard['setores'] ?? []));
 $alertasSetor = array_values((array)($dashboard['alertas_setor'] ?? []));
 $pendentes = array_values((array)($dashboard['pendentes'] ?? []));
 $concluidos = array_values((array)($dashboard['concluidos'] ?? []));
+$naoParticiparam = array_values((array)($dashboard['nao_participaram'] ?? []));
 ?>
 <div class="p-6 space-y-6" data-release="training-dashboard-manual-sync-20260703">
   <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -79,11 +80,16 @@ $concluidos = array_values((array)($dashboard['concluidos'] ?? []));
     </div>
   </form>
 
-  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+  <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
     <div class="bg-white shadow rounded p-4"><div class="text-xs text-gray-500 uppercase">Treinamentos</div><div class="text-3xl font-bold"><?= (int)($dashboard['resumo']['treinamentos_monitorados'] ?? 0) ?></div></div>
     <div class="bg-white shadow rounded p-4"><div class="text-xs text-gray-500 uppercase">Inscritos</div><div class="text-3xl font-bold"><?= (int)($dashboard['resumo']['total_inscritos'] ?? 0) ?></div></div>
     <div class="bg-white shadow rounded p-4"><div class="text-xs text-gray-500 uppercase">Presentes</div><div class="text-3xl font-bold"><?= (int)($dashboard['resumo']['total_presentes'] ?? 0) ?></div></div>
     <div class="bg-white shadow rounded p-4"><div class="text-xs text-gray-500 uppercase">Certificados</div><div class="text-3xl font-bold"><?= (int)($dashboard['resumo']['total_certificados'] ?? 0) ?></div></div>
+    <div class="bg-white shadow rounded p-4">
+      <div class="text-xs text-gray-500 uppercase">Não Participaram</div>
+      <div class="text-3xl font-bold"><?= (int)($dashboard['resumo']['total_nao_participaram'] ?? 0) ?></div>
+      <div class="text-xs text-gray-500 mt-1"><?= number_format((float)($dashboard['resumo']['percentual_nao_participaram'] ?? 0), 1, ',', '.') ?>% dos pendentes/concluídos</div>
+    </div>
   </div>
 
   <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -217,7 +223,7 @@ $concluidos = array_values((array)($dashboard['concluidos'] ?? []));
     </div>
   </div>
 
-  <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
     <div class="bg-white shadow rounded p-5">
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
         <div>
@@ -257,6 +263,28 @@ $concluidos = array_values((array)($dashboard['concluidos'] ?? []));
             <?php endforeach; ?>
             <?php if (empty($concluidos)): ?>
               <tr><td colspan="3" class="p-4 text-center text-gray-500">Nenhuma conclusão registrada.</td></tr>
+            <?php endif; ?>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="bg-white shadow rounded p-5">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+        <div>
+          <h2 class="font-semibold">Não Participaram</h2>
+          <p class="text-xs text-gray-500"><?= count($naoParticiparam) ?> colaborador(es) em turmas encerradas sem presença</p>
+        </div>
+        <button type="button" class="dashboard-panel-toggle px-3 py-1 rounded bg-gray-100 text-brand-brown text-sm" data-panel-target="naoParticiparamPanel">Recolher</button>
+      </div>
+      <div id="naoParticiparamPanel" class="overflow-auto border rounded" style="max-height: 24rem;">
+        <table class="min-w-full text-sm">
+          <thead class="sticky top-0 bg-white border-b text-left"><tr><th class="p-2">Treinamento</th><th class="p-2">Colaborador</th><th class="p-2">Unidade</th></tr></thead>
+          <tbody>
+            <?php foreach ($naoParticiparam as $row): ?>
+              <tr class="border-b"><td class="p-2"><?= htmlspecialchars($row['treinamento_nome']) ?></td><td class="p-2"><?= htmlspecialchars($row['colaborador_nome']) ?></td><td class="p-2"><?= htmlspecialchars((string)$row['unidade_nome']) ?></td></tr>
+            <?php endforeach; ?>
+            <?php if (empty($naoParticiparam)): ?>
+              <tr><td colspan="3" class="p-4 text-center text-gray-500">Nenhum registro de não participação.</td></tr>
             <?php endif; ?>
           </tbody>
         </table>

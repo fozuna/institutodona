@@ -621,12 +621,17 @@ class TreinamentoModel extends BaseModel
         $setores = $this->sectorTotals($filters);
         $acumulados = $this->periodAccumulators($filters);
         $alertasSetor = array_values(array_filter($setores, static fn(array $row): bool => (float)($row['percentual_participacao'] ?? 0) < 50.0));
+        $pendentes = $this->dashboardListByStatus($filters, 'pendente');
+        $concluidos = $this->dashboardListByStatus($filters, 'concluido');
+        $naoParticiparam = $this->dashboardListByStatus($filters, 'pendente', 'interrompido');
+        $totalPendentesConcluidos = count($pendentes) + count($concluidos);
         return [
             'por_treinamento' => $this->dashboardBy($filters, 't.id', 't.nome'),
             'por_funcao' => $this->dashboardBy($filters, 'f.id', 'f.nome'),
             'por_unidade' => $this->dashboardBy($filters, 'c.id', 'c.nome_empresa'),
-            'pendentes' => $this->dashboardListByStatus($filters, 'pendente'),
-            'concluidos' => $this->dashboardListByStatus($filters, 'concluido'),
+            'pendentes' => $pendentes,
+            'concluidos' => $concluidos,
+            'nao_participaram' => $naoParticiparam,
             'alertas' => $this->pendingAlertsFiltered($filters, false),
             'participacao_treinamento' => $participacao,
             'setores' => $setores,
@@ -638,6 +643,10 @@ class TreinamentoModel extends BaseModel
                 'total_inscritos' => array_sum(array_map(static fn(array $row): int => (int)($row['total_inscritos'] ?? 0), $participacao)),
                 'total_presentes' => array_sum(array_map(static fn(array $row): int => (int)($row['total_presentes'] ?? 0), $participacao)),
                 'total_certificados' => array_sum(array_map(static fn(array $row): int => (int)($row['total_certificados'] ?? 0), $participacao)),
+                'total_nao_participaram' => count($naoParticiparam),
+                'percentual_nao_participaram' => $totalPendentesConcluidos > 0
+                    ? round(count($naoParticiparam) / $totalPendentesConcluidos * 100, 1)
+                    : 0.0,
             ],
             'filters' => $filters,
         ];
@@ -656,14 +665,14 @@ class TreinamentoModel extends BaseModel
                     t.periodicidade,
                     t.carga_horaria,
                     COUNT(ta.id) AS total_agendas_unidade,
-                    SUM(CASE WHEN ta.id IS NOT NULL AND COALESCE(ta.data_fim, ta.data) <= NOW() THEN 1 ELSE 0 END) AS total_agendas_encerradas,
-                    SUM(CASE WHEN ta.id IS NOT NULL AND COALESCE(ta.data_fim, ta.data) > NOW() THEN 1 ELSE 0 END) AS total_agendas_futuras,
-                    SUM(CASE WHEN ta.id IS NOT NULL AND COALESCE(ta.data_fim, ta.data) <= NOW()
+                    SUM(CASE WHEN ta.id IS NOT NULL AND (ta.encerrada_em IS NOT NULL OR COALESCE(ta.data_fim, ta.data) <= NOW()) THEN 1 ELSE 0 END) AS total_agendas_encerradas,
+                    SUM(CASE WHEN ta.id IS NOT NULL AND ta.encerrada_em IS NULL AND COALESCE(ta.data_fim, ta.data) > NOW() THEN 1 ELSE 0 END) AS total_agendas_futuras,
+                    SUM(CASE WHEN ta.id IS NOT NULL AND (ta.encerrada_em IS NOT NULL OR COALESCE(ta.data_fim, ta.data) <= NOW())
                               AND (tp.presenca = 0 AND tp.certificado_emitido = 0)
                              THEN 1 ELSE 0 END) AS pendencias_encerradas,
                     SUM(CASE WHEN ta.id IS NOT NULL
                               AND (tp.presenca = 1 OR tp.certificado_emitido = 1)
-                              AND COALESCE(ta.data_fim, ta.data) <= NOW()
+                              AND (ta.encerrada_em IS NOT NULL OR COALESCE(ta.data_fim, ta.data) <= NOW())
                              THEN 1 ELSE 0 END) AS agendas_com_presenca,
                     MAX(CASE WHEN ta.id IS NOT NULL AND (tp.presenca = 1 OR tp.certificado_emitido = 1) THEN ta.data ELSE NULL END) AS ultima_conclusao,
                     COALESCE(SUM(CASE
@@ -785,14 +794,14 @@ class TreinamentoModel extends BaseModel
                     col.nome AS colaborador_nome,
                     col.email AS colaborador_email,
                     COUNT(ta.id) AS total_agendas_unidade,
-                    SUM(CASE WHEN ta.id IS NOT NULL AND COALESCE(ta.data_fim, ta.data) <= NOW() THEN 1 ELSE 0 END) AS total_agendas_encerradas,
-                    SUM(CASE WHEN ta.id IS NOT NULL AND COALESCE(ta.data_fim, ta.data) > NOW() THEN 1 ELSE 0 END) AS total_agendas_futuras,
-                    SUM(CASE WHEN ta.id IS NOT NULL AND COALESCE(ta.data_fim, ta.data) <= NOW()
+                    SUM(CASE WHEN ta.id IS NOT NULL AND (ta.encerrada_em IS NOT NULL OR COALESCE(ta.data_fim, ta.data) <= NOW()) THEN 1 ELSE 0 END) AS total_agendas_encerradas,
+                    SUM(CASE WHEN ta.id IS NOT NULL AND ta.encerrada_em IS NULL AND COALESCE(ta.data_fim, ta.data) > NOW() THEN 1 ELSE 0 END) AS total_agendas_futuras,
+                    SUM(CASE WHEN ta.id IS NOT NULL AND (ta.encerrada_em IS NOT NULL OR COALESCE(ta.data_fim, ta.data) <= NOW())
                               AND (tp.presenca = 0 AND tp.certificado_emitido = 0)
                              THEN 1 ELSE 0 END) AS pendencias_encerradas,
                     SUM(CASE WHEN ta.id IS NOT NULL
                               AND (tp.presenca = 1 OR tp.certificado_emitido = 1)
-                              AND COALESCE(ta.data_fim, ta.data) <= NOW()
+                              AND (ta.encerrada_em IS NOT NULL OR COALESCE(ta.data_fim, ta.data) <= NOW())
                              THEN 1 ELSE 0 END) AS agendas_com_presenca,
                     MAX(CASE WHEN ta.id IS NOT NULL AND (tp.presenca = 1 OR tp.certificado_emitido = 1) THEN ta.data ELSE NULL END) AS ultima_conclusao,
                     COALESCE(SUM(CASE
@@ -974,7 +983,7 @@ class TreinamentoModel extends BaseModel
         return $rows;
     }
 
-    private function dashboardListByStatus(array $filters, string $status): array
+    private function dashboardListByStatus(array $filters, string $status, ?string $statusDetalhe = null): array
     {
         $params = ['status' => $status];
         $sql = "SELECT
@@ -990,6 +999,10 @@ class TreinamentoModel extends BaseModel
                 JOIN clientes c ON c.id = col.cliente_id
                 JOIN departamentos d ON d.id = t.departamento_id
                 WHERE tc.status = :status";
+        if ($statusDetalhe !== null) {
+            $sql .= " AND tc.status_detalhe = :status_detalhe";
+            $params['status_detalhe'] = $statusDetalhe;
+        }
         $sql .= $this->applyEmpresaDashboardFilter($filters, $params, ['COALESCE(t.cliente_id, d.cliente_id)', 'col.cliente_id', 'c.id']);
         if (!empty($filters['setor_id'])) {
             $sql .= " AND s.id = :setor_id";

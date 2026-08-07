@@ -584,6 +584,9 @@ switch ($route) {
     case 'treinamentos/save_presence':
         (new TreinamentosController())->savePresence();
         break;
+    case 'treinamentos/close_agenda':
+        (new TreinamentosController())->closeAgenda();
+        break;
     case 'treinamentos/certificado':
         (new TreinamentosController())->certificado();
         break;

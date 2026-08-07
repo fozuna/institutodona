@@ -157,10 +157,13 @@ final class TreinamentoSchema
         self::ensureColumn($db, 'treinamento_participantes', 'hora_saida', "ALTER TABLE treinamento_participantes ADD COLUMN hora_saida TIME NULL AFTER hora_entrada");
         self::ensureColumn($db, 'treinamento_participantes', 'observacao', "ALTER TABLE treinamento_participantes ADD COLUMN observacao TEXT NULL AFTER hora_saida");
         self::ensureColumn($db, 'treinamentos_agenda', 'data_fim', "ALTER TABLE treinamentos_agenda ADD COLUMN data_fim DATETIME NULL AFTER data");
+        self::ensureColumn($db, 'treinamentos_agenda', 'encerrada_em', "ALTER TABLE treinamentos_agenda ADD COLUMN encerrada_em DATETIME NULL AFTER data_fim");
+        self::ensureColumn($db, 'treinamentos_agenda', 'encerrada_por', "ALTER TABLE treinamentos_agenda ADD COLUMN encerrada_por INT NULL AFTER encerrada_em");
         self::ensureColumn($db, 'treinamento_colaboradores', 'status_detalhe', "ALTER TABLE treinamento_colaboradores ADD COLUMN status_detalhe VARCHAR(30) NULL AFTER status");
         self::ensureColumn($db, 'treinamento_colaboradores', 'origem', "ALTER TABLE treinamento_colaboradores ADD COLUMN origem ENUM('publico_alvo','extra') NOT NULL DEFAULT 'publico_alvo' AFTER status_detalhe");
         self::ensureIndex($db, 'treinamento_colaboradores', 'idx_treinamento_colaboradores_origem', "ALTER TABLE treinamento_colaboradores ADD INDEX idx_treinamento_colaboradores_origem (origem)");
         self::ensureIndex($db, 'treinamentos_agenda', 'idx_treinamentos_agenda_data_fim', "ALTER TABLE treinamentos_agenda ADD INDEX idx_treinamentos_agenda_data_fim (data_fim)");
+        self::ensureIndex($db, 'treinamentos_agenda', 'idx_treinamentos_agenda_encerrada_em', "ALTER TABLE treinamentos_agenda ADD INDEX idx_treinamentos_agenda_encerrada_em (encerrada_em)");
 
         self::ensureIndex($db, 'colaboradores', 'idx_colaboradores_matricula', "ALTER TABLE colaboradores ADD INDEX idx_colaboradores_matricula (matricula)");
         self::ensureIndex($db, 'colaboradores', 'idx_colaboradores_status_atual', "ALTER TABLE colaboradores ADD INDEX idx_colaboradores_status_atual (status_atual)");
