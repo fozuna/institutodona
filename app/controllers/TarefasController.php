@@ -34,7 +34,23 @@ final class TarefasController extends BaseController
     {
         $this->requireLogin();
         $clientes = $this->clientes->allActive();
-        $this->render('tarefas/create', ['clientes' => $clientes]);
+        // Contexto opcional vindo do Perfil do Cliente (index.php?route=tarefas/create&cliente=ID).
+        // So pre-seleciona se o cliente informado estiver entre os que o usuario pode acessar
+        // (mesma lista ja tenant-scoped usada para popular o <select>); caso contrario, ignora.
+        $requestedCliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
+        $selectedCliente = 0;
+        if ($requestedCliente > 0) {
+            foreach ($clientes as $c) {
+                if ((int)$c['id'] === $requestedCliente) {
+                    $selectedCliente = $requestedCliente;
+                    break;
+                }
+            }
+        }
+        $this->render('tarefas/create', [
+            'clientes' => $clientes,
+            'selectedCliente' => $selectedCliente,
+        ]);
     }
 
     public function store(): void
@@ -59,6 +75,13 @@ final class TarefasController extends BaseController
         if ($id <= 0) {
             http_response_code(400);
             echo 'Campos obrigatórios faltando';
+            return;
+        }
+        // Quando o cadastro partiu do Perfil do Cliente (tarefas/create&cliente=ID), retorna
+        // para la em vez da listagem geral de Tarefas, preservando o padrao ja usado pelas
+        // demais acoes disparadas daquela tela (ver ClientesController::attach/storeFilial/...).
+        if (!empty($_POST['voltar_perfil']) && (int)$data['cliente_id'] > 0) {
+            header('Location: index.php?route=clientes/show&id=' . (int)$data['cliente_id']);
             return;
         }
         header('Location: index.php?route=tarefas/index&cliente=' . (int)$data['cliente_id']);

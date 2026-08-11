@@ -26,7 +26,7 @@
         <div class="flex flex-col items-center">
           <div class="text-[11px] font-medium text-gray-600 mb-1">Criar tarefa</div>
           <a class="icon-btn icon-btn--lg icon-btn--primary"
-             href="index.php?route=metodologias/create&cliente=<?= $clienteAlvoId ?>"
+             href="index.php?route=tarefas/create&cliente=<?= $clienteAlvoId ?>"
              title="Criar tarefa"
              aria-label="Criar tarefa"><span data-feather="plus"></span></a>
         </div>
