@@ -326,27 +326,6 @@ $viewMode = $viewMode ?? 'cards';
       nameInput.addEventListener('change', scheduleSearch);
     }
 
-    const decimalRe = /^-?(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d{1,4})?$/;
-    function normalizeDecimal(value) {
-      let raw = String(value || '').trim();
-      if (!raw) return '';
-      raw = raw.replace(/\s+/g, '').replace(/R\$/g, '');
-      raw = raw.replace(/[^0-9,.\-]/g, '');
-      const parts = raw.split(',');
-      if (parts.length > 2) return '';
-      if (parts.length === 2) {
-        raw = parts[0].replace(/\./g, '') + ',' + parts[1];
-      }
-      if (!decimalRe.test(raw)) return '';
-      if (raw.includes(',') && raw.includes('.')) {
-        raw = raw.replace(/\./g, '');
-      }
-      raw = raw.replace(',', '.');
-      const numeric = Number(raw);
-      if (!Number.isFinite(numeric)) return '';
-      return numeric.toFixed(2).replace('.', ',');
-    }
-
     function setCardMsg(card, type, text) {
       if (!card) return;
       const box = card.querySelector('[data-indicador-msg]');
@@ -381,13 +360,10 @@ $viewMode = $viewMode ?? 'cards';
 
     function validateValueByUnit(card, value) {
       const tipo = String(card?.getAttribute('data-unidade-tipo') || '').toLowerCase();
-      const normalized = normalizeDecimal(value);
-      if (!normalized) return { ok: false, message: 'Valor inválido.' };
-      const numeric = Number(normalized.replace(',', '.'));
-      if (!Number.isFinite(numeric)) return { ok: false, message: 'Valor inválido.' };
-      if (tipo === 'inteiro' && Math.floor(numeric) !== numeric) return { ok: false, message: 'Este indicador aceita apenas números inteiros.' };
-      if (tipo === 'percentual' && numeric > 100) return { ok: false, message: 'Percentual deve ser menor ou igual a 100.' };
-      return { ok: true, normalized, numeric };
+      const result = window.IndicadorDecimal.parse(value);
+      if (!result.ok) return { ok: false, message: 'Valor inválido.' };
+      if (tipo === 'inteiro' && Math.floor(result.numeric) !== result.numeric) return { ok: false, message: 'Este indicador aceita apenas números inteiros.' };
+      return { ok: true, normalized: result.formatted, numeric: result.numeric };
     }
 
     async function saveValor(card) {
@@ -537,7 +513,10 @@ $viewMode = $viewMode ?? 'cards';
       results.addEventListener('blur', (e) => {
         const input = e.target && e.target.matches ? (e.target.matches('[data-indicador-valor-input]') ? e.target : null) : null;
         if (!input) return;
-        input.value = normalizeDecimal(input.value);
+        // So reformata quando o valor digitado e valido; entrada invalida
+        // permanece visivel para o usuario corrigir (nao e apagada em silencio).
+        const result = window.IndicadorDecimal.parse(input.value);
+        if (result.ok) input.value = result.formatted;
       }, true);
     }
 

@@ -340,22 +340,12 @@ $formatInput = static function ($raw): string {
       });
     }
 
-    function normalizeDecimal(value) {
-      let raw = String(value || '').trim();
-      if (!raw) return '';
-      raw = raw.replace(/\s+/g, '').replace(/R\$/g, '');
-      if (raw.includes(',') && raw.includes('.')) {
-        raw = raw.replace(/\./g, '');
-      }
-      raw = raw.replace(',', '.');
-      const numeric = Number(raw);
-      if (!Number.isFinite(numeric)) return '';
-      return numeric.toFixed(2).replace('.', ',');
-    }
-
     document.querySelectorAll('[data-indicador-decimal]').forEach((input) => {
       input.addEventListener('blur', function () {
-        this.value = normalizeDecimal(this.value);
+        // So reformata quando o valor digitado e valido; entrada invalida
+        // permanece visivel para o usuario corrigir (nao e apagada em silencio).
+        const result = window.IndicadorDecimal.parse(this.value);
+        if (result.ok) this.value = result.formatted;
       });
     });
 
@@ -374,7 +364,8 @@ $formatInput = static function ($raw): string {
       }
       clearClientError();
       this.querySelectorAll('[data-indicador-decimal]').forEach((input) => {
-        input.value = normalizeDecimal(input.value);
+        const result = window.IndicadorDecimal.parse(input.value);
+        if (result.ok) input.value = result.formatted;
       });
     });
 

@@ -170,9 +170,6 @@ class IndicadorModel extends BaseModel
             if ($type === 'inteiro' && floor((float)$data['valor']) !== (float)$data['valor']) {
                 $errors['valor'] = I18n::t('indicadores.validation.invalid_integer');
             }
-            if ($type === 'percentual' && (float)$data['valor'] > 100) {
-                $errors['valor'] = I18n::t('indicadores.validation.invalid_percentage');
-            }
         }
 
         $minProvided = $data['valor_minimo'] !== null;
@@ -457,9 +454,6 @@ class IndicadorModel extends BaseModel
             if (($unit['tipo'] ?? '') === 'inteiro' && floor((float)$normalized) !== (float)$normalized) {
                 return false;
             }
-            if (($unit['tipo'] ?? '') === 'percentual' && (float)$normalized > 100) {
-                return false;
-            }
         }
         $params = ['id' => $id, 'valor' => $normalized, 'updated_by' => $userId > 0 ? $userId : null];
         $scope = $this->tenantInCondition('cliente_id', $params, 'indv');
@@ -644,42 +638,7 @@ class IndicadorModel extends BaseModel
 
     private function normalizeDecimal($value): ?float
     {
-        if ($value === null || $value === '') {
-            return null;
-        }
-        if (is_string($value)) {
-            $raw = trim($value);
-            $raw = str_replace(['R$', ' '], '', $raw);
-            if ($raw === '' || preg_match('/[^0-9,\\.\\-]/', $raw)) {
-                return null;
-            }
-            if (substr_count($raw, ',') > 1) {
-                return null;
-            }
-            if (str_contains($raw, ',')) {
-                [$intPart, $decPart] = array_pad(explode(',', $raw, 2), 2, '');
-                if ($decPart === '' || preg_match('/[^0-9]/', $decPart)) {
-                    return null;
-                }
-                if ($intPart === '' || preg_match('/[^0-9\\.\\-]/', $intPart)) {
-                    return null;
-                }
-                $intPart = str_replace('.', '', $intPart);
-                $raw = $intPart . '.' . $decPart;
-            } else {
-                if (str_contains($raw, '.')) {
-                    if (!preg_match('/^-?\d{1,3}(\.\d{3})+$/', $raw)) {
-                        return null;
-                    }
-                    $raw = str_replace('.', '', $raw);
-                }
-            }
-            $value = $raw;
-        }
-        if (!is_numeric($value)) {
-            return null;
-        }
-        return round((float)$value, 4);
+        return \App\Core\DecimalParser::parse($value);
     }
 
     /** @return array<string,bool> */

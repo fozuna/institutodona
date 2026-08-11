@@ -178,11 +178,23 @@ $zeroReferenceErrors = $indicadores->validate(array_merge($baseData, [
 ]));
 assert_true(isset($zeroReferenceErrors['valor']), 'Bloqueia meta com valor zero');
 
+// Mudanca de regra de negocio (2026-08-11): indicadores percentuais deixaram de
+// ter teto fixo em 100 tanto no cadastro quanto no lancamento de resultado (ver
+// item 06 do backlog de auditoria). valor_maximo/valor_minimo continuam servindo
+// apenas para o badge visual de status de controle, nunca como limite de validacao.
 $percentageErrors = $indicadores->validate(array_merge($baseData, [
     'indicador' => 'Indicador Percentual ' . $suffix,
     'valor' => '110',
 ]));
-assert_true(isset($percentageErrors['valor']), 'Restringe percentual apenas ao teto de 100');
+assert_true($percentageErrors === [], 'Permite cadastrar meta percentual acima de 100');
+
+$percentageAboveMaxErrors = $indicadores->validate(array_merge($baseData, [
+    'indicador' => 'Indicador Percentual Acima do Maximo ' . $suffix,
+    'valor' => '150,5',
+    'valor_minimo' => '70',
+    'valor_maximo' => '95',
+]));
+assert_true($percentageAboveMaxErrors === [], 'Permite meta percentual acima do valor_maximo configurado (banda e so visual)');
 
 $integerErrors = $indicadores->validate(array_merge($baseData, [
     'indicador' => 'Indicador Inteiro ' . $suffix,
@@ -219,7 +231,11 @@ assert_true($indicadorEventos->updateAchievedValue((int)$createdEvents[2]['id'],
 $updatedEventComma = $indicadorEventos->find((int)$createdEvents[2]['id']);
 assert_true($updatedEventComma !== null && abs((float)($updatedEventComma['valor_atingido'] ?? 0) - 68.5) < 0.0001, 'Persistiu valor com vírgula corretamente');
 assert_true(!$indicadorEventos->updateAchievedValue((int)$createdEvents[3]['id'], '10,0,0', 1, 'Inválido'), 'Rejeita formato com múltiplas vírgulas');
-assert_true(!$indicadorEventos->updateAchievedValue((int)$createdEvents[4]['id'], '110', 1, 'Percentual inválido'), 'Rejeita percentual acima de 100 no evento');
+// Mudanca de regra de negocio (2026-08-11): ver comentario acima sobre o item 06.
+assert_true($indicadorEventos->updateAchievedValue((int)$createdEvents[4]['id'], '110', 1, 'Percentual acima de 100'), 'Permite lançar percentual acima de 100 no evento');
+$eventoAcimaDeCem = $indicadorEventos->find((int)$createdEvents[4]['id']);
+assert_true(($eventoAcimaDeCem['meta_status_key'] ?? '') === 'atingida', 'Percentual acima de 100 (meta 85) fica classificado como meta atingida');
+assert_true(abs((float)($eventoAcimaDeCem['percentual_cumprimento'] ?? 0) - 129.41) < 0.01, 'Calcula cumprimento acima de 100% corretamente (110/85 = 129,41%)');
 assert_true($indicadorEventos->updateAchievedValue((int)$createdEvents[5]['id'], '-10', 1, 'Percentual negativo'), 'Aceita valor negativo no evento quando o valor medido assim exigir');
 assert_true(($indicadorEventos->find((int)$createdEvents[5]['id'])['meta_status_key'] ?? '') === 'nao_atingida', 'Valor negativo no evento continua classificado como abaixo do mínimo');
 assert_true($indicadorEventos->updateAchievedValue((int)$createdEvents[1]['id'], '85', 1, 'Meta atendida'), 'Atualiza evento com meta atingida');

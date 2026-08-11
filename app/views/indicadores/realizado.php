@@ -56,7 +56,7 @@ $renderTable = static function (array $items, int $cliente, int $indicadorId, st
                       <input type="hidden" name="periodo_fim" value="<?= htmlspecialchars($periodoFim) ?>" />
                       <input type="text"
                              inputmode="decimal"
-                             pattern="^-?(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d{1,4})?$"
+                             pattern="^-?(?:\d+(?:\.\d{3})*(?:,\d{1,4})?|\d+\.\d{1,4})$"
                              name="valor"
                              data-indicador-decimal
                              data-unidade-tipo="<?= htmlspecialchars((string)($item['unidade_tipo'] ?? '')) ?>"
@@ -165,33 +165,12 @@ $renderTable = static function (array $items, int $cliente, int $indicadorId, st
 </div>
 <script>
   (function () {
-    const decimalRe = /^-?(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d{1,4})?$/;
-
-    function toPtBrDecimal(value) {
-      let raw = String(value || '').trim();
-      if (!raw) return '';
-      raw = raw.replace(/\s+/g, '').replace(/R\$/g, '');
-      raw = raw.replace(/[^0-9,.\-]/g, '');
-      const parts = raw.split(',');
-      if (parts.length > 2) return '';
-      if (parts.length === 2) {
-        raw = parts[0].replace(/\./g, '') + ',' + parts[1];
-      }
-      if (!decimalRe.test(raw)) return '';
-      if (raw.includes(',') && raw.includes('.')) raw = raw.replace(/\./g, '');
-      raw = raw.replace(',', '.');
-      const numeric = Number(raw);
-      if (!Number.isFinite(numeric)) return '';
-      return numeric.toFixed(2).replace('.', ',');
-    }
-
-    function normalizeDecimal(value) {
-      return toPtBrDecimal(value);
-    }
-
     document.querySelectorAll('[data-indicador-decimal]').forEach((input) => {
       input.addEventListener('blur', function () {
-        this.value = normalizeDecimal(this.value);
+        // So reformata quando o valor digitado e valido; entrada invalida
+        // permanece visivel para o usuario corrigir (nao e apagada em silencio).
+        const result = window.IndicadorDecimal.parse(this.value);
+        if (result.ok) this.value = result.formatted;
       });
       input.addEventListener('input', function () {
         const raw = String(this.value || '').replace(/[^0-9,.\-]/g, '');
@@ -199,34 +178,21 @@ $renderTable = static function (array $items, int $cliente, int $indicadorId, st
         this.value = parts.length > 2 ? (parts[0] + ',' + parts.slice(1).join('')) : raw;
       });
       input.form?.addEventListener('submit', function (e) {
-        const normalized = normalizeDecimal(input.value);
-        if (!normalized) {
+        const result = window.IndicadorDecimal.parse(input.value);
+        if (!result.ok) {
           if (e && typeof e.preventDefault === 'function') e.preventDefault();
-          alert('Informe um valor válido. Use apenas números e, se necessário, uma vírgula para decimais.');
+          alert('Informe um valor válido. Use apenas números e, se necessário, vírgula ou ponto para decimais.');
           input.focus();
           return;
         }
         const tipo = String(input.getAttribute('data-unidade-tipo') || '').toLowerCase();
-        const numeric = Number(normalized.replace(',', '.'));
-        if (!Number.isFinite(numeric)) {
-          if (e && typeof e.preventDefault === 'function') e.preventDefault();
-          alert('Informe um valor válido.');
-          input.focus();
-          return;
-        }
-        if (tipo === 'inteiro' && Math.floor(numeric) !== numeric) {
+        if (tipo === 'inteiro' && Math.floor(result.numeric) !== result.numeric) {
           if (e && typeof e.preventDefault === 'function') e.preventDefault();
           alert('Este indicador aceita apenas números inteiros.');
           input.focus();
           return;
         }
-        if (tipo === 'percentual' && numeric > 100) {
-          if (e && typeof e.preventDefault === 'function') e.preventDefault();
-          alert('Percentual deve ser menor ou igual a 100.');
-          input.focus();
-          return;
-        }
-        input.value = normalized;
+        input.value = result.formatted;
       });
     });
 

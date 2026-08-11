@@ -539,3 +539,61 @@ document.addEventListener('DOMContentLoaded', function () {
   nav.init();
   window.AppNav = nav;
 });
+
+// Normalizacao/parsing de numeros decimais digitados pelo usuario (telas de
+// Indicadores). Unico ponto de verdade no frontend para este formato,
+// evitando reimplementacoes divergentes da mesma regra em cada view.
+// Regra (deve espelhar App\Core\DecimalParser no backend):
+// - virgula presente (no maximo uma): e o separador decimal; pontos antes
+//   dela sao separador de milhar e sao removidos (ex.: "1.234,56" -> 1234.56)
+// - sem virgula, um unico ponto: o ponto e o separador decimal
+//   (ex.: "97.5" -> 97.5, "1234.56" -> 1234.56)
+// - sem virgula, dois ou mais pontos: todos os pontos sao separador de
+//   milhar, exigindo agrupamento valido de 3 digitos (ex.: "12.345.678")
+// - qualquer outra combinacao e invalida (retorna ok:false), nunca vira 0
+(function () {
+  function parse(value) {
+    let raw = String(value == null ? '' : value).trim();
+    if (!raw) return { ok: false };
+    raw = raw.replace(/\s+/g, '').replace(/R\$/g, '');
+    if (/[^0-9,.\-]/.test(raw)) return { ok: false };
+
+    let negative = false;
+    if (raw.charAt(0) === '-') {
+      negative = true;
+      raw = raw.slice(1);
+    }
+    if (raw === '' || raw.indexOf('-') !== -1) return { ok: false };
+
+    const commaCount = (raw.match(/,/g) || []).length;
+    if (commaCount > 1) return { ok: false };
+
+    let normalized;
+    if (commaCount === 1) {
+      const parts = raw.split(',');
+      const intPart = parts[0];
+      const decPart = parts[1];
+      if (!/^\d+$/.test(decPart)) return { ok: false };
+      if (intPart === '' || !/^\d+(\.\d{3})*$/.test(intPart)) return { ok: false };
+      normalized = intPart.replace(/\./g, '') + '.' + decPart;
+    } else {
+      const dotCount = (raw.match(/\./g) || []).length;
+      if (dotCount === 0) {
+        if (!/^\d+$/.test(raw)) return { ok: false };
+        normalized = raw;
+      } else if (dotCount === 1) {
+        if (!/^\d+\.\d+$/.test(raw)) return { ok: false };
+        normalized = raw;
+      } else {
+        if (!/^\d{1,3}(\.\d{3})+$/.test(raw)) return { ok: false };
+        normalized = raw.replace(/\./g, '');
+      }
+    }
+
+    const numeric = Number(normalized) * (negative ? -1 : 1);
+    if (!Number.isFinite(numeric)) return { ok: false };
+    return { ok: true, numeric: numeric, formatted: numeric.toFixed(2).replace('.', ',') };
+  }
+
+  window.IndicadorDecimal = { parse: parse };
+})();
