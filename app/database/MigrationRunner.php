@@ -169,8 +169,22 @@ class MigrationRunner
             throw new RuntimeException('Nao foi possivel ler ' . $version);
         }
 
+        foreach (self::parseStatements($sql) as $statement) {
+            $this->execStatement($statement);
+        }
+    }
+
+    /**
+     * Divide o conteudo de uma migration .sql em statements individuais.
+     * Metodo puro (sem I/O, sem PDO) para permitir teste isolado do parsing.
+     */
+    public static function parseStatements(string $sql): array
+    {
+        $sql = self::stripUtf8Bom($sql);
+
         $delimiter = ';';
         $buffer = '';
+        $statements = [];
         $lines = preg_split("/\r\n|\n|\r/", $sql) ?: [];
 
         foreach ($lines as $line) {
@@ -192,14 +206,30 @@ class MigrationRunner
                 if ($statement === '') {
                     continue;
                 }
-                $this->execStatement($statement);
+                $statements[] = $statement;
             }
         }
 
         $remainder = trim($buffer);
         if ($remainder !== '') {
-            $this->execStatement($remainder);
+            $statements[] = $remainder;
         }
+
+        return $statements;
+    }
+
+    /**
+     * Remove um BOM UTF-8 (EF BB BF) no inicio do conteudo, se presente.
+     * trim() nao remove esses bytes por padrao, entao um arquivo salvo com
+     * BOM faz a primeira linha (ex.: um comentario "--") deixar de ser
+     * reconhecida, quebrando o parsing do statement seguinte.
+     */
+    private static function stripUtf8Bom(string $content): string
+    {
+        if (str_starts_with($content, "\xEF\xBB\xBF")) {
+            return substr($content, 3);
+        }
+        return $content;
     }
 
     private function execStatement(string $statement): void
