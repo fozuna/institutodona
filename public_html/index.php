@@ -446,6 +446,9 @@ switch ($route) {
     case 'auditorias/finalizar':
         (new AuditoriasController())->finalizar();
         break;
+    case 'auditorias/reabrir':
+        (new AuditoriasController())->reabrir();
+        break;
     case 'auditorias/relatorio_pdf':
         (new AuditoriasController())->relatorioPdf();
         break;

@@ -267,6 +267,7 @@ class AuditoriasController extends BaseController
             'item' => $item,
             'respostas' => $respostas,
             'canManage' => $this->canManageAuditorias(),
+            'canReopen' => Auth::canReopenAuditoria((int)$item['cliente_id']),
         ]);
     }
 
@@ -327,15 +328,83 @@ class AuditoriasController extends BaseController
             ]);
             return;
         }
-        $ok = $this->auditorias->finalizarAuditoria($id, $avaliacoes, (int)($_SESSION['user']['id'] ?? 0));
+        $statusAnterior = (string)($item['status'] ?? '');
+        $userId = (int)($_SESSION['user']['id'] ?? 0);
+        $ok = $this->auditorias->finalizarAuditoria($id, $avaliacoes, $userId);
         if (!$ok) {
             $_SESSION['flash_error'] = 'Não foi possível finalizar a auditoria.';
             $this->redirect('index.php?route=auditorias/index');
             return;
         }
-        AuditLogger::log('auditoria_finalize', 'auditoria', $id, []);
+        AuditLogger::log('auditoria_finalize', 'auditoria', $id, [
+            'status_anterior' => $statusAnterior,
+            'status_novo' => 'Realizada',
+            'usuario_id' => $userId,
+        ]);
         $_SESSION['flash_success'] = 'Auditoria finalizada com sucesso.';
         $this->redirect('index.php?route=auditorias/index');
+    }
+
+    /**
+     * Reabre uma auditoria Realizada por engano (item 10, Fluxo B).
+     * Acao explicitamente separada de update()/finalizar() - nao reaproveita
+     * o fluxo generico de edicao. Somente POST; exige motivo obrigatorio.
+     */
+    public function reabrir(): void
+    {
+        $this->requireLogin();
+        $this->requireManagePermission();
+        if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo 'Requisição inválida.';
+            return;
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        $item = $this->auditorias->find($id);
+        if (!$item) {
+            $_SESSION['flash_error'] = 'Auditoria não encontrada.';
+            $this->redirect('index.php?route=auditorias/index');
+            return;
+        }
+        if (!Auth::canReopenAuditoria((int)$item['cliente_id'])) {
+            http_response_code(403);
+            echo 'Acesso negado: apenas Instituto ou Cliente Admin da própria empresa podem reabrir uma auditoria.';
+            return;
+        }
+        if ((string)($item['status'] ?? '') !== 'Realizada') {
+            $_SESSION['flash_error'] = 'Somente auditorias realizadas podem ser reabertas.';
+            $this->redirect('index.php?route=auditorias/show&id=' . $id);
+            return;
+        }
+        $motivo = trim((string)($_POST['motivo'] ?? ''));
+        if ($motivo === '' || mb_strlen($motivo) > 1000) {
+            $_SESSION['flash_error'] = 'Informe o motivo da reabertura (até 1000 caracteres).';
+            $this->redirect('index.php?route=auditorias/show&id=' . $id);
+            return;
+        }
+        $userId = (int)($_SESSION['user']['id'] ?? 0);
+        $ok = $this->auditorias->reabrirAuditoria($id, $userId, $motivo);
+        if (!$ok) {
+            $reason = (string)($this->auditorias->getLastError() ?? '');
+            $_SESSION['flash_error'] = $reason === 'setor_metricas_inconsistente'
+                ? 'Não foi possível reabrir: inconsistência detectada nas métricas do setor. Nenhuma alteração foi aplicada.'
+                : 'Não foi possível reabrir a auditoria.';
+            AuditLogger::log('auditoria_reopen_failed', 'auditoria', $id, [
+                'motivo' => $motivo,
+                'usuario_id' => $userId,
+                'erro' => $reason,
+            ]);
+            $this->redirect('index.php?route=auditorias/show&id=' . $id);
+            return;
+        }
+        AuditLogger::log('auditoria_reopen', 'auditoria', $id, [
+            'status_anterior' => 'Realizada',
+            'status_novo' => 'Em Auditoria',
+            'usuario_id' => $userId,
+            'motivo' => $motivo,
+        ]);
+        $_SESSION['flash_success'] = 'Auditoria reaberta com sucesso.';
+        $this->redirect('index.php?route=auditorias/show&id=' . $id);
     }
 
     public function relatorioPdf(): void

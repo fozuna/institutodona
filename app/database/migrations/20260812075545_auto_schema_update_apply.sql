@@ -1,0 +1,12 @@
+-- 20260812075545_auto_schema_update_apply.sql
+-- Nenhuma alteracao de schema real: o hook de pre-commit dispara sempre que
+-- um arquivo app/models/*Model.php e alterado, mesmo sem DDL (heuristica
+-- ampla, sem diff real de schema). Esta alteracao tocou AuditoriaModel.php
+-- (novo metodo reabrirAuditoria() + parametro opcional em
+-- saveHistorySnapshot()) e SetorMetricaModel.php (memoizacao de ensure() +
+-- novo metodo estornarConclusao()/ensureSchema()) para implementar a
+-- reabertura segura de auditorias finalizadas por engano (item 10, Fluxo B).
+-- Nenhuma tabela ou coluna nova, alterada ou removida; reaproveita
+-- integralmente as estruturas existentes (status, finalized_at nullable,
+-- auditoria_historico, setor_metricas).
+SELECT 1;

@@ -170,4 +170,32 @@ class Auth
         // fica liberada para instituto e perfis de cliente.
         return self::isInstituto() || self::isCliente();
     }
+
+    /**
+     * Permissao dedicada para reabrir uma auditoria finalizada por engano
+     * (item 10, Fluxo B). Deliberadamente NAO reaproveita a capacidade
+     * generica de "write" do modulo operacional (que hoje tambem inclui o
+     * perfil "cliente" comum) nem AccessControl::WRITE_ACTIONS - reabertura
+     * e mais sensivel que uma edicao comum (reverte um marco de negocio ja
+     * consolidado, com efeito colateral em metricas de setor) e a regra
+     * aprovada e mais restrita: só Instituto, ou Cliente Admin dentro do
+     * proprio tenant.
+     *
+     * Nota: propositalmente NAO usa self::isClienteAdmin() - esse metodo
+     * (linha ~99) checa a mesma constante ADMIN_CLIENT_ROLES = ['cliente',
+     * 'cliente_admin'] usada por isCliente(), ou seja, hoje tambem retorna
+     * true para o perfil "cliente" comum. Usar isClienteAdmin() aqui
+     * permitiria indevidamente que "cliente" reabrisse auditorias, o que
+     * contraria a regra aprovada. Comparamos o tipo_acesso exato.
+     */
+    public static function canReopenAuditoria(int $auditoriaClienteId): bool
+    {
+        if (self::isInstituto()) {
+            return true;
+        }
+        if ((self::user()['tipo_acesso'] ?? null) !== 'cliente_admin') {
+            return false;
+        }
+        return self::canAccessCliente($auditoriaClienteId);
+    }
 }

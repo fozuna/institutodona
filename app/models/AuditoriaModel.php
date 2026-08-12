@@ -1174,6 +1174,11 @@ class AuditoriaModel extends BaseModel
         if (!$auditoria || !in_array((string)$auditoria['status'], ['Agendada', 'Em Auditoria'], true)) {
             return false;
         }
+        // Garante o schema de setor_metricas ANTES de abrir a transacao: um
+        // CREATE TABLE IF NOT EXISTS dentro da transacao causaria commit
+        // implicito no MySQL/MariaDB na primeira chamada de um processo novo
+        // (ver SetorMetricaModel::ensureSchema()).
+        (new SetorMetricaModel())->ensureSchema();
         try {
             if (!$this->db->beginTransaction()) {
                 return false;
@@ -1182,6 +1187,11 @@ class AuditoriaModel extends BaseModel
             return false;
         }
         try {
+            $this->saveHistorySnapshot($auditoriaId, $userId, [
+                'tipo' => 'finalizacao',
+                'status_anterior' => (string)$auditoria['status'],
+                'status_novo' => 'Realizada',
+            ]);
             $this->persistAvaliacoesNoTx($auditoriaId, $avaliacoes, $userId);
             $this->db->prepare("UPDATE auditorias SET status = 'Em Auditoria', updated_by = :updated_by, lock_version = lock_version + 1 WHERE id = :id AND status = 'Agendada'")
                 ->execute(['id' => $auditoriaId, 'updated_by' => $userId]);
@@ -1230,6 +1240,87 @@ class AuditoriaModel extends BaseModel
             if ($check && ($check['status'] ?? '') === 'Realizada' && !empty($check['realizada_at'])) {
                 return true;
             }
+            return false;
+        }
+    }
+
+    /**
+     * Reabre uma auditoria Realizada por engano (item 10, Fluxo B). Operacao
+     * atomica: destrava respostas, volta o status para 'Em Auditoria' e
+     * estorna de setor_metricas exatamente a contribuicao somada na
+     * finalizacao original - nessa ordem (estorno ANTES de destravar
+     * respostas), para nunca calcular o estorno sobre dados ja alterados.
+     *
+     * $this->lastError e populado em caso de falha:
+     * 'not_found' | 'invalid_status' | 'transaction' | 'setor_metricas_inconsistente' | 'exception'
+     */
+    public function reabrirAuditoria(int $auditoriaId, int $userId, string $motivo): bool
+    {
+        $this->ensureTables();
+        $this->lastError = null;
+        $auditoria = $this->find($auditoriaId);
+        if (!$auditoria) {
+            $this->lastError = 'not_found';
+            return false;
+        }
+        if ((string)($auditoria['status'] ?? '') !== 'Realizada') {
+            $this->lastError = 'invalid_status';
+            return false;
+        }
+        // Mesmo motivo do pre-aquecimento em finalizarAuditoria(): evita que o
+        // primeiro CREATE TABLE IF NOT EXISTS de setor_metricas num processo
+        // novo cause commit implicito dentro desta transacao.
+        (new SetorMetricaModel())->ensureSchema();
+        try {
+            if (!$this->db->beginTransaction()) {
+                $this->lastError = 'transaction';
+                return false;
+            }
+        } catch (\Throwable $e) {
+            $this->lastError = 'transaction';
+            return false;
+        }
+        try {
+            // Respostas ainda travadas (finalized_at continua preenchido) - os stats
+            // calculados agora sao exatamente os mesmos usados na finalizacao original.
+            $stats = $this->computeConformidadeStats($auditoriaId);
+            $anoMes = !empty($auditoria['realizada_at']) ? substr((string)$auditoria['realizada_at'], 0, 7) : date('Y-m');
+
+            $estornado = (new SetorMetricaModel())->estornarConclusao((int)$auditoria['setor_id'], $anoMes, $stats);
+            if (!$estornado) {
+                $this->lastError = 'setor_metricas_inconsistente';
+                $this->safeRollback();
+                return false;
+            }
+
+            $this->saveHistorySnapshot($auditoriaId, $userId, [
+                'tipo' => 'reabertura',
+                'status_anterior' => 'Realizada',
+                'status_novo' => 'Em Auditoria',
+                'motivo' => $motivo,
+            ]);
+
+            $this->db->prepare('UPDATE auditoria_avaliacoes SET finalized_at = NULL WHERE auditoria_id = :id')
+                ->execute(['id' => $auditoriaId]);
+
+            // realizada_at precisa voltar a NULL: finalizarAuditoria() exige
+            // "realizada_at IS NULL" para aceitar a proxima finalizacao (guarda de
+            // idempotencia contra duplo clique) - sem isso, refinalizar falharia.
+            $upd = $this->db->prepare("UPDATE auditorias
+                SET status = 'Em Auditoria', realizada_at = NULL, updated_by = :updated_by, lock_version = lock_version + 1
+                WHERE id = :id AND deleted_at IS NULL AND status = 'Realizada'");
+            $ok = $upd->execute(['id' => $auditoriaId, 'updated_by' => $userId]) && $upd->rowCount() > 0;
+            if (!$ok) {
+                $this->lastError = 'concurrency_conflict';
+                $this->safeRollback();
+                return false;
+            }
+
+            $this->db->commit();
+            return true;
+        } catch (\Throwable $e) {
+            $this->lastError = 'exception';
+            $this->safeRollback();
             return false;
         }
     }
@@ -1499,11 +1590,19 @@ class AuditoriaModel extends BaseModel
         return $items;
     }
 
-    public function saveHistorySnapshot(int $auditoriaId, int $userId): bool
+    /**
+     * @param array $evento Metadados opcionais da transicao que motivou o snapshot
+     *   (ex.: ['tipo' => 'reabertura', 'status_anterior' => 'Realizada', 'status_novo' => 'Em Auditoria', 'motivo' => '...']).
+     *   Mesclado dentro do JSON de dados_anteriores sob a chave "evento" - nao exige coluna nova.
+     */
+    public function saveHistorySnapshot(int $auditoriaId, int $userId, array $evento = []): bool
     {
         $snapshot = $this->snapshotForHistory($auditoriaId);
         if ($snapshot === null) {
             return false;
+        }
+        if (!empty($evento)) {
+            $snapshot['evento'] = $evento;
         }
         $stmt = $this->db->prepare('INSERT INTO auditoria_historico (auditoria_id, dados_anteriores, usuario_id) VALUES (:auditoria_id, :dados_anteriores, :usuario_id)');
         return $stmt->execute([

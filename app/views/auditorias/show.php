@@ -1,4 +1,4 @@
-<?php use App\Core\DateHelper; /** @var array $item */ /** @var array $respostas */ /** @var bool $canManage */ ?>
+<?php use App\Core\DateHelper; use App\Core\Security; /** @var array $item */ /** @var array $respostas */ /** @var bool $canManage */ /** @var bool $canReopen */ ?>
 <div class="p-6 max-w-6xl">
     <div class="flex items-center justify-between mb-4">
         <div>
@@ -12,6 +12,9 @@
             <?php endif; ?>
             <?php if (!empty($canManage) && (($item['status'] ?? '') !== 'Realizada')): ?>
                 <a href="index.php?route=auditorias/auditar&id=<?= (int)$item['id'] ?>" class="px-4 py-2 rounded bg-brand-red text-white">Auditar</a>
+            <?php endif; ?>
+            <?php if (!empty($canReopen) && (($item['status'] ?? '') === 'Realizada')): ?>
+                <button type="button" id="btnOpenReabrir" class="px-4 py-2 rounded bg-gray-700 text-white">Reabrir auditoria</button>
             <?php endif; ?>
             <a href="index.php?route=auditorias/relatorio_pdf&id=<?= (int)$item['id'] ?>" class="px-4 py-2 rounded bg-brand-pink text-white" target="_blank">PDF</a>
         </div>
@@ -87,6 +90,46 @@
         <?php endforeach; ?>
     </div>
 </div>
+<?php if (!empty($canReopen) && (($item['status'] ?? '') === 'Realizada')): ?>
+<div id="modalReabrir" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded shadow p-6 w-full max-w-md">
+        <h2 class="text-lg font-semibold mb-3">Reabrir auditoria</h2>
+        <p class="text-sm text-gray-700 mb-4">Esta auditoria voltará para "Em Auditoria" e poderá ser editada novamente.</p>
+        <form method="post" action="index.php?route=auditorias/reabrir" class="space-y-3">
+            <input type="hidden" name="csrf" value="<?= Security::csrfToken() ?>" />
+            <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
+            <div>
+                <label class="block text-sm" for="reabrirMotivo">Motivo da reabertura</label>
+                <textarea id="reabrirMotivo" name="motivo" class="border rounded p-2 w-full" rows="3" maxlength="1000" required></textarea>
+            </div>
+            <div class="flex items-center justify-end gap-2">
+                <button type="button" id="cancelReabrir" class="px-3 py-2 rounded bg-gray-200 text-brand-brown">Cancelar</button>
+                <button type="submit" class="px-3 py-2 rounded bg-brand-red text-white">Reabrir auditoria</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+    (function(){
+        const btnOpen = document.getElementById('btnOpenReabrir');
+        const modal = document.getElementById('modalReabrir');
+        const btnCancel = document.getElementById('cancelReabrir');
+        if (!btnOpen || !modal) return;
+        btnOpen.addEventListener('click', () => {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            const textarea = document.getElementById('reabrirMotivo');
+            if (textarea) textarea.focus();
+        });
+        if (btnCancel) {
+            btnCancel.addEventListener('click', () => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            });
+        }
+    })();
+</script>
+<?php endif; ?>
 <?php if (($item['status'] ?? '') === 'Realizada'): ?>
 <div id="imgOverlay" class="fixed inset-0 bg-black/85 hidden items-center justify-center z-[60]" role="dialog" aria-modal="true" aria-label="Visualizador de anexo">
     <button type="button" id="ovClose" class="absolute top-4 right-4 px-3 py-2 rounded bg-white/20 text-white">Fechar ✕</button>

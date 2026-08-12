@@ -3,8 +3,33 @@ namespace App\Models;
 
 class SetorMetricaModel extends BaseModel
 {
+    // Memoização por processo, no mesmo padrão de AuditoriaModel::$tablesEnsured
+    // (AuditoriaModel.php:8). Sem isso, cada chamada a ensure() reexecuta
+    // "CREATE TABLE IF NOT EXISTS", e esse DDL causa COMMIT IMPLICITO no
+    // MySQL/MariaDB mesmo quando a tabela ja existe - o que quebraria a
+    // atomicidade de qualquer transacao aberta pelo chamador (ex.:
+    // AuditoriaModel::reabrirAuditoria()). Descoberto e corrigido durante a
+    // implementacao do item 10 (Fluxo B - reabertura de auditoria).
+    private static bool $ensured = false;
+
+    /**
+     * Garante o schema ANTES de abrir uma transacao externa (ex.:
+     * AuditoriaModel::finalizarAuditoria()/reabrirAuditoria()). Chamar isso
+     * antes de beginTransaction() evita que o primeiro CREATE TABLE IF NOT
+     * EXISTS de um processo novo (a memoizacao de self::$ensured so ajuda em
+     * chamadas SEGUINTES no mesmo processo) dispare o commit implicito do
+     * DDL no meio da transacao do chamador.
+     */
+    public function ensureSchema(): void
+    {
+        $this->ensure();
+    }
+
     private function ensure(): void
     {
+        if (self::$ensured) {
+            return;
+        }
         try {
             $this->db->exec("CREATE TABLE IF NOT EXISTS setor_metricas (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -17,6 +42,7 @@ class SetorMetricaModel extends BaseModel
                 updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 UNIQUE KEY uq_setor_ano_mes (setor_id, ano_mes)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            self::$ensured = true;
         } catch (\PDOException $e) {}
     }
 
@@ -39,6 +65,51 @@ class SetorMetricaModel extends BaseModel
             'tv' => (int)($stats['validas'] ?? 0),
             'tc' => (int)($stats['conforme'] ?? 0),
             'pct' => (float)($stats['pct'] ?? 0.0),
+        ]);
+    }
+
+    /**
+     * Estorna (subtrai) de setor_metricas exatamente a contribuicao que uma
+     * finalizacao de auditoria somou anteriormente via registrarConclusao(),
+     * usado pela reabertura de auditoria (item 10 - Fluxo B) para que
+     * finalizar -> reabrir -> finalizar de novo nao duplique os totais do
+     * setor. Deve ser chamado dentro da MESMA transacao do chamador (a
+     * conexao PDO e compartilhada via BaseModel/Database::getConnection()).
+     *
+     * SELECT ... FOR UPDATE trava a linha para leitura consistente dentro da
+     * transacao. Se a linha nao existir, ou se o estorno tornaria algum
+     * acumulador negativo (sinal de inconsistencia - ex.: estorno tentado
+     * duas vezes, ou mes diferente do que foi de fato incrementado), retorna
+     * false SEM aplicar nenhuma mudanca; o chamador deve fazer ROLLBACK da
+     * transacao inteira em vez de tentar "corrigir" silenciosamente com zero.
+     */
+    public function estornarConclusao(int $setorId, string $anoMes, array $stats): bool
+    {
+        $this->ensure();
+        $tv = (int)($stats['validas'] ?? 0);
+        $tc = (int)($stats['conforme'] ?? 0);
+
+        $sel = $this->db->prepare('SELECT total_validas, total_conforme FROM setor_metricas WHERE setor_id = :sid AND ano_mes = :am FOR UPDATE');
+        $sel->execute(['sid' => $setorId, 'am' => $anoMes]);
+        $row = $sel->fetch();
+        if (!$row) {
+            return false;
+        }
+
+        $novoValidas = (int)$row['total_validas'] - $tv;
+        $novoConforme = (int)$row['total_conforme'] - $tc;
+        if ($novoValidas < 0 || $novoConforme < 0) {
+            return false;
+        }
+
+        $novoPct = $novoValidas > 0 ? round($novoConforme / $novoValidas * 100, 2) : 0.00;
+        $upd = $this->db->prepare('UPDATE setor_metricas SET total_validas = :tv, total_conforme = :tc, pct = :pct WHERE setor_id = :sid AND ano_mes = :am');
+        return $upd->execute([
+            'tv' => $novoValidas,
+            'tc' => $novoConforme,
+            'pct' => $novoPct,
+            'sid' => $setorId,
+            'am' => $anoMes,
         ]);
     }
 
