@@ -55,6 +55,23 @@ class ManuaisController extends BaseController
             }
         }
 
+        $canManageManuais = ManualModel::canManage();
+        $portalLinks = [];
+        if ($empresaId > 0 && $canManageManuais) {
+            foreach ($this->portalTokens->listByEmpresa($empresaId) as $row) {
+                $expiraEm = $row['expira_em'] ?? null;
+                $expirado = !empty($expiraEm) && strtotime((string)$expiraEm) < time();
+                $ativo = (int)($row['ativo'] ?? 0) === 1 && !$expirado;
+                $portalLinks[] = [
+                    'id' => (int)$row['id'],
+                    'link' => $this->buildPortalLinkForToken($row),
+                    'ativo' => $ativo,
+                    'status_label' => $ativo ? 'Ativo' : (((int)($row['ativo'] ?? 0) === 0) ? 'Revogado' : 'Expirado'),
+                    'created_at' => $row['created_at'] ?? '',
+                ];
+            }
+        }
+
         $this->render('manuais/index', [
             'items' => $items,
             'clientes' => $clientes,
@@ -64,14 +81,9 @@ class ManuaisController extends BaseController
             'searchNome' => $nome,
             'selectedSortCol' => $sortCol,
             'selectedSortDir' => $sortDir,
-            'canManageManuais' => ManualModel::canManage(),
+            'canManageManuais' => $canManageManuais,
             'canDeleteManuais' => ManualModel::canDelete(),
-            'portalLink' => $empresaId > 0 && ManualModel::canManage() && !empty($_GET['portal_token'])
-                ? $this->buildPortalLink((string)$_GET['portal_token'], [
-                    'departamento_id' => $departamentoId > 0 ? $departamentoId : null,
-                    'q' => $nome !== '' ? $nome : null,
-                ])
-                : '',
+            'portalLinks' => $portalLinks,
         ]);
     }
 
@@ -739,7 +751,9 @@ class ManuaisController extends BaseController
             'q' => $q,
         ]);
         $scopeIds = [$empresaId];
-        $expiraEm = date('Y-m-d H:i:s', strtotime('+30 days'));
+        // Link permanente por empresa: sem expiracao automatica. So deixa de funcionar se
+        // for revogado explicitamente (ver revokePortalLink()).
+        $expiraEm = null;
         $token = $this->portalTokens->issue($empresaId, $expiraEm, $scopeIds, $filters);
         AuditLogger::log('manual_portal_token_issue', 'manual_portal', null, [
             'empresa_id' => $empresaId,
@@ -759,6 +773,40 @@ class ManuaisController extends BaseController
             $redirectParams['nome'] = $q;
         }
         header('Location: index.php?' . http_build_query($redirectParams));
+    }
+
+    public function revokePortalLink(): void
+    {
+        $this->requireLogin();
+        if (!ManualModel::canManage()) {
+            http_response_code(403);
+            echo 'Sem permissão.';
+            return;
+        }
+        $csrf = $_POST['csrf'] ?? null;
+        if (!Security::verifyCsrf($csrf)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+        $empresaId = (int)($this->resolveScopedClienteId((int)($_POST['empresa_id'] ?? 0) ?: null) ?? 0);
+        $tokenId = (int)($_POST['token_id'] ?? 0);
+        if ($empresaId <= 0 || $tokenId <= 0) {
+            http_response_code(400);
+            echo 'Requisição inválida.';
+            return;
+        }
+        $revoked = $this->portalTokens->revoke($tokenId, $empresaId);
+        AuditLogger::log('manual_portal_token_revoke', 'manual_portal', null, [
+            'empresa_id' => $empresaId,
+            'token_id' => $tokenId,
+            'usuario_id' => (int)($_SESSION['user']['id'] ?? 0),
+            'resultado' => $revoked ? 'revogado' : 'nao_encontrado_ou_ja_revogado',
+        ]);
+        $_SESSION[$revoked ? 'flash_success' : 'flash_error'] = $revoked
+            ? 'Link do portal revogado com sucesso.'
+            : 'Link não encontrado ou já estava revogado.';
+        header('Location: index.php?route=manuais/index&empresa_id=' . $empresaId);
     }
 
     private function startPortalSession(string $token): ?array
@@ -842,6 +890,27 @@ class ManuaisController extends BaseController
         $session['expires_at'] = time() + 1800;
         $_SESSION['manual_portal'] = $session;
         return $session;
+    }
+
+    /**
+     * Reconstroi a URL de um token ja emitido usando os filtros que ficaram
+     * gravados nele (filters_json), nao os filtros atualmente selecionados na
+     * tela - o portal() compara a querystring recebida com o que foi travado
+     * no token e rejeita o acesso se nao baterem.
+     */
+    private function buildPortalLinkForToken(array $row): string
+    {
+        $filters = [];
+        if (!empty($row['filters_json'])) {
+            $decoded = json_decode((string)$row['filters_json'], true);
+            if (is_array($decoded)) {
+                $filters = $this->normalizePortalFilters($decoded);
+            }
+        }
+        return $this->buildPortalLink((string)$row['token'], [
+            'departamento_id' => $filters['departamento_id'] ?? null,
+            'q' => ($filters['q'] ?? '') !== '' ? $filters['q'] : null,
+        ]);
     }
 
     private function buildPortalLink(string $token, array $query = []): string

@@ -2,7 +2,7 @@
 <?php /** @var int $selectedEmpresa */ /** @var int $selectedDepartamento */ /** @var string $searchNome */ ?>
 <?php /** @var bool $canManageManuais */ ?>
 <?php /** @var bool $canDeleteManuais */ ?>
-<?php /** @var string $portalLink */ ?>
+<?php /** @var array $portalLinks */ ?>
 <?php /** @var string $selectedSortCol */ ?>
 <?php /** @var string $selectedSortDir */ ?>
 <?php $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/\\'); if ($basePath === '.' || $basePath === '/' || $basePath === '\\') { $basePath = ''; } ?>
@@ -39,7 +39,7 @@ $hasActiveFilters = ($selectedEmpresa > 0) || ($selectedDepartamento > 0) || ($s
       <div class="flex items-center justify-between gap-3">
         <div>
           <div class="text-sm font-semibold text-slate-900">Portal público da biblioteca</div>
-          <div class="text-xs text-slate-500 mt-0.5">Gere um link seguro para o cliente acessar somente os itens autorizados.</div>
+          <div class="text-xs text-slate-500 mt-0.5">Gere um link permanente para o cliente acessar somente os itens autorizados. O link continua funcionando até ser revogado.</div>
         </div>
         <form method="post" action="index.php?route=manuais/generatePortalLink">
           <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
@@ -52,16 +52,37 @@ $hasActiveFilters = ($selectedEmpresa > 0) || ($selectedDepartamento > 0) || ($s
           </button>
         </form>
       </div>
-      <?php if (!empty($portalLink)): ?>
-        <div class="mt-3">
-          <label class="mb-1 block text-xs font-medium text-slate-600">Link</label>
-          <div class="flex items-center gap-2">
-            <input type="text" readonly class="h-9 rounded-md border border-slate-300 px-3 text-sm w-full" id="portalLinkInput" value="<?= htmlspecialchars($portalLink) ?>" />
-            <button type="button" class="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 whitespace-nowrap" id="copyPortalLinkBtn">
-              <span data-feather="copy" class="h-4 w-4"></span>
-              <span>Copiar</span>
-            </button>
-          </div>
+      <?php if (!empty($portalLinks)): ?>
+        <div class="mt-3 divide-y divide-slate-100 border-t border-slate-100">
+          <?php foreach ($portalLinks as $pt): ?>
+            <div class="flex flex-col gap-2 py-2 sm:flex-row sm:items-center sm:justify-between">
+              <div class="flex flex-1 items-center gap-2 min-w-0">
+                <input type="text" readonly
+                       class="portal-link-input h-9 min-w-0 flex-1 rounded-md border border-slate-300 px-3 text-sm <?= $pt['ativo'] ? '' : 'text-slate-400 bg-slate-50' ?>"
+                       value="<?= htmlspecialchars($pt['link']) ?>" />
+                <button type="button" class="copy-portal-link-btn inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 whitespace-nowrap" title="Copiar">
+                  <span data-feather="copy" class="h-4 w-4"></span>
+                </button>
+              </div>
+              <div class="flex shrink-0 items-center gap-3 text-xs text-slate-500">
+                <span class="inline-flex items-center rounded-full px-2 py-0.5 font-medium <?= $pt['ativo'] ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600' ?>">
+                  <?= htmlspecialchars($pt['status_label']) ?>
+                </span>
+                <span><?= htmlspecialchars((string)$pt['created_at']) ?></span>
+                <?php if ($pt['ativo']): ?>
+                  <form method="post" action="index.php?route=manuais/revokePortalLink" onsubmit="return confirm('Revogar este link? Ele deixará de funcionar imediatamente.');">
+                    <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+                    <input type="hidden" name="empresa_id" value="<?= (int)$selectedEmpresa ?>" />
+                    <input type="hidden" name="token_id" value="<?= (int)$pt['id'] ?>" />
+                    <button type="submit" class="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-red-200 bg-white px-2 text-xs font-medium text-red-600 hover:bg-red-50 whitespace-nowrap">
+                      <span data-feather="slash" class="h-3.5 w-3.5"></span>
+                      <span>Revogar</span>
+                    </button>
+                  </form>
+                <?php endif; ?>
+              </div>
+            </div>
+          <?php endforeach; ?>
         </div>
       <?php endif; ?>
     </div>
@@ -231,18 +252,19 @@ $hasActiveFilters = ($selectedEmpresa > 0) || ($selectedDepartamento > 0) || ($s
     const byId = {};
     (clientesMap || []).forEach(function(c) { byId[String(c.id)] = c; });
 
-    var copyBtn = document.getElementById('copyPortalLinkBtn');
-    var linkInput = document.getElementById('portalLinkInput');
-    if (copyBtn && linkInput && navigator && navigator.clipboard) {
+    document.querySelectorAll('.copy-portal-link-btn').forEach(function(copyBtn) {
+      var wrap = copyBtn.closest('.flex');
+      var linkInput = wrap ? wrap.querySelector('.portal-link-input') : null;
+      if (!linkInput) return;
       copyBtn.addEventListener('click', function() {
-        navigator.clipboard.writeText(linkInput.value || '');
+        if (navigator && navigator.clipboard) {
+          navigator.clipboard.writeText(linkInput.value || '');
+        } else {
+          linkInput.select();
+          document.execCommand('copy');
+        }
       });
-    } else if (copyBtn && linkInput) {
-      copyBtn.addEventListener('click', function() {
-        linkInput.select();
-        document.execCommand('copy');
-      });
-    }
+    });
 
     const empresa = document.getElementById('manualEmpresaFilter');
     const departamento = document.getElementById('manualDepartamentoFilter');

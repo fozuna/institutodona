@@ -103,8 +103,10 @@ namespace {
     ob_start();
     (new ManuaisController())->index();
     $indexHtml = ob_get_clean();
-    if (!preg_match('/id="portalLinkInput" value="([^"]+)"/', $indexHtml, $m)) {
-        failFast('Campo do link do portal não foi renderizado em manuais/index');
+    // manuais/index agora lista todos os links da empresa (não só o recém-gerado); o mais
+    // recente (o que acabamos de gerar) aparece primeiro, ordenado por created_at DESC.
+    if (!preg_match('/class="portal-link-input[^"]*"\s+value="([^"]+)"/', $indexHtml, $m)) {
+        failFast('Lista de links do portal não foi renderizada em manuais/index');
     }
     $displayedLink = htmlspecialchars_decode($m[1]);
     if (strpos($displayedLink, 'departamento_id=' . $departamentoIdA) === false) {

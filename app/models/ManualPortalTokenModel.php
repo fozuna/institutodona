@@ -39,9 +39,9 @@ class ManualPortalTokenModel extends BaseModel
     public function issue(int $empresaId, ?string $expiraEm = null, ?array $scopeIds = null, ?array $filters = null): string
     {
         $this->ensureColumns();
-        $this->db->prepare('UPDATE manual_portal_tokens SET ativo = 0 WHERE empresa_id = :empresa_id')->execute([
-            'empresa_id' => $empresaId,
-        ]);
+        // Cada chamada cria um token novo e independente. Links ja emitidos (inclusive de
+        // outras combinacoes de filtro) permanecem ativos ate serem revogados explicitamente
+        // via revoke() - gerar um novo link NAO desativa os anteriores da mesma empresa.
         $token = bin2hex(random_bytes(24));
         $hasScopeCol = \App\Database\Database::columnExists('manual_portal_tokens', 'scope_ids_json');
         $hasFiltersCol = \App\Database\Database::columnExists('manual_portal_tokens', 'filters_json');
@@ -93,5 +93,36 @@ class ManualPortalTokenModel extends BaseModel
             return null;
         }
         return $row;
+    }
+
+    /**
+     * Revoga um token especifico da empresa informada (defesa extra: o id sozinho ja
+     * pertence a uma unica empresa, mas o escopo por empresa_id evita que um id de outra
+     * empresa seja revogado por engano/manipulacao). Idempotente: revogar um token ja
+     * inativo nao falha, apenas nao afeta nenhuma linha adicional. Nao apaga o registro
+     * (preserva o historico).
+     */
+    public function revoke(int $id, int $empresaId): bool
+    {
+        $this->ensureColumns();
+        $stmt = $this->db->prepare(
+            'UPDATE manual_portal_tokens SET ativo = 0 WHERE id = :id AND empresa_id = :empresa_id AND ativo = 1'
+        );
+        $stmt->execute(['id' => $id, 'empresa_id' => $empresaId]);
+        return $stmt->rowCount() > 0;
+    }
+
+    /** Lista todos os tokens (ativos, revogados ou expirados) de uma empresa, mais recentes primeiro. */
+    public function listByEmpresa(int $empresaId): array
+    {
+        $this->ensureColumns();
+        $stmt = $this->db->prepare(
+            'SELECT id, token, ativo, expira_em, filters_json, created_at
+             FROM manual_portal_tokens
+             WHERE empresa_id = :empresa_id
+             ORDER BY created_at DESC, id DESC'
+        );
+        $stmt->execute(['empresa_id' => $empresaId]);
+        return $stmt->fetchAll() ?: [];
     }
 }

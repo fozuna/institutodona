@@ -404,6 +404,9 @@ switch ($route) {
     case 'manuais/generatePortalLink':
         (new ManuaisController())->generatePortalLink();
         break;
+    case 'manuais/revokePortalLink':
+        (new ManuaisController())->revokePortalLink();
+        break;
     case 'aplicacoes/set_status':
         (new AplicacoesController())->set_status();
         break;
