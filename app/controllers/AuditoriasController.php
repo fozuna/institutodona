@@ -268,6 +268,7 @@ class AuditoriasController extends BaseController
             'respostas' => $respostas,
             'canManage' => $this->canManageAuditorias(),
             'canReopen' => Auth::canReopenAuditoria((int)$item['cliente_id']),
+            'canCorrect' => Auth::canCorrectAuditoriaClassification((int)$item['cliente_id']),
         ]);
     }
 
@@ -404,6 +405,92 @@ class AuditoriasController extends BaseController
             'motivo' => $motivo,
         ]);
         $_SESSION['flash_success'] = 'Auditoria reaberta com sucesso.';
+        $this->redirect('index.php?route=auditorias/show&id=' . $id);
+    }
+
+    /**
+     * Corrige departamento/setor de uma auditoria Realizada (item 10, Fluxo
+     * A) sem reabri-la. Acao explicitamente separada de update()/reabrir() -
+     * a auditoria permanece Realizada; apenas a classificacao muda.
+     */
+    public function corrigirClassificacao(): void
+    {
+        $this->requireLogin();
+        $this->requireManagePermission();
+        if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo 'Requisição inválida.';
+            return;
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        $item = $this->auditorias->find($id);
+        if (!$item) {
+            $_SESSION['flash_error'] = 'Auditoria não encontrada.';
+            $this->redirect('index.php?route=auditorias/index');
+            return;
+        }
+        if (!Auth::canCorrectAuditoriaClassification((int)$item['cliente_id'])) {
+            http_response_code(403);
+            echo 'Acesso negado: apenas Instituto ou Cliente Admin da própria empresa podem corrigir a classificação.';
+            return;
+        }
+        if ((string)($item['status'] ?? '') !== 'Realizada') {
+            $_SESSION['flash_error'] = 'Somente auditorias realizadas podem ter a classificação corrigida.';
+            $this->redirect('index.php?route=auditorias/show&id=' . $id);
+            return;
+        }
+        $departamentoId = (int)($_POST['departamento_id'] ?? 0);
+        $setorId = (int)($_POST['setor_id'] ?? 0);
+        if ($departamentoId <= 0 || $setorId <= 0) {
+            $_SESSION['flash_error'] = 'Selecione o departamento e o setor corretos.';
+            $this->redirect('index.php?route=auditorias/show&id=' . $id);
+            return;
+        }
+        $motivo = trim((string)($_POST['motivo'] ?? ''));
+        if ($motivo === '' || mb_strlen($motivo) > 1000) {
+            $_SESSION['flash_error'] = 'Informe o motivo da correção (até 1000 caracteres).';
+            $this->redirect('index.php?route=auditorias/show&id=' . $id);
+            return;
+        }
+        $prevLockVersionRaw = $_POST['prev_lock_version'] ?? null;
+        $prevLockVersion = is_numeric($prevLockVersionRaw) ? (int)$prevLockVersionRaw : null;
+        $userId = (int)($_SESSION['user']['id'] ?? 0);
+        $ok = $this->auditorias->corrigirClassificacao($id, $userId, $departamentoId, $setorId, $motivo, $prevLockVersion);
+        if (!$ok) {
+            $reason = (string)($this->auditorias->getLastError() ?? '');
+            if ($reason === 'no_change') {
+                $_SESSION['flash_success'] = 'Nenhuma alteração foi identificada.';
+                $this->redirect('index.php?route=auditorias/show&id=' . $id);
+                return;
+            }
+            $messages = [
+                'invalid_departamento' => 'Departamento inválido para esta empresa.',
+                'invalid_setor' => 'Setor inválido para o departamento informado.',
+                'invalid_status' => 'Somente auditorias realizadas podem ter a classificação corrigida.',
+                'concurrency_conflict' => 'Registro desatualizado. Recarregue a página antes de corrigir.',
+                'setor_metricas_inconsistente' => 'Não foi possível corrigir: inconsistência detectada nas métricas do setor. Nenhuma alteração foi aplicada.',
+            ];
+            $_SESSION['flash_error'] = $messages[$reason] ?? 'Não foi possível corrigir a classificação.';
+            AuditLogger::log('auditoria_classification_correction_failed', 'auditoria', $id, [
+                'departamento_novo_id' => $departamentoId,
+                'setor_novo_id' => $setorId,
+                'usuario_id' => $userId,
+                'motivo' => $motivo,
+                'erro' => $reason,
+            ]);
+            $this->redirect('index.php?route=auditorias/show&id=' . $id);
+            return;
+        }
+        $info = $this->auditorias->getLastCorrectionInfo();
+        AuditLogger::log('auditoria_classification_corrected', 'auditoria', $id, [
+            'departamento_anterior_id' => $info['departamento_anterior_id'] ?? null,
+            'departamento_novo_id' => $info['departamento_novo_id'] ?? null,
+            'setor_anterior_id' => $info['setor_anterior_id'] ?? null,
+            'setor_novo_id' => $info['setor_novo_id'] ?? null,
+            'usuario_id' => $userId,
+            'motivo' => $motivo,
+        ]);
+        $_SESSION['flash_success'] = 'Classificação corrigida com sucesso.';
         $this->redirect('index.php?route=auditorias/show&id=' . $id);
     }
 

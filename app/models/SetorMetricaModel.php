@@ -113,6 +113,26 @@ class SetorMetricaModel extends BaseModel
         ]);
     }
 
+    /**
+     * Transfere a contribuicao de uma auditoria Realizada de um setor para
+     * outro (item 10 - Fluxo A: correcao cadastral de departamento/setor sem
+     * reabrir a auditoria). Estorna do setor antigo e credita no setor novo
+     * dentro da MESMA transacao do chamador, preservando o ano_mes original -
+     * o total global (soma de todos os setores) nao muda, so a classificacao
+     * da contribuicao. Se o estorno do setor antigo falhar (inconsistencia -
+     * ver estornarConclusao()), nao credita nada no setor novo e retorna
+     * false; o chamador deve fazer ROLLBACK da transacao inteira.
+     */
+    public function transferirContribuicao(int $setorAntigoId, int $setorNovoId, string $anoMes, array $stats): bool
+    {
+        $estornado = $this->estornarConclusao($setorAntigoId, $anoMes, $stats);
+        if (!$estornado) {
+            return false;
+        }
+        $this->registrarConclusao($setorNovoId, $stats, $anoMes);
+        return true;
+    }
+
     public function series(int $setorId, string $inicio, string $fim): array
     {
         $this->ensure();

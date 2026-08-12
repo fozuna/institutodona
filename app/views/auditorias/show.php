@@ -1,4 +1,4 @@
-<?php use App\Core\DateHelper; use App\Core\Security; /** @var array $item */ /** @var array $respostas */ /** @var bool $canManage */ /** @var bool $canReopen */ ?>
+<?php use App\Core\DateHelper; use App\Core\Security; /** @var array $item */ /** @var array $respostas */ /** @var bool $canManage */ /** @var bool $canReopen */ /** @var bool $canCorrect */ ?>
 <div class="p-6 max-w-6xl">
     <div class="flex items-center justify-between mb-4">
         <div>
@@ -12,6 +12,9 @@
             <?php endif; ?>
             <?php if (!empty($canManage) && (($item['status'] ?? '') !== 'Realizada')): ?>
                 <a href="index.php?route=auditorias/auditar&id=<?= (int)$item['id'] ?>" class="px-4 py-2 rounded bg-brand-red text-white">Auditar</a>
+            <?php endif; ?>
+            <?php if (!empty($canCorrect) && (($item['status'] ?? '') === 'Realizada')): ?>
+                <button type="button" id="btnOpenCorrigir" class="px-4 py-2 rounded border border-gray-400 text-brand-brown bg-white">Corrigir classificação</button>
             <?php endif; ?>
             <?php if (!empty($canReopen) && (($item['status'] ?? '') === 'Realizada')): ?>
                 <button type="button" id="btnOpenReabrir" class="px-4 py-2 rounded bg-gray-700 text-white">Reabrir auditoria</button>
@@ -120,6 +123,127 @@
             modal.classList.add('flex');
             const textarea = document.getElementById('reabrirMotivo');
             if (textarea) textarea.focus();
+        });
+        if (btnCancel) {
+            btnCancel.addEventListener('click', () => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            });
+        }
+    })();
+</script>
+<?php endif; ?>
+<?php if (!empty($canCorrect) && (($item['status'] ?? '') === 'Realizada')): ?>
+<div id="modalCorrigirClassificacao" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded shadow p-6 w-full max-w-md">
+        <h2 class="text-lg font-semibold mb-3">Corrigir classificação</h2>
+        <p class="text-sm text-gray-700 mb-4">A auditoria permanecerá finalizada. Apenas sua classificação será corrigida e a alteração ficará registrada no histórico.</p>
+        <form method="post" action="index.php?route=auditorias/corrigir_classificacao" class="space-y-3">
+            <input type="hidden" name="csrf" value="<?= Security::csrfToken() ?>" />
+            <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
+            <input type="hidden" name="prev_lock_version" value="<?= (int)($item['lock_version'] ?? 0) ?>" />
+            <div>
+                <label class="block text-sm" for="corrigirDepartamentoSelect">Departamento</label>
+                <select id="corrigirDepartamentoSelect" name="departamento_id" class="border rounded p-2 w-full" required>
+                    <option value="">Carregando...</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm" for="corrigirSetorSelect">Setor</label>
+                <select id="corrigirSetorSelect" name="setor_id" class="border rounded p-2 w-full" required>
+                    <option value="">Selecione o departamento primeiro</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm" for="corrigirMotivo">Motivo da correção</label>
+                <textarea id="corrigirMotivo" name="motivo" class="border rounded p-2 w-full" rows="3" maxlength="1000" required></textarea>
+            </div>
+            <div class="flex items-center justify-end gap-2">
+                <button type="button" id="cancelCorrigir" class="px-3 py-2 rounded bg-gray-200 text-brand-brown">Cancelar</button>
+                <button type="submit" class="px-3 py-2 rounded bg-brand-pink text-white">Salvar correção</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+    (function(){
+        const btnOpen = document.getElementById('btnOpenCorrigir');
+        const modal = document.getElementById('modalCorrigirClassificacao');
+        const btnCancel = document.getElementById('cancelCorrigir');
+        const depSelect = document.getElementById('corrigirDepartamentoSelect');
+        const setSelect = document.getElementById('corrigirSetorSelect');
+        if (!btnOpen || !modal || !depSelect || !setSelect) return;
+        const clienteId = <?= (int)$item['cliente_id'] ?>;
+        const setorAtualId = <?= (int)$item['setor_id'] ?>;
+        let setoresData = null;
+
+        function populateDepartamentos(items, selectedDepId) {
+            const deps = new Map();
+            items.forEach((it) => {
+                if (!deps.has(it.departamento_id)) {
+                    deps.set(it.departamento_id, it.departamento || ('Departamento ' + it.departamento_id));
+                }
+            });
+            depSelect.innerHTML = '<option value="">Selecione</option>';
+            deps.forEach((nome, id) => {
+                const opt = document.createElement('option');
+                opt.value = String(id);
+                opt.textContent = nome;
+                if (id === selectedDepId) opt.selected = true;
+                depSelect.appendChild(opt);
+            });
+        }
+
+        function populateSetores(items, departamentoId, selectedSetorId) {
+            setSelect.innerHTML = '<option value="">Selecione</option>';
+            items
+                .filter((it) => it.departamento_id === departamentoId)
+                .forEach((it) => {
+                    const opt = document.createElement('option');
+                    opt.value = String(it.id);
+                    opt.textContent = it.nome;
+                    if (selectedSetorId !== null && it.id === selectedSetorId) opt.selected = true;
+                    setSelect.appendChild(opt);
+                });
+        }
+
+        function openWithData(items) {
+            const atual = items.find((it) => it.id === setorAtualId);
+            const depAtualId = atual ? atual.departamento_id : null;
+            populateDepartamentos(items, depAtualId);
+            populateSetores(items, depAtualId, setorAtualId);
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function loadAndOpen() {
+            if (setoresData) {
+                openWithData(setoresData);
+                return;
+            }
+            depSelect.innerHTML = '<option value="">Carregando...</option>';
+            fetch('index.php?route=auditorias/api_setores&cliente_id=' + encodeURIComponent(clienteId))
+                .then((r) => r.json())
+                .then((json) => {
+                    const items = (json && Array.isArray(json.items)) ? json.items : [];
+                    setoresData = items.map((it) => ({
+                        id: parseInt(it.id, 10),
+                        nome: it.nome,
+                        departamento_id: parseInt(it.departamento_id, 10),
+                        departamento: it.departamento,
+                    }));
+                    openWithData(setoresData);
+                })
+                .catch(() => {
+                    setoresData = [];
+                    depSelect.innerHTML = '<option value="">Erro ao carregar</option>';
+                });
+        }
+
+        btnOpen.addEventListener('click', loadAndOpen);
+        depSelect.addEventListener('change', () => {
+            const depId = depSelect.value ? parseInt(depSelect.value, 10) : null;
+            populateSetores(setoresData || [], depId, null);
         });
         if (btnCancel) {
             btnCancel.addEventListener('click', () => {

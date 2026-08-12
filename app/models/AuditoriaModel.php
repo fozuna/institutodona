@@ -7,6 +7,7 @@ class AuditoriaModel extends BaseModel
 {
     private static bool $tablesEnsured = false;
     private ?string $lastError = null;
+    private array $lastCorrectionInfo = [];
 
     public static function percentSplit(int $conforme, int $naoConforme): array
     {
@@ -1323,6 +1324,154 @@ class AuditoriaModel extends BaseModel
             $this->safeRollback();
             return false;
         }
+    }
+
+    /**
+     * Corrige o departamento/setor de uma auditoria Realizada por erro de
+     * cadastro (item 10, Fluxo A) - diferente da reabertura (Fluxo B): a
+     * auditoria continua "Realizada", respostas/nota/farol/anexos permanecem
+     * intocados, e NAO ha nova finalizacao. A unica coisa que muda e a
+     * classificacao (setor_id) e, por consequencia, a distribuicao da
+     * contribuicao ja computada em setor_metricas, que e TRANSFERIDA do
+     * setor antigo para o novo (nunca duplicada nem recalculada) via
+     * SetorMetricaModel::transferirContribuicao().
+     *
+     * auditorias nao possui coluna departamento_id propria - o departamento
+     * e sempre derivado do setor (setores.departamento_id). $departamentoId
+     * e usado apenas para validar que o setor informado de fato pertence ao
+     * departamento que o usuario selecionou na UI (nunca confiar so no
+     * dropdown do frontend).
+     *
+     * $this->lastError e populado em caso de falha: 'not_found' |
+     * 'invalid_status' | 'concurrency_conflict' | 'invalid_departamento' |
+     * 'invalid_setor' | 'no_change' | 'transaction' |
+     * 'setor_metricas_inconsistente' | 'exception'.
+     * Em caso de sucesso, getLastCorrectionInfo() expõe os valores
+     * anteriores/novos de departamento e setor para uso em log/histórico.
+     */
+    public function corrigirClassificacao(
+        int $auditoriaId,
+        int $userId,
+        int $departamentoId,
+        int $setorId,
+        string $motivo,
+        ?int $prevLockVersion = null
+    ): bool {
+        $this->ensureTables();
+        $this->lastError = null;
+        $this->lastCorrectionInfo = [];
+
+        $auditoria = $this->find($auditoriaId);
+        if (!$auditoria) {
+            $this->lastError = 'not_found';
+            return false;
+        }
+        if ((string)($auditoria['status'] ?? '') !== 'Realizada') {
+            $this->lastError = 'invalid_status';
+            return false;
+        }
+        if ($prevLockVersion !== null && (int)$auditoria['lock_version'] !== $prevLockVersion) {
+            $this->lastError = 'concurrency_conflict';
+            return false;
+        }
+
+        $clienteId = (int)$auditoria['cliente_id'];
+        if (!$this->departamentoBelongsToCatalogCliente($departamentoId, $clienteId)) {
+            $this->lastError = 'invalid_departamento';
+            return false;
+        }
+        if (!$this->setorBelongsToCatalogCliente($setorId, $clienteId, $departamentoId)) {
+            $this->lastError = 'invalid_setor';
+            return false;
+        }
+
+        $setorAntigoId = (int)$auditoria['setor_id'];
+        if ($setorId === $setorAntigoId) {
+            $this->lastError = 'no_change';
+            return false;
+        }
+
+        $setorModel = new SetorModel();
+        $departamentoModel = new DepartamentoModel();
+        $setorAntigoInfo = $setorModel->find($setorAntigoId);
+        $departamentoAntigoId = (int)($setorAntigoInfo['departamento_id'] ?? 0);
+        $departamentoAntigoInfo = $departamentoAntigoId > 0 ? $departamentoModel->find($departamentoAntigoId) : null;
+        $setorNovoInfo = $setorModel->find($setorId);
+        $departamentoNovoInfo = $departamentoModel->find($departamentoId);
+
+        (new SetorMetricaModel())->ensureSchema();
+        try {
+            if (!$this->db->beginTransaction()) {
+                $this->lastError = 'transaction';
+                return false;
+            }
+        } catch (\Throwable $e) {
+            $this->lastError = 'transaction';
+            return false;
+        }
+        try {
+            // Respostas nao sao tocadas: o mesmo mecanismo confiavel usado na
+            // finalizacao/reabertura garante que a contribuicao transferida e
+            // EXATAMENTE a que ja esta contabilizada (nao ha novo calculo de
+            // resultado, nao ha nova finalizacao).
+            $stats = $this->computeConformidadeStats($auditoriaId);
+            $anoMes = !empty($auditoria['realizada_at']) ? substr((string)$auditoria['realizada_at'], 0, 7) : date('Y-m');
+
+            $transferido = (new SetorMetricaModel())->transferirContribuicao($setorAntigoId, $setorId, $anoMes, $stats);
+            if (!$transferido) {
+                $this->lastError = 'setor_metricas_inconsistente';
+                $this->safeRollback();
+                return false;
+            }
+
+            $evento = [
+                'tipo' => 'correcao_classificacao',
+                'status' => 'Realizada',
+                'departamento_anterior_id' => $departamentoAntigoId,
+                'departamento_anterior_nome' => $departamentoAntigoInfo['nome'] ?? null,
+                'departamento_novo_id' => $departamentoId,
+                'departamento_novo_nome' => $departamentoNovoInfo['nome'] ?? null,
+                'setor_anterior_id' => $setorAntigoId,
+                'setor_anterior_nome' => $setorAntigoInfo['nome'] ?? null,
+                'setor_novo_id' => $setorId,
+                'setor_novo_nome' => $setorNovoInfo['nome'] ?? null,
+                'motivo' => $motivo,
+            ];
+            // Captura o snapshot ANTES do UPDATE, para que "auditoria.setor_id"
+            // dentro do snapshot registre o valor antigo.
+            $this->saveHistorySnapshot($auditoriaId, $userId, $evento);
+
+            $params = ['id' => $auditoriaId, 'setor_id' => $setorId, 'updated_by' => $userId];
+            $concurrency = '';
+            if ($prevLockVersion !== null) {
+                $params['prev_lock_version'] = $prevLockVersion;
+                $concurrency = ' AND lock_version = :prev_lock_version';
+            }
+            // Nao mexe em respostas/avaliacao/conformidade_pct/semaforo/realizada_at/
+            // finalized_at - apenas a classificacao (setor_id) muda.
+            $upd = $this->db->prepare("UPDATE auditorias
+                SET setor_id = :setor_id, updated_by = :updated_by, lock_version = lock_version + 1
+                WHERE id = :id AND deleted_at IS NULL AND status = 'Realizada'$concurrency");
+            $ok = $upd->execute($params) && $upd->rowCount() > 0;
+            if (!$ok) {
+                $this->lastError = 'concurrency_conflict';
+                $this->safeRollback();
+                return false;
+            }
+
+            $this->db->commit();
+            $this->lastCorrectionInfo = $evento;
+            return true;
+        } catch (\Throwable $e) {
+            $this->lastError = 'exception';
+            $this->safeRollback();
+            return false;
+        }
+    }
+
+    public function getLastCorrectionInfo(): array
+    {
+        return $this->lastCorrectionInfo;
     }
 
     public function respostasByAuditoria(int $auditoriaId): array

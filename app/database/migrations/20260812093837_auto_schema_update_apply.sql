@@ -1,0 +1,12 @@
+-- 20260812093837_auto_schema_update_apply.sql
+-- Nenhuma alteracao de schema real: o hook de pre-commit dispara sempre que
+-- um arquivo app/models/*Model.php e alterado, mesmo sem DDL (heuristica
+-- ampla, sem diff real de schema). Esta alteracao tocou AuditoriaModel.php
+-- (novo metodo corrigirClassificacao() + getLastCorrectionInfo()) e
+-- SetorMetricaModel.php (novo metodo transferirContribuicao()) para
+-- implementar a correcao de departamento/setor de auditorias finalizadas
+-- por erro de cadastro, sem reabri-las (item 10, Fluxo A). Nenhuma tabela
+-- ou coluna nova, alterada ou removida; reaproveita integralmente as
+-- estruturas existentes (departamentos, setores, departamento_clientes,
+-- setor_metricas, auditoria_historico, lock_version).
+SELECT 1;

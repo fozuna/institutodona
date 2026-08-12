@@ -198,4 +198,26 @@ class Auth
         }
         return self::canAccessCliente($auditoriaClienteId);
     }
+
+    /**
+     * Permissao dedicada para corrigir departamento/setor de uma auditoria
+     * Realizada por erro de cadastro (item 10, Fluxo A) - cenario distinto
+     * da reabertura (Fluxo B): a auditoria continua Realizada, so a
+     * classificacao muda. Mesma regra de acesso de canReopenAuditoria() (so
+     * Instituto ou Cliente Admin do proprio tenant), porem mantida como
+     * metodo proprio (nao um alias) para nao acoplar duas operacoes de
+     * negocio distintas a uma unica permissao - se um dia divergirem (ex.:
+     * Consultor passar a poder corrigir cadastro mas nao reabrir), a
+     * separacao ja existe.
+     */
+    public static function canCorrectAuditoriaClassification(int $auditoriaClienteId): bool
+    {
+        if (self::isInstituto()) {
+            return true;
+        }
+        if ((self::user()['tipo_acesso'] ?? null) !== 'cliente_admin') {
+            return false;
+        }
+        return self::canAccessCliente($auditoriaClienteId);
+    }
 }
