@@ -50,11 +50,14 @@ if (!AccessControl::canAccessRoute('avaliacoes/store', 'POST', $clienteAdmin)
     || !AccessControl::canAccessRoute('indicadores/index', 'GET', $clienteAdmin)
     || !AccessControl::canAccessRoute('auditorias/index', 'GET', $clienteAdmin)
     || !AccessControl::canAccessRoute('colaboradores/create', 'GET', $clienteAdmin)
-    || !AccessControl::canAccessRoute('colaboradores/delete', 'POST', $clienteAdmin)) {
-    failFast('Cliente admin deveria possuir CRUD completo nos módulos operacionais/permitidos');
+    || !AccessControl::canAccessRoute('colaboradores/delete', 'POST', $clienteAdmin)
+    // Mudança de regra de negócio (itens 13+16, 2026-08): dashboard/* passou de
+    // ADMIN_MODULE para CLIENT_ADMIN_MODULE - as 6 rotas do prefixo são só
+    // leitura/relatório e já eram tenant-safe internamente (scopeClienteIds()).
+    || !AccessControl::canAccessRoute('dashboard/index', 'GET', $clienteAdmin)) {
+    failFast('Cliente admin deveria possuir CRUD completo nos módulos operacionais/permitidos (incluindo Dashboard)');
 }
-if (AccessControl::canAccessRoute('clientes/index', 'GET', $clienteAdmin)
-    || AccessControl::canAccessRoute('dashboard/index', 'GET', $clienteAdmin)) {
+if (AccessControl::canAccessRoute('clientes/index', 'GET', $clienteAdmin)) {
     failFast('Cliente admin não deveria acessar módulos restritos ao Instituto');
 }
 ok('Cliente admin respeita limites administrativos');
@@ -97,10 +100,11 @@ if (AccessControl::canAccessRoute('departamentos/delete', 'POST', $clienteEditor
     || AccessControl::canAccessRoute('agenda/index', 'GET', $clienteEditor)
     || AccessControl::canAccessRoute('reunioes/index', 'GET', $clienteEditor)
     || AccessControl::canAccessRoute('usuarios/index', 'GET', $clienteEditor)
+    || AccessControl::canAccessRoute('dashboard/index', 'GET', $clienteEditor)
     || AccessControl::canDeleteRoute('avaliacoes/delete-ajax', 'POST', $clienteEditor)) {
-    failFast('Cliente editor não deveria possuir exclusão');
+    failFast('Cliente editor não deveria possuir exclusão, módulos de Cliente Admin, nem Dashboard');
 }
-ok('Cliente editor bloqueia exclusão e módulos exclusivos de Cliente Admin');
+ok('Cliente editor bloqueia exclusão e módulos exclusivos de Cliente Admin (Dashboard incluso)');
 
 $reader = userRole('reader');
 if (!AccessControl::canAccessRoute('avaliacoes/index', 'GET', $reader)
@@ -116,11 +120,12 @@ if (AccessControl::canAccessRoute('avaliacoes/create', 'GET', $reader)
     || AccessControl::canAccessRoute('agenda/index', 'GET', $reader)
     || AccessControl::canAccessRoute('reunioes/index', 'GET', $reader)
     || AccessControl::canAccessRoute('usuarios/index', 'GET', $reader)
+    || AccessControl::canAccessRoute('dashboard/index', 'GET', $reader)
     || AccessControl::canAccessRoute('avaliacoes/store', 'POST', $reader)
     || AccessControl::canAccessRoute('avaliacoes/delete-ajax', 'POST', $reader)) {
-    failFast('Cliente leitor não deveria acessar ações de escrita');
+    failFast('Cliente leitor não deveria acessar ações de escrita nem Dashboard');
 }
-ok('Cliente leitor permanece somente leitura e sem acesso aos módulos de Cliente Admin');
+ok('Cliente leitor permanece somente leitura e sem acesso aos módulos de Cliente Admin (Dashboard incluso)');
 
 if (AccessControl::defaultHomeRoute($instituto) !== 'dashboard/index') {
     failFast('Home do Instituto deveria ser o dashboard');
@@ -128,6 +133,13 @@ if (AccessControl::defaultHomeRoute($instituto) !== 'dashboard/index') {
 if (AccessControl::defaultHomeRoute($consultor) !== 'avaliacoes/index') {
     failFast('Home do consultor deveria apontar para um módulo permitido');
 }
-ok('Rotas iniciais respeitam o perfil');
+// Itens 13+16: antes desta correção, dashboard/index era ADMIN_MODULE e
+// defaultHomeRoute() caía em avaliacoes/index para Cliente Admin (avaliações
+// virava "home" só por ser o próximo candidato da lista, não por ser a
+// intenção de negócio). Agora deve entrar direto no Dashboard da própria empresa.
+if (AccessControl::defaultHomeRoute($clienteAdmin) !== 'dashboard/index') {
+    failFast('Home do Cliente Admin deveria ser o dashboard (itens 13+16), não avaliacoes/index');
+}
+ok('Rotas iniciais respeitam o perfil (Cliente Admin entra direto no Dashboard)');
 
 echo "All RBAC route matrix unit tests passed.\n";

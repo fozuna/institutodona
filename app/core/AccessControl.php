@@ -47,7 +47,14 @@ final class AccessControl
         'pilares' => self::ADMIN_MODULE,
         'metodologias' => self::ADMIN_MODULE,
         'aplicacoes' => self::ADMIN_MODULE,
-        'dashboard' => self::ADMIN_MODULE,
+        // CLIENT_ADMIN_MODULE desde 2026-08 (itens 13+16 do backlog de auditoria):
+        // as 6 rotas de dashboard/* sao apenas leitura/relatorio, e todo filtro de
+        // empresa ja passa por DashboardController::scopeClienteIds() (tenant-safe
+        // por construcao, com fallback para a propria empresa do usuario) - nao
+        // havia motivo para reserva-las ao Instituto, e isso empurrava o Cliente
+        // Admin para avaliacoes/index como home apos login (defaultHomeRoute()
+        // tenta dashboard/index primeiro).
+        'dashboard' => self::CLIENT_ADMIN_MODULE,
         'indicadores' => self::OPERACIONAL_MODULE,
         'agenda' => self::CLIENT_ADMIN_MODULE,
         'cronograma' => self::CLIENT_ADMIN_MODULE,
