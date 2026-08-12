@@ -215,6 +215,16 @@ class ClientesController extends BaseController
         ]);
     }
 
+    /**
+     * Mantida apenas por compatibilidade com links/favoritos antigos. A
+     * implementacao oficial agora vive em PlanoAcaoController::export() (modulo
+     * operacional, tambem acessivel ao Cliente Admin - ver item 08 do backlog
+     * de auditoria). Aqui so resolve o cliente/filial/filtros vindos da tela
+     * "Perfil do Cliente" (que continua exclusiva do Instituto, ver clientes/*
+     * = ADMIN_MODULE em AccessControl) e redireciona internamente; nao ha
+     * bypass de RBAC porque a rota de destino reaplica sua propria autorizacao
+     * (Auth::canExportPlanosAcao() + escopo de tenant) de forma independente.
+     */
     public function exportPlanos(): void
     {
         $this->requireLogin();
@@ -238,35 +248,20 @@ class ClientesController extends BaseController
         }
         $filiais = ((int)($item['is_matriz'] ?? 1) === 1) ? $this->clientes->filiaisByMatriz($id) : [];
         $selectedFilialId = $this->resolveSelectedFilialId($id, $filiais);
-        $scopeClienteIds = $this->buildClienteScopeIds($id, $filiais, $selectedFilialId);
         $statusFilters = $_GET['plano_status'] ?? [];
         if (!is_array($statusFilters)) {
             $statusFilters = [$statusFilters];
         }
         $statusFilters = array_values(array_filter(array_map('trim', $statusFilters)));
 
-        $taskModel = new \App\Models\PlanoAcaoTaskModel();
-        $rows = $taskModel->filterForExportByClientes($scopeClienteIds, $statusFilters);
-        if (empty($rows)) {
-            http_response_code(400);
-            echo 'Nenhum plano de ação encontrado para os filtros selecionados.';
-            return;
+        $params = ['route' => 'planoacao/export', 'cliente' => $id];
+        if ($selectedFilialId > 0) {
+            $params['filial_id'] = $selectedFilialId;
         }
-        $filename = 'planos_acao_cliente_' . $id . '_' . date('Ymd_His') . '.xlsx';
-        $path = \App\Core\XlsxExport::exportPlanos($rows, $filename);
-        \App\Core\AuditLogger::log('planoacao_export', 'pdca_tasks', null, [
-            'cliente_id' => $id,
-            'filial_id' => $selectedFilialId > 0 ? $selectedFilialId : null,
-            'scope_cliente_ids' => $scopeClienteIds,
-            'status_filters' => $statusFilters,
-            'count' => count($rows),
-            'file' => $filename,
-        ]);
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment; filename="' . $filename . '"');
-        header('Content-Length: ' . filesize($path));
-        readfile($path);
-        @unlink($path);
+        if (!empty($statusFilters)) {
+            $params['plano_status'] = $statusFilters;
+        }
+        header('Location: index.php?' . http_build_query($params));
         exit;
     }
 

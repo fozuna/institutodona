@@ -335,6 +335,9 @@ switch ($route) {
     case 'planoacao/index':
         (new PlanoAcaoController())->index();
         break;
+    case 'planoacao/export':
+        (new PlanoAcaoController())->export();
+        break;
     case 'planoacao/api_list':
         (new PlanoAcaoController())->apiList();
         break;

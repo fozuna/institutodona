@@ -1,6 +1,7 @@
 <?php
 namespace App\Controllers;
 
+use App\Core\Auth;
 use App\Core\BaseController;
 use App\Core\Security;
 use App\Core\PlanoAcaoImportService;
@@ -85,7 +86,86 @@ class PlanoAcaoController extends BaseController
             'viewMode' => $viewMode,
             'importEnabled' => getenv('PLANOACAO_IMPORT_ENABLED') === '1',
             'importAlreadyRun' => is_file(__DIR__ . '/../../storage/imports/planoacao_import_done.flag'),
+            'canExportPlanos' => Auth::canExportPlanosAcao(),
         ]);
+    }
+
+    /**
+     * Implementacao oficial de exportacao de Planos de Acao (item 08 do backlog
+     * de auditoria). Vive no modulo planoacao (CLIENT_ADMIN_MODULE), acessivel a
+     * Instituto e Cliente Admin - ao contrario da antiga clientes/exportPlanos,
+     * que ficava presa ao ADMIN_MODULE (so Instituto) mesmo a regra de negocio
+     * (Auth::canExportPlanosAcao()) ja liberando cliente/cliente_admin.
+     *
+     * Escopo de tenant: o parametro "cliente" e um dos nomes reconhecidos por
+     * BaseController::routeClienteCandidate(), entao requireLogin()/authorizeRoute()
+     * ja bloqueia com 404 oculto, antes deste metodo rodar, qualquer tentativa de
+     * informar uma empresa fora do tenant do usuario (Auth::canAccessCliente()).
+     * Como segunda camada, resolveScopedClienteId() tambem nunca deixa passar um
+     * id fora do escopo, e PlanoAcaoTaskModel::filterForExportByClientes() aplica
+     * tenantInCondition() de novo na propria consulta SQL.
+     */
+    public function export(): void
+    {
+        $this->requireLogin();
+        if (!Auth::canExportPlanosAcao()) {
+            http_response_code(403);
+            echo 'Sem permissao para exportar planos de acao.';
+            return;
+        }
+        $requestedId = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
+        $id = (int)($this->resolveScopedClienteId($requestedId > 0 ? $requestedId : null) ?? 0);
+        if ($id <= 0) {
+            http_response_code(400);
+            echo 'Cliente inválido para exportação.';
+            return;
+        }
+        $clientes = new ClienteModel();
+        $item = $clientes->find($id);
+        if (!$item) {
+            http_response_code(400);
+            echo 'Cliente inválido para exportação.';
+            return;
+        }
+
+        $filiais = ((int)($item['is_matriz'] ?? 1) === 1) ? $clientes->filiaisByMatriz($id) : [];
+        $filialId = (int)($_GET['filial_id'] ?? 0);
+        $validFilialIds = array_map(static fn(array $row): int => (int)($row['id'] ?? 0), $filiais);
+        if ($filialId > 0 && !in_array($filialId, $validFilialIds, true)) {
+            $filialId = 0;
+        }
+        $scopeClienteIds = $filialId > 0
+            ? [$filialId]
+            : array_values(array_unique(array_filter(array_merge([$id], $validFilialIds))));
+
+        $statusFilters = $_GET['plano_status'] ?? [];
+        if (!is_array($statusFilters)) {
+            $statusFilters = [$statusFilters];
+        }
+        $statusFilters = array_values(array_filter(array_map('trim', $statusFilters)));
+
+        $rows = $this->tasks->filterForExportByClientes($scopeClienteIds, $statusFilters);
+        if (empty($rows)) {
+            http_response_code(400);
+            echo 'Nenhum plano de ação encontrado para os filtros selecionados.';
+            return;
+        }
+        $filename = 'planos_acao_cliente_' . $id . '_' . date('Ymd_His') . '.xlsx';
+        $path = \App\Core\XlsxExport::exportPlanos($rows, $filename);
+        AuditLogger::log('planoacao_export', 'pdca_tasks', null, [
+            'cliente_id' => $id,
+            'filial_id' => $filialId > 0 ? $filialId : null,
+            'scope_cliente_ids' => $scopeClienteIds,
+            'status_filters' => $statusFilters,
+            'count' => count($rows),
+            'file' => $filename,
+        ]);
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Length: ' . filesize($path));
+        readfile($path);
+        @unlink($path);
+        exit;
     }
 
     public function apiList(): void

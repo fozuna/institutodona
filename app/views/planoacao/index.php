@@ -8,6 +8,7 @@
   $totalPages = max(1, (int)($totalPages ?? 1));
   $statusFilters = array_values(array_filter($statusFilters ?? []));
   $viewMode = (($viewMode ?? 'cards') === 'list') ? 'list' : 'cards';
+  $canExportPlanos = (bool)($canExportPlanos ?? false);
 
   $deadlineBadgeClass = static function(array $task): string {
       $prazoDate = $task['prazo'] ?? null;
@@ -92,6 +93,19 @@
           <span data-feather="upload-cloud" class="w-4 h-4"></span>
           <span>Importar planos</span>
         </button>
+        <?php endif; ?>
+        <?php if ($selectedCliente && $canExportPlanos): ?>
+        <form method="get" action="index.php" class="inline">
+          <input type="hidden" name="route" value="planoacao/export" />
+          <input type="hidden" name="cliente" value="<?= (int)$selectedCliente ?>" />
+          <?php foreach ($statusFilters as $statusFilter): ?>
+            <input type="hidden" name="plano_status[]" value="<?= htmlspecialchars($statusFilter) ?>" />
+          <?php endforeach; ?>
+          <button type="submit" aria-label="Exportar planos para Excel" class="px-3 py-2 bg-brand-brown text-white rounded hover:bg-gray-800 transition-colors whitespace-nowrap flex items-center gap-2">
+            <span data-feather="download" class="w-4 h-4"></span>
+            <span>Exportar Excel</span>
+          </button>
+        </form>
         <?php endif; ?>
         <a id="createBtn" class="px-3 py-2 bg-brand-orange text-white rounded hover:bg-orange-700 transition-colors whitespace-nowrap" href="index.php?route=planoacao/create<?= $selectedCliente ? '&cliente=' . $selectedCliente : '' ?>">Novo Plano de Ação</a>
         <a id="backBtn" class="px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors whitespace-nowrap <?= $selectedCliente ? '' : 'hidden' ?>" href="index.php?route=clientes/show&id=<?= (int)$selectedCliente ?>">Voltar ao perfil</a>

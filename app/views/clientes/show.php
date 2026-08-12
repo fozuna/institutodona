@@ -225,8 +225,8 @@
             <?php endif; ?>
             <?php if ($canExportPlanos): ?>
             <form method="get" action="index.php" id="planoExportForm" class="inline">
-              <input type="hidden" name="route" value="clientes/exportPlanos" />
-              <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
+              <input type="hidden" name="route" value="planoacao/export" />
+              <input type="hidden" name="cliente" value="<?= (int)$item['id'] ?>" />
               <input type="hidden" name="filial_id" value="<?= $selectedFilialId ?>" />
               <?php if ($planoSearch !== ''): ?>
                 <input type="hidden" name="plano_q" value="<?= htmlspecialchars($planoSearch) ?>" />
