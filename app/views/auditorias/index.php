@@ -1,4 +1,4 @@
-<?php use App\Core\DateHelper; use App\Core\Security; /** @var array $items */ /** @var array $filters */ /** @var array $clientes */ /** @var array $departamentos */ /** @var array $setores */ /** @var array $metrics */ /** @var bool $canManage */ ?>
+<?php use App\Core\DateHelper; use App\Core\Security; /** @var array $items */ /** @var array $filters */ /** @var array $clientes */ /** @var array $departamentos */ /** @var array $setores */ /** @var array $metrics */ /** @var bool $canManage */ /** @var bool $canDeleteAuditorias */ /** @var bool $canEditRealizada */ ?>
 <?php
     $mediaGeral = $metrics['geral']['media'] ?? null;
     $countGeral = (int)($metrics['geral']['count'] ?? 0);
@@ -177,13 +177,13 @@
                             <td class="p-3"><?= (int)($row['total_questoes'] ?? 0) ?></td>
                             <td class="p-3 whitespace-nowrap">
                                 <a class="text-brand-brown icon-action mr-2" href="index.php?route=auditorias/show&id=<?= (int)$row['id'] ?>" title="Abrir"><span data-feather="eye"></span></a>
-                                <?php if (!empty($canManage)): ?>
+                                <?php if (!empty($canManage) && (($row['status'] ?? '') !== 'Realizada' || !empty($canEditRealizada))): ?>
                                     <a class="text-brand-pink icon-action mr-2" href="index.php?route=auditorias/edit&id=<?= (int)$row['id'] ?>" title="Editar"><span data-feather="edit"></span></a>
                                 <?php endif; ?>
                                 <?php if (!empty($canManage) && (($row['status'] ?? '') !== 'Realizada')): ?>
                                     <a class="text-brand-red icon-action mr-2" href="index.php?route=auditorias/auditar&id=<?= (int)$row['id'] ?>" title="Auditar"><span data-feather="check-circle"></span></a>
                                 <?php endif; ?>
-                                <?php if (!empty($canManage)): ?>
+                                <?php if (!empty($canDeleteAuditorias)): ?>
                                     <button type="button" class="text-brand-brown icon-action" data-open-delete="<?= (int)$row['id'] ?>" title="Excluir"><span data-feather="trash-2"></span></button>
                                 <?php endif; ?>
                                 <?php if (!empty($canManage)): ?>
@@ -215,7 +215,7 @@
         </div>
     <?php endif; ?>
 
-    <?php if (!empty($canManage)): ?>
+    <?php if (!empty($canDeleteAuditorias)): ?>
     <div id="modalDelete" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
         <div class="bg-white rounded shadow p-6 w-full max-w-md">
             <h2 class="text-lg font-semibold mb-3">Confirmar exclusão</h2>
@@ -231,6 +231,8 @@
 
     </div>
 
+    <?php endif; ?>
+    <?php if (!empty($canManage)): ?>
     <div id="modalDuplicate" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
         <div class="bg-white rounded shadow p-6 w-full max-w-md">
             <h2 class="text-lg font-semibold mb-3">Duplicar Auditoria</h2>
@@ -258,7 +260,8 @@
 <script>
     (function(){
         const canManage = <?= !empty($canManage) ? 'true' : 'false' ?>;
-        if (canManage) {
+        const canDeleteAuditorias = <?= !empty($canDeleteAuditorias) ? 'true' : 'false' ?>;
+        if (canDeleteAuditorias) {
         const modalDelete = document.getElementById('modalDelete');
         const deleteId = document.getElementById('deleteId');
         document.querySelectorAll('[data-open-delete]').forEach((btn)=>{

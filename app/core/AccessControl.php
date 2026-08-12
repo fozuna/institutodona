@@ -7,6 +7,17 @@ final class AccessControl
     private const CADASTROS_MODULE = 'cadastros';
     private const AVALIACOES_MODULE = 'avaliacoes';
     private const OPERACIONAL_MODULE = 'operacional';
+    /**
+     * Modulo dedicado a Auditorias, separado de OPERACIONAL_MODULE (Sprint B,
+     * Achado B). OPERACIONAL_MODULE tambem engloba indicadores/coaching/
+     * processos - conceder OPERACIONAL_MODULE inteiro ao Consultor abriria
+     * esses tres modulos sem analise/aprovacao. Como Consultor deve acessar
+     * apenas Auditorias por ora, Auditorias foi extraida para seu proprio
+     * modulo. Cliente Admin/Cliente/Reader recebem AMBOS os modulos (ver
+     * ROLE_CAPABILITIES) para preservar exatamente o acesso que ja tinham -
+     * o split e transparente para esses perfis.
+     */
+    private const AUDITORIAS_MODULE = 'auditorias_modulo';
     private const CLIENT_ADMIN_MODULE = 'client_admin';
     private const ADMIN_MODULE = 'admin';
 
@@ -62,7 +73,7 @@ final class AccessControl
         'tarefas' => self::CLIENT_ADMIN_MODULE,
         'manuais' => self::CLIENT_ADMIN_MODULE,
         'biblioteca' => self::CLIENT_ADMIN_MODULE,
-        'auditorias' => self::OPERACIONAL_MODULE,
+        'auditorias' => self::AUDITORIAS_MODULE,
         'treinamentos' => self::CLIENT_ADMIN_MODULE,
         'reunioes' => self::CLIENT_ADMIN_MODULE,
         'coaching' => self::OPERACIONAL_MODULE,
@@ -133,26 +144,38 @@ final class AccessControl
             'write' => true,
             'delete' => true,
         ],
+        // Sprint B, Achado B: Consultor ganha o modulo dedicado de Auditorias
+        // (AUDITORIAS_MODULE), NAO o OPERACIONAL_MODULE inteiro - continua
+        // sem acesso a indicadores/coaching/processos. 'delete' permanece
+        // true aqui (mantido para nao alterar o que o Consultor ja podia
+        // excluir em cadastros/avaliacoes), mas a exclusao de auditorias em
+        // si e bloqueada explicitamente no controller (ver
+        // AuditoriasController::delete()) porque este array nao expressa
+        // permissao por modulo, so por perfil.
         'consultor' => [
-            'modules' => [self::CADASTROS_MODULE, self::AVALIACOES_MODULE, self::PUBLIC_MODULE],
+            'modules' => [self::CADASTROS_MODULE, self::AVALIACOES_MODULE, self::PUBLIC_MODULE, self::AUDITORIAS_MODULE],
             'view' => true,
             'write' => true,
             'delete' => true,
         ],
+        // AUDITORIAS_MODULE adicionado aqui apenas para preservar o acesso
+        // que este perfil ja tinha antes do split de 'auditorias' para fora
+        // de OPERACIONAL_MODULE (Sprint B, Achado B) - efetivamente nenhuma
+        // mudanca de comportamento para cliente_admin/cliente/reader.
         'cliente_admin' => [
-            'modules' => [self::CADASTROS_MODULE, self::AVALIACOES_MODULE, self::OPERACIONAL_MODULE, self::CLIENT_ADMIN_MODULE, self::PUBLIC_MODULE],
+            'modules' => [self::CADASTROS_MODULE, self::AVALIACOES_MODULE, self::OPERACIONAL_MODULE, self::AUDITORIAS_MODULE, self::CLIENT_ADMIN_MODULE, self::PUBLIC_MODULE],
             'view' => true,
             'write' => true,
             'delete' => true,
         ],
         'cliente' => [
-            'modules' => [self::CADASTROS_MODULE, self::AVALIACOES_MODULE, self::OPERACIONAL_MODULE, self::PUBLIC_MODULE],
+            'modules' => [self::CADASTROS_MODULE, self::AVALIACOES_MODULE, self::OPERACIONAL_MODULE, self::AUDITORIAS_MODULE, self::PUBLIC_MODULE],
             'view' => true,
             'write' => true,
             'delete' => false,
         ],
         'reader' => [
-            'modules' => [self::CADASTROS_MODULE, self::AVALIACOES_MODULE, self::OPERACIONAL_MODULE, self::PUBLIC_MODULE],
+            'modules' => [self::CADASTROS_MODULE, self::AVALIACOES_MODULE, self::OPERACIONAL_MODULE, self::AUDITORIAS_MODULE, self::PUBLIC_MODULE],
             'view' => true,
             'write' => false,
             'delete' => false,

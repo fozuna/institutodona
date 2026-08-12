@@ -1,4 +1,4 @@
-<?php use App\Core\DateHelper; use App\Core\Security; /** @var array $item */ /** @var array $respostas */ /** @var bool $canManage */ /** @var bool $canReopen */ /** @var bool $canCorrect */ ?>
+<?php use App\Core\DateHelper; use App\Core\Security; /** @var array $item */ /** @var array $respostas */ /** @var bool $canManage */ /** @var bool $canDeleteAuditorias */ /** @var bool $canEditRealizada */ /** @var bool $canReopen */ /** @var bool $canCorrect */ ?>
 <div class="p-6 max-w-6xl">
     <div class="flex items-center justify-between mb-4">
         <div>
@@ -7,7 +7,7 @@
         </div>
         <div class="flex items-center gap-2">
             <a href="index.php?route=auditorias/index" class="px-4 py-2 rounded bg-gray-200 text-brand-brown">Voltar</a>
-            <?php if (!empty($canManage)): ?>
+            <?php if (!empty($canManage) && (($item['status'] ?? '') !== 'Realizada' || !empty($canEditRealizada))): ?>
                 <a href="index.php?route=auditorias/edit&id=<?= (int)$item['id'] ?>" class="px-4 py-2 rounded bg-brand-pink text-white">Editar</a>
             <?php endif; ?>
             <?php if (!empty($canManage) && (($item['status'] ?? '') !== 'Realizada')): ?>

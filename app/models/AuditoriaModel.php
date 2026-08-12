@@ -184,9 +184,23 @@ class AuditoriaModel extends BaseModel
         return !$this->canBypassScope() && count($this->tenantClientIds()) > 0;
     }
 
+    /**
+     * Sprint B, Achado B: Consultor foi REMOVIDO deste bypass. Antes,
+     * `Auth::isInstituto() || Auth::isConsultor()` fazia o Consultor
+     * enxergar TODAS as auditorias de TODOS os clientes, sem nenhum
+     * isolamento por tenant - inconsistente com a regra de negocio (o
+     * Consultor deve acessar somente os clientes vinculados a ele via
+     * `usuario_empresas`, o mesmo mecanismo generico que ja escopa
+     * Cliente Admin/Cliente/Reader - ver TenantScopeResolver e
+     * Auth::allowedClientIds()). Como o Consultor sequer conseguia acessar
+     * o modulo de Auditorias ate esta correcao (AccessControl bloqueava
+     * antes de qualquer checagem daqui), este bypass nunca chegou a ser
+     * exercido em producao. Instituto continua com bypass total (unico
+     * perfil realmente irrestrito no sistema).
+     */
     private function canBypassScope(): bool
     {
-        return Auth::isInstituto() || Auth::isConsultor();
+        return Auth::isInstituto();
     }
 
     private function isValidAuditoriaCatalogSelection(int $clienteId, int $setorId): bool

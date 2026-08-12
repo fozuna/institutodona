@@ -1,0 +1,11 @@
+-- 20260812132745_auto_schema_update_apply.sql
+-- Nenhuma alteracao de schema real: o hook de pre-commit dispara sempre que
+-- um arquivo app/models/*Model.php e alterado, mesmo sem DDL (heuristica
+-- ampla, sem diff real de schema). Esta alteracao tocou AuditoriaModel.php
+-- apenas para corrigir AuditoriaModel::canBypassScope() (Sprint B, Achado B
+-- - RBAC do Consultor em Auditorias): removido bypass indevido de escopo
+-- por tenant para o perfil Consultor, que passou a ser escopado pelo mesmo
+-- mecanismo generico ja usado por Cliente Admin/Cliente/Reader
+-- (Auth::allowedClientIds()/usuario_empresas). Nenhuma tabela ou coluna
+-- nova, alterada ou removida.
+SELECT 1;

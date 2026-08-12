@@ -32,12 +32,22 @@ if (!AccessControl::canAccessRoute('departamentos/index', 'GET', $consultor)
     || !AccessControl::canAccessRoute('avaliacoes/delete-ajax', 'POST', $consultor)) {
     failFast('Consultor deveria possuir CRUD completo em cadastros e avaliações');
 }
-if (AccessControl::canAccessRoute('indicadores/index', 'GET', $consultor)
-    || AccessControl::canAccessRoute('usuarios/index', 'GET', $consultor)
-    || AccessControl::canAccessRoute('auditorias/index', 'GET', $consultor)) {
-    failFast('Consultor não deveria acessar módulos administrativos fora do RBAC');
+// Sprint B, Achado B (correção de RBAC do Consultor em Auditorias): Consultor
+// GANHOU acesso a Auditorias (módulo dedicado AUDITORIAS_MODULE, separado de
+// OPERACIONAL_MODULE - ver AccessControl::PREFIX_MODULES/ROLE_CAPABILITIES),
+// mas continua sem indicadores/coaching/processos (que permanecem em
+// OPERACIONAL_MODULE) nem módulos administrativos.
+if (!AccessControl::canAccessRoute('auditorias/index', 'GET', $consultor)) {
+    failFast('Consultor deveria acessar Auditorias (Sprint B, Achado B)');
 }
-ok('Consultor respeita escopo de módulos permitidos');
+if (AccessControl::canAccessRoute('indicadores/index', 'GET', $consultor)
+    || AccessControl::canAccessRoute('coaching/index', 'GET', $consultor)
+    || AccessControl::canAccessRoute('processos/index', 'GET', $consultor)
+    || AccessControl::canAccessRoute('usuarios/index', 'GET', $consultor)
+    || AccessControl::canAccessRoute('dashboard/index', 'GET', $consultor)) {
+    failFast('Consultor não deveria acessar módulos administrativos/operacionais fora do RBAC (indicadores/coaching/processos/usuarios/dashboard)');
+}
+ok('Consultor respeita escopo de módulos permitidos (Auditorias liberado; demais módulos operacionais/administrativos continuam bloqueados)');
 
 $clienteAdmin = userRole('cliente_admin');
 if (!AccessControl::canAccessRoute('avaliacoes/store', 'POST', $clienteAdmin)

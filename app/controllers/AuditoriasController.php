@@ -46,6 +46,13 @@ class AuditoriasController extends BaseController
     {
         $this->requireLogin();
         $canManage = $this->canManageAuditorias();
+        // Sprint B, Achado B: dentro de canManage (escrita geral em
+        // Auditorias), exclusao e edicao de auditorias ja Realizada
+        // permanecem fora do escopo do Consultor (ver delete()/update() e
+        // seus comentarios). A UI usa estas flags para nao oferecer acoes
+        // que o backend recusaria.
+        $canDeleteAuditorias = $canManage && !Auth::isConsultor();
+        $canEditRealizada = $canManage && !Auth::isConsultor();
         $filters = $this->collectFilters();
         $page = max(1, (int)($_GET['page'] ?? 1));
         $per = max(10, min(50, (int)($_GET['per'] ?? 15)));
@@ -75,6 +82,8 @@ class AuditoriasController extends BaseController
             'total' => $total,
             'totalPages' => $totalPages,
             'canManage' => $canManage,
+            'canDeleteAuditorias' => $canDeleteAuditorias,
+            'canEditRealizada' => $canEditRealizada,
         ]);
     }
 
@@ -174,6 +183,18 @@ class AuditoriasController extends BaseController
             $this->redirect('index.php?route=auditorias/index');
             return;
         }
+        // Sprint B, Achado B: update() tambem edita auditorias ja Realizada
+        // (updateRealizadaCompleta()/updatePartial() sem checar status) -
+        // isso e "correcao pos-finalizacao", que o escopo aprovado para
+        // Consultor explicitamente NAO inclui (esse papel fica restrito aos
+        // fluxos dedicados Reabertura/Corrigir Classificacao, ambos ja
+        // bloqueados para Consultor). Nao reduz o que outros perfis (ex.:
+        // Cliente) ja podiam fazer aqui.
+        if (Auth::isConsultor() && (($current['status'] ?? '') === 'Realizada')) {
+            http_response_code(403);
+            echo 'Acesso negado: consultores não podem editar auditorias já finalizadas.';
+            return;
+        }
         $saveMode = (string)($_POST['save_mode'] ?? 'full'); // 'full' ou 'partial'
         $prevUpdatedAt = (string)($_POST['prev_updated_at'] ?? '');
         $prevLockVersionRaw = $_POST['prev_lock_version'] ?? null;
@@ -263,10 +284,13 @@ class AuditoriasController extends BaseController
             return;
         }
         $respostas = $this->auditorias->respostasByAuditoria($id);
+        $canManage = $this->canManageAuditorias();
         $this->render('auditorias/show', [
             'item' => $item,
             'respostas' => $respostas,
-            'canManage' => $this->canManageAuditorias(),
+            'canManage' => $canManage,
+            'canDeleteAuditorias' => $canManage && !Auth::isConsultor(),
+            'canEditRealizada' => $canManage && !Auth::isConsultor(),
             'canReopen' => Auth::canReopenAuditoria((int)$item['cliente_id']),
             'canCorrect' => Auth::canCorrectAuditoriaClassification((int)$item['cliente_id']),
         ]);
@@ -892,6 +916,17 @@ class AuditoriasController extends BaseController
     {
         $this->requireLogin();
         $this->requireManagePermission();
+        // Sprint B, Achado B: Consultor ganhou o modulo de Auditorias (ver
+        // AccessControl::AUDITORIAS_MODULE), mas o array ROLE_CAPABILITIES
+        // so expressa 'delete' por PERFIL, nao por modulo - Consultor
+        // precisa manter 'delete'=>true para o que ja podia excluir em
+        // cadastros/avaliacoes. Exclusao de auditorias fica bloqueada aqui,
+        // explicitamente, sem tocar a capacidade generica do perfil.
+        if (Auth::isConsultor()) {
+            http_response_code(403);
+            echo 'Acesso negado: consultores não podem excluir auditorias.';
+            return;
+        }
         if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
             http_response_code(400);
             echo 'Requisição inválida.';
@@ -924,6 +959,13 @@ class AuditoriasController extends BaseController
     {
         $this->requireLogin();
         $this->requireManagePermission();
+        // Sprint B, Achado B: fluxo exclusivo de edicao pos-finalizacao -
+        // fora do escopo aprovado para Consultor (ver comentario em update()).
+        if (Auth::isConsultor()) {
+            http_response_code(403);
+            echo 'Acesso negado: consultores não podem editar auditorias já finalizadas.';
+            return;
+        }
         $id = (int)($_GET['id'] ?? 0);
         $item = $this->auditorias->findWithQuestoes($id);
         if (!$item || ($item['status'] ?? '') !== 'Realizada') {
@@ -943,6 +985,13 @@ class AuditoriasController extends BaseController
     {
         $this->requireLogin();
         $this->requireManagePermission();
+        // Sprint B, Achado B: idem editarRealizada() - correcao pos-finalizacao
+        // fora do escopo aprovado para Consultor.
+        if (Auth::isConsultor()) {
+            http_response_code(403);
+            echo 'Acesso negado: consultores não podem editar auditorias já finalizadas.';
+            return;
+        }
         if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
             http_response_code(400);
             echo 'Requisição inválida.';
@@ -1600,7 +1649,12 @@ class AuditoriasController extends BaseController
     private function requireManagePermission(bool $json = false): void
     {
         if (!$this->canManageAuditorias()) {
-            $message = 'Acesso negado: apenas consultores e usuários Instituto podem criar, editar ou excluir auditorias.';
+            // Mensagem genérica de propósito: a lista real de perfis com
+            // escrita em Auditorias já não cabe numa frase curta (Instituto,
+            // Cliente Admin, Cliente e, desde a Sprint B/Achado B,
+            // Consultor - cada um com nuances distintas de exclusão/edição
+            // pós-finalização tratadas em pontos específicos do controller).
+            $message = 'Acesso negado: seu perfil não possui permissão para executar esta ação em Auditorias.';
             if ($json) {
                 header('Content-Type: application/json; charset=utf-8');
                 http_response_code(403);

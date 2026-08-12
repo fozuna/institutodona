@@ -26,11 +26,19 @@ if (stripos($instituto, 'Requisição inválida') === false) {
 }
 ok('Instituto com acesso de escrita em auditorias');
 
+// Correção (Sprint B, Achado B): esta asserção esperava 'cliente' bloqueado
+// para escrita, mas AccessControl::ROLE_CAPABILITIES['cliente'] tem
+// write=true desde a criação deste módulo (roleLabel 'Cliente Editor' -
+// é o perfil operacional padrão da própria empresa, com escrita esperada
+// em Auditorias). A expectativa estava incorreta desde o commit original
+// (a86f9f6) e nunca foi de fato exercitada porque o teste sempre morria
+// antes, na asserção do Consultor (ver acima). 'reader' (Cliente Leitor,
+// write=false) logo abaixo já cobre o caso de perfil bloqueado.
 $empresa = runAudProbe('cliente', 'store');
-if (stripos($empresa, 'Acesso negado') === false) {
-    failFast('Perfil empresa deveria ser bloqueado para escrita em auditorias');
+if (stripos($empresa, 'Requisição inválida') === false) {
+    failFast('Perfil Cliente (Editor) deveria ter acesso de escrita em auditorias');
 }
-ok('Perfil empresa bloqueado para escrita em auditorias');
+ok('Perfil Cliente (Editor) com acesso de escrita em auditorias');
 
 $reader = runAudProbe('reader', 'store');
 if (stripos($reader, 'Acesso negado') === false) {
