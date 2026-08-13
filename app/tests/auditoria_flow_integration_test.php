@@ -70,6 +70,19 @@ try {
     $colaboradorB = (int)$pdo->lastInsertId();
     $colaboradorIds[] = $colaboradorB;
 
+    /**
+     * Sprint B, Achado B: a regra vigente para o Consultor é acesso somente
+     * aos clientes vinculados via usuario_empresas (resolvido por
+     * TenantScopeResolver / Auth::allowedClientIds() e aplicado pelo
+     * AuditoriaModel). Não existe mais "Consultor com escrita ampla" -
+     * este bloco cobre o isolamento cross-tenant chamando o Model
+     * diretamente (sem passar pelo Controller/AccessControl), validando
+     * que a defesa em profundidade não depende exclusivamente da camada
+     * HTTP. A matriz completa de RBAC/módulos é coberta em
+     * auditorias_consultor_rbac_scope_regression_test.php; este teste foca
+     * no comportamento do Model em si dentro de um fluxo operacional mais
+     * longo (lote, concorrência, histórico, exclusão).
+     */
     Auth::login([
         'id' => 2001,
         'nome' => 'Consultor Escopo A',
@@ -79,6 +92,8 @@ try {
     ]);
 
     $model = new AuditoriaModel();
+
+    // Cenário 1 (próprio tenant): Consultor cria auditoria no Cliente A - SUCESSO.
     $first = $model->create([
         'cliente_id' => $clienteA,
         'setor_id' => $setorA,
@@ -97,9 +112,13 @@ try {
         failFast('Criação inicial de auditoria falhou');
     }
     $auditoriaIds[] = $first;
-    ok('Criação de auditoria em escopo permitido');
+    ok('Cenário 1: Consultor cria auditoria no cliente vinculado (Cliente A)');
 
-    $second = $model->create([
+    // Cenário 2 (cross-tenant): Consultor sem vínculo ao Cliente B tenta criar
+    // auditoria nele diretamente via AuditoriaModel::create() - BLOQUEADO.
+    // Nenhum registro pode ser persistido para o Cliente B.
+    $countClienteBAntes = (int)$pdo->query('SELECT COUNT(*) FROM auditorias WHERE cliente_id = ' . (int)$clienteB)->fetchColumn();
+    $crossTenantCreate = $model->create([
         'cliente_id' => $clienteB,
         'setor_id' => $setorB,
         'nome_auditoria' => 'Auditoria Processo B ' . $suffix,
@@ -113,11 +132,68 @@ try {
             ],
         ],
     ], 2001);
-    if ($second <= 0) {
-        failFast('Consultor deveria criar auditoria em qualquer empresa');
+    if ($crossTenantCreate > 0) {
+        $auditoriaIds[] = $crossTenantCreate;
+        failFast('Falha de segurança: Consultor sem vínculo ao Cliente B conseguiu criar auditoria via AuditoriaModel::create() chamado diretamente (isolamento não pode depender do Controller/AccessControl)');
     }
-    $auditoriaIds[] = $second;
-    ok('Consultor com escrita ampla em auditorias');
+    $countClienteBDepois = (int)$pdo->query('SELECT COUNT(*) FROM auditorias WHERE cliente_id = ' . (int)$clienteB)->fetchColumn();
+    if ($countClienteBDepois !== $countClienteBAntes) {
+        failFast('Nenhum registro deveria ter sido persistido para o Cliente B fora do escopo do Consultor');
+    }
+    ok('Cenário 2: Consultor sem vínculo é bloqueado ao criar auditoria no Cliente B (defesa em profundidade no Model)');
+
+    // Cenário 3 (leitura cross-tenant): auditoria pré-existente do Cliente B
+    // (inserida diretamente, simulando um registro real de outra empresa) não
+    // pode ser lida pelo Consultor via find() - contrato atual do Model é null.
+    $pdo->prepare("INSERT INTO auditorias (cliente_id, setor_id, data_auditoria, nome_auditoria, pergunta, objetivo, referencia_esperada, status, created_by, updated_by)
+        VALUES (:cid, :sid, CURDATE(), :nome, 'P', 'O', 'R', 'Agendada', 9999, 9999)")
+        ->execute(['cid' => $clienteB, 'sid' => $setorB, 'nome' => 'Auditoria Fora de Escopo ' . $suffix]);
+    $auditoriaForaEscopoId = (int)$pdo->lastInsertId();
+    $auditoriaIds[] = $auditoriaForaEscopoId;
+    if ($model->find($auditoriaForaEscopoId) !== null) {
+        failFast('Consultor NÃO deveria conseguir visualizar auditoria do Cliente B via find()');
+    }
+    ok('Cenário 3: leitura cross-tenant bloqueada (find() retorna null para auditoria do Cliente B)');
+
+    // Cenário 4 (listagem): Consultor lista auditorias e enxerga somente o
+    // que pertence ao(s) cliente(s) vinculado(s), sem vazar o Cliente B.
+    $listaEscopo = $model->list(['sort_col' => 'data', 'sort_dir' => 'desc'], 1, 50);
+    $idsListados = array_map(static fn($row) => (int)$row['id'], $listaEscopo['items']);
+    if (in_array($auditoriaForaEscopoId, $idsListados, true)) {
+        failFast('Listagem do Consultor vazou uma auditoria do Cliente B');
+    }
+    if (!in_array($first, $idsListados, true)) {
+        failFast('Listagem do Consultor deveria conter a auditoria do próprio Cliente A');
+    }
+    ok('Cenário 4: listagem permanece escopada ao(s) cliente(s) vinculado(s) do Consultor');
+
+    // Cenário 5 (Instituto): o único perfil com bypass global continua
+    // funcionando normalmente, inclusive no Cliente B (sem regressão).
+    Auth::login(['id' => 9999, 'nome' => 'Instituto Flow', 'email' => 'instituto.flow@test.local', 'tipo_acesso' => 'instituto', 'id_cliente' => null]);
+    $institutoCreate = $model->create([
+        'cliente_id' => $clienteB,
+        'setor_id' => $setorB,
+        'nome_auditoria' => 'Auditoria Instituto Cliente B ' . $suffix,
+        'data_auditoria' => date('Y-m-d'),
+        'questoes' => [['responsavel_nome' => 'Resp Instituto', 'pergunta' => 'Pergunta de conformidade do processo auditado', 'referencia_esperada' => 'POP-INST', 'processos' => []]],
+    ], 9999);
+    if ($institutoCreate <= 0) {
+        failFast('Instituto deveria continuar conseguindo criar auditoria em qualquer cliente (bypass global mantido)');
+    }
+    $auditoriaIds[] = $institutoCreate;
+    if ($model->find($institutoCreate) === null) {
+        failFast('Instituto deveria conseguir visualizar auditoria de qualquer cliente');
+    }
+    ok('Cenário 5: Instituto mantém bypass global de escopo, sem regressão');
+
+    // Volta ao contexto do Consultor para o restante do fluxo operacional.
+    Auth::login([
+        'id' => 2001,
+        'nome' => 'Consultor Escopo A',
+        'email' => 'scope.a@test.local',
+        'tipo_acesso' => 'consultor',
+        'id_cliente' => $clienteA,
+    ]);
 
     $t0 = microtime(true);
     for ($i = 0; $i < 1000; $i++) {
