@@ -629,14 +629,18 @@
             el.addEventListener('change', () => setDrawerDirtyFromForm(form));
           });
 
+          // Item 05A: a area de anexos de Reuniao (data-cronograma-reuniao-anexos) fica
+          // visivel sempre que renderizada pelo PHP (evento_drawer.php ja decide isso
+          // corretamente: tipo Reuniao + ainda nao finalizado + escopo evento). Antes,
+          // um "hidden" fixo no HTML so era removido quando o <select> de Status chegava
+          // a valer "Finalizado" - e o botao "Encerrar reuniao" setava esse valor e
+          // submetia o form no mesmo instante, sem o usuario conseguir usar o campo de
+          // upload antes da primeira tentativa (que falhava por falta de anexo). A
+          // area de upload nao deve mais depender do valor momentaneo do status para
+          // ficar visivel; a obrigatoriedade do anexo continua sendo validada abaixo,
+          // no submit, e no backend (CronogramaEventoModel::setStatus()/update()).
           const statusSelect = form.querySelector('[data-cronograma-status-select]');
           const reuniaoBlock = form.querySelector('[data-cronograma-reuniao-anexos]');
-          const syncReuniaoBlock = () => {
-            if (!statusSelect || !reuniaoBlock) return;
-            reuniaoBlock.classList.toggle('hidden', statusSelect.value !== 'Finalizado');
-          };
-          if (statusSelect) statusSelect.addEventListener('change', syncReuniaoBlock);
-          syncReuniaoBlock();
 
           form.addEventListener('submit', async (ev) => {
             ev.preventDefault();

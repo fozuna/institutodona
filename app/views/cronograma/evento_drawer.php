@@ -156,7 +156,7 @@ $notasInternas = (string)($event['notas_internas'] ?? '');
     </section>
 
     <?php if ($isReuniao && !$isFinalizado && $scope === 'evento'): ?>
-      <section class="hidden bg-white border rounded p-4 space-y-3" data-cronograma-reuniao-anexos>
+      <section class="bg-white border rounded p-4 space-y-3" data-cronograma-reuniao-anexos>
         <div class="font-semibold text-sm">Documentos para encerramento</div>
         <div class="text-xs text-gray-600">Para encerrar uma reunião, anexe pelo menos um documento.</div>
         <input type="hidden" name="MAX_FILE_SIZE" value="<?= 20 * 1024 * 1024 ?>" />
