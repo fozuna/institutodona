@@ -341,6 +341,7 @@
         <form method="post" action="index.php?route=planoacao/delete" onsubmit="return confirm('Tem certeza que deseja excluir este plano de ação?');" style="display:inline;">
                               <input type="hidden" name="id" value="<?= $pt['id'] ?>">
                               <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>">
+                              <input type="hidden" name="voltar_perfil" value="1">
                               <button type="submit" class="text-red-600 hover:bg-red-50 p-1.5 rounded transition-colors" title="Excluir">
                                   <span data-feather="trash-2" class="w-4 h-4"></span>
                               </button>

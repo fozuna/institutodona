@@ -448,10 +448,20 @@ class PlanoAcaoController extends BaseController
             $this->tasks->delete($id);
             // Optionally delete related actions, metrics, etc.
             // Ideally use foreign keys with ON DELETE CASCADE or handle here
-            
+
             // Log deletion
             (new PlanoAcaoHistoryModel())->log('task', $id, 'delete', [], $_SESSION['user']['id'] ?? null);
-            
+
+            // Item 03: quando a exclusao partiu do Perfil do Cliente (marcador
+            // controlado pelo sistema, nao uma URL enviada pelo navegador), volta
+            // para la em vez da listagem geral do modulo. O id_cliente usado no
+            // redirect vem do proprio registro ja localizado por
+            // PlanoAcaoTaskModel::find() (com escopo de tenant aplicado), nunca do
+            // POST - mesmo padrao usado em TarefasController::store().
+            if (!empty($_POST['voltar_perfil']) && (int)$task['id_cliente'] > 0) {
+                header('Location: index.php?route=clientes/show&id=' . (int)$task['id_cliente']);
+                return;
+            }
             header('Location: index.php?route=planoacao/index&cliente=' . $task['id_cliente']);
         } else {
             header('Location: index.php?route=planoacao/index');
