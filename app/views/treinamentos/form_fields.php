@@ -1,4 +1,35 @@
-<?php /** @var array $clientes */ /** @var string $catalogoEndpoint */ ?>
+<?php
+  /** @var array $clientes */ /** @var string $catalogoEndpoint */
+  // Item 14: ao editar um treinamento cujos setor_ids/funcao_ids salvos pertencem a
+  // departamentos DIFERENTES do departamento_id principal (multi-departamento, regra
+  // mantida desde o commit 7691b79), pré-selecionamos esses departamentos extras aqui
+  // no campo "Departamentos adicionais" para que o filtro visual (JS) parta já
+  // incluindo-os - senao o apply() no carregamento da pagina esconderia (e a UI
+  // acabaria descasando ao salvar) selecoes legitimas de outros departamentos.
+  $principalDepartamentoId = (int)($values['departamento_id'] ?? 0);
+  $setorDepartamentoMap = [];
+  foreach (($setores ?? []) as $s) {
+    $setorDepartamentoMap[(int)($s['id'] ?? 0)] = (int)($s['departamento_id'] ?? 0);
+  }
+  $funcaoDepartamentoMap = [];
+  foreach (($funcoes ?? []) as $f) {
+    $funcaoDepartamentoMap[(int)($f['id'] ?? 0)] = (int)($f['departamento_id'] ?? 0);
+  }
+  $extraDepartamentoIds = [];
+  foreach ((array)($values['setor_ids'] ?? []) as $sid) {
+    $depId = $setorDepartamentoMap[(int)$sid] ?? 0;
+    if ($depId > 0 && $depId !== $principalDepartamentoId) {
+      $extraDepartamentoIds[$depId] = true;
+    }
+  }
+  foreach ((array)($values['funcao_ids'] ?? []) as $fid) {
+    $depId = $funcaoDepartamentoMap[(int)$fid] ?? 0;
+    if ($depId > 0 && $depId !== $principalDepartamentoId) {
+      $extraDepartamentoIds[$depId] = true;
+    }
+  }
+  $extraDepartamentoIds = array_keys($extraDepartamentoIds);
+?>
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4" data-treinamentos-form data-catalog-endpoint="<?= htmlspecialchars((string)($catalogoEndpoint ?? '')) ?>">
   <div class="md:col-span-2">
     <label class="block text-sm">Nome</label>
@@ -45,15 +76,16 @@
     <p class="text-xs text-gray-500 mt-1 hidden" id="treinamentosCatalogoStatus"></p>
   </div>
   <div>
-    <label class="block text-sm">Departamentos (Filtro)</label>
+    <label class="block text-sm">Departamentos adicionais (opcional)</label>
     <select multiple size="4" class="border rounded p-2 w-full" id="treinamentosDepartamentosFiltro">
       <?php foreach ($departamentos as $departamento): ?>
-        <option value="<?= (int)$departamento['id'] ?>">
+        <option value="<?= (int)$departamento['id'] ?>"
+                <?= in_array((int)$departamento['id'], $extraDepartamentoIds, true) ? 'selected' : '' ?>>
           <?= htmlspecialchars((string)($departamento['label'] ?? $departamento['nome'] ?? '')) ?>
         </option>
       <?php endforeach; ?>
     </select>
-    <p class="text-xs text-gray-500 mt-1">Opcional: selecione um ou mais departamentos para filtrar Setores e Funções aplicáveis.</p>
+    <p class="text-xs text-gray-500 mt-1">Utilize apenas quando o treinamento também se aplicar a setores ou funções de outros departamentos da mesma empresa.</p>
   </div>
   <div>
     <label class="block text-sm">Periodicidade</label>
@@ -131,14 +163,29 @@
       return Number.isFinite(id) ? id : 0;
     };
 
+    const normalizeSelectedId = (select) => {
+      if (!select) return 0;
+      const id = parseInt(select.value || '0', 10);
+      return Number.isFinite(id) && id > 0 ? id : 0;
+    };
+
     const buildOptions = (select, items, config = {}) => {
       if (!select) return;
       const {
         placeholder = false,
         labelKey = 'label',
         attrs = [],
+        // Item 14: ao trocar de Empresa, a troca de catalogo NAO deve preservar
+        // selecoes antigas (departamento/setores/funcoes de OUTRA empresa nao fazem
+        // mais sentido). preserve=true e usado apenas no carregamento inicial da
+        // pagina, para reconstituir corretamente os vinculos de um treinamento em
+        // edicao (a partir das options ja marcadas "selected" no HTML renderizado
+        // pelo servidor).
+        preserve = true,
       } = config;
-      const selected = new Set(Array.from(select.selectedOptions).map((opt) => String(opt.value || '')));
+      const selected = preserve
+        ? new Set(Array.from(select.selectedOptions).map((opt) => String(opt.value || '')))
+        : new Set();
       select.innerHTML = '';
       if (placeholder) {
         const opt = document.createElement('option');
@@ -238,28 +285,48 @@
       }
     };
 
+    // Item 14: o conjunto de departamentos que filtra Setores/Funcoes e a UNIAO do
+    // Departamento principal (campo obrigatorio, agora participa do filtro visual)
+    // com os "Departamentos adicionais" (campo opcional multi-select, para o caso
+    // legitimo - mantido desde o commit 7691b79 - de um treinamento se aplicar a
+    // setores/funcoes de mais de um departamento da mesma empresa).
+    const activeDepartamentoIds = () => {
+      const ids = selectedIdsFromSelect(departamentosFiltro);
+      const principalId = normalizeSelectedId(departamento);
+      if (principalId > 0) ids.push(principalId);
+      return Array.from(new Set(ids));
+    };
+
     const apply = () => {
       ensureDepartamentoValid();
 
-      const depIds = selectedIdsFromSelect(departamentosFiltro);
+      const depIds = activeDepartamentoIds();
       filterOptionsByDepartments(setores, depIds);
+      // Remove selecoes de Setor que ficaram incompativeis ANTES de calcular o filtro
+      // de Funcoes - senao uma Funcao ligada a um Setor recem-invalidado continuaria
+      // visivel/selecionada por mais um ciclo (ID antigo "escondido" mas ainda no
+      // formulario), o que o Item 14 pede explicitamente para nao acontecer.
+      dropInvalidSelections(setores);
 
       const setorIds = selectedIdsFromSelect(setores);
       filterOptionsBySetores(funcoes, setorIds, depIds);
-
-      dropInvalidSelections(setores);
       dropInvalidSelections(funcoes);
     };
 
-    const loadCatalog = async () => {
+    // preserve=true (padrao): mantem as selecoes atuais dos <select> ao reconstruir as
+    // options (usado no carregamento inicial da pagina, para nao perder os vinculos de
+    // um treinamento em edicao). preserve=false: reconstroi tudo "zerado" - usado
+    // quando a propria Empresa muda, pois Departamento/Setores/Funcoes da empresa
+    // anterior nao tem mais sentido nenhum (Item 14, regra de troca de Empresa).
+    const loadCatalog = async (preserve = true) => {
       const clientId = normalizeClientId();
       if (!catalogEndpoint || clientId <= 0) {
         setCatalogLoading(false);
         setCatalogStatus('');
-        buildOptions(departamento, [], { placeholder: true });
-        buildOptions(departamentosFiltro, []);
-        buildOptions(setores, [], { attrs: [{ key: 'departamento_id', name: 'data-departamento-id' }] });
-        buildOptions(funcoes, [], { attrs: [{ key: 'setor_id', name: 'data-setor-id' }, { key: 'departamento_id', name: 'data-departamento-id' }] });
+        buildOptions(departamento, [], { placeholder: true, preserve });
+        buildOptions(departamentosFiltro, [], { preserve });
+        buildOptions(setores, [], { attrs: [{ key: 'departamento_id', name: 'data-departamento-id' }], preserve });
+        buildOptions(funcoes, [], { attrs: [{ key: 'setor_id', name: 'data-setor-id' }, { key: 'departamento_id', name: 'data-departamento-id' }], preserve });
         apply();
         return;
       }
@@ -287,25 +354,27 @@
           throw new Error((payload && payload.message) ? payload.message : 'Falha ao carregar o catálogo da empresa selecionada.');
         }
         const catalogo = payload && payload.ok ? (payload.catalogo || {}) : {};
-        buildOptions(departamento, catalogo.departamentos || [], { placeholder: true });
-        buildOptions(departamentosFiltro, catalogo.departamentos || []);
+        buildOptions(departamento, catalogo.departamentos || [], { placeholder: true, preserve });
+        buildOptions(departamentosFiltro, catalogo.departamentos || [], { preserve });
         buildOptions(setores, catalogo.setores || [], {
-          attrs: [{ key: 'departamento_id', name: 'data-departamento-id' }]
+          attrs: [{ key: 'departamento_id', name: 'data-departamento-id' }],
+          preserve
         });
         buildOptions(funcoes, catalogo.funcoes || [], {
           attrs: [
             { key: 'setor_id', name: 'data-setor-id' },
             { key: 'departamento_id', name: 'data-departamento-id' }
-          ]
+          ],
+          preserve
         });
         apply();
         setCatalogStatus('');
       } catch (error) {
         console.error('Falha ao carregar catálogo de treinamentos.', error);
-        buildOptions(departamento, [], { placeholder: true });
-        buildOptions(departamentosFiltro, []);
-        buildOptions(setores, [], { attrs: [{ key: 'departamento_id', name: 'data-departamento-id' }] });
-        buildOptions(funcoes, [], { attrs: [{ key: 'setor_id', name: 'data-setor-id' }, { key: 'departamento_id', name: 'data-departamento-id' }] });
+        buildOptions(departamento, [], { placeholder: true, preserve });
+        buildOptions(departamentosFiltro, [], { preserve });
+        buildOptions(setores, [], { attrs: [{ key: 'departamento_id', name: 'data-departamento-id' }], preserve });
+        buildOptions(funcoes, [], { attrs: [{ key: 'setor_id', name: 'data-setor-id' }, { key: 'departamento_id', name: 'data-departamento-id' }], preserve });
         apply();
         setCatalogStatus('Não foi possível carregar os departamentos da empresa selecionada.', 'error');
       } finally {
@@ -315,11 +384,12 @@
       }
     };
 
-    cliente.addEventListener('change', loadCatalog);
+    cliente.addEventListener('change', () => loadCatalog(false));
+    departamento.addEventListener('change', apply);
     if (departamentosFiltro) {
       departamentosFiltro.addEventListener('change', apply);
     }
     setores.addEventListener('change', apply);
-    loadCatalog();
+    loadCatalog(true);
   })();
 </script>
