@@ -1,5 +1,13 @@
 <?php /** @var array $items */ /** @var array $funcoes */ /** @var int $cliente */ ?>
 <?php
+$selectedSort = (string)($selected_sort ?? '');
+$selectedDir = (string)($selected_dir ?? 'asc');
+$sortIndicator = static function (string $column) use ($selectedSort, $selectedDir): string {
+    if ($selectedSort !== $column) {
+        return '↕';
+    }
+    return $selectedDir === 'desc' ? '↓' : '↑';
+};
 $currentUser = $_SESSION['user'] ?? null;
 $canClienteShow = \App\Core\AccessControl::canAccessRoute('clientes/show', 'GET', $currentUser);
 $canCreate = \App\Core\AccessControl::canAccessRoute('colaboradores/create', 'GET', $currentUser);
@@ -322,6 +330,8 @@ $backUrl = ($canClienteShow && (int)($cliente ?? 0) > 0)
     <?php endif; ?>
     <form method="get" action="index.php" id="colaboradoresFilterForm" class="mb-4 grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
         <input type="hidden" name="route" value="colaboradores/index" />
+        <input type="hidden" name="sort" id="colaboradoresSort" value="<?= htmlspecialchars($selectedSort) ?>" />
+        <input type="hidden" name="dir" id="colaboradoresDir" value="<?= htmlspecialchars($selectedDir) ?>" />
         <div class="md:col-span-4">
           <label class="text-sm">Cliente</label>
           <select name="cliente" id="colaboradoresCliente" class="border rounded p-2 w-full">
@@ -424,12 +434,42 @@ $backUrl = ($canClienteShow && (int)($cliente ?? 0) > 0)
         <table class="min-w-full">
             <thead>
                 <tr class="text-left border-b">
-                    <th class="p-3">Nome</th>
-                    <th class="p-3">E-mail</th>
-                    <th class="p-3">Unidade</th>
-                    <th class="p-3">Função</th>
-                    <th class="p-3">Setor</th>
-                    <th class="p-3">Departamento</th>
+                    <th class="p-3">
+                      <button type="button" class="colab-sort-trigger inline-flex items-center gap-1 font-semibold" data-col="nome">
+                        <span>Nome</span>
+                        <span class="text-[11px] leading-none text-gray-400" data-sort-indicator="nome"><?= $sortIndicator('nome') ?></span>
+                      </button>
+                    </th>
+                    <th class="p-3">
+                      <button type="button" class="colab-sort-trigger inline-flex items-center gap-1 font-semibold" data-col="email">
+                        <span>E-mail</span>
+                        <span class="text-[11px] leading-none text-gray-400" data-sort-indicator="email"><?= $sortIndicator('email') ?></span>
+                      </button>
+                    </th>
+                    <th class="p-3">
+                      <button type="button" class="colab-sort-trigger inline-flex items-center gap-1 font-semibold" data-col="unidade">
+                        <span>Unidade</span>
+                        <span class="text-[11px] leading-none text-gray-400" data-sort-indicator="unidade"><?= $sortIndicator('unidade') ?></span>
+                      </button>
+                    </th>
+                    <th class="p-3">
+                      <button type="button" class="colab-sort-trigger inline-flex items-center gap-1 font-semibold" data-col="funcao">
+                        <span>Função</span>
+                        <span class="text-[11px] leading-none text-gray-400" data-sort-indicator="funcao"><?= $sortIndicator('funcao') ?></span>
+                      </button>
+                    </th>
+                    <th class="p-3">
+                      <button type="button" class="colab-sort-trigger inline-flex items-center gap-1 font-semibold" data-col="setor">
+                        <span>Setor</span>
+                        <span class="text-[11px] leading-none text-gray-400" data-sort-indicator="setor"><?= $sortIndicator('setor') ?></span>
+                      </button>
+                    </th>
+                    <th class="p-3">
+                      <button type="button" class="colab-sort-trigger inline-flex items-center gap-1 font-semibold" data-col="departamento">
+                        <span>Departamento</span>
+                        <span class="text-[11px] leading-none text-gray-400" data-sort-indicator="departamento"><?= $sortIndicator('departamento') ?></span>
+                      </button>
+                    </th>
                     <th class="p-3">Ações</th>
                 </tr>
             </thead>
@@ -494,6 +534,8 @@ $backUrl = ($canClienteShow && (int)($cliente ?? 0) > 0)
     if (!form) return;
 
     const cliente = document.getElementById('colaboradoresCliente');
+    const sortField = document.getElementById('colaboradoresSort');
+    const dirField = document.getElementById('colaboradoresDir');
     const all = document.getElementById('colaboradoresAllFuncionarios');
     const unidade = document.getElementById('colaboradoresUnidade');
     const lider = document.getElementById('colaboradoresLider');
@@ -692,6 +734,32 @@ $backUrl = ($canClienteShow && (int)($cliente ?? 0) > 0)
       });
     }
 
+    const updateSortIndicators = () => {
+      document.querySelectorAll('[data-sort-indicator]').forEach((el) => {
+        const col = el.getAttribute('data-sort-indicator');
+        if (sortField && sortField.value === col) {
+          el.textContent = (dirField && dirField.value === 'desc') ? '↓' : '↑';
+        } else {
+          el.textContent = '↕';
+        }
+      });
+    };
+
+    document.querySelectorAll('.colab-sort-trigger').forEach((button) => {
+      button.addEventListener('click', () => {
+        const column = button.getAttribute('data-col') || '';
+        if (!sortField || !dirField || !column) return;
+        if (sortField.value === column) {
+          dirField.value = dirField.value === 'asc' ? 'desc' : 'asc';
+        } else {
+          sortField.value = column;
+          dirField.value = 'asc';
+        }
+        updateSortIndicators();
+        refresh(1);
+      });
+    });
+
     if (clearBtn) {
       clearBtn.addEventListener('click', () => {
         resetSelect(cliente, '');
@@ -703,6 +771,9 @@ $backUrl = ($canClienteShow && (int)($cliente ?? 0) > 0)
         resetSelect(setor, '0');
         resetSelect(funcao, '0');
         resetSelect(per, '20');
+        resetSelect(sortField, '');
+        resetSelect(dirField, 'asc');
+        updateSortIndicators();
         refresh(1);
       });
     }

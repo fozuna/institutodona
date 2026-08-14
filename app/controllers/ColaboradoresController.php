@@ -44,6 +44,8 @@ class ColaboradoresController extends BaseController
         $unidadeId = isset($_GET['unidade_id']) ? (int)$_GET['unidade_id'] : 0;
         $status = trim((string)($_GET['status'] ?? ''));
         $allFuncionarios = !empty($_GET['all_funcionarios']) && (string)$_GET['all_funcionarios'] !== '0';
+        $sort = ColaboradorModel::normalizeSortColumn($_GET['sort'] ?? null);
+        $dir = ColaboradorModel::normalizeSortDirection($_GET['dir'] ?? null);
         $filters = [
             'lider' => $lider,
             'departamento_id' => $departamentoId ?: null,
@@ -84,7 +86,7 @@ class ColaboradoresController extends BaseController
             $unidadeId = 0;
         }
 
-        $items = !empty($scopeClienteIds) ? $this->colabs->paginatedByClientesWithFilters($scopeClienteIds, $page, $perPage, $filters) : [];
+        $items = !empty($scopeClienteIds) ? $this->colabs->paginatedByClientesWithFilters($scopeClienteIds, $page, $perPage, $filters, $sort, $dir) : [];
         $total = !empty($scopeClienteIds) ? $this->colabs->countByClientesWithFilters($scopeClienteIds, $filters) : 0;
         $totalPages = !empty($scopeClienteIds) ? max(1, (int)ceil($total / $perPage)) : 1;
 
@@ -123,7 +125,9 @@ class ColaboradoresController extends BaseController
             'filter_unidade' => $unidadeId,
             'filter_status' => $status,
             'filter_all_funcionarios' => $allFuncionarios,
-            'can_all_funcionarios' => $canAllFuncionarios
+            'can_all_funcionarios' => $canAllFuncionarios,
+            'selected_sort' => $sort ?? '',
+            'selected_dir' => $dir,
         ]);
     }
 
@@ -147,6 +151,8 @@ class ColaboradoresController extends BaseController
         $unidadeId = isset($_GET['unidade_id']) ? (int)$_GET['unidade_id'] : 0;
         $status = trim((string)($_GET['status'] ?? ''));
         $allFuncionarios = !empty($_GET['all_funcionarios']) && (string)$_GET['all_funcionarios'] !== '0';
+        $sort = ColaboradorModel::normalizeSortColumn($_GET['sort'] ?? null);
+        $dir = ColaboradorModel::normalizeSortDirection($_GET['dir'] ?? null);
 
         $clienteModel = new ClienteModel();
         $selectedCliente = $cliente > 0 ? $clienteModel->find($cliente) : null;
@@ -242,12 +248,12 @@ class ColaboradoresController extends BaseController
             'status' => $status !== '' ? $status : null,
         ];
 
-        $items = $this->colabs->paginatedByClientesWithFilters($scopeClienteIds, $page, $perPage, $filters);
+        $items = $this->colabs->paginatedByClientesWithFilters($scopeClienteIds, $page, $perPage, $filters, $sort, $dir);
         $total = $this->colabs->countByClientesWithFilters($scopeClienteIds, $filters);
         $totalPages = max(1, (int)ceil($total / $perPage));
         $page = min($page, $totalPages);
         if ($page !== (int)($_GET['page'] ?? $page)) {
-            $items = $this->colabs->paginatedByClientesWithFilters($scopeClienteIds, $page, $perPage, $filters);
+            $items = $this->colabs->paginatedByClientesWithFilters($scopeClienteIds, $page, $perPage, $filters, $sort, $dir);
         }
 
         $departamentos = $effectiveCatalogId > 0 ? $this->deps->activeByCliente($effectiveCatalogId) : [];
@@ -272,6 +278,8 @@ class ColaboradoresController extends BaseController
                 'setor' => $setorId,
                 'funcao' => $funcaoId,
                 'status' => $status,
+                'sort' => $sort ?? '',
+                'dir' => $dir,
             ],
             'options' => [
                 'unidades' => $unidades,

@@ -3,6 +3,42 @@ namespace App\Models;
 
 class ColaboradorModel extends BaseModel
 {
+    /**
+     * Item 15b: whitelist fixa para ordenacao por cabecalho clicavel na
+     * listagem de Colaboradores. O navegador so envia a chave logica (ex.:
+     * "nome"); o Model e' quem decide a coluna SQL real - nenhum valor de
+     * $_GET chega a ser concatenado na query.
+     */
+    private const SORT_COLUMNS = [
+        'nome' => 'col.nome',
+        'email' => 'col.email',
+        'unidade' => 'cli.nome_empresa',
+        'funcao' => 'f.nome',
+        'setor' => 's.nome',
+        'departamento' => 'd.nome',
+    ];
+
+    public static function sortableColumns(): array
+    {
+        return array_keys(self::SORT_COLUMNS);
+    }
+
+    /**
+     * Retorna null quando a chave e' vazia/invalida - sinaliza para manter
+     * a ordenacao padrao atual (hierarquica: departamento > setor > funcao >
+     * nome), em vez de forcar um fallback para uma coluna especifica.
+     */
+    public static function normalizeSortColumn(?string $value): ?string
+    {
+        $value = trim((string)$value);
+        return array_key_exists($value, self::SORT_COLUMNS) ? $value : null;
+    }
+
+    public static function normalizeSortDirection(?string $value): string
+    {
+        return strtolower(trim((string)$value)) === 'desc' ? 'desc' : 'asc';
+    }
+
     private function buildClienteScopeClause(string $column, array $clienteIds, array &$params, string $prefix): string
     {
         $holders = [];
@@ -219,7 +255,7 @@ class ColaboradorModel extends BaseModel
         return $stmt->fetchAll();
     }
 
-    public function paginatedByClientesWithFilters(array $clienteIds, int $page, int $perPage, array $filters): array
+    public function paginatedByClientesWithFilters(array $clienteIds, int $page, int $perPage, array $filters, ?string $sort = null, ?string $dir = null): array
     {
         $this->ensureTable();
         $clienteIds = array_values(array_unique(array_filter(array_map('intval', $clienteIds))));
@@ -239,6 +275,13 @@ class ColaboradorModel extends BaseModel
         if (!empty($filters['funcao_id'])) { $conds[] = 'f.id = :func'; $params['func'] = (int)$filters['funcao_id']; }
         if (!empty($filters['status'])) { $this->applyStatusFilter((string)$filters['status'], $conds, $params); }
 
+        $orderBy = 'd.nome, s.nome, f.nome, col.nome';
+        $sortKey = self::normalizeSortColumn($sort);
+        if ($sortKey !== null) {
+            $direction = self::normalizeSortDirection($dir) === 'desc' ? 'DESC' : 'ASC';
+            $orderBy = self::SORT_COLUMNS[$sortKey] . ' ' . $direction . ', col.id ' . $direction;
+        }
+
         $sql = 'SELECT DISTINCT col.id, col.nome, col.email, col.funcao_id, col.cliente_id,
                        cli.nome_empresa AS unidade, f.nome AS funcao, s.nome AS setor, d.nome AS departamento
                 FROM colaboradores col
@@ -247,7 +290,7 @@ class ColaboradorModel extends BaseModel
                 JOIN departamentos d ON d.id = s.departamento_id
                 LEFT JOIN clientes cli ON cli.id = col.cliente_id
                 WHERE ' . implode(' AND ', $conds) . '
-                ORDER BY d.nome, s.nome, f.nome, col.nome
+                ORDER BY ' . $orderBy . '
                 LIMIT ' . (int)$perPage . ' OFFSET ' . (int)$offset;
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
