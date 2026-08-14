@@ -73,6 +73,9 @@ final class AccessControl
         'tarefas' => self::CLIENT_ADMIN_MODULE,
         'manuais' => self::CLIENT_ADMIN_MODULE,
         'biblioteca' => self::CLIENT_ADMIN_MODULE,
+        // Item 05B: acervo interno de Atas - Instituto only (nenhum outro perfil tem
+        // ADMIN_MODULE liberado). Reforcado tambem no AtasController e no AtaModel.
+        'atas' => self::ADMIN_MODULE,
         'auditorias' => self::AUDITORIAS_MODULE,
         'treinamentos' => self::CLIENT_ADMIN_MODULE,
         'reunioes' => self::CLIENT_ADMIN_MODULE,

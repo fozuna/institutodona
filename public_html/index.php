@@ -29,6 +29,7 @@ use App\Controllers\AboutController;
 use App\Controllers\AuditoriasController;
 use App\Controllers\AvaliacaoPublicaController;
 use App\Controllers\ManuaisController;
+use App\Controllers\AtasController;
 use App\Controllers\TreinamentosController;
 use App\Controllers\TarefasController;
 use App\Controllers\ReunioesController;
@@ -409,6 +410,21 @@ switch ($route) {
         break;
     case 'manuais/revokePortalLink':
         (new ManuaisController())->revokePortalLink();
+        break;
+    case 'atas/index':
+        (new AtasController())->index();
+        break;
+    case 'atas/create':
+        (new AtasController())->create();
+        break;
+    case 'atas/store':
+        (new AtasController())->store();
+        break;
+    case 'atas/download':
+        (new AtasController())->download();
+        break;
+    case 'atas/delete':
+        (new AtasController())->delete();
         break;
     case 'aplicacoes/set_status':
         (new AplicacoesController())->set_status();

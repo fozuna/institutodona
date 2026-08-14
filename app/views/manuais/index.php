@@ -34,6 +34,13 @@ $hasActiveFilters = ($selectedEmpresa > 0) || ($selectedDepartamento > 0) || ($s
     </div>
   </div>
 
+  <?php if (\App\Core\Auth::isInstituto()): ?>
+  <div class="mb-4 flex items-center gap-1 border-b border-slate-200">
+    <a class="px-3 py-2 text-sm font-medium text-brand-red border-b-2 border-brand-red -mb-px" href="index.php?route=manuais/index">Manuais</a>
+    <a class="px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800" href="index.php?route=atas/index">Atas</a>
+  </div>
+  <?php endif; ?>
+
   <?php if ($canManageManuais && $selectedEmpresa > 0): ?>
     <div class="rounded-lg border border-slate-200 bg-white p-4 mb-4 shadow-sm">
       <div class="flex items-center justify-between gap-3">
