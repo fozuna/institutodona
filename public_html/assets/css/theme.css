@@ -59,7 +59,12 @@
 }
 .nav-link-icon { width: 18px; height: 18px; flex-shrink: 0; }
 .nav-link:hover { background-color: rgba(255,255,255,0.08); box-shadow: inset 4px 0 0 var(--brand-red); }
-.nav-link:focus { outline: 2px solid var(--brand-red); outline-offset: 2px; }
+/* :focus-visible (não :focus) - mesmo padrão já usado em .icon-btn/.icon-action: o anel de
+   foco aparece na navegação por teclado, mas não fica "grudado" depois de um clique de mouse
+   (senão o item pai de submenu, que é um <button>, mantém o foco após abrir/fechar e o anel
+   passa a parecer uma borda permanente de destaque forte - o efeito de "botão dominante" que
+   esta normalização queria evitar). */
+.nav-link:focus-visible { outline: 2px solid var(--brand-red); outline-offset: 2px; }
 /* Destaque forte: reservado exclusivamente para o item realmente ativo (folha). */
 .nav-link.is-active { background-color: rgba(255,255,255,0.12); box-shadow: inset 4px 0 0 var(--brand-red); font-weight: 600; }
 
