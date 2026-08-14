@@ -97,147 +97,121 @@ $brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
                     $hasProcessosMenu = $canBiblioteca || $canAuditorias || $canReunioes || $canCoaching || $canProcessos;
                     $hasResultadosMenu = $canIndicadores;
                     $hasCadastrosMenu = $canClientes || $canUsuarios || $canConsultores || $canPilares || $canDepartamentos || $canSetores || $canFuncoes || $canColaboradores;
+
+                    // Sprint de normalizacao do menu lateral: dois helpers garantem que TODO item
+                    // (simples ou pai de submenu) compartilhe exatamente a mesma estrutura interna
+                    // (.nav-link-inner > icone + label [+ chevron]), eliminando a divergencia de
+                    // alinhamento entre <a> e <button> que existia antes. Nao alteram RBAC/rotas -
+                    // apenas centralizam a marcacao que ja era montada manualmente em ~20 lugares.
+                    $navLink = static function (string $route, string $icon, string $label, bool $active, string $extraClass = '', string $rawAttrs = '') use ($r): string {
+                        $cls = trim('nav-link ' . $extraClass . ($active ? ' is-active' : ''));
+                        return '<a class="' . htmlspecialchars($cls) . '" href="index.php?route=' . htmlspecialchars($route) . '" title="' . htmlspecialchars($label) . '"' . ($rawAttrs !== '' ? ' ' . $rawAttrs : '') . '>'
+                            . '<span class="nav-link-inner"><span data-feather="' . htmlspecialchars($icon) . '" class="nav-link-icon shrink-0"></span><span class="sidebar-label">' . htmlspecialchars($label) . '</span></span>'
+                            . '</a>';
+                    };
+                    $submenuTrigger = static function (string $key, string $icon, string $label, bool $hasActiveChild) : string {
+                        $cls = 'w-full nav-link submenu-trigger' . ($hasActiveChild ? ' has-active-descendant' : '');
+                        return '<button type="button" class="' . htmlspecialchars($cls) . '" data-submenu-trigger="' . htmlspecialchars($key) . '" data-default-open="' . ($hasActiveChild ? 'true' : 'false') . '" aria-expanded="' . ($hasActiveChild ? 'true' : 'false') . '" title="' . htmlspecialchars($label) . '">'
+                            . '<span class="nav-link-inner"><span data-feather="' . htmlspecialchars($icon) . '" class="nav-link-icon shrink-0"></span><span class="flex-1 text-left sidebar-label">' . htmlspecialchars($label) . '</span><span data-feather="chevron-down" class="submenu-chevron"></span></span>'
+                            . '</button>';
+                    };
                 ?>
                 <nav class="px-4 py-4 space-y-1">
                     <?php if ($canDashboard): ?>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'dashboard/')===0?'is-active':'' ?>" href="index.php?route=dashboard/index" title="Dashboard"><span data-feather="home" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Dashboard</span></a>
+                    <?= $navLink('dashboard/index', 'home', 'Dashboard', strpos($r,'dashboard/')===0) ?>
                     <?php endif; ?>
                     <?php if ($canAvaliacoes): ?>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'avaliacoes/')===0?'is-active':'' ?>" href="index.php?route=avaliacoes/index" title="Avaliações"><span data-feather="check-square" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Avaliações</span></a>
+                    <?= $navLink('avaliacoes/index', 'check-square', 'Avaliações', strpos($r,'avaliacoes/')===0) ?>
                     <?php endif; ?>
                     <?php if ($canCronograma): ?>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'cronograma/')===0?'is-active':'' ?>" href="index.php?route=cronograma/index" title="Cronograma"><span data-feather="calendar" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Cronograma</span></a>
+                    <?= $navLink('cronograma/index', 'calendar', 'Cronograma', strpos($r,'cronograma/')===0) ?>
                     <?php endif; ?>
                     <?php if ($hasProcessosMenu): ?>
                     <div class="submenu-group">
-                        <button type="button"
-                                class="w-full px-3 py-2 rounded nav-link submenu-trigger <?= $isProcessosActive ? 'is-active' : '' ?>"
-                                data-submenu-trigger="processos"
-                                data-default-open="<?= $isProcessosActive ? 'true' : 'false' ?>"
-                                aria-expanded="<?= $isProcessosActive ? 'true' : 'false' ?>"
-                                title="Processos">
-                            <span class="flex items-center">
-                                <span data-feather="layers" class="inline-block mr-2 shrink-0"></span>
-                                <span class="flex-1 text-left sidebar-label">Processos</span>
-                                <span data-feather="chevron-down" class="submenu-chevron"></span>
-                            </span>
-                        </button>
+                        <?= $submenuTrigger('processos', 'layers', 'Processos', $isProcessosActive) ?>
                         <div class="submenu-panel <?= $isProcessosActive ? '' : 'hidden' ?>" data-submenu-panel="processos">
                             <?php if ($canBiblioteca): ?>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'manuais/')===0?'is-active':'' ?>" href="index.php?route=manuais/index" title="Biblioteca"><span data-feather="book-open" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Biblioteca</span></a>
+                            <?= $navLink('manuais/index', 'book-open', 'Biblioteca', strpos($r,'manuais/')===0, 'submenu-link') ?>
                             <?php endif; ?>
                             <?php if ($canAuditorias): ?>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'auditorias/')===0?'is-active':'' ?>" href="index.php?route=auditorias/index" title="Auditorias"><span data-feather="clipboard" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Auditorias</span></a>
+                            <?= $navLink('auditorias/index', 'clipboard', 'Auditorias', strpos($r,'auditorias/')===0, 'submenu-link') ?>
                             <?php endif; ?>
                             <?php if ($canReunioes): ?>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'reunioes/')===0?'is-active':'' ?>" href="index.php?route=reunioes/index" title="Reuniões" <?= $ozunaOnlyAttr ?>><span data-feather="users" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Reuniões</span></a>
+                            <?= $navLink('reunioes/index', 'users', 'Reuniões', strpos($r,'reunioes/')===0, 'submenu-link', $ozunaOnlyAttr) ?>
                             <?php endif; ?>
                             <?php if ($canCoaching): ?>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'coaching/')===0?'is-active':'' ?>" href="index.php?route=coaching/index" title="Coaching" <?= $ozunaOnlyAttr ?>><span data-feather="target" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Coaching</span></a>
+                            <?= $navLink('coaching/index', 'target', 'Coaching', strpos($r,'coaching/')===0, 'submenu-link', $ozunaOnlyAttr) ?>
                             <?php endif; ?>
                             <?php if ($canProcessos): ?>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'processos/')===0?'is-active':'' ?>" href="index.php?route=processos/index" title="Processos" <?= $ozunaOnlyAttr ?>><span data-feather="git-branch" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Processos</span></a>
+                            <?= $navLink('processos/index', 'git-branch', 'Processos', strpos($r,'processos/')===0, 'submenu-link', $ozunaOnlyAttr) ?>
                             <?php endif; ?>
                         </div>
                     </div>
                     <?php endif; ?>
                     <?php if ($hasResultadosMenu): ?>
                     <div class="submenu-group">
-                        <button type="button"
-                                class="w-full px-3 py-2 rounded nav-link submenu-trigger <?= $isResultadosActive ? 'is-active' : '' ?>"
-                                data-submenu-trigger="resultados"
-                                data-default-open="<?= $isResultadosActive ? 'true' : 'false' ?>"
-                                aria-expanded="<?= $isResultadosActive ? 'true' : 'false' ?>"
-                                title="Resultados">
-                            <span class="flex items-center">
-                                <span data-feather="bar-chart-2" class="inline-block mr-2 shrink-0"></span>
-                                <span class="flex-1 text-left sidebar-label">Resultados</span>
-                                <span data-feather="chevron-down" class="submenu-chevron"></span>
-                            </span>
-                        </button>
+                        <?= $submenuTrigger('resultados', 'bar-chart-2', 'Resultados', $isResultadosActive) ?>
                         <div class="submenu-panel <?= $isResultadosActive ? '' : 'hidden' ?>" data-submenu-panel="resultados">
                             <?php if ($canIndicadores): ?>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'indicadores/')===0?'is-active':'' ?>" href="index.php?route=indicadores/index" title="Indicadores"><span data-feather="bar-chart-2" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Indicadores</span></a>
+                            <?= $navLink('indicadores/index', 'bar-chart-2', 'Indicadores', strpos($r,'indicadores/')===0, 'submenu-link') ?>
                             <?php endif; ?>
                         </div>
                     </div>
                     <?php endif; ?>
                     <?php if ($hasPessoasMenu): ?>
                     <div class="submenu-group">
-                        <button type="button"
-                                class="w-full px-3 py-2 rounded nav-link submenu-trigger <?= $isPessoasActive ? 'is-active' : '' ?>"
-                                data-submenu-trigger="pessoas"
-                                data-default-open="<?= $isPessoasActive ? 'true' : 'false' ?>"
-                                aria-expanded="<?= $isPessoasActive ? 'true' : 'false' ?>"
-                                title="Pessoas">
-                            <span class="flex items-center">
-                                <span data-feather="users" class="inline-block mr-2 shrink-0"></span>
-                                <span class="flex-1 text-left sidebar-label">Pessoas</span>
-                                <span data-feather="chevron-down" class="submenu-chevron"></span>
-                            </span>
-                        </button>
+                        <?= $submenuTrigger('pessoas', 'users', 'Pessoas', $isPessoasActive) ?>
                         <div class="submenu-panel <?= $isPessoasActive ? '' : 'hidden' ?>" data-submenu-panel="pessoas">
                             <?php if ($canTreinamentos): ?>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'treinamentos/')===0?'is-active':'' ?>" href="index.php?route=treinamentos/index" title="Treinamentos"><span data-feather="award" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Treinamentos</span></a>
+                            <?= $navLink('treinamentos/index', 'award', 'Treinamentos', strpos($r,'treinamentos/')===0, 'submenu-link') ?>
                             <?php endif; ?>
                         </div>
                     </div>
                     <?php endif; ?>
                     <?php if ($canPlanoAcao): ?>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'planoacao/')===0?'is-active':'' ?>" href="index.php?route=planoacao/index" title="Plano de Ação"><span data-feather="activity" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Plano de Ação</span></a>
+                    <?= $navLink('planoacao/index', 'activity', 'Plano de Ação', strpos($r,'planoacao/')===0) ?>
                     <?php endif; ?>
                     <?php if ($canTarefas): ?>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'tarefas/')===0?'is-active':'' ?>" href="index.php?route=tarefas/index" title="Tarefas"><span data-feather="check-square" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Tarefas</span></a>
+                    <?= $navLink('tarefas/index', 'check-square', 'Tarefas', strpos($r,'tarefas/')===0) ?>
                     <?php endif; ?>
                     <?php if ($canAgenda): ?>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'agenda/')===0?'is-active':'' ?>" href="index.php?route=agenda/index" title="Agenda"><span data-feather="calendar" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Agenda</span></a>
+                    <?= $navLink('agenda/index', 'calendar', 'Agenda', strpos($r,'agenda/')===0) ?>
                     <?php endif; ?>
                     <?php if ($hasCadastrosMenu): ?>
                     <div class="submenu-group">
-                        <button type="button"
-                                class="w-full px-3 py-2 rounded nav-link submenu-trigger <?= $isCadastrosActive ? 'is-active' : '' ?>"
-                                data-submenu-trigger="cadastros"
-                                data-default-open="<?= $isCadastrosActive ? 'true' : 'false' ?>"
-                                aria-expanded="<?= $isCadastrosActive ? 'true' : 'false' ?>"
-                                title="Cadastros">
-                            <span class="flex items-center">
-                                <span data-feather="folder" class="inline-block mr-2 shrink-0"></span>
-                                <span class="flex-1 text-left sidebar-label">Cadastros</span>
-                                <span data-feather="chevron-down" class="submenu-chevron"></span>
-                            </span>
-                        </button>
+                        <?= $submenuTrigger('cadastros', 'folder', 'Cadastros', $isCadastrosActive) ?>
                         <div class="submenu-panel <?= $isCadastrosActive ? '' : 'hidden' ?>" data-submenu-panel="cadastros">
                             <?php if ($canClientes): ?>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'clientes/')===0?'is-active':'' ?>" href="index.php?route=clientes/index" title="Clientes"><span data-feather="briefcase" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Clientes</span></a>
+                            <?= $navLink('clientes/index', 'briefcase', 'Clientes', strpos($r,'clientes/')===0, 'submenu-link') ?>
                             <?php endif; ?>
                             <?php if ($canUsuarios): ?>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'usuarios/')===0?'is-active':'' ?>" href="index.php?route=usuarios/index" title="Usuários"><span data-feather="user" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Usuários</span></a>
+                            <?= $navLink('usuarios/index', 'user', 'Usuários', strpos($r,'usuarios/')===0, 'submenu-link') ?>
                             <?php endif; ?>
                             <?php if ($canConsultores): ?>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'consultores/')===0?'is-active':'' ?>" href="index.php?route=consultores/index" title="Consultores"><span data-feather="users" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Consultores</span></a>
+                            <?= $navLink('consultores/index', 'users', 'Consultores', strpos($r,'consultores/')===0, 'submenu-link') ?>
                             <?php endif; ?>
                             <?php if ($canPilares): ?>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'pilares/')===0?'is-active':'' ?>" href="index.php?route=pilares/index" title="Pilares"><span data-feather="grid" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Pilares</span></a>
+                            <?= $navLink('pilares/index', 'grid', 'Pilares', strpos($r,'pilares/')===0, 'submenu-link') ?>
                             <?php endif; ?>
                             <?php if ($canDepartamentos): ?>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'departamentos/')===0?'is-active':'' ?>" href="index.php?route=departamentos/index" title="Departamentos"><span data-feather="folder" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Departamentos</span></a>
+                            <?= $navLink('departamentos/index', 'folder', 'Departamentos', strpos($r,'departamentos/')===0, 'submenu-link') ?>
                             <?php endif; ?>
                             <?php if ($canSetores): ?>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'setores/')===0?'is-active':'' ?>" href="index.php?route=setores/index" title="Setores"><span data-feather="layers" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Setores</span></a>
+                            <?= $navLink('setores/index', 'layers', 'Setores', strpos($r,'setores/')===0, 'submenu-link') ?>
                             <?php endif; ?>
                             <?php if ($canFuncoes): ?>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'funcoes/')===0?'is-active':'' ?>" href="index.php?route=funcoes/index" title="Funções"><span data-feather="briefcase" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Funções</span></a>
+                            <?= $navLink('funcoes/index', 'briefcase', 'Funções', strpos($r,'funcoes/')===0, 'submenu-link') ?>
                             <?php endif; ?>
                             <?php if ($canColaboradores): ?>
-                            <a class="block px-3 py-2 rounded nav-link submenu-link <?= strpos($r,'colaboradores/')===0?'is-active':'' ?>" href="index.php?route=colaboradores/index" title="Colaboradores"><span data-feather="users" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Colaboradores</span></a>
+                            <?= $navLink('colaboradores/index', 'users', 'Colaboradores', strpos($r,'colaboradores/')===0, 'submenu-link') ?>
                             <?php endif; ?>
                         </div>
                     </div>
                     <?php endif; ?>
                     <?php if (($user['email'] ?? '') === 'admin@agencialester.com.br'): ?>
-                    <a class="block px-3 py-2 rounded nav-link <?= strpos($r,'logs/')===0?'is-active':'' ?>" href="index.php?route=logs/index" title="Logs"><span data-feather="file-text" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Logs</span></a>
+                    <?= $navLink('logs/index', 'file-text', 'Logs', strpos($r,'logs/')===0) ?>
                     <?php endif; ?>
-                    <a class="block px-3 py-2 rounded nav-link <?= $isSobreManualActive ? 'is-active' : '' ?>" href="index.php?route=about/index" title="Sobre e Manual de Uso"><span data-feather="book" class="inline-block mr-2 shrink-0"></span><span class="sidebar-label">Sobre e Manual de Uso</span></a>
+                    <?= $navLink('about/index', 'book', 'Sobre e Manual de Uso', $isSobreManualActive) ?>
                 </nav>
                 <div class="mt-auto px-4 py-3 border-t border-brand-brown flex items-center justify-between">
                     <button id="themeToggle" class="text-sm flex items-center gap-2">
