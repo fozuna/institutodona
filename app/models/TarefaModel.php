@@ -6,6 +6,25 @@ use App\Database\Database;
 final class TarefaModel extends BaseModel
 {
     private const STATUS_VALUES = ['Planejado', 'Pendente', 'Andamento', 'Adiado', 'Finalizado'];
+    private const PRIORIDADE_VALUES = ['baixa', 'media', 'alta'];
+
+    /**
+     * Item 17: whitelist fixa de ordenacao - cada chave mapeia para uma
+     * expressao SQL inteiramente conhecida em tempo de compilacao, nunca
+     * construida a partir de valor cru de $_GET (normalizeOrder() sempre
+     * cai no default se a chave nao existir aqui). FIELD() para prioridade
+     * e literal (nao concatena o valor do filtro), expressando a ordem de
+     * negocio alta > media > baixa (e o inverso).
+     */
+    private const ORDER_OPTIONS = [
+        'data_inicio_desc' => 't.data_inicio DESC, t.id DESC',
+        'data_inicio_asc' => 't.data_inicio ASC, t.id ASC',
+        'created_at_desc' => 't.created_at DESC, t.id DESC',
+        'created_at_asc' => 't.created_at ASC, t.id ASC',
+        'prioridade_desc' => "FIELD(t.prioridade,'alta','media','baixa'), t.data_inicio DESC",
+        'prioridade_asc' => "FIELD(t.prioridade,'baixa','media','alta'), t.data_inicio DESC",
+    ];
+    private const DEFAULT_ORDER = 'data_inicio_desc';
 
     private function ensureTable(): void
     {
@@ -54,6 +73,122 @@ final class TarefaModel extends BaseModel
         return $stmt->fetchAll();
     }
 
+    public static function statusValues(): array
+    {
+        return self::STATUS_VALUES;
+    }
+
+    public static function prioridadeValues(): array
+    {
+        return self::PRIORIDADE_VALUES;
+    }
+
+    public static function orderOptions(): array
+    {
+        return array_keys(self::ORDER_OPTIONS);
+    }
+
+    public static function normalizeStatusFilter(?string $value): ?string
+    {
+        $value = trim((string)$value);
+        return in_array($value, self::STATUS_VALUES, true) ? $value : null;
+    }
+
+    public static function normalizePrioridadeFilter(?string $value): ?string
+    {
+        $value = trim((string)$value);
+        return in_array($value, self::PRIORIDADE_VALUES, true) ? $value : null;
+    }
+
+    public static function normalizeOrder(?string $value): string
+    {
+        $value = trim((string)$value);
+        return array_key_exists($value, self::ORDER_OPTIONS) ? $value : self::DEFAULT_ORDER;
+    }
+
+    /**
+     * Monta a clausula WHERE compartilhada por count() e paginate() (Item
+     * 17), garantindo que os dois usem exatamente os mesmos filtros. Mesma
+     * defesa em profundidade de all()/find(): cliente_id (se informado) e
+     * remapeado por normalizeScopedClienteId() e a condicao de tenant
+     * (tenantInCondition) e sempre ANDada por cima, independente do filtro.
+     */
+    private function buildFilterClause(array $filters, array &$params, string $prefix): string
+    {
+        $where = [];
+        $clienteId = isset($filters['cliente_id']) ? (int)$filters['cliente_id'] : 0;
+        if ($clienteId > 0) {
+            $key = $prefix . '_cliente';
+            $params[$key] = $this->normalizeScopedClienteId($clienteId);
+            $where[] = 't.cliente_id = :' . $key;
+        }
+        $where[] = $this->tenantInCondition('t.cliente_id', $params, $prefix . '_tenant');
+
+        $status = self::normalizeStatusFilter($filters['status'] ?? null);
+        if ($status !== null) {
+            $key = $prefix . '_status';
+            $params[$key] = $status;
+            $where[] = 't.status = :' . $key;
+        }
+
+        $prioridade = self::normalizePrioridadeFilter($filters['prioridade'] ?? null);
+        if ($prioridade !== null) {
+            $key = $prefix . '_prioridade';
+            $params[$key] = $prioridade;
+            $where[] = 't.prioridade = :' . $key;
+        }
+
+        return implode(' AND ', $where);
+    }
+
+    /**
+     * Item 17: contagem usada para calcular o total de paginas, com os
+     * mesmos filtros de paginate() (via buildFilterClause compartilhado).
+     */
+    public function count(array $filters = []): int
+    {
+        $this->ensureTable();
+        $params = [];
+        $where = $this->buildFilterClause($filters, $params, 'tkc');
+        $stmt = $this->db->prepare("SELECT COUNT(*) FROM tarefas t WHERE $where");
+        $stmt->execute($params);
+        return (int)$stmt->fetchColumn();
+    }
+
+    /**
+     * Item 17: listagem paginada e filtrada (cliente/status/prioridade) com
+     * ordenacao configuravel via whitelist (normalizeOrder()). Nao substitui
+     * all() - metodo novo, adicional, usado apenas por
+     * TarefasController::index().
+     */
+    public function paginate(array $filters = [], int $page = 1, int $perPage = 20): array
+    {
+        $this->ensureTable();
+        $page = max(1, $page);
+        $perPage = max(1, min(200, $perPage));
+        $offset = ($page - 1) * $perPage;
+
+        $params = [];
+        $where = $this->buildFilterClause($filters, $params, 'tkp');
+        $orderKey = self::normalizeOrder($filters['ordem'] ?? null);
+        $orderSql = self::ORDER_OPTIONS[$orderKey];
+
+        $sql = "SELECT t.*, c.nome_empresa AS cliente
+                FROM tarefas t
+                JOIN clientes c ON c.id = t.cliente_id
+                WHERE $where
+                ORDER BY $orderSql
+                LIMIT :limit OFFSET :offset";
+        $stmt = $this->db->prepare($sql);
+        foreach ($params as $key => $value) {
+            $stmt->bindValue(':' . $key, $value, is_int($value) ? \PDO::PARAM_INT : \PDO::PARAM_STR);
+        }
+        $stmt->bindValue(':limit', $perPage, \PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, \PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
     public function find(int $id): ?array
     {
         $this->ensureTable();
@@ -85,7 +220,7 @@ final class TarefaModel extends BaseModel
         if ($titulo === '' || $dataInicio === '') {
             return 0;
         }
-        if (!in_array($prioridade, ['baixa', 'media', 'alta'], true)) {
+        if (!in_array($prioridade, self::PRIORIDADE_VALUES, true)) {
             $prioridade = 'media';
         }
         if (!in_array($status, self::STATUS_VALUES, true)) {
@@ -124,7 +259,7 @@ final class TarefaModel extends BaseModel
         if ($titulo === '' || $dataInicio === '') {
             return false;
         }
-        if (!in_array($prioridade, ['baixa', 'media', 'alta'], true)) {
+        if (!in_array($prioridade, self::PRIORIDADE_VALUES, true)) {
             $prioridade = 'media';
         }
         if (!in_array($status, self::STATUS_VALUES, true)) {

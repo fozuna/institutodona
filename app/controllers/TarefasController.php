@@ -21,12 +21,43 @@ final class TarefasController extends BaseController
     {
         $this->requireLogin();
         $cliente = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
-        $items = $this->tarefas->all($cliente ?: null);
+        $status = TarefaModel::normalizeStatusFilter($_GET['status'] ?? null);
+        $prioridade = TarefaModel::normalizePrioridadeFilter($_GET['prioridade'] ?? null);
+        $ordem = TarefaModel::normalizeOrder($_GET['ordem'] ?? null);
+        $page = (int)($_GET['page'] ?? 1);
+        if ($page < 1) {
+            $page = 1;
+        }
+        $perPage = 20;
+
+        $filters = [
+            'cliente_id' => $cliente ?: null,
+            'status' => $status,
+            'prioridade' => $prioridade,
+            'ordem' => $ordem,
+        ];
+
+        $total = $this->tarefas->count($filters);
+        $totalPages = max(1, (int)ceil($total / $perPage));
+        if ($page > $totalPages) {
+            $page = $totalPages;
+        }
+        $items = $this->tarefas->paginate($filters, $page, $perPage);
         $clientes = $this->clientes->all();
+
         $this->render('tarefas/index', [
             'items' => $items,
             'clientes' => $clientes,
             'selectedCliente' => $cliente,
+            'selectedStatus' => $status ?? '',
+            'selectedPrioridade' => $prioridade ?? '',
+            'selectedOrdem' => $ordem,
+            'statusOptions' => TarefaModel::statusValues(),
+            'prioridadeOptions' => TarefaModel::prioridadeValues(),
+            'page' => $page,
+            'perPage' => $perPage,
+            'total' => $total,
+            'totalPages' => $totalPages,
         ]);
     }
 

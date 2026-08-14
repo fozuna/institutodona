@@ -33,7 +33,10 @@ namespace {
 
     $pdo = Database::getConnection();
     $suffix = substr(bin2hex(random_bytes(4)), 0, 8);
+    $clienteAId = 0;
+    $clienteBId = 0;
 
+    try {
     $_SESSION['user'] = [
         'id' => 1,
         'nome' => 'Instituto',
@@ -177,16 +180,22 @@ namespace {
     if (strpos($editHtml, 'name="titulo"') === false) { failFast('Regressão: tela de edição de tarefa parou de renderizar o formulário'); }
     ok('Regressão: edição de tarefa continua funcionando');
 
-    // Filtro "Todos" (sem cliente) continua funcionando e inclui as tarefas criadas.
+    // Filtro "Todos" (sem cliente) continua funcionando: a listagem renderiza sem erro.
+    // Item 17 introduziu paginação real - a página 1 isolada deixou de ser garantia de
+    // conter qualquer registro específico da tabela (existem ~100+ tarefas de outras
+    // massas de teste concentradas nas mesmas datas futuras usadas por este arquivo), então
+    // a presença das tarefas recém-criadas já é coberta de forma determinística acima
+    // (filtro por cliente); aqui só confirmamos que a ação "Todos" continua respondendo
+    // normalmente, sem erro.
     resetRequest();
     $_GET['route'] = 'tarefas/index';
     ob_start();
     (new TarefasController())->index();
     $indexTodos = (string)ob_get_clean();
-    if (strpos($indexTodos, 'Tarefa via Perfil ' . $suffix) === false || strpos($indexTodos, 'Tarefa Tradicional ' . $suffix) === false) {
-        failFast('Regressão: listagem sem filtro de cliente parou de exibir as tarefas');
+    if (strpos($indexTodos, '<table') === false) {
+        failFast('Regressão: listagem sem filtro de cliente parou de renderizar');
     }
-    ok('Regressão: filtro "Todos" da listagem de Tarefas continua funcionando');
+    ok('Regressão: filtro "Todos" da listagem de Tarefas continua funcionando (sem erro, tabela renderizada)');
 
     // ===================== TENANT / RBAC (camada de modelo) =====================
 
@@ -253,4 +262,15 @@ namespace {
     ok('Instituto preserva o escopo normal: cria tarefas para qualquer empresa');
 
     echo "Tarefas via Perfil do Cliente regression tests passed.\n";
+    } finally {
+        if ($clienteAId > 0 || $clienteBId > 0) {
+            $ids = array_values(array_filter([$clienteAId, $clienteBId]));
+            if (!empty($ids)) {
+                $in = implode(',', array_map('intval', $ids));
+                $pdo->exec("DELETE FROM tarefas WHERE cliente_id IN ($in)");
+                $pdo->exec("DELETE FROM clientes WHERE id IN ($in)");
+            }
+        }
+        unset($_SESSION['user']);
+    }
 }
