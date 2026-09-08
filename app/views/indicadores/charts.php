@@ -518,10 +518,28 @@ $departamentoId = (int)($departamentoId ?? 0);
       });
     }
 
+    // Item 01 (bug secundário confirmado): a troca de Cliente reabilitava
+    // Departamento e Indicador via AJAX, mas nunca tocava nos campos de
+    // Período de apuração - eles ficavam presos no estado `disabled` renderizado
+    // no primeiro carregamento (sem Cliente), impedindo o usuário de informar
+    // um período já no primeiro filtro da mesma sessão de navegação (só
+    // funcionava após um reload completo da página com `cliente` na URL).
+    function syncPeriodoFields() {
+      const hasCliente = !!(clienteSelect && clienteSelect.value);
+      if (periodoInicioInput) periodoInicioInput.disabled = !hasCliente;
+      if (periodoFimInput) periodoFimInput.disabled = !hasCliente;
+      if (!hasCliente) {
+        if (periodoInicioInput) periodoInicioInput.value = '';
+        if (periodoFimInput) periodoFimInput.value = '';
+        setMsg('');
+      }
+    }
+
     clienteSelect?.addEventListener('change', () => {
       if (departamentoSelect) departamentoSelect.value = '0';
       refreshDepartamentos();
       refreshIndicadores();
+      syncPeriodoFields();
     });
     departamentoSelect?.addEventListener('change', refreshIndicadores);
   })();
