@@ -510,9 +510,25 @@ class AuditoriaModel extends BaseModel
             $where[] = 'a.cliente_id = :' . $prefix . '_cliente';
             $params[$prefix . '_cliente'] = (int)$filters['cliente'];
         }
-        if (!empty($filters['setor'])) {
-            $where[] = 'a.setor_id = :' . $prefix . '_setor';
-            $params[$prefix . '_setor'] = (int)$filters['setor'];
+        // Item 02: "setor" (int unico) virou "setores" (array) - filtro multi-
+        // selecao da listagem. Zero selecionados = sem restricao (todos os
+        // setores dentro do escopo ja aplicado pelas demais condicoes); um ou
+        // mais = uniao via IN(), sempre com placeholders nomeados (nunca
+        // concatenacao de valor cru vindo de GET/POST).
+        if (!empty($filters['setores']) && is_array($filters['setores'])) {
+            $setorIds = array_values(array_unique(array_filter(
+                array_map('intval', $filters['setores']),
+                static fn(int $v): bool => $v > 0
+            )));
+            if (!empty($setorIds)) {
+                $holders = [];
+                foreach ($setorIds as $i => $setorId) {
+                    $key = $prefix . '_setor' . $i;
+                    $holders[] = ':' . $key;
+                    $params[$key] = $setorId;
+                }
+                $where[] = 'a.setor_id IN (' . implode(',', $holders) . ')';
+            }
         }
         if (!empty($filters['departamento'])) {
             $where[] = 's.departamento_id = :' . $prefix . '_departamento';

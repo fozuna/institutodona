@@ -1563,10 +1563,38 @@ class AuditoriasController extends BaseController
         $inicio = AuditoriaValidator::normalizeDate((string)($_GET['inicio'] ?? ''));
         $fim = AuditoriaValidator::normalizeDate((string)($_GET['fim'] ?? ''));
         $cliente = (int)($this->resolveScopedClienteId((int)($_GET['cliente'] ?? 0)) ?? 0);
+
+        // Item 02: "setor" (int unico) -> "setores" (array). O navegador manda
+        // so a chave logica (id); aqui ela e' validada contra os setores
+        // realmente disponiveis para o cliente ja resolvido/escopado acima
+        // (setoresCached() reaproveita SetorModel::allByCliente(), que so
+        // devolve setores da empresa selecionada) - nenhum id cru do GET
+        // chega as queries sem passar por essa lista permitida. "setor"
+        // (singular) continua aceito por compatibilidade - a tela de
+        // Relatório Executivo ainda usa um <select> único e não foi tocada
+        // nesta entrega (fora do escopo do Item 02).
+        $setoresRaw = $_GET['setores'] ?? [];
+        if (!is_array($setoresRaw)) {
+            $setoresRaw = $setoresRaw !== '' ? [$setoresRaw] : [];
+        }
+        $legacySetor = (int)($_GET['setor'] ?? 0);
+        if ($legacySetor > 0) {
+            $setoresRaw[] = $legacySetor;
+        }
+        $setoresRequested = array_values(array_unique(array_filter(
+            array_map('intval', $setoresRaw),
+            static fn(int $v): bool => $v > 0
+        )));
+        $setores = [];
+        if (!empty($setoresRequested) && $cliente > 0) {
+            $allowedSetorIds = array_map('intval', array_column($this->setoresCached($cliente), 'id'));
+            $setores = array_values(array_intersect($setoresRequested, $allowedSetorIds));
+        }
+
         return [
             'cliente' => $cliente > 0 ? $cliente : null,
             'departamento' => (int)($_GET['departamento'] ?? 0) ?: null,
-            'setor' => (int)($_GET['setor'] ?? 0) ?: null,
+            'setores' => $setores,
             'status' => ($_GET['status'] ?? '') ?: null,
             'farol' => ($_GET['farol'] ?? '') ?: null,
             'inicio' => $inicio,

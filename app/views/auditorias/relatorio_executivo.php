@@ -26,7 +26,10 @@ $pdfQuery = http_build_query(array_filter([
     'route' => 'auditorias/relatorio_executivo_pdf',
     'cliente' => $filters['cliente'] ?? null,
     'departamento' => $filters['departamento'] ?? null,
-    'setor' => $filters['setor'] ?? null,
+    // Item 02: $filters['setor'] virou $filters['setores'] (array). Esta tela
+    // ainda usa <select name="setor"> único (fora do escopo desta entrega),
+    // então o array aqui nunca tem mais de 1 item - preserva o link do PDF.
+    'setor' => $filters['setores'][0] ?? null,
     'status' => $filters['status'] ?? null,
     'farol' => $filters['farol'] ?? null,
     'inicio' => !empty($filters['inicio']) ? DateHelper::formatDate((string)$filters['inicio']) : null,
@@ -69,7 +72,7 @@ $pdfQuery = http_build_query(array_filter([
       <select name="setor" class="border rounded p-2 w-full">
         <option value="">Todos</option>
         <?php foreach ($setores as $s): ?>
-          <option value="<?= (int)$s['id'] ?>" <?= ((int)($filters['setor'] ?? 0) === (int)$s['id']) ? 'selected' : '' ?>><?= htmlspecialchars($s['nome']) ?></option>
+          <option value="<?= (int)$s['id'] ?>" <?= (in_array((int)$s['id'], $filters['setores'] ?? [], true)) ? 'selected' : '' ?>><?= htmlspecialchars($s['nome']) ?></option>
         <?php endforeach; ?>
       </select>
     </div>

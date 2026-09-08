@@ -36,14 +36,24 @@
                 <?php endforeach; ?>
             </select>
         </div>
-        <div class="md:col-span-2">
+        <?php $selectedSetores = array_map('intval', $filters['setores'] ?? []); ?>
+        <div class="md:col-span-2 relative" id="setorMultiWrap">
             <label class="block text-sm">Setor</label>
-            <select name="setor" class="border rounded p-2 w-full">
-                <option value="">Todos</option>
+            <button type="button" id="setorMultiBtn" class="border rounded p-2 w-full text-left bg-white flex items-center justify-between gap-2">
+                <span id="setorMultiLabel" class="truncate text-sm"><?= count($selectedSetores) === 0 ? 'Todos' : (count($selectedSetores) . ' selecionado(s)') ?></span>
+                <span data-feather="chevron-down" class="h-4 w-4 shrink-0 text-gray-500"></span>
+            </button>
+            <div id="setorMultiPanel" class="hidden absolute z-20 mt-1 w-full max-h-56 overflow-auto bg-white border rounded shadow-lg p-2 space-y-1">
+                <?php if (empty($setores)): ?>
+                    <div class="text-xs text-gray-500 p-1">Selecione uma Empresa para listar os setores.</div>
+                <?php endif; ?>
                 <?php foreach ($setores as $s): ?>
-                    <option value="<?= (int)$s['id'] ?>" <?= ((int)($filters['setor'] ?? 0) === (int)$s['id']) ? 'selected' : '' ?>><?= htmlspecialchars($s['nome']) ?></option>
+                    <label class="flex items-center gap-2 text-sm p-1 rounded hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" name="setores[]" value="<?= (int)$s['id'] ?>" class="setor-multi-checkbox" <?= in_array((int)$s['id'], $selectedSetores, true) ? 'checked' : '' ?> />
+                        <span><?= htmlspecialchars($s['nome']) ?></span>
+                    </label>
                 <?php endforeach; ?>
-            </select>
+            </div>
         </div>
         <div class="md:col-span-2">
             <label class="block text-sm">Status</label>
@@ -287,8 +297,42 @@
         const clearFiltersLink = document.getElementById('auditoriasClearFiltersLink');
         const clearSavedButton = document.getElementById('btnRedefinirFiltrosSalvos');
         const storageKey = 'auditorias:index:filters';
-        const trackedFields = ['cliente', 'departamento', 'setor', 'status', 'farol', 'inicio', 'fim', 'q', 'sort_col', 'sort_dir'];
+        const trackedFields = ['cliente', 'departamento', 'status', 'farol', 'inicio', 'fim', 'q', 'sort_col', 'sort_dir'];
+        const setorMultiWrap = document.getElementById('setorMultiWrap');
+        const setorMultiBtn = document.getElementById('setorMultiBtn');
+        const setorMultiPanel = document.getElementById('setorMultiPanel');
+        const setorMultiLabel = document.getElementById('setorMultiLabel');
         let debounce = null;
+        function setorCheckboxes() {
+            return Array.from(document.querySelectorAll('.setor-multi-checkbox'));
+        }
+        function setorSelectedIds() {
+            return setorCheckboxes().filter((el)=>el.checked).map((el)=>el.value);
+        }
+        function updateSetorLabel() {
+            if (!setorMultiLabel) return;
+            const n = setorSelectedIds().length;
+            setorMultiLabel.textContent = n === 0 ? 'Todos' : (n + ' selecionado(s)');
+        }
+        function closeSetorPanel() {
+            setorMultiPanel?.classList.add('hidden');
+        }
+        setorMultiBtn?.addEventListener('click', (e)=>{
+            e.stopPropagation();
+            setorMultiPanel?.classList.toggle('hidden');
+        });
+        document.addEventListener('click', (e)=>{
+            if (setorMultiWrap && !setorMultiWrap.contains(e.target)) {
+                closeSetorPanel();
+            }
+        });
+        setorCheckboxes().forEach((el)=>{
+            el.addEventListener('change', ()=>{
+                updateSetorLabel();
+                saveState();
+                filtroForm.submit();
+            });
+        });
         function syncDepartamentos() {
             if (!filtroCliente || !filtroDepartamento) return;
             const clienteId = filtroCliente.value;
@@ -308,6 +352,7 @@
                 const input = filtroForm.querySelector(`[name="${field}"]`);
                 state[field] = input ? input.value : '';
             });
+            state.setores = setorSelectedIds();
             return state;
         };
         const applyState = (state)=>{
@@ -317,8 +362,18 @@
                     input.value = String(state[field] ?? '');
                 }
             });
+            if (Array.isArray(state.setores)) {
+                const wanted = state.setores.map(String);
+                setorCheckboxes().forEach((el)=>{
+                    el.checked = wanted.includes(String(el.value));
+                });
+                updateSetorLabel();
+            }
         };
         const hasMeaningfulState = (state)=>{
+            if (Array.isArray(state.setores) && state.setores.length > 0) {
+                return true;
+            }
             return trackedFields.some((field)=>{
                 const value = String(state[field] ?? '');
                 if (field === 'sort_col') {
@@ -332,6 +387,9 @@
         };
         const hasExplicitFilters = ()=>{
             const params = new URLSearchParams(window.location.search);
+            if (params.getAll('setores[]').some((value)=>String(value ?? '') !== '')) {
+                return true;
+            }
             return trackedFields.some((field)=>{
                 if (!params.has(field)) {
                     return false;
