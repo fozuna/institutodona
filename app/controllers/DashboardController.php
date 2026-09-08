@@ -792,12 +792,16 @@ class DashboardController extends BaseController
     private function scopeClienteIds(array $clienteIds): array
     {
         if (!Auth::isInstituto()) {
+            // Item 04: Cliente Admin sem filtro explicito (ou cujo filtro nao
+            // resultou em nenhum id dentro da propria carteira - ex.: tentativa
+            // cross-tenant via `clientes[]`) deve consolidar TODA a carteira
+            // permitida (Auth::allowedClientIds()), nunca apenas o primeiro
+            // item. array_intersect() ja garante que nenhum id fora do tenant
+            // sobrevive; o fallback abaixo so amplia para a carteira inteira,
+            // nunca para IDs externos.
             $allowed = Auth::allowedClientIds();
-            $clienteIds = array_values(array_intersect($clienteIds, $allowed));
-            if (empty($clienteIds) && !empty($allowed)) {
-                $clienteIds = [(int)$allowed[0]];
-            }
-            return $clienteIds;
+            $scoped = array_values(array_intersect($clienteIds, $allowed));
+            return empty($scoped) ? $allowed : $scoped;
         }
         $all = array_values(array_filter(array_map('intval', array_column($this->clientes->all(), 'id'))));
         if (!empty($clienteIds)) {
