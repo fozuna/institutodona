@@ -239,7 +239,21 @@ class ManuaisController extends BaseController
             $tamanho = $sizeBytes;
         }
 
-        $ok = $this->manuais->update($id, [
+        // Item 03: valida os vinculos de filial ANTES da escrita (mesma logica de
+        // sempre), mas a atualizacao do Manual e a troca de vinculos agora
+        // acontecem numa unica transacao (updateWithFilialLinks()) - nunca mais
+        // duas escritas separadas que podiam ficar dessincronizadas se a segunda
+        // falhasse.
+        $empresa = $this->clientes->find($empresaId);
+        $filiaisIds = $_POST['filiais_ids'] ?? [];
+        $selected = [];
+        if ($empresa && (int)($empresa['is_matriz'] ?? 1) === 1 && is_array($filiaisIds)) {
+            $allowed = array_values(array_map('intval', array_column($this->clientes->filiaisByMatriz($empresaId), 'id')));
+            $selected = array_values(array_unique(array_filter(array_map('intval', $filiaisIds))));
+            $selected = array_values(array_intersect($selected, $allowed));
+        }
+
+        $ok = $this->manuais->updateWithFilialLinks($id, [
             'empresa_id' => $empresaId,
             'departamento_id' => $departamentoId,
             'nome' => $nome,
@@ -247,7 +261,7 @@ class ManuaisController extends BaseController
             'arquivo' => $arquivoRel,
             'tipo_arquivo' => $tipoArquivo,
             'tamanho' => $tamanho,
-        ]);
+        ], $selected);
         if (!$ok) {
             if ($newAbsPath && is_file($newAbsPath)) {
                 @unlink($newAbsPath);
@@ -258,17 +272,6 @@ class ManuaisController extends BaseController
         }
         if ($newAbsPath && is_file($oldAbsPath)) {
             @unlink($oldAbsPath);
-        }
-
-        $empresa = $this->clientes->find($empresaId);
-        $filiaisIds = $_POST['filiais_ids'] ?? [];
-        if ($empresa && (int)($empresa['is_matriz'] ?? 1) === 1 && is_array($filiaisIds)) {
-            $allowed = array_values(array_map('intval', array_column($this->clientes->filiaisByMatriz($empresaId), 'id')));
-            $selected = array_values(array_unique(array_filter(array_map('intval', $filiaisIds))));
-            $selected = array_values(array_intersect($selected, $allowed));
-            $this->manuais->replaceFilialLinks($id, $selected);
-        } else {
-            $this->manuais->replaceFilialLinks($id, []);
         }
 
         AuditLogger::log('manual_update', 'manual', $id, [

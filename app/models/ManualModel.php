@@ -40,8 +40,25 @@ class ManualModel extends BaseModel
         'svg' => ['image/svg+xml', 'text/xml', 'application/xml', 'application/octet-stream'],
     ];
 
+    // Item 03: memoizacao por processo do "CREATE TABLE IF NOT EXISTS" - ver
+    // ensureTable()/ensureLinkTable() para o motivo (DDL da commit implicito
+    // no MySQL mesmo com a tabela ja existente, o que quebraria a transacao
+    // de updateWithFilialLinks()).
+    private static bool $tableEnsured = false;
+    private static bool $linkTableEnsured = false;
+
     private function ensureTable(): void
     {
+        // Item 03: memoizado por processo. CREATE TABLE IF NOT EXISTS e' DDL -
+        // no MySQL/InnoDB, DDL sempre da commit implicito, mesmo quando a
+        // tabela ja existe (a clausula IF NOT EXISTS nao evita o commit, so
+        // evita o erro). Sem essa memoizacao, chamar update()/replaceFilialLinks()
+        // (que reexecutam isso a cada chamada) de dentro de updateWithFilialLinks()
+        // encerraria a transacao por baixo dos panos antes do commit()/rollBack()
+        // explicito.
+        if (self::$tableEnsured) {
+            return;
+        }
         try {
             $this->db->exec("CREATE TABLE IF NOT EXISTS manuais (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -62,11 +79,15 @@ class ManualModel extends BaseModel
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         } catch (\PDOException $e) {
         }
+        self::$tableEnsured = true;
     }
 
     private function ensureLinkTable(): void
     {
         $this->ensureTable();
+        if (self::$linkTableEnsured) {
+            return;
+        }
         try {
             $this->db->exec("CREATE TABLE IF NOT EXISTS manual_filial_links (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -81,6 +102,7 @@ class ManualModel extends BaseModel
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         } catch (\PDOException $e) {
         }
+        self::$linkTableEnsured = true;
     }
 
     private function manualCatalogClienteId(int $manualId): ?int
@@ -195,6 +217,16 @@ class ManualModel extends BaseModel
         if ($id <= 0) {
             return false;
         }
+        // Item 03: existencia + escopo de tenant sao decididos AQUI (via find(),
+        // que ja aplica tenantInCondition()), nunca mais por rowCount() do
+        // UPDATE abaixo. Um UPDATE que casa a linha mas nao muda nenhuma coluna
+        // (ex.: editar so os vinculos de filial, sem tocar em Nome/Descricao/
+        // Empresa/Departamento/arquivo) tem rowCount() = 0 no MySQL mesmo sendo
+        // uma operacao inteiramente valida - era essa a causa do falso erro
+        // "Falha ao atualizar manual." ao alterar somente as filiais.
+        if ($this->find($id) === null) {
+            return false;
+        }
         $params = [
             'id' => $id,
             'empresa_id' => (int)$this->normalizeScopedClienteId(isset($data['empresa_id']) ? (int)$data['empresa_id'] : null),
@@ -221,8 +253,11 @@ class ManualModel extends BaseModel
                 tipo_arquivo = :tipo_arquivo,
                 tamanho = :tamanho
             WHERE id = :id AND $scope");
-        $stmt->execute($params);
-        return $stmt->rowCount() > 0;
+        // execute() (nao rowCount()) e' a fonte de verdade de sucesso a partir
+        // daqui: a existencia+tenant ja foram confirmados acima, e o PDO deste
+        // projeto usa ERRMODE_EXCEPTION - um erro real de SQL propaga como
+        // excecao (mesmo comportamento de antes), nunca vira um "false" silencioso.
+        return $stmt->execute($params);
     }
 
     public function delete(int $id): bool
@@ -291,6 +326,41 @@ class ManualModel extends BaseModel
                 continue;
             }
             $stmt->execute(['mid' => $manualId, 'fid' => $fid]);
+        }
+    }
+
+
+    /**
+     * Item 03: coordena update() + replaceFilialLinks() numa unica transacao,
+     * para que a edicao do Manual e a troca de vinculos com filiais sejam
+     * atomicas - se qualquer etapa falhar, nenhuma das duas fica aplicada
+     * parcialmente. Reaproveita os dois metodos existentes sem duplicar a
+     * logica de cada um; nenhuma mudanca de comportamento para quem ainda
+     * chama update()/replaceFilialLinks() separadamente (ex.: store(), que
+     * cria o vinculo junto com o INSERT e nao sofre do mesmo problema de
+     * rowCount()).
+     */
+    public function updateWithFilialLinks(int $id, array $data, array $filialIds): bool
+    {
+        $this->ensureTable();
+        $this->ensureLinkTable();
+        try {
+            $this->db->beginTransaction();
+            if (!$this->update($id, $data)) {
+                $this->db->rollBack();
+                return false;
+            }
+            $this->replaceFilialLinks($id, $filialIds);
+            $this->db->commit();
+            return true;
+        } catch (\Throwable $e) {
+            try {
+                if ($this->db->inTransaction()) {
+                    $this->db->rollBack();
+                }
+            } catch (\Throwable $e2) {
+            }
+            return false;
         }
     }
 
