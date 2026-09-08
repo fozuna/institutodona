@@ -114,14 +114,21 @@ CREATE TABLE IF NOT EXISTS manuais (
   departamento_id INT NOT NULL,
   nome VARCHAR(255) NOT NULL,
   descricao VARCHAR(500) NULL,
-  arquivo VARCHAR(255) NOT NULL,
-  tipo_arquivo VARCHAR(10) NOT NULL,
+  arquivo VARCHAR(255) NULL,
+  tipo_arquivo VARCHAR(10) NULL,
   tamanho INT UNSIGNED NOT NULL DEFAULT 0,
   usuario_id INT NULL,
+  -- Item 04 (Pré-cadastro de Manuais), Sprint 01: status e' a fonte de
+  -- verdade do ciclo de vida pre_cadastro -> publicado; arquivo/tipo_arquivo
+  -- ficaram nullable porque um pre-cadastro ainda nao tem documento.
+  -- tamanho permanece NOT NULL DEFAULT 0 (nao ha upload real com tamanho 0).
+  status VARCHAR(20) NOT NULL DEFAULT 'publicado',
+  publicado_em DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_manuais_empresa (empresa_id),
   INDEX idx_manuais_departamento (departamento_id),
   INDEX idx_manuais_nome (nome),
+  INDEX idx_manuais_status (status),
   CONSTRAINT fk_manuais_empresa FOREIGN KEY (empresa_id) REFERENCES clientes(id) ON DELETE CASCADE,
   CONSTRAINT fk_manuais_departamento FOREIGN KEY (departamento_id) REFERENCES departamentos(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
