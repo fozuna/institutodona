@@ -15,6 +15,33 @@ $_SESSION['user'] = [
 ];
 
 $pdo = Database::getConnection();
+
+// Achado na Sprint 01 (Item 04): este teste era um script linear, sem
+// try/finally nem register_shutdown_function - se o processo fosse
+// interrompido (timeout, kill, crash) antes do bloco de limpeza no final
+// do arquivo, as fixtures ficavam orfas no banco permanentemente (foi
+// exatamente o que causou o residuo manuais.id=27 datado de 2026-07-19,
+// que colidiu com um id de Ata em execucoes futuras). Corrigido para o
+// mesmo padrao ja usado nos demais testes desta sessao: os ids criados
+// sao acumulados em $cleanup conforme surgem, e a limpeza roda via
+// register_shutdown_function - executa mesmo que uma assercao futura
+// chame exit()/uma excecao interrompa o script no meio.
+$cleanup = ['manual_ids' => [], 'departamento_ids' => [], 'cliente_ids' => []];
+register_shutdown_function(function () use ($pdo, &$cleanup) {
+    try {
+        foreach ($cleanup['manual_ids'] as $id) {
+            $pdo->prepare('DELETE FROM manuais WHERE id = :id')->execute(['id' => $id]);
+        }
+        foreach ($cleanup['departamento_ids'] as $id) {
+            $pdo->prepare('DELETE FROM departamentos WHERE id = :id')->execute(['id' => $id]);
+        }
+        foreach ($cleanup['cliente_ids'] as $id) {
+            $pdo->prepare('DELETE FROM clientes WHERE id = :id')->execute(['id' => $id]);
+        }
+    } catch (\Throwable $e) {
+    }
+});
+
 $empresaId = (int)$pdo->query('SELECT id FROM clientes ORDER BY id ASC LIMIT 1')->fetchColumn();
 $stmt = $pdo->prepare('SELECT id FROM departamentos WHERE cliente_id = :cid ORDER BY id ASC LIMIT 1');
 $stmt->execute(['cid' => $empresaId]);
@@ -33,6 +60,7 @@ if ($empresaId <= 0 || $departamentoId <= 0) {
         ]);
         $empresaId = (int)$pdo->lastInsertId();
         $createdEmpresa = true;
+        $cleanup['cliente_ids'][] = $empresaId;
     }
     if ($departamentoId <= 0) {
         $stmt = $pdo->prepare('INSERT INTO departamentos (nome, cliente_id) VALUES (:nome, :cid)');
@@ -42,6 +70,7 @@ if ($empresaId <= 0 || $departamentoId <= 0) {
         ]);
         $departamentoId = (int)$pdo->lastInsertId();
         $createdDepartamento = true;
+        $cleanup['departamento_ids'][] = $departamentoId;
     }
 }
 
@@ -57,6 +86,7 @@ $id = $model->create([
     'tamanho' => 123,
     'usuario_id' => 1,
 ]);
+$cleanup['manual_ids'][] = $id;
 $sortPrefix = 'Manual Sort ' . uniqid('', true);
 $sortAId = $model->create([
     'empresa_id' => $empresaId,
@@ -68,6 +98,7 @@ $sortAId = $model->create([
     'tamanho' => 10,
     'usuario_id' => 1,
 ]);
+$cleanup['manual_ids'][] = $sortAId;
 $sortZId = $model->create([
     'empresa_id' => $empresaId,
     'departamento_id' => $departamentoId,
@@ -78,6 +109,7 @@ $sortZId = $model->create([
     'tamanho' => 20,
     'usuario_id' => 1,
 ]);
+$cleanup['manual_ids'][] = $sortZId;
 
 $all = $model->list(['empresa_id' => $empresaId, 'nome' => $prefix]);
 $filtered = $model->list(['empresa_id' => $empresaId, 'departamento_id' => $departamentoId, 'nome' => $prefix]);
@@ -116,6 +148,7 @@ $stmt->execute([
     'matriz_id' => null,
 ]);
 $matrizId = (int)$pdo->lastInsertId();
+$cleanup['cliente_ids'][] = $matrizId;
 $stmt->execute([
     'nome' => 'Filial Manual Link ' . $suffix,
     'cnpj' => '44.444.444/0001-' . substr($suffix, 0, 2),
@@ -124,8 +157,11 @@ $stmt->execute([
     'matriz_id' => $matrizId,
 ]);
 $filialId = (int)$pdo->lastInsertId();
+$cleanup['cliente_ids'][] = $filialId;
 $depMatrizId = $deps->create(['nome' => 'Dep Matriz Link ' . $suffix, 'cliente_id' => $matrizId]);
+$cleanup['departamento_ids'][] = $depMatrizId;
 $depFilialId = $deps->create(['nome' => 'Dep Filial Link ' . $suffix, 'cliente_id' => $filialId]);
+$cleanup['departamento_ids'][] = $depFilialId;
 $manualMatriz = $model->create([
     'empresa_id' => $matrizId,
     'departamento_id' => $depMatrizId,
@@ -136,6 +172,7 @@ $manualMatriz = $model->create([
     'tamanho' => 1,
     'usuario_id' => 1,
 ]);
+$cleanup['manual_ids'][] = $manualMatriz;
 $manualFilial = $model->create([
     'empresa_id' => $filialId,
     'departamento_id' => $depFilialId,
@@ -146,6 +183,7 @@ $manualFilial = $model->create([
     'tamanho' => 1,
     'usuario_id' => 1,
 ]);
+$cleanup['manual_ids'][] = $manualFilial;
 $model->replaceFilialLinks($manualMatriz, [$filialId]);
 $updatedName = 'Manual Matriz Link Updated ' . $suffix;
 $model->update($manualMatriz, [
@@ -175,24 +213,9 @@ foreach ($listFilial as $row) {
 }
 $linkOk = $model->isLinkedToFilial($manualMatriz, $filialId);
 
-$cleanup = $pdo->prepare('DELETE FROM manuais WHERE id = :id');
-$cleanup->execute(['id' => $id]);
-$cleanup->execute(['id' => $sortAId]);
-$cleanup->execute(['id' => $sortZId]);
- $cleanup->execute(['id' => $manualMatriz]);
- $cleanup->execute(['id' => $manualFilial]);
-if ($createdDepartamento) {
-    $stmt = $pdo->prepare('DELETE FROM departamentos WHERE id = :id');
-    $stmt->execute(['id' => $departamentoId]);
-}
-if ($createdEmpresa) {
-    $stmt = $pdo->prepare('DELETE FROM clientes WHERE id = :id');
-    $stmt->execute(['id' => $empresaId]);
-}
- $pdo->prepare('DELETE FROM departamentos WHERE id = :id')->execute(['id' => $depMatrizId]);
- $pdo->prepare('DELETE FROM departamentos WHERE id = :id')->execute(['id' => $depFilialId]);
- $pdo->prepare('DELETE FROM clientes WHERE id = :id')->execute(['id' => $filialId]);
- $pdo->prepare('DELETE FROM clientes WHERE id = :id')->execute(['id' => $matrizId]);
+// Limpeza feita pelo register_shutdown_function registrado no topo do
+// arquivo (roda mesmo se o exit(1) abaixo disparar) - ids ja acumulados
+// em $cleanup conforme cada fixture foi criada.
 
 echo json_encode([
     'created_id_positive' => $id > 0,
