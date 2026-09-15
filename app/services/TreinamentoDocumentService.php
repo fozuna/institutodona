@@ -280,23 +280,53 @@ class TreinamentoDocumentService
         $instrutor = (string)($agenda['instrutor'] ?: ($treinamento['assinatura_responsavel'] ?? $agenda['responsavel_nome'] ?? ''));
         $assinatura = (string)($treinamento['assinatura_responsavel'] ?? $agenda['responsavel_nome'] ?? 'Responsável');
 
+        // Correção da regressão introduzida em d2dde64 (29/05/2026): a versão
+        // anterior usava `.page`/`.certificate` com `width:100%;height:100%`
+        // ANINHADOS (um dentro do outro, cada um com seu próprio padding) mais
+        // `page-break-inside:avoid`. O Dompdf resolve porcentagens aninhadas de
+        // forma imprevisível quando não há uma altura de referência real em
+        // html/body, produzindo uma caixa MAIOR que a própria página (medido:
+        // ~930x670pt para uma página de 841.89x595.28pt) - e como o bloco
+        // "não cabia" numa página, o page-break-inside:avoid empurrava o
+        // certificado inteiro para a página 2, deixando a página 1 em branco.
+        //
+        // Correção estrutural (validada byte-a-byte no PDF gerado, ver testes):
+        // um único container (`.certificate`), sem wrapper aninhado, sem
+        // largura/altura fixas e sem box-sizing:border-box (o Dompdf comprovadamente
+        // NÃO honra box-sizing:border-box em combinação com width fixo aqui -
+        // padding/border acabavam sendo somados por fora, estourando a largura
+        // da página). Em vez disso, `.certificate` usa `width:auto` (padrão de
+        // bloco) para preencher exatamente a área útil definida pela margem do
+        // @page - o mesmo padrão já comprovadamente estável usado em
+        // wrapHtml() (usado sem problema pelos demais relatórios deste
+        // serviço). Sem altura fixa nem `height:100%`: a caixa cresce conforme
+        // o conteúdo, o que elimina de vez o risco de um cálculo de altura
+        // maior que a página. Sem `display:flex`/`display:grid` (suporte
+        // instável no Dompdf) - o bloco de metadados usa uma <table>, e o
+        // cabeçalho usa blocos empilhados simples, ambos com comportamento
+        // previsível. Nenhum texto usa `white-space:nowrap`: todos os campos
+        // (nome do participante, nome do treinamento, instrutor, assinatura)
+        // quebram naturalmente dentro da largura do container. `body{margin:0}`
+        // foi removido de propósito: zerar a margem do body cancelava a
+        // margem definida em `@page`, fazendo o conteúdo começar em X=0 (fora
+        // da área útil real) - a margem da página deve ser a única fonte de
+        // espaçamento externo, exatamente como em wrapHtml().
         $html = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>'
-            . '@page { margin: 0mm; }'
-            . 'html,body{margin:0;padding:0;font-family:DejaVu Sans, Arial, sans-serif;color:#111827;}'
-            . '.page{box-sizing:border-box;width:100%;height:100%;padding:14mm;}'
-            . '.certificate{box-sizing:border-box;width:100%;height:100%;border:6px solid #7f1d1d;border-radius:18px;padding:14mm;text-align:center;background:#fff;page-break-inside:avoid;}'
-            . '.top{display:flex;align-items:center;justify-content:center;gap:10mm;margin-bottom:6mm;}'
-            . '.cert-logo{height:18mm;max-width:60mm;object-fit:contain;}'
-            . '.certificate-title{font-size:34px;font-weight:bold;color:#7f1d1d;line-height:1.1;}'
-            . '.certificate-subtitle{font-size:16px;margin-top:10mm;}'
-            . '.certificate-name{font-size:26px;font-weight:bold;margin:10mm 0 8mm;color:#111827;}'
-            . '.certificate-body{font-size:16px;line-height:1.6;margin:0 8mm;}'
-            . '.certificate-meta{margin-top:8mm;font-size:12px;line-height:1.7;text-align:left;display:grid;grid-template-columns:repeat(2,1fr);gap:4mm 10mm;}'
-            . '.signature{margin-top:10mm;display:flex;justify-content:center;}'
-            . '.signature-line{border-top:1px solid #111827;width:90mm;padding-top:3mm;text-align:center;font-size:12px;}'
+            . '@page { margin: 10mm; }'
+            . 'body{margin:0;font-family:DejaVu Sans, Arial, sans-serif;color:#111827;}'
+            . '.certificate{border:6px solid #7f1d1d;border-radius:18px;padding:8mm 16mm;text-align:center;background:#fff;}'
+            . '.cert-logo{display:block;margin:0 auto 4mm;height:16mm;max-width:60mm;object-fit:contain;}'
+            . '.certificate-title{font-size:32px;font-weight:bold;color:#7f1d1d;line-height:1.1;margin-top:2mm;}'
+            . '.certificate-subtitle{font-size:15px;margin-top:8mm;}'
+            . '.certificate-name{font-size:24px;font-weight:bold;margin:6mm 12mm;color:#111827;word-wrap:break-word;overflow-wrap:break-word;}'
+            . '.certificate-body{font-size:15px;line-height:1.6;margin:0 16mm;word-wrap:break-word;overflow-wrap:break-word;}'
+            . '.certificate-meta{width:100%;margin-top:8mm;font-size:11px;line-height:1.6;border-collapse:collapse;}'
+            . '.certificate-meta td{text-align:left;padding:1.5mm 6mm;width:50%;word-wrap:break-word;overflow-wrap:break-word;}'
+            . '.signature{margin-top:8mm;}'
+            . '.signature-line{border-top:1px solid #111827;width:90mm;margin:0 auto;padding-top:3mm;text-align:center;font-size:12px;word-wrap:break-word;overflow-wrap:break-word;}'
             . '</style></head><body>'
-            . '<div class="page"><div class="certificate">'
-            . '<div class="top">' . $logo . '<div class="certificate-title">Certificado</div></div>'
+            . '<div class="certificate">'
+            . $logo . '<div class="certificate-title">Certificado</div>'
             . '<div class="certificate-subtitle">Certificamos que</div>'
             . '<div class="certificate-name">' . $this->e((string)($participant['colaborador_nome'] ?? '')) . '</div>'
             . '<div class="certificate-body">'
@@ -304,14 +334,15 @@ class TreinamentoDocumentService
             . 'com carga horária de <strong>' . $this->e((string)($agenda['carga_horaria'] ?? '0')) . ' hora(s)</strong>, '
             . 'previsto para <strong>' . $this->e($quando) . '</strong>.'
             . '</div>'
-            . '<div class="certificate-meta">'
-            . '<div><strong>Instrutor/Responsável:</strong> ' . $this->e($instrutor) . '</div>'
-            . '<div><strong>Número:</strong> ' . $this->e($numero) . '</div>'
-            . '<div><strong>Código de autenticação:</strong> ' . $this->e($codigo) . '</div>'
-            . '<div><strong>Gerado em:</strong> ' . $this->e((string)($branding['generated_at'] ?? '')) . '</div>'
-            . '</div>'
+            . '<table class="certificate-meta"><tr>'
+            . '<td><strong>Instrutor/Responsável:</strong> ' . $this->e($instrutor) . '</td>'
+            . '<td><strong>Número:</strong> ' . $this->e($numero) . '</td>'
+            . '</tr><tr>'
+            . '<td><strong>Código de autenticação:</strong> ' . $this->e($codigo) . '</td>'
+            . '<td><strong>Gerado em:</strong> ' . $this->e((string)($branding['generated_at'] ?? '')) . '</td>'
+            . '</tr></table>'
             . '<div class="signature"><div class="signature-line">' . $this->e($assinatura) . '</div></div>'
-            . '</div></div>'
+            . '</div>'
             . '</body></html>';
 
         return $this->renderPdf($html, 'A4', 'landscape');
