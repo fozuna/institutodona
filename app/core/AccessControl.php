@@ -73,6 +73,10 @@ final class AccessControl
         'tarefas' => self::CLIENT_ADMIN_MODULE,
         'manuais' => self::CLIENT_ADMIN_MODULE,
         'biblioteca' => self::CLIENT_ADMIN_MODULE,
+        // Pilar de Pessoas - Avaliacoes de Desempenho (Sprint 01): mesmo
+        // modulo/perfis de Treinamentos - Instituto + Cliente Admin apenas,
+        // nenhum papel novo criado.
+        'pessoas' => self::CLIENT_ADMIN_MODULE,
         // Item 05B: acervo interno de Atas - Instituto only (nenhum outro perfil tem
         // ADMIN_MODULE liberado). Reforcado tambem no AtasController e no AtaModel.
         'atas' => self::ADMIN_MODULE,

@@ -56,7 +56,7 @@ $brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
                     // Itens do menu ocultos por padrão: Reuniões, Coaching e Processos só aparecem quando o nome do usuário contém "Ozuna".
                     $showOzunaOnlyMenu = stripos((string)($user['nome'] ?? ''), 'Ozuna') !== false;
                     $ozunaOnlyAttr = $showOzunaOnlyMenu ? '' : 'style="display:none" aria-hidden="true" tabindex="-1"';
-                    $isPessoasActive = strpos($r, 'treinamentos/') === 0;
+                    $isPessoasActive = strpos($r, 'treinamentos/') === 0 || strpos($r, 'pessoas/') === 0;
                     $isProcessosActive = strpos($r, 'manuais/') === 0
                         || strpos($r, 'auditorias/') === 0
                         || strpos($r, 'reunioes/') === 0
@@ -93,7 +93,8 @@ $brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
                     $canSetores = $user && \App\Core\AccessControl::canAccessRoute('setores/index', 'GET', $user);
                     $canFuncoes = $user && \App\Core\AccessControl::canAccessRoute('funcoes/index', 'GET', $user);
                     $canColaboradores = $user && \App\Core\AccessControl::canAccessRoute('colaboradores/index', 'GET', $user);
-                    $hasPessoasMenu = $canTreinamentos;
+                    $canPessoasAvaliacoes = $user && \App\Core\AccessControl::canAccessRoute('pessoas/index', 'GET', $user);
+                    $hasPessoasMenu = $canTreinamentos || $canPessoasAvaliacoes;
                     $hasProcessosMenu = $canBiblioteca || $canAuditorias || $canReunioes || $canCoaching || $canProcessos;
                     $hasResultadosMenu = $canIndicadores;
                     $hasCadastrosMenu = $canClientes || $canUsuarios || $canConsultores || $canPilares || $canDepartamentos || $canSetores || $canFuncoes || $canColaboradores;
@@ -162,6 +163,9 @@ $brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
                     <div class="submenu-group">
                         <?= $submenuTrigger('pessoas', 'users', 'Pessoas', $isPessoasActive) ?>
                         <div class="submenu-panel <?= $isPessoasActive ? '' : 'hidden' ?>" data-submenu-panel="pessoas">
+                            <?php if ($canPessoasAvaliacoes): ?>
+                            <?= $navLink('pessoas/index', 'trending-up', 'Avaliações de Desempenho', strpos($r,'pessoas/')===0, 'submenu-link') ?>
+                            <?php endif; ?>
                             <?php if ($canTreinamentos): ?>
                             <?= $navLink('treinamentos/index', 'award', 'Treinamentos', strpos($r,'treinamentos/')===0, 'submenu-link') ?>
                             <?php endif; ?>

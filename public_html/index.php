@@ -37,6 +37,8 @@ use App\Controllers\CoachingController;
 use App\Controllers\ProcessosController;
 use App\Controllers\PwaController;
 use App\Controllers\ErrorController;
+use App\Controllers\PessoasModelosController;
+use App\Controllers\PessoasCiclosController;
 
 $migrationRunner = new MigrationRunner();
 $currentMigrationFingerprint = $migrationRunner->currentFingerprint();
@@ -629,6 +631,85 @@ switch ($route) {
         break;
     case 'treinamentos/dashboard_pdf':
         (new TreinamentosController())->dashboardPdf();
+        break;
+    // ---- Pilar de Pessoas: Avaliações de Desempenho ----
+    case 'pessoas/index':
+        (new PessoasCiclosController())->index();
+        break;
+    case 'pessoas/cicloCreate':
+        (new PessoasCiclosController())->create();
+        break;
+    case 'pessoas/cicloStore':
+        (new PessoasCiclosController())->store();
+        break;
+    case 'pessoas/cicloEdit':
+        (new PessoasCiclosController())->edit();
+        break;
+    case 'pessoas/cicloUpdate':
+        (new PessoasCiclosController())->update();
+        break;
+    case 'pessoas/cicloShow':
+        (new PessoasCiclosController())->show();
+        break;
+    case 'pessoas/cicloParticipantesStore':
+        (new PessoasCiclosController())->participantesStore();
+        break;
+    case 'pessoas/cicloAbrir':
+        (new PessoasCiclosController())->abrir();
+        break;
+    case 'pessoas/cicloEncerrar':
+        (new PessoasCiclosController())->encerrar();
+        break;
+    case 'pessoas/avaliacaoIniciar':
+        (new PessoasCiclosController())->avaliacaoIniciar();
+        break;
+    case 'pessoas/avaliacaoResponder':
+        (new PessoasCiclosController())->avaliacaoResponder();
+        break;
+    case 'pessoas/avaliacaoSalvar':
+        (new PessoasCiclosController())->avaliacaoSalvar();
+        break;
+    case 'pessoas/avaliacaoFinalizar':
+        (new PessoasCiclosController())->avaliacaoFinalizar();
+        break;
+    case 'pessoas/avaliacaoResultado':
+        (new PessoasCiclosController())->avaliacaoResultado();
+        break;
+    case 'pessoas/modelos':
+        (new PessoasModelosController())->index();
+        break;
+    case 'pessoas/modeloCreate':
+        (new PessoasModelosController())->create();
+        break;
+    case 'pessoas/modeloStore':
+        (new PessoasModelosController())->store();
+        break;
+    case 'pessoas/modeloEdit':
+        (new PessoasModelosController())->edit();
+        break;
+    case 'pessoas/modeloUpdate':
+        (new PessoasModelosController())->update();
+        break;
+    case 'pessoas/modeloToggleAtivo':
+        (new PessoasModelosController())->toggleAtivo();
+        break;
+    case 'pessoas/grupoStore':
+        (new PessoasModelosController())->storeGrupo();
+        break;
+    case 'pessoas/grupoUpdate':
+        (new PessoasModelosController())->updateGrupo();
+        break;
+    case 'pessoas/grupoDelete':
+        (new PessoasModelosController())->deleteGrupo();
+        break;
+    case 'pessoas/perguntaStore':
+        (new PessoasModelosController())->storePergunta();
+        break;
+    case 'pessoas/perguntaUpdate':
+        (new PessoasModelosController())->updatePergunta();
+        break;
+    case 'pessoas/perguntaDelete':
+        (new PessoasModelosController())->deletePergunta();
         break;
     case 'aplicacoes/delete_update':
         (new AplicacoesController())->delete_update();
