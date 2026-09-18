@@ -101,6 +101,16 @@ try {
     ok('Validação de upload: PDF/DOC/DOCX aceitos, extensão inválida/tamanho excedido/MIME incompatível rejeitados (não confia só na extensão)');
 
     // ===================== PARTE 3: fluxo ponta-a-ponta via probe (Instituto) =====================
+    // Independencia do AUTO_INCREMENT (Sprint 04 - higiene): o Cenario 12 usa o id
+    // da Ata recem-criada em manuais/download e espera 404 (Atas e Manuais sao
+    // tabelas separadas). Se por coincidencia existir um Manual com o MESMO id, o
+    // cenario deixa de ser valido (o Manual existe -> 403, nao 404). Para o teste
+    // nao depender do estado do contador, o AUTO_INCREMENT de atas e' posicionado
+    // acima do maior id de manuais ANTES do cadastro - o contrato (404) e a
+    // expectativa do cenario continuam exatamente os mesmos.
+    $maxManualId = (int)$pdo->query('SELECT COALESCE(MAX(id), 0) FROM manuais')->fetchColumn();
+    $pdo->exec('ALTER TABLE atas AUTO_INCREMENT = ' . ($maxManualId + 1));
+
     $nomeAta = 'Ata Regressão ' . $suffix;
     $pdfContent = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\nCONTEUDO-UNICO-" . $suffix . "\n%%EOF";
     $pdfFile = makeTmpFile($pdfContent, 'pdf');

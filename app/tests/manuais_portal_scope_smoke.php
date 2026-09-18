@@ -23,6 +23,22 @@ $tokens = new ManualPortalTokenModel();
 $pdo = Database::getConnection();
 $suffix = substr(bin2hex(random_bytes(4)), 0, 8);
 
+// Higiene (Pilar de Pessoas, Sprint 04): este teste era linear, com a limpeza
+// so no final - qualquer interrupcao (assercao, excecao, timeout) antes disso
+// deixava Manuais/Clientes/Tokens orfaos permanentes no banco, que colidiam
+// por id com outras tabelas (ex.: atas). Agora os ids sao acumulados e a
+// limpeza roda via register_shutdown_function, mesmo em exit()/excecao.
+$cleanup = ['token_empresas' => [], 'manual_ids' => [], 'departamento_ids' => [], 'cliente_ids' => []];
+register_shutdown_function(function () use ($pdo, &$cleanup) {
+    try {
+        foreach ($cleanup['token_empresas'] as $id) { $pdo->prepare('DELETE FROM manual_portal_tokens WHERE empresa_id = :id')->execute(['id' => $id]); }
+        foreach ($cleanup['manual_ids'] as $id) { $pdo->prepare('DELETE FROM manuais WHERE id = :id')->execute(['id' => $id]); }
+        foreach ($cleanup['departamento_ids'] as $id) { $pdo->prepare('DELETE FROM departamentos WHERE id = :id')->execute(['id' => $id]); }
+        foreach ($cleanup['cliente_ids'] as $id) { $pdo->prepare('DELETE FROM clientes WHERE id = :id')->execute(['id' => $id]); }
+    } catch (\Throwable $e) {
+    }
+});
+
 $stmt = $pdo->prepare('INSERT INTO clientes (nome_empresa, CNPJ, contato, is_matriz, matriz_id) VALUES (:nome, :cnpj, :contato, :is_matriz, :matriz_id)');
 $stmt->execute([
     'nome' => 'Matriz Portal ' . $suffix,
@@ -32,6 +48,8 @@ $stmt->execute([
     'matriz_id' => null,
 ]);
 $matrizId = (int)$pdo->lastInsertId();
+$cleanup['cliente_ids'][] = $matrizId;
+$cleanup['token_empresas'][] = $matrizId;
 $stmt->execute([
     'nome' => 'Filial Portal ' . $suffix,
     'cnpj' => '66.666.666/0001-' . substr($suffix, 0, 2),
@@ -40,9 +58,12 @@ $stmt->execute([
     'matriz_id' => $matrizId,
 ]);
 $filialId = (int)$pdo->lastInsertId();
+$cleanup['cliente_ids'][] = $filialId;
+$cleanup['token_empresas'][] = $filialId;
 
 $depMatrizId = $departamentos->create(['nome' => 'Dep Matriz ' . $suffix, 'cliente_id' => $matrizId]);
 $depFilialId = $departamentos->create(['nome' => 'Dep Filial ' . $suffix, 'cliente_id' => $filialId]);
+$cleanup['departamento_ids'] = [$depMatrizId, $depFilialId];
 
 $manualMatriz = $manuais->create([
     'empresa_id' => $matrizId,
@@ -54,6 +75,7 @@ $manualMatriz = $manuais->create([
     'tamanho' => 1,
     'usuario_id' => 1,
 ]);
+$cleanup['manual_ids'][] = $manualMatriz;
 $manualFilial = $manuais->create([
     'empresa_id' => $filialId,
     'departamento_id' => $depFilialId,
@@ -65,6 +87,7 @@ $manualFilial = $manuais->create([
     'usuario_id' => 1,
 ]);
 
+$cleanup['manual_ids'][] = $manualFilial;
 $token = $tokens->issue($matrizId, date('Y-m-d H:i:s', strtotime('+1 day')));
 $validToken = $tokens->findValid($token);
 $scopeMatriz = $clientes->manualPortalScopeIds($matrizId);
@@ -99,14 +122,7 @@ ob_start();
 $portalHtml = (string)ob_get_clean();
 $portalMismatchBlocked = str_contains($portalHtml, 'Link inválido');
 
-$pdo->prepare('DELETE FROM manual_portal_tokens WHERE empresa_id = :id')->execute(['id' => $matrizId]);
-$pdo->prepare('DELETE FROM manual_portal_tokens WHERE empresa_id = :id')->execute(['id' => $filialId]);
-$pdo->prepare('DELETE FROM manuais WHERE id = :id')->execute(['id' => $manualMatriz]);
-$pdo->prepare('DELETE FROM manuais WHERE id = :id')->execute(['id' => $manualFilial]);
-$pdo->prepare('DELETE FROM departamentos WHERE id = :id')->execute(['id' => $depMatrizId]);
-$pdo->prepare('DELETE FROM departamentos WHERE id = :id')->execute(['id' => $depFilialId]);
-$pdo->prepare('DELETE FROM clientes WHERE id = :id')->execute(['id' => $filialId]);
-$pdo->prepare('DELETE FROM clientes WHERE id = :id')->execute(['id' => $matrizId]);
+// Limpeza feita pelo register_shutdown_function registrado no topo.
 
 echo json_encode([
     'valid_token_found' => !empty($validToken),

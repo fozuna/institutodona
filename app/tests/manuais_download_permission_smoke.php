@@ -48,6 +48,18 @@ $manualId = $model->create([
     'usuario_id' => 1,
 ]);
 
+// Higiene (Sprint 04): download() pode dar exit()/lancar excecao antes do
+// bloco de limpeza abaixo - o Manual (e Empresa/Departamento eventualmente
+// criados) ficariam orfaos. A limpeza tambem roda no shutdown (idempotente).
+register_shutdown_function(function () use ($pdo, $manualId, $createdDepartamento, $departamentoId, $createdEmpresa, $empresaId) {
+    try {
+        if ($manualId > 0) { $pdo->prepare('DELETE FROM manuais WHERE id = :id')->execute(['id' => $manualId]); }
+        if ($createdDepartamento) { $pdo->prepare('DELETE FROM departamentos WHERE id = :id')->execute(['id' => $departamentoId]); }
+        if ($createdEmpresa) { $pdo->prepare('DELETE FROM clientes WHERE id = :id')->execute(['id' => $empresaId]); }
+    } catch (\Throwable $e) {
+    }
+});
+
 $_SESSION['user'] = [
     'id' => 2,
     'nome' => 'Consultor',

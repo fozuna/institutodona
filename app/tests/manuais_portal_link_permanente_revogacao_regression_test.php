@@ -73,6 +73,21 @@ namespace {
 
     $clienteAId = $clientes->create(['nome_empresa' => 'Cliente Portal Permanente A ' . $suffix, 'CNPJ' => '33.444.5' . substr($suffix, 0, 2) . '/0001-33', 'contato' => 'Contato A']);
     $clienteBId = $clientes->create(['nome_empresa' => 'Cliente Portal Permanente B ' . $suffix, 'CNPJ' => '44.555.6' . substr($suffix, 0, 2) . '/0001-44', 'contato' => 'Contato B']);
+    // Higiene (Sprint 04): este teste NAO tinha nenhuma limpeza - cada execucao
+    // deixava 2 empresas + tokens de portal orfaos no banco (fonte principal do
+    // lixo que colidia por id com outras tabelas). Limpeza via shutdown, que
+    // roda mesmo em failFast()/exit()/excecao.
+    register_shutdown_function(function () use ($pdo, $clienteAId, $clienteBId) {
+        try {
+            foreach ([$clienteAId, $clienteBId] as $id) {
+                if ($id > 0) {
+                    $pdo->prepare('DELETE FROM manual_portal_tokens WHERE empresa_id = :id')->execute(['id' => $id]);
+                    $pdo->prepare('DELETE FROM clientes WHERE id = :id')->execute(['id' => $id]);
+                }
+            }
+        } catch (\Throwable $e) {
+        }
+    });
     if ($clienteAId <= 0 || $clienteBId <= 0) { failFast('Falha ao criar clientes de teste'); }
     ok('Criou clientes A e B para o teste');
 
