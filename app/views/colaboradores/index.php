@@ -13,6 +13,9 @@ $canClienteShow = \App\Core\AccessControl::canAccessRoute('clientes/show', 'GET'
 $canCreate = \App\Core\AccessControl::canAccessRoute('colaboradores/create', 'GET', $currentUser);
 $canEdit = \App\Core\AccessControl::canAccessRoute('colaboradores/edit', 'GET', $currentUser);
 $canDelete = \App\Core\AccessControl::canAccessRoute('colaboradores/delete', 'POST', $currentUser);
+// Pilar de Pessoas, Sprint 02: link para o Histórico de Desenvolvimento -
+// só aparece para quem já tem acesso ao módulo Pessoas (mesmo RBAC).
+$canPessoas = \App\Core\AccessControl::canAccessRoute('pessoas/index', 'GET', $currentUser);
 $canImport = \App\Core\AccessControl::canAccessRoute('colaboradores/import', 'POST', $currentUser);
 $canDownloadTemplate = \App\Core\AccessControl::canAccessRoute('colaboradores/importTemplate', 'GET', $currentUser);
 $backUrl = ($canClienteShow && (int)($cliente ?? 0) > 0)
@@ -486,8 +489,11 @@ $backUrl = ($canClienteShow && (int)($cliente ?? 0) > 0)
                           <td class="p-3"><?= htmlspecialchars($c['setor'] ?? '') ?></td>
                           <td class="p-3"><?= htmlspecialchars($c['departamento'] ?? '') ?></td>
                           <td class="p-3 whitespace-nowrap">
+                              <?php if ($canPessoas ?? false): ?>
+                              <a class="text-brand-brown icon-action" href="index.php?route=pessoas/colaboradorHistorico&id=<?= (int)$c['id'] ?>" title="Histórico de Desenvolvimento (Pessoas)" aria-label="Histórico de Desenvolvimento"><span data-feather="trending-up"></span></a>
+                              <?php endif; ?>
                               <?php if ($canEdit): ?>
-                              <a class="text-brand-pink icon-action" href="index.php?route=colaboradores/edit&id=<?= (int)$c['id'] ?><?= $cliente ? '&cliente='.(int)$cliente : '' ?>" title="Editar" aria-label="Editar"><span data-feather="edit"></span></a>
+                              <a class="text-brand-pink icon-action ml-2" href="index.php?route=colaboradores/edit&id=<?= (int)$c['id'] ?><?= $cliente ? '&cliente='.(int)$cliente : '' ?>" title="Editar" aria-label="Editar"><span data-feather="edit"></span></a>
                               <?php endif; ?>
                               <?php if ($canDelete): ?>
                               <a class="text-brand-brown icon-action ml-2" href="index.php?route=colaboradores/delete&id=<?= (int)$c['id'] ?><?= $cliente ? '&cliente='.(int)$cliente : '' ?>" title="Excluir" aria-label="Excluir"><span data-feather="trash-2"></span></a>

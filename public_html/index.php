@@ -39,6 +39,7 @@ use App\Controllers\PwaController;
 use App\Controllers\ErrorController;
 use App\Controllers\PessoasModelosController;
 use App\Controllers\PessoasCiclosController;
+use App\Controllers\PessoasGestaoController;
 
 $migrationRunner = new MigrationRunner();
 $currentMigrationFingerprint = $migrationRunner->currentFingerprint();
@@ -710,6 +711,33 @@ switch ($route) {
         break;
     case 'pessoas/perguntaDelete':
         (new PessoasModelosController())->deletePergunta();
+        break;
+    case 'pessoas/colaboradorHistorico':
+        (new PessoasGestaoController())->colaboradorHistorico();
+        break;
+    case 'pessoas/gapCreate':
+        (new PessoasGestaoController())->gapCreate();
+        break;
+    case 'pessoas/gapShow':
+        (new PessoasGestaoController())->gapShow();
+        break;
+    case 'pessoas/gapStatus':
+        (new PessoasGestaoController())->gapStatus();
+        break;
+    case 'pessoas/feedbackCreate':
+        (new PessoasGestaoController())->feedbackCreate();
+        break;
+    case 'pessoas/acaoCreate':
+        (new PessoasGestaoController())->acaoCreate();
+        break;
+    case 'pessoas/acaoEmAndamento':
+        (new PessoasGestaoController())->acaoEmAndamento();
+        break;
+    case 'pessoas/acaoConcluir':
+        (new PessoasGestaoController())->acaoConcluir();
+        break;
+    case 'pessoas/acaoCancelar':
+        (new PessoasGestaoController())->acaoCancelar();
         break;
     case 'aplicacoes/delete_update':
         (new AplicacoesController())->delete_update();

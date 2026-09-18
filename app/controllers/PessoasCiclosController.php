@@ -9,6 +9,7 @@ use App\Models\ColaboradorModel;
 use App\Models\DepartamentoModel;
 use App\Models\PessoaAvaliacaoModel;
 use App\Models\PessoaCicloAvaliacaoModel;
+use App\Models\PessoaGapModel;
 use App\Models\PessoaModeloAvaliacaoModel;
 
 /**
@@ -24,6 +25,7 @@ class PessoasCiclosController extends BaseController
     private ClienteModel $clientes;
     private ColaboradorModel $colaboradores;
     private DepartamentoModel $departamentos;
+    private PessoaGapModel $gaps;
 
     public function __construct()
     {
@@ -33,6 +35,7 @@ class PessoasCiclosController extends BaseController
         $this->clientes = new ClienteModel();
         $this->colaboradores = new ColaboradorModel();
         $this->departamentos = new DepartamentoModel();
+        $this->gaps = new PessoaGapModel();
     }
 
     public function index(): void
@@ -390,12 +393,23 @@ class PessoasCiclosController extends BaseController
             $this->redirect('index.php?route=pessoas/index');
             return;
         }
+        // Sprint 02: mapa resposta_id -> gap_id (já registrado) para a View
+        // decidir entre mostrar "Registrar GAP" ou "GAP registrado" por item,
+        // sem repetir uma consulta por linha.
+        $gapPorResposta = [];
+        foreach ($this->avaliacoes->listRespostas($id) as $item) {
+            $gapExistente = $this->gaps->findByResposta((int)$item['id']);
+            if ($gapExistente !== null) {
+                $gapPorResposta[(int)$item['id']] = (int)$gapExistente['id'];
+            }
+        }
         $this->render('pessoas/avaliacoes/resultado', [
             'pageTitle' => 'Resultado — ' . $avaliacao['colaborador_nome'],
             'avaliacao' => $avaliacao,
             'grupos' => $this->avaliacoes->respostasAgrupadas($id),
             'resultadoPorGrupo' => $this->avaliacoes->resultadoPorGrupo($id),
             'classificacaoGeral' => \App\Core\PessoasAvaliacaoScale::classification((float)$avaliacao['resultado']),
+            'gapPorResposta' => $gapPorResposta,
         ]);
     }
 }
