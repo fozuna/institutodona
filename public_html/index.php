@@ -739,6 +739,24 @@ switch ($route) {
     case 'pessoas/acaoCancelar':
         (new PessoasGestaoController())->acaoCancelar();
         break;
+    case 'pessoas/acaoShow':
+        (new PessoasGestaoController())->acaoShow();
+        break;
+    case 'pessoas/acaoEncaminharPlano':
+        (new PessoasGestaoController())->acaoEncaminharPlano();
+        break;
+    case 'pessoas/acaoEncaminharTreinamento':
+        (new PessoasGestaoController())->acaoEncaminharTreinamento();
+        break;
+    case 'pessoas/necessidadeCreate':
+        (new PessoasGestaoController())->necessidadeCreate();
+        break;
+    case 'pessoas/necessidadeAtender':
+        (new PessoasGestaoController())->necessidadeAtender();
+        break;
+    case 'pessoas/necessidadeCancelar':
+        (new PessoasGestaoController())->necessidadeCancelar();
+        break;
     case 'aplicacoes/delete_update':
         (new AplicacoesController())->delete_update();
         break;

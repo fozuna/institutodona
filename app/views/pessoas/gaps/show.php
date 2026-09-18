@@ -116,13 +116,14 @@ $csrf = \App\Core\Security::csrfToken();
         <?php foreach ($acoes as $a): ?>
           <div class="border rounded p-3 text-sm">
             <div class="flex items-center justify-between gap-2 mb-1">
-              <span class="font-medium"><?= htmlspecialchars($a['titulo']) ?></span>
+              <a class="font-medium text-brand-brown hover:underline" href="index.php?route=pessoas/acaoShow&id=<?= (int)$a['id'] ?>"><?= htmlspecialchars($a['titulo']) ?></a>
               <span class="px-2 py-0.5 rounded text-xs <?= $acaoStatusClasses[$a['status']] ?? '' ?>"><?= htmlspecialchars($acaoStatusLabels[$a['status']] ?? $a['status']) ?></span>
             </div>
             <?php if (!empty($a['descricao'])): ?><p class="text-gray-600 mb-1"><?= nl2br(htmlspecialchars($a['descricao'])) ?></p><?php endif; ?>
             <div class="text-xs text-gray-500">
               Responsável: <?= htmlspecialchars((string)($a['responsavel_nome'] ?? 'Não definido')) ?>
               <?php if (!empty($a['prazo'])): ?> · Prazo: <?= htmlspecialchars(DateHelper::formatDate((string)$a['prazo'])) ?><?php endif; ?>
+              · <a class="text-brand-pink" href="index.php?route=pessoas/acaoShow&id=<?= (int)$a['id'] ?>">Desenvolvimento</a>
             </div>
             <?php if (!empty($a['conclusao'])): ?>
               <div class="mt-2 text-xs bg-green-50 border border-green-200 rounded p-2 text-green-800"><?= nl2br(htmlspecialchars($a['conclusao'])) ?></div>

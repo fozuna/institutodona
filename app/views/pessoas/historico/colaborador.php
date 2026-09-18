@@ -155,9 +155,13 @@ $csrf = \App\Core\Security::csrfToken();
     <?php else: ?>
       <div class="space-y-2 mb-3">
         <?php foreach ($acoes as $a): ?>
+          <?php
+            $dev = $desenvolvimento[(int)$a['id']] ?? null;
+            $gapDaAcao = !empty($a['gap_id']) ? ($gapsPorId[(int)$a['gap_id']] ?? null) : null;
+          ?>
           <div class="border rounded p-3 text-sm">
             <div class="flex items-center justify-between gap-2 mb-1">
-              <span class="font-medium"><?= htmlspecialchars($a['titulo']) ?></span>
+              <a class="font-medium text-brand-brown hover:underline" href="index.php?route=pessoas/acaoShow&id=<?= (int)$a['id'] ?>"><?= htmlspecialchars($a['titulo']) ?></a>
               <span class="px-2 py-0.5 rounded text-xs <?= $acaoStatusClasses[$a['status']] ?? '' ?>"><?= htmlspecialchars($acaoStatusLabels[$a['status']] ?? $a['status']) ?></span>
             </div>
             <div class="text-xs text-gray-500">
@@ -165,6 +169,30 @@ $csrf = \App\Core\Security::csrfToken();
               <?php if (!empty($a['prazo'])): ?> · Prazo: <?= htmlspecialchars(DateHelper::formatDate((string)$a['prazo'])) ?><?php endif; ?>
               <?php if (!empty($a['gap_id'])): ?> · <a class="text-brand-pink" href="index.php?route=pessoas/gapShow&id=<?= (int)$a['gap_id'] ?>">Ver GAP relacionado</a><?php endif; ?>
             </div>
+            <?php if ($dev): ?>
+              <!-- Leitura encadeada: Avaliação -> GAP -> Ação -> Desenvolvimento -->
+              <div class="flex flex-wrap items-center gap-1 text-xs mt-2">
+                <?php if ($gapDaAcao && $gapDaAcao['origem'] === 'avaliacao'): ?>
+                  <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700">Avaliação</span><span class="text-gray-400">→</span>
+                <?php endif; ?>
+                <?php if ($gapDaAcao): ?>
+                  <span class="px-2 py-0.5 rounded bg-amber-50 text-amber-800">GAP: <?= htmlspecialchars(mb_strimwidth($gapDaAcao['titulo'], 0, 40, '…')) ?></span><span class="text-gray-400">→</span>
+                <?php endif; ?>
+                <span class="px-2 py-0.5 rounded bg-blue-50 text-blue-800">Ação</span><span class="text-gray-400">→</span>
+                <span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800"><?= htmlspecialchars($dev['estado']) ?></span>
+              </div>
+              <?php if ($dev['plano']): ?>
+                <div class="text-xs mt-1">Plano de Ação: <?= htmlspecialchars($dev['plano']['titulo']) ?> — <?= htmlspecialchars((string)$dev['plano']['plano_status']) ?>
+                  <?php if (!empty($links['plano'])): ?> · <a class="text-brand-pink" href="index.php?route=planoacao/show&id=<?= (int)$dev['plano']['plano_task_id'] ?>">Abrir Plano</a><?php endif; ?></div>
+              <?php endif; ?>
+              <?php foreach ($dev['treinamentos'] as $t): ?>
+                <div class="text-xs mt-1">Treinamento: <?= htmlspecialchars($t['nome']) ?> — <?= htmlspecialchars($t['situacao']['label']) ?><?= !empty($t['situacao']['certificado']) ? ' (certificado emitido)' : '' ?>
+                  <?php if (!empty($links['treinamento'])): ?> · <a class="text-brand-pink" href="index.php?route=treinamentos/show&id=<?= (int)$t['treinamento_id'] ?>">Abrir</a><?php endif; ?></div>
+              <?php endforeach; ?>
+              <?php foreach ($dev['necessidades'] as $n): ?>
+                <div class="text-xs mt-1">Necessidade de treinamento: <?= htmlspecialchars($n['titulo']) ?> — <?= htmlspecialchars(ucfirst($n['status'])) ?> (prioridade <?= htmlspecialchars($prioridadeLabels[$n['prioridade']] ?? $n['prioridade']) ?>)</div>
+              <?php endforeach; ?>
+            <?php endif; ?>
           </div>
         <?php endforeach; ?>
       </div>

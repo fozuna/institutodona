@@ -6,9 +6,13 @@ use App\Core\BaseController;
 use App\Core\Security;
 use App\Models\ColaboradorModel;
 use App\Models\PessoaAcaoMelhoriaModel;
+use App\Core\AccessControl;
 use App\Models\PessoaAvaliacaoModel;
+use App\Models\PessoaDesenvolvimentoModel;
 use App\Models\PessoaFeedbackModel;
 use App\Models\PessoaGapModel;
+use App\Models\PlanoAcaoTaskModel;
+use App\Models\TreinamentoModel;
 
 /**
  * Pilar de Pessoas, Sprint 02 - Resultado -> GAP -> Feedback -> Ação de
@@ -22,6 +26,7 @@ class PessoasGestaoController extends BaseController
     private PessoaGapModel $gaps;
     private PessoaFeedbackModel $feedbacks;
     private PessoaAcaoMelhoriaModel $acoes;
+    private PessoaDesenvolvimentoModel $desenvolvimento;
 
     public function __construct()
     {
@@ -30,6 +35,7 @@ class PessoasGestaoController extends BaseController
         $this->gaps = new PessoaGapModel();
         $this->feedbacks = new PessoaFeedbackModel();
         $this->acoes = new PessoaAcaoMelhoriaModel();
+        $this->desenvolvimento = new PessoaDesenvolvimentoModel();
     }
 
     /** Resolve o colaborador garantindo tenant (find() já filtra por escopo; canAccessCliente() é defesa redundante). */
@@ -56,14 +62,29 @@ class PessoasGestaoController extends BaseController
 
         $avaliacoesDoColaborador = $this->db_findAvaliacoesByColaborador($colaboradorId, $empresaId);
 
+        $gaps = $this->gaps->listByColaborador($colaboradorId, $empresaId);
+        $acoes = $this->acoes->listByColaborador($colaboradorId, $empresaId);
+        // Sprint 03: desenvolvimento (Plano/Treinamento/Necessidade + estado derivado)
+        // por Acao, e mapas para a leitura encadeada Avaliacao -> GAP -> Acao -> Desenvolvimento.
+        $desenvolvimento = [];
+        foreach ($acoes as $a) {
+            $desenvolvimento[(int)$a['id']] = $this->desenvolvimento->desenvolvimentoDaAcao($a);
+        }
+        $gapsPorId = [];
+        foreach ($gaps as $g) {
+            $gapsPorId[(int)$g['id']] = $g;
+        }
         $this->render('pessoas/historico/colaborador', [
             'pageTitle' => 'Histórico de Desenvolvimento — ' . $colaborador['nome'],
             'colaborador' => $colaborador,
             'avaliacoes' => $avaliacoesDoColaborador,
-            'gaps' => $this->gaps->listByColaborador($colaboradorId, $empresaId),
+            'gaps' => $gaps,
+            'gapsPorId' => $gapsPorId,
             'feedbacks' => $this->feedbacks->listByColaborador($colaboradorId, $empresaId),
-            'acoes' => $this->acoes->listByColaborador($colaboradorId, $empresaId),
+            'acoes' => $acoes,
+            'desenvolvimento' => $desenvolvimento,
             'usuariosResponsaveis' => $this->acoes->usuariosResponsaveisDisponiveis($empresaId),
+            'links' => $this->linksPermitidos(),
         ]);
     }
 
@@ -340,6 +361,199 @@ class PessoasGestaoController extends BaseController
             $_SESSION['flash_error'] = 'Não foi possível cancelar a ação.';
         }
         $this->redirect($voltarPara);
+    }
+
+    // ---------------------------------------------------------------
+    // Sprint 03 - Desenvolvimento (Plano de Ação / Treinamento / Necessidade)
+    // ---------------------------------------------------------------
+
+    /**
+     * Links operacionais para módulos de destino só aparecem se o usuário JÁ tem
+     * permissão nesses módulos - acesso a Pessoas não concede nada além disso.
+     */
+    private function linksPermitidos(): array
+    {
+        $user = $_SESSION['user'] ?? null;
+        return [
+            'plano' => AccessControl::canAccessRoute('planoacao/show', 'GET', $user),
+            'treinamento' => AccessControl::canAccessRoute('treinamentos/show', 'GET', $user),
+        ];
+    }
+
+    /** Bloqueia a operação se o usuário não puder escrever no módulo de destino (sem bypass de RBAC). */
+    private function exigirModuloDestino(string $route): bool
+    {
+        if (AccessControl::canAccessRoute($route, 'POST', $_SESSION['user'] ?? null)) {
+            return true;
+        }
+        $_SESSION['flash_error'] = 'Operação não permitida.';
+        return false;
+    }
+
+    public function acaoShow(): void
+    {
+        $this->requireClienteAdminAccess();
+        $acao = $this->acoes->find((int)($_GET['id'] ?? 0));
+        if (!$acao || !$this->canAccessCliente((int)$acao['empresa_id'])) {
+            $_SESSION['flash_error'] = 'Ação de Melhoria não encontrada.';
+            $this->redirect('index.php?route=colaboradores/index');
+            return;
+        }
+        $gap = !empty($acao['gap_id']) ? $this->gaps->find((int)$acao['gap_id']) : null;
+        $this->render('pessoas/acoes/show', [
+            'pageTitle' => 'Ação de Melhoria — ' . $acao['titulo'],
+            'acao' => $acao,
+            'gap' => $gap,
+            'dev' => $this->desenvolvimento->desenvolvimentoDaAcao($acao),
+            'treinamentosDisponiveis' => $this->desenvolvimento->treinamentosDisponiveis((int)$acao['empresa_id']),
+            'links' => $this->linksPermitidos(),
+        ]);
+    }
+
+    private function acaoParaDesenvolvimento(): ?array
+    {
+        if (!Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return null;
+        }
+        $acao = $this->acoes->find((int)($_POST['acao_id'] ?? 0));
+        if (!$acao || !$this->canAccessCliente((int)$acao['empresa_id'])) {
+            http_response_code(404);
+            echo 'Ação de Melhoria não encontrada.';
+            return null;
+        }
+        return $acao;
+    }
+
+    public function acaoEncaminharPlano(): void
+    {
+        $this->requireClienteAdminAccess();
+        $acao = $this->acaoParaDesenvolvimento();
+        if ($acao === null) {
+            return;
+        }
+        $voltar = 'index.php?route=pessoas/acaoShow&id=' . (int)$acao['id'];
+        if (!$this->exigirModuloDestino('planoacao/store')) {
+            $this->redirect($voltar);
+            return;
+        }
+        $userId = (int)($_SESSION['user']['id'] ?? 0);
+        $r = $this->desenvolvimento->encaminharPlanoAcao((int)$acao['id'], [
+            'titulo' => $_POST['titulo'] ?? '',
+            'descricao' => $_POST['descricao'] ?? '',
+            'prazo' => $_POST['prazo'] ?? null,
+        ], $this->acoes, new PlanoAcaoTaskModel(), $userId);
+        if (!$r['ok']) {
+            $_SESSION['flash_error'] = $r['error'];
+        } elseif ($r['already_existed']) {
+            $_SESSION['flash_success'] = 'Este encaminhamento já existe.';
+        } else {
+            AuditLogger::log('pessoas_acao_encaminhada_plano_acao', 'pessoas_acao_melhoria', (int)$acao['id'], ['empresa_id' => $acao['empresa_id'], 'plano_id' => $r['plano_id']]);
+            $_SESSION['flash_success'] = 'Plano de Ação criado com sucesso.';
+        }
+        $this->redirect($voltar);
+    }
+
+    public function acaoEncaminharTreinamento(): void
+    {
+        $this->requireClienteAdminAccess();
+        $acao = $this->acaoParaDesenvolvimento();
+        if ($acao === null) {
+            return;
+        }
+        $voltar = 'index.php?route=pessoas/acaoShow&id=' . (int)$acao['id'];
+        if (!$this->exigirModuloDestino('treinamentos/add_participante_extra')) {
+            $this->redirect($voltar);
+            return;
+        }
+        $treinamentoId = (int)($_POST['treinamento_id'] ?? 0);
+        $r = $this->desenvolvimento->vincularTreinamento((int)$acao['id'], $treinamentoId, $this->acoes, new TreinamentoModel(), (int)($_SESSION['user']['id'] ?? 0));
+        if (!$r['ok']) {
+            $_SESSION['flash_error'] = $r['error'];
+        } elseif ($r['already_existed']) {
+            $_SESSION['flash_success'] = 'Este encaminhamento já existe.';
+        } else {
+            AuditLogger::log('pessoas_acao_encaminhada_treinamento', 'pessoas_acao_melhoria', (int)$acao['id'], ['empresa_id' => $acao['empresa_id'], 'treinamento_id' => $treinamentoId]);
+            $_SESSION['flash_success'] = 'Treinamento vinculado.';
+        }
+        $this->redirect($voltar);
+    }
+
+    public function necessidadeCreate(): void
+    {
+        $this->requireClienteAdminAccess();
+        $acao = $this->acaoParaDesenvolvimento();
+        if ($acao === null) {
+            return;
+        }
+        $r = $this->desenvolvimento->registrarNecessidade((int)$acao['id'], [
+            'titulo' => $_POST['titulo'] ?? '',
+            'descricao' => $_POST['descricao'] ?? null,
+            'prioridade' => $_POST['prioridade'] ?? 'media',
+        ], $this->acoes, (int)($_SESSION['user']['id'] ?? 0));
+        if (!$r['ok']) {
+            $_SESSION['flash_error'] = $r['error'];
+        } elseif ($r['already_existed']) {
+            $_SESSION['flash_success'] = 'Este encaminhamento já existe.';
+        } else {
+            AuditLogger::log('pessoas_necessidade_treinamento_criada', 'pessoas_necessidade_treinamento', $r['id'], ['empresa_id' => $acao['empresa_id'], 'acao_id' => $acao['id']]);
+            $_SESSION['flash_success'] = 'Necessidade de treinamento registrada.';
+        }
+        $this->redirect('index.php?route=pessoas/acaoShow&id=' . (int)$acao['id']);
+    }
+
+    public function necessidadeAtender(): void
+    {
+        $this->requireClienteAdminAccess();
+        if (!Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+        $n = $this->desenvolvimento->findNecessidade((int)($_POST['id'] ?? 0));
+        if (!$n || !$this->canAccessCliente((int)$n['empresa_id'])) {
+            http_response_code(404);
+            echo 'Necessidade não encontrada.';
+            return;
+        }
+        $voltar = 'index.php?route=pessoas/acaoShow&id=' . (int)$n['acao_melhoria_id'];
+        if (!$this->exigirModuloDestino('treinamentos/add_participante_extra')) {
+            $this->redirect($voltar);
+            return;
+        }
+        $treinamentoId = (int)($_POST['treinamento_id'] ?? 0);
+        $r = $this->desenvolvimento->atenderNecessidade((int)$n['id'], $treinamentoId, $this->acoes, new TreinamentoModel(), (int)($_SESSION['user']['id'] ?? 0));
+        if (!$r['ok']) {
+            $_SESSION['flash_error'] = $r['error'];
+        } else {
+            AuditLogger::log('pessoas_necessidade_treinamento_atendida', 'pessoas_necessidade_treinamento', (int)$n['id'], ['empresa_id' => $n['empresa_id'], 'treinamento_id' => $treinamentoId]);
+            $_SESSION['flash_success'] = 'Necessidade atendida e treinamento vinculado.';
+        }
+        $this->redirect($voltar);
+    }
+
+    public function necessidadeCancelar(): void
+    {
+        $this->requireClienteAdminAccess();
+        if (!Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+        $n = $this->desenvolvimento->findNecessidade((int)($_POST['id'] ?? 0));
+        if (!$n || !$this->canAccessCliente((int)$n['empresa_id'])) {
+            http_response_code(404);
+            echo 'Necessidade não encontrada.';
+            return;
+        }
+        if ($this->desenvolvimento->cancelarNecessidade((int)$n['id'])) {
+            AuditLogger::log('pessoas_necessidade_treinamento_cancelada', 'pessoas_necessidade_treinamento', (int)$n['id'], ['empresa_id' => $n['empresa_id']]);
+            $_SESSION['flash_success'] = 'Necessidade cancelada.';
+        } else {
+            $_SESSION['flash_error'] = 'Operação não permitida.';
+        }
+        $this->redirect('index.php?route=pessoas/acaoShow&id=' . (int)$n['acao_melhoria_id']);
     }
 
     /** @return array{0:?array,1:string} */
