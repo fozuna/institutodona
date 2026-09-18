@@ -31,6 +31,32 @@ $csrf = \App\Core\Security::csrfToken();
     <div class="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><?= htmlspecialchars($_SESSION['flash_error']); unset($_SESSION['flash_error']); ?></div>
   <?php endif; ?>
 
+  <!-- PDI (Sprint 04) -->
+  <div class="bg-white shadow rounded-xl p-4 md:p-6">
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+      <h2 class="font-semibold">PDI — Plano de Desenvolvimento Individual</h2>
+      <a class="px-3 py-2 rounded bg-brand-red text-white text-sm" href="index.php?route=pessoas/pdiCreate&colaborador_id=<?= (int)$colaborador['id'] ?>">Criar PDI</a>
+    </div>
+    <?php if (empty($pdis)): ?>
+      <div class="text-sm text-gray-500">Nenhum PDI criado ainda.</div>
+    <?php else: ?>
+      <div class="space-y-2">
+        <?php foreach ($pdis as $p): ?>
+          <div class="border rounded p-3 text-sm flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <a class="font-medium text-brand-brown hover:underline" href="index.php?route=pessoas/pdiShow&id=<?= (int)$p['id'] ?>"><?= htmlspecialchars($p['titulo']) ?></a>
+              <div class="text-xs text-gray-500">
+                <?= !empty($p['data_inicio']) ? htmlspecialchars(DateHelper::formatDate((string)$p['data_inicio'])) : '—' ?> a <?= !empty($p['data_fim_prevista']) ? htmlspecialchars(DateHelper::formatDate((string)$p['data_fim_prevista'])) : '—' ?>
+                · Progresso do PDI: <?= htmlspecialchars(PessoasGestaoConfig::formatProgresso((float)$p['progresso'])) ?> (<?= (int)$p['objetivos_concluidos'] ?>/<?= (int)$p['objetivos_validos'] ?>)
+              </div>
+            </div>
+            <span class="px-2 py-0.5 rounded text-xs <?= PessoasGestaoConfig::pdiStatusClasses()[$p['status']] ?? '' ?>"><?= htmlspecialchars(PessoasGestaoConfig::pdiStatusLabels()[$p['status']] ?? $p['status']) ?></span>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
+  </div>
+
   <!-- Avaliações -->
   <div class="bg-white shadow rounded-xl p-4 md:p-6">
     <h2 class="font-semibold mb-3">Avaliações</h2>

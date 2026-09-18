@@ -40,6 +40,8 @@ use App\Controllers\ErrorController;
 use App\Controllers\PessoasModelosController;
 use App\Controllers\PessoasCiclosController;
 use App\Controllers\PessoasGestaoController;
+use App\Controllers\PessoasPdiController;
+use App\Controllers\PessoasVisaoController;
 
 $migrationRunner = new MigrationRunner();
 $currentMigrationFingerprint = $migrationRunner->currentFingerprint();
@@ -756,6 +758,53 @@ switch ($route) {
         break;
     case 'pessoas/necessidadeCancelar':
         (new PessoasGestaoController())->necessidadeCancelar();
+        break;
+
+    // ---- Pilar de Pessoas: PDI e Visão Geral (Sprint 04) ----
+    case 'pessoas/visaoGeral':
+        (new PessoasVisaoController())->index();
+        break;
+    case 'pessoas/pdiIndex':
+        (new PessoasPdiController())->index();
+        break;
+    case 'pessoas/pdiCreate':
+        (new PessoasPdiController())->create();
+        break;
+    case 'pessoas/pdiStore':
+        (new PessoasPdiController())->store();
+        break;
+    case 'pessoas/pdiShow':
+        (new PessoasPdiController())->show();
+        break;
+    case 'pessoas/pdiUpdate':
+        (new PessoasPdiController())->update();
+        break;
+    case 'pessoas/pdiAtivar':
+        (new PessoasPdiController())->ativar();
+        break;
+    case 'pessoas/pdiConcluir':
+        (new PessoasPdiController())->concluir();
+        break;
+    case 'pessoas/pdiCancelar':
+        (new PessoasPdiController())->cancelar();
+        break;
+    case 'pessoas/pdiGapAdd':
+        (new PessoasPdiController())->gapAdd();
+        break;
+    case 'pessoas/pdiGapRemove':
+        (new PessoasPdiController())->gapRemove();
+        break;
+    case 'pessoas/pdiObjetivoCreate':
+        (new PessoasPdiController())->objetivoCreate();
+        break;
+    case 'pessoas/pdiObjetivoStatus':
+        (new PessoasPdiController())->objetivoStatus();
+        break;
+    case 'pessoas/pdiAcaoVincular':
+        (new PessoasPdiController())->acaoVincular();
+        break;
+    case 'pessoas/pdiAcaoCriar':
+        (new PessoasPdiController())->acaoCriar();
         break;
     case 'aplicacoes/delete_update':
         (new AplicacoesController())->delete_update();

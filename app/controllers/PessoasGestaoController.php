@@ -11,6 +11,7 @@ use App\Models\PessoaAvaliacaoModel;
 use App\Models\PessoaDesenvolvimentoModel;
 use App\Models\PessoaFeedbackModel;
 use App\Models\PessoaGapModel;
+use App\Models\PessoaPdiModel;
 use App\Models\PlanoAcaoTaskModel;
 use App\Models\TreinamentoModel;
 
@@ -27,6 +28,7 @@ class PessoasGestaoController extends BaseController
     private PessoaFeedbackModel $feedbacks;
     private PessoaAcaoMelhoriaModel $acoes;
     private PessoaDesenvolvimentoModel $desenvolvimento;
+    private PessoaPdiModel $pdis;
 
     public function __construct()
     {
@@ -36,6 +38,7 @@ class PessoasGestaoController extends BaseController
         $this->feedbacks = new PessoaFeedbackModel();
         $this->acoes = new PessoaAcaoMelhoriaModel();
         $this->desenvolvimento = new PessoaDesenvolvimentoModel();
+        $this->pdis = new PessoaPdiModel();
     }
 
     /** Resolve o colaborador garantindo tenant (find() já filtra por escopo; canAccessCliente() é defesa redundante). */
@@ -85,6 +88,7 @@ class PessoasGestaoController extends BaseController
             'desenvolvimento' => $desenvolvimento,
             'usuariosResponsaveis' => $this->acoes->usuariosResponsaveisDisponiveis($empresaId),
             'links' => $this->linksPermitidos(),
+            'pdis' => $this->pdis->listByColaborador($colaboradorId, $empresaId),
         ]);
     }
 
@@ -181,6 +185,11 @@ class PessoasGestaoController extends BaseController
             'feedbacks' => $this->feedbacksRelacionadosAoGap((int)$gap['id']),
             'acoes' => $this->acoes->listByGap((int)$gap['id']),
             'usuariosResponsaveis' => $this->acoes->usuariosResponsaveisDisponiveis((int)$gap['empresa_id']),
+            'pdiDoGap' => $this->pdis->pdiDoGap((int)$gap['id']),
+            'pdisEditaveis' => array_values(array_filter(
+                $this->pdis->listByColaborador((int)$gap['colaborador_id'], (int)$gap['empresa_id']),
+                static fn(array $p): bool => in_array($p['status'], ['rascunho', 'ativo'], true)
+            )),
         ]);
     }
 

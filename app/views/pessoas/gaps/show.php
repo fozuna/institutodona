@@ -30,6 +30,30 @@ $csrf = \App\Core\Security::csrfToken();
     <div class="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><?= htmlspecialchars($_SESSION['flash_error']); unset($_SESSION['flash_error']); ?></div>
   <?php endif; ?>
 
+  <!-- PDI (Sprint 04): nunca cria PDI automaticamente -->
+  <div class="bg-white shadow rounded-xl p-4 text-sm">
+    <?php if (!empty($pdiDoGap)): ?>
+      <span class="font-medium">Incluído no PDI:</span>
+      <a class="text-brand-pink hover:underline" href="index.php?route=pessoas/pdiShow&id=<?= (int)$pdiDoGap['id'] ?>"><?= htmlspecialchars($pdiDoGap['titulo']) ?></a>
+    <?php else: ?>
+      <div class="flex flex-wrap items-center gap-2">
+        <?php if (!empty($pdisEditaveis)): ?>
+          <form method="post" action="index.php?route=pessoas/pdiGapAdd" class="flex flex-wrap items-center gap-2">
+            <input type="hidden" name="csrf" value="<?= $csrf ?>" />
+            <input type="hidden" name="gap_id" value="<?= (int)$gap['id'] ?>" />
+            <input type="hidden" name="return" value="gap" />
+            <select name="pdi_id" class="border rounded p-2 text-sm">
+              <?php foreach ($pdisEditaveis as $p): ?><option value="<?= (int)$p['id'] ?>"><?= htmlspecialchars($p['titulo']) ?> (<?= htmlspecialchars(PessoasGestaoConfig::pdiStatusLabels()[$p['status']] ?? $p['status']) ?>)</option><?php endforeach; ?>
+            </select>
+            <button type="submit" class="px-3 py-2 rounded bg-brand-red text-white text-sm">Adicionar ao PDI</button>
+          </form>
+          <span class="text-gray-400">ou</span>
+        <?php endif; ?>
+        <a class="px-3 py-2 rounded bg-gray-200 text-brand-brown text-sm" href="index.php?route=pessoas/pdiCreate&colaborador_id=<?= (int)$colaborador['id'] ?>&gap_id=<?= (int)$gap['id'] ?>">Criar PDI</a>
+      </div>
+    <?php endif; ?>
+  </div>
+
   <div class="bg-white shadow rounded-xl p-4 md:p-6 space-y-3">
     <div class="flex flex-wrap items-center gap-2">
       <span class="px-2 py-1 rounded text-xs <?= $statusClasses[$gap['status']] ?? 'bg-gray-100 text-gray-600' ?>"><?= htmlspecialchars($statusLabels[$gap['status']] ?? $gap['status']) ?></span>

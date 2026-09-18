@@ -163,8 +163,14 @@ $brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
                     <div class="submenu-group">
                         <?= $submenuTrigger('pessoas', 'users', 'Pessoas', $isPessoasActive) ?>
                         <div class="submenu-panel <?= $isPessoasActive ? '' : 'hidden' ?>" data-submenu-panel="pessoas">
+                            <?php
+                                $isPessoasVisao = strpos($r, 'pessoas/visao') === 0;
+                                $isPessoasPdi = strpos($r, 'pessoas/pdi') === 0;
+                            ?>
                             <?php if ($canPessoasAvaliacoes): ?>
-                            <?= $navLink('pessoas/index', 'trending-up', 'Avaliações de Desempenho', strpos($r,'pessoas/')===0, 'submenu-link') ?>
+                            <?= $navLink('pessoas/visaoGeral', 'bar-chart-2', 'Visão Geral', $isPessoasVisao, 'submenu-link') ?>
+                            <?= $navLink('pessoas/index', 'trending-up', 'Avaliações de Desempenho', strpos($r,'pessoas/')===0 && !$isPessoasVisao && !$isPessoasPdi, 'submenu-link') ?>
+                            <?= $navLink('pessoas/pdiIndex', 'target', 'PDI', $isPessoasPdi, 'submenu-link') ?>
                             <?php endif; ?>
                             <?php if ($canTreinamentos): ?>
                             <?= $navLink('treinamentos/index', 'award', 'Treinamentos', strpos($r,'treinamentos/')===0, 'submenu-link') ?>
