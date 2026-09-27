@@ -308,6 +308,36 @@ class AplicacaoModel extends BaseModel
         return $stmt->fetchAll();
     }
 
+    /**
+     * Contagem por pilar/status restrita a um conjunto de empresas
+     * (respeitando sempre o escopo do tenant). Lista vazia = nenhum resultado.
+     */
+    public function statsByPilarForClientes(array $clienteIds): array
+    {
+        $clienteIds = array_values(array_unique(array_filter(array_map('intval', $clienteIds))));
+        if (empty($clienteIds)) {
+            return [];
+        }
+        $this->ensureTable();
+        $params = [];
+        $holders = [];
+        foreach ($clienteIds as $i => $id) {
+            $holders[] = ':cli' . $i;
+            $params['cli' . $i] = $id;
+        }
+        $scope = $this->tenantInCondition('a.id_cliente', $params, 'asp');
+        $sql = "SELECT p.nome AS pilar, a.status, COUNT(*) AS total
+                FROM aplicacoes a
+                JOIN metodologias m ON m.id = a.id_metodologia
+                JOIN pilares p ON p.id = m.id_pilar
+                WHERE a.id_cliente IN (" . implode(',', $holders) . ") AND $scope
+                GROUP BY p.nome, a.status
+                ORDER BY p.nome";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
     public function create(int $idCliente, int $idMetodologia, string $status, ?int $consultorId = null, ?string $dataPrevista = null): int
     {
         $idCliente = (int)$this->normalizeScopedClienteId($idCliente);

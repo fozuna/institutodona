@@ -318,13 +318,22 @@ $latestItems = array_slice($latestItems, 0, 8);
           </div>
           <aside class="dash-mini">
             <h2>Carteira atual</h2>
-            <?php $totalCarteira = max(1, array_sum(array_map('intval', $totalsByStatus))); ?>
+            <?php
+            $carteiraEmpresas = max(0, (int)($carteiraEmpresas ?? 0));
+            $carteiraMedia = $carteiraEmpresas > 1;
+            $totalCarteira = max(1, array_sum(array_map('intval', $totalsByStatus)));
+            ?>
+            <small style="color:rgba(255,255,255,.74);margin-top:-6px"><?= $carteiraMedia ? ('Média por empresa (' . $carteiraEmpresas . ' empresas)') : 'Empresa selecionada' ?></small>
             <?php foreach (['Planejado', 'Em Andamento', 'Concluído', 'Pendente'] as $statusLabel): ?>
               <?php $count = (int)($totalsByStatus[$statusLabel] ?? 0); ?>
               <div class="dash-mini-row">
                 <div class="flex items-center justify-between gap-3">
                   <strong><?= htmlspecialchars($statusLabel) ?></strong>
-                  <small><?= $count ?> item(ns)</small>
+                  <?php if ($carteiraMedia): ?>
+                    <small title="<?= $count ?> item(ns) no total"><?= number_format($count / $carteiraEmpresas, 2, ',', '.') ?> item(ns) · <?= number_format(($count / $totalCarteira) * 100, 0, ',', '.') ?>%</small>
+                  <?php else: ?>
+                    <small><?= $count ?> item(ns)</small>
+                  <?php endif; ?>
                 </div>
                 <div class="dash-mini-track"><div class="dash-mini-fill" style="width: <?= max(0, min(100, ($count / $totalCarteira) * 100)) ?>%;"></div></div>
               </div>

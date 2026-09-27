@@ -41,7 +41,10 @@ class DashboardController extends BaseController
             'Concluído' => [],
         ];
 
-        $stats = $this->aplicacoes->statsByPilar($selectedCliente);
+        // Carteira atual: restrita as empresas do filtro (ja escopadas pelo tenant).
+        // Sem selecao, cliente_ids contem todas as empresas visiveis.
+        $carteiraEmpresas = count($filters['cliente_ids'] ?? []);
+        $stats = $this->aplicacoes->statsByPilarForClientes($filters['cliente_ids'] ?? []);
         $totalsByStatus = ['Planejado' => 0, 'Em Andamento' => 0, 'Concluído' => 0];
         foreach ($stats as $s) {
             $st = $s['status'];
@@ -66,6 +69,7 @@ class DashboardController extends BaseController
             'kanbanData' => $kanbanData,
             'stats' => $stats,
             'totalsByStatus' => $totalsByStatus,
+            'carteiraEmpresas' => $carteiraEmpresas,
             'user' => $user,
             'filters' => $filters,
             'departamentos' => $this->departamentosVisiveis($filters['cliente_ids']),
@@ -758,6 +762,10 @@ class DashboardController extends BaseController
             if ($cid > 0) {
                 $clienteIds = [$cid];
             }
+        } elseif (isset($_GET['month_start'])) {
+            // Envio do formulario sem nenhuma empresa marcada = "Todas as empresas"
+            // (nao reaproveita a selecao anterior guardada na sessao).
+            $clienteIds = [];
         } elseif (!empty($stored['cliente_ids']) && is_array($stored['cliente_ids'])) {
             $clienteIds = array_values(array_filter(array_map('intval', $stored['cliente_ids'])));
         }
