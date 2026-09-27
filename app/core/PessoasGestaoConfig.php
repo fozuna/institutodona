@@ -137,6 +137,46 @@ final class PessoasGestaoConfig
         return "({$alias}.prazo IS NOT NULL AND {$alias}.prazo < CURDATE() AND {$alias}.status IN ('pendente','em_andamento'))";
     }
 
+    // ---------------------------------------------------------------
+    // Sprint 05 - Gestão operacional
+    // ---------------------------------------------------------------
+
+    /**
+     * GAP "com tratamento" = possui ao menos uma Ação de Melhoria vinculada que
+     * NÃO esteja cancelada (ação cancelada não trata o GAP). Derivado, nunca
+     * persistido; fonte única para listagem, Central e Visão Geral.
+     */
+    public static function gapComAcaoSql(string $alias = 'g'): string
+    {
+        return "EXISTS (SELECT 1 FROM pessoas_acoes_melhoria amx WHERE amx.gap_id = {$alias}.id AND amx.status <> 'cancelada')";
+    }
+
+    /** GAP aberto sem Ação de Melhoria (ponto de atenção operacional). */
+    public static function gapAbertoSemAcaoSql(string $alias = 'g'): string
+    {
+        return "({$alias}.status = 'aberto' AND NOT " . self::gapComAcaoSql($alias) . ')';
+    }
+
+    public static function necessidadeStatusLabels(): array
+    {
+        return ['pendente' => 'Pendente', 'atendida' => 'Atendida', 'cancelada' => 'Cancelada'];
+    }
+
+    public static function necessidadeStatusClasses(): array
+    {
+        return [
+            'pendente' => 'bg-amber-100 text-amber-800',
+            'atendida' => 'bg-green-100 text-green-700',
+            'cancelada' => 'bg-red-100 text-red-700',
+        ];
+    }
+
+    /** Versão PHP de acaoVencidaSql() (mesma regra) para linhas já carregadas. */
+    public static function isAcaoVencida(?string $prazo, string $status): bool
+    {
+        return $prazo !== null && $prazo !== '' && substr($prazo, 0, 10) < date('Y-m-d') && in_array($status, ['pendente', 'em_andamento'], true);
+    }
+
     /** Objetivo de PDI vencido = prazo < hoje, não concluído e não cancelado (derivado). */
     public static function objetivoVencidoSql(string $alias = 'o'): string
     {

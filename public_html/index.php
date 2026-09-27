@@ -42,6 +42,7 @@ use App\Controllers\PessoasCiclosController;
 use App\Controllers\PessoasGestaoController;
 use App\Controllers\PessoasPdiController;
 use App\Controllers\PessoasVisaoController;
+use App\Controllers\PessoasOperacionalController;
 
 $migrationRunner = new MigrationRunner();
 $currentMigrationFingerprint = $migrationRunner->currentFingerprint();
@@ -769,6 +770,15 @@ switch ($route) {
     // ---- Pilar de Pessoas: PDI e Visão Geral (Sprint 04) ----
     case 'pessoas/visaoGeral':
         (new PessoasVisaoController())->index();
+        break;
+    case 'pessoas/gaps':
+        (new PessoasOperacionalController())->gaps();
+        break;
+    case 'pessoas/acoes':
+        (new PessoasOperacionalController())->acoes();
+        break;
+    case 'pessoas/necessidades':
+        (new PessoasOperacionalController())->necessidades();
         break;
     case 'pessoas/pdiIndex':
         (new PessoasPdiController())->index();

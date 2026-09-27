@@ -3,11 +3,7 @@ namespace App\Controllers;
 
 use App\Core\AccessControl;
 use App\Core\BaseController;
-use App\Models\ClienteModel;
-use App\Models\DepartamentoModel;
-use App\Models\FuncaoModel;
 use App\Models\PessoaDashboardModel;
-use App\Models\SetorModel;
 
 /**
  * Pilar de Pessoas, Sprint 04 - Visão Geral gerencial. Somente leitura
@@ -16,58 +12,37 @@ use App\Models\SetorModel;
  */
 class PessoasVisaoController extends BaseController
 {
+    use PessoasFiltrosTrait;
+
     public function index(): void
     {
         $this->requireClienteAdminAccess();
-        $clientes = (new ClienteModel())->all();
-        $acessiveis = array_map(static fn(array $c): int => (int)$c['id'], $clientes);
-        $empresaReq = (int)($_GET['empresa_id'] ?? 0);
-        $empresaSel = ($empresaReq > 0 && in_array($empresaReq, $acessiveis, true)) ? $empresaReq : 0;
-        $empresaIds = $empresaSel > 0 ? [$empresaSel] : $acessiveis;
+        $escopo = $this->resolverEscopoPessoas($_GET);
+        $empresaIds = $escopo['empresaIds'];
 
-        $isDate = static fn($v): bool => is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) === 1 && strtotime($v) !== false;
-        $inicio = $isDate($_GET['inicio'] ?? null) ? (string)$_GET['inicio'] : date('Y-01-01');
-        $fim = $isDate($_GET['fim'] ?? null) ? (string)$_GET['fim'] : date('Y-m-d');
+        $inicio = $this->dataValidaPessoas($_GET['inicio'] ?? null) ?? date('Y-01-01');
+        $fim = $this->dataValidaPessoas($_GET['fim'] ?? null) ?? date('Y-m-d');
         if ($fim < $inicio) {
             [$inicio, $fim] = [$fim, $inicio];
         }
-
-        // Filtros organizacionais só fazem sentido com uma empresa selecionada (ou única acessível).
-        $empresaOrg = $empresaSel > 0 ? $empresaSel : (count($acessiveis) === 1 ? $acessiveis[0] : 0);
-        $filters = ['inicio' => $inicio, 'fim' => $fim];
-        $departamentos = $setores = $funcoes = [];
-        if ($empresaOrg > 0) {
-            $departamentos = (new DepartamentoModel())->allByCliente($empresaOrg);
-            $depId = (int)($_GET['departamento_id'] ?? 0);
-            $depIds = array_map(static fn($d) => (int)$d['id'], $departamentos);
-            if ($depId > 0 && in_array($depId, $depIds, true)) {
-                $filters['departamento_id'] = $depId;
-                $setores = (new SetorModel())->activeByDepartamento($depId);
-                $setId = (int)($_GET['setor_id'] ?? 0);
-                if ($setId > 0 && in_array($setId, array_map(static fn($s) => (int)$s['id'], $setores), true)) {
-                    $filters['setor_id'] = $setId;
-                    $funcoes = (new FuncaoModel())->activeBySetor($setId, [$empresaOrg]);
-                    $funId = (int)($_GET['funcao_id'] ?? 0);
-                    if ($funId > 0 && in_array($funId, array_map(static fn($f) => (int)$f['id'], $funcoes), true)) {
-                        $filters['funcao_id'] = $funId;
-                    }
-                }
-            }
-        }
+        $filters = array_merge(['inicio' => $inicio, 'fim' => $fim], $escopo['org']);
 
         $user = $_SESSION['user'] ?? null;
         $this->render('pessoas/visao/index', [
             'pageTitle' => 'Pessoas — Visão Geral',
             'dados' => (new PessoaDashboardModel())->resumo($empresaIds, $filters),
-            'clientes' => $clientes,
-            'selectedEmpresa' => $empresaSel,
+            'clientes' => $escopo['clientes'],
+            'selectedEmpresa' => $escopo['empresaSel'],
             'filters' => $filters,
-            'departamentos' => $departamentos,
-            'setores' => $setores,
-            'funcoes' => $funcoes,
+            'departamentos' => $escopo['departamentos'],
+            'setores' => $escopo['setores'],
+            'funcoes' => $escopo['funcoes'],
             'links' => [
                 'avaliacoes' => AccessControl::canAccessRoute('pessoas/index', 'GET', $user),
                 'pdi' => AccessControl::canAccessRoute('pessoas/pdiIndex', 'GET', $user),
+                'gaps' => AccessControl::canAccessRoute('pessoas/gaps', 'GET', $user),
+                'acoes' => AccessControl::canAccessRoute('pessoas/acoes', 'GET', $user),
+                'necessidades' => AccessControl::canAccessRoute('pessoas/necessidades', 'GET', $user),
             ],
         ]);
     }

@@ -166,10 +166,13 @@ $brandFooter = \App\Core\AppBrand::FOOTER_LABEL;
                             <?php
                                 $isPessoasVisao = strpos($r, 'pessoas/visao') === 0;
                                 $isPessoasPdi = strpos($r, 'pessoas/pdi') === 0;
+                                // Sprint 05: telas operacionais (GAPs, Ações, Necessidades, Central do
+                                // Colaborador) têm subnavegação própria; não realçam "Avaliações".
+                                $isPessoasOperacional = (bool)preg_match('#^pessoas/(gap|acao|acoes|necessidade|feedback|colaboradorHistorico)#', (string)$r);
                             ?>
                             <?php if ($canPessoasAvaliacoes): ?>
                             <?= $navLink('pessoas/visaoGeral', 'bar-chart-2', 'Visão Geral', $isPessoasVisao, 'submenu-link') ?>
-                            <?= $navLink('pessoas/index', 'trending-up', 'Avaliações de Desempenho', strpos($r,'pessoas/')===0 && !$isPessoasVisao && !$isPessoasPdi, 'submenu-link') ?>
+                            <?= $navLink('pessoas/index', 'trending-up', 'Avaliações de Desempenho', strpos($r,'pessoas/')===0 && !$isPessoasVisao && !$isPessoasPdi && !$isPessoasOperacional, 'submenu-link') ?>
                             <?= $navLink('pessoas/pdiIndex', 'target', 'PDI', $isPessoasPdi, 'submenu-link') ?>
                             <?php endif; ?>
                             <?php if ($canTreinamentos): ?>

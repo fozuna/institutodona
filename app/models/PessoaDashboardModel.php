@@ -22,62 +22,7 @@ use App\Core\PessoasGestaoConfig;
  */
 class PessoaDashboardModel extends BaseModel
 {
-    /** @param int[] $ids */
-    private function inClause(string $column, array $ids, array &$params, string $prefix): string
-    {
-        $ids = array_values(array_filter(array_map('intval', $ids), static fn(int $v): bool => $v > 0));
-        if (empty($ids)) {
-            return '1 = 0';
-        }
-        $ph = [];
-        foreach ($ids as $i => $id) {
-            $params[$prefix . $i] = $id;
-            $ph[] = ':' . $prefix . $i;
-        }
-        return $column . ' IN (' . implode(',', $ph) . ') AND ' . $this->tenantInCondition($column, $params, $prefix . 't');
-    }
-
-    /** Filtros organizacionais aplicados sobre o alias `col` (colaboradores). */
-    private function orgFilter(array $filters, array &$params, string $prefix): string
-    {
-        $sql = '';
-        if (!empty($filters['funcao_id'])) {
-            $sql .= " AND col.funcao_id = :{$prefix}f";
-            $params[$prefix . 'f'] = (int)$filters['funcao_id'];
-        } elseif (!empty($filters['setor_id'])) {
-            $sql .= " AND col.funcao_id IN (SELECT fu.id FROM funcoes fu WHERE fu.setor_id = :{$prefix}s)";
-            $params[$prefix . 's'] = (int)$filters['setor_id'];
-        } elseif (!empty($filters['departamento_id'])) {
-            $sql .= " AND col.funcao_id IN (SELECT fu.id FROM funcoes fu JOIN setores se ON se.id = fu.setor_id WHERE se.departamento_id = :{$prefix}d)";
-            $params[$prefix . 'd'] = (int)$filters['departamento_id'];
-        }
-        return $sql;
-    }
-
-    /**
-     * PDO (sem emulação) não aceita o mesmo placeholder nomeado mais de uma vez:
-     * cada repetição vira `:nome__N` com o mesmo valor.
-     */
-    private function row(string $sql, array $params): array
-    {
-        $seen = [];
-        $sql = preg_replace_callback('/:([A-Za-z_][A-Za-z0-9_]*)/', static function (array $m) use (&$seen, &$params): string {
-            $name = $m[1];
-            if (!array_key_exists($name, $params) && !isset($seen[$name])) {
-                return $m[0];
-            }
-            $seen[$name] = ($seen[$name] ?? 0) + 1;
-            if ($seen[$name] === 1) {
-                return $m[0];
-            }
-            $alias = $name . '__' . $seen[$name];
-            $params[$alias] = $params[$name];
-            return ':' . $alias;
-        }, $sql);
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetch() ?: [];
-    }
+    use PessoasEscopoSql;
 
     /** Faixas de classificação -> SUM(CASE) derivados de PessoasAvaliacaoScale (sem duplicar limites). */
     private function bandSumsSql(string $inPeriodCond): string
@@ -132,6 +77,7 @@ class PessoaDashboardModel extends BaseModel
         $sql = "SELECT
             COALESCE(SUM(g.status = 'aberto'), 0) AS abertos,
             COALESCE(SUM(g.status = 'em_tratamento'), 0) AS em_tratamento,
+            COALESCE(SUM(CASE WHEN " . PessoasGestaoConfig::gapAbertoSemAcaoSql('g') . " THEN 1 ELSE 0 END), 0) AS abertos_sem_acao,
             COALESCE(SUM(CASE WHEN g.status = 'resolvido' AND " . $per('g.resolvido_em') . " THEN 1 ELSE 0 END), 0) AS resolvidos
             FROM pessoas_gaps g JOIN colaboradores col ON col.id = g.colaborador_id
             WHERE " . $this->inClause('g.empresa_id', $empresaIds, $p, 'e') . $this->orgFilter($filters, $p, 'o');
@@ -193,7 +139,10 @@ class PessoaDashboardModel extends BaseModel
                 'media' => $media !== null ? round((float)$media, 2) : null,
             ],
             'distribuicao' => $distribuicao,
-            'gaps' => ['abertos' => (int)($gaps['abertos'] ?? 0), 'em_tratamento' => (int)($gaps['em_tratamento'] ?? 0), 'resolvidos' => (int)($gaps['resolvidos'] ?? 0)],
+            'gaps' => [
+                'abertos' => (int)($gaps['abertos'] ?? 0), 'em_tratamento' => (int)($gaps['em_tratamento'] ?? 0),
+                'resolvidos' => (int)($gaps['resolvidos'] ?? 0), 'abertos_sem_acao' => (int)($gaps['abertos_sem_acao'] ?? 0),
+            ],
             'acoes' => [
                 'pendentes' => (int)($acoes['pendentes'] ?? 0), 'em_andamento' => (int)($acoes['em_andamento'] ?? 0),
                 'concluidas' => (int)($acoes['concluidas'] ?? 0), 'vencidas' => (int)($acoes['vencidas'] ?? 0),

@@ -21,6 +21,7 @@ $postForm = static function (string $route, array $hidden, string $label, string
 };
 ?>
 <div class="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
+  <?php $pessoasSubnavAtivo = 'pdi'; require __DIR__ . '/../_subnav.php'; ?>
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <h1 class="text-xl md:text-2xl font-bold text-brand-black"><?= htmlspecialchars($pdi['titulo']) ?></h1>

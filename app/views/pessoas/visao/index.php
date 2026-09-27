@@ -18,16 +18,37 @@ $avUrl = !empty($links['avaliacoes']) ? 'index.php?route=pessoas/index' . $empre
 $pdiAtivosUrl = !empty($links['pdi']) ? 'index.php?route=pessoas/pdiIndex&status=ativo' . $empresaQs : '';
 $pdiRascUrl = !empty($links['pdi']) ? 'index.php?route=pessoas/pdiIndex&status=rascunho' . $empresaQs : '';
 $pdiConcUrl = !empty($links['pdi']) ? 'index.php?route=pessoas/pdiIndex&status=concluido' . $empresaQs : '';
+// Sprint 05: destinos acionáveis. Levam empresa + filtros organizacionais (nunca o
+// período: estes contadores são de situação atual) e usam os mesmos predicados.
+$escopoLista = array_filter([
+    'empresa_id' => $selectedEmpresa > 0 ? (int)$selectedEmpresa : null,
+    'departamento_id' => $filters['departamento_id'] ?? null,
+    'setor_id' => $filters['setor_id'] ?? null,
+    'funcao_id' => $filters['funcao_id'] ?? null,
+]);
+$lista = static function (string $chave, string $rota, array $extra) use ($links, $escopoLista): string {
+    return !empty($links[$chave]) ? 'index.php?' . http_build_query(array_merge(['route' => $rota], $escopoLista, $extra)) : '';
+};
+$gapAbertoUrl = $lista('gaps', 'pessoas/gaps', ['status' => 'aberto']);
+$gapTratUrl = $lista('gaps', 'pessoas/gaps', ['status' => 'em_tratamento']);
+$gapSemAcaoUrl = $lista('gaps', 'pessoas/gaps', ['status' => 'aberto', 'tratamento' => 'sem_acao']);
+$acaoPendUrl = $lista('acoes', 'pessoas/acoes', ['status' => 'pendente']);
+$acaoAndUrl = $lista('acoes', 'pessoas/acoes', ['status' => 'em_andamento']);
+$acaoVencUrl = $lista('acoes', 'pessoas/acoes', ['atrasadas' => 1]);
+$necPendUrl = $lista('necessidades', 'pessoas/necessidades', ['status' => 'pendente']);
+$pessoasSubnavAtivo = 'visao';
 
 $atencao = [];
-if ($dados['acoes']['vencidas'] > 0) { $atencao[] = [$dados['acoes']['vencidas'] . ' ação(ões) de melhoria vencida(s)', '']; }
+if ($dados['gaps']['abertos_sem_acao'] > 0) { $atencao[] = [$dados['gaps']['abertos_sem_acao'] . ' GAP(s) aberto(s) sem ação de melhoria', $gapSemAcaoUrl]; }
+if ($dados['acoes']['vencidas'] > 0) { $atencao[] = [$dados['acoes']['vencidas'] . ' ação(ões) de melhoria atrasada(s)', $acaoVencUrl]; }
 if ($dados['objetivos_vencidos'] > 0) { $atencao[] = [$dados['objetivos_vencidos'] . ' objetivo(s) de PDI vencido(s)', $pdiAtivosUrl]; }
 if ($dados['pdis']['ativos_atrasados'] > 0) { $atencao[] = [$dados['pdis']['ativos_atrasados'] . ' PDI(s) ativo(s) com fim previsto ultrapassado', $pdiAtivosUrl]; }
-if ($dados['necessidades_pendentes'] > 0) { $atencao[] = [$dados['necessidades_pendentes'] . ' necessidade(s) de treinamento pendente(s)', '']; }
-if ($dados['gaps']['abertos'] > 0) { $atencao[] = [$dados['gaps']['abertos'] . ' GAP(s) aberto(s)', '']; }
+if ($dados['necessidades_pendentes'] > 0) { $atencao[] = [$dados['necessidades_pendentes'] . ' necessidade(s) de treinamento pendente(s)', $necPendUrl]; }
+if ($dados['gaps']['abertos'] > 0) { $atencao[] = [$dados['gaps']['abertos'] . ' GAP(s) aberto(s)', $gapAbertoUrl]; }
 if ($dados['avaliacoes']['pendentes'] > 0) { $atencao[] = [$dados['avaliacoes']['pendentes'] . ' avaliação(ões) pendente(s)', $avUrl]; }
 ?>
 <div class="p-4 md:p-6 space-y-6">
+  <?php require __DIR__ . '/../_subnav.php'; ?>
   <div>
     <h1 class="text-2xl font-bold text-brand-black">Pessoas — Visão Geral</h1>
     <p class="text-sm text-gray-600">Panorama gerencial do Pilar de Pessoas.</p>
@@ -118,23 +139,24 @@ if ($dados['avaliacoes']['pendentes'] > 0) { $atencao[] = [$dados['avaliacoes'][
 
   <section class="space-y-2">
     <h2 class="font-semibold">GAPs</h2>
-    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-      <?= $card('GAPs abertos', $dados['gaps']['abertos'], 'situação atual') ?>
-      <?= $card('GAPs em tratamento', $dados['gaps']['em_tratamento'], 'situação atual') ?>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <?= $card('GAPs abertos', $dados['gaps']['abertos'], 'situação atual', $gapAbertoUrl) ?>
+      <?= $card('GAPs em tratamento', $dados['gaps']['em_tratamento'], 'situação atual', $gapTratUrl) ?>
       <?= $card('GAPs resolvidos', $dados['gaps']['resolvidos'], 'no período') ?>
+      <?= $card('GAPs abertos sem ação', $dados['gaps']['abertos_sem_acao'], 'situação atual', $gapSemAcaoUrl) ?>
     </div>
   </section>
 
   <section class="space-y-2">
     <h2 class="font-semibold">Ações de melhoria e desenvolvimento</h2>
     <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
-      <?= $card('Ações pendentes', $dados['acoes']['pendentes'], 'situação atual') ?>
-      <?= $card('Ações em andamento', $dados['acoes']['em_andamento'], 'situação atual') ?>
+      <?= $card('Ações pendentes', $dados['acoes']['pendentes'], 'situação atual', $acaoPendUrl) ?>
+      <?= $card('Ações em andamento', $dados['acoes']['em_andamento'], 'situação atual', $acaoAndUrl) ?>
       <?= $card('Ações concluídas', $dados['acoes']['concluidas'], 'no período') ?>
-      <?= $card('Ações vencidas', $dados['acoes']['vencidas'], 'prazo < hoje, não concluídas') ?>
+      <?= $card('Ações atrasadas', $dados['acoes']['vencidas'], 'prazo < hoje, não concluídas', $acaoVencUrl) ?>
       <?= $card('Ações → Plano de Ação', $dados['encaminhadas']['planos'], 'encaminhadas no período') ?>
       <?= $card('Ações → Treinamento', $dados['encaminhadas']['treinamentos'], 'encaminhadas no período') ?>
-      <?= $card('Necessidades pendentes', $dados['necessidades_pendentes'], 'situação atual') ?>
+      <?= $card('Necessidades pendentes', $dados['necessidades_pendentes'], 'situação atual', $necPendUrl) ?>
     </div>
   </section>
 

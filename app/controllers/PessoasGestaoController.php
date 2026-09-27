@@ -11,6 +11,7 @@ use App\Models\PessoaAvaliacaoModel;
 use App\Models\PessoaDesenvolvimentoModel;
 use App\Models\PessoaFeedbackModel;
 use App\Models\PessoaGapModel;
+use App\Models\PessoaOperacionalModel;
 use App\Models\PessoaPdiModel;
 use App\Models\PlanoAcaoTaskModel;
 use App\Models\TreinamentoModel;
@@ -67,28 +68,60 @@ class PessoasGestaoController extends BaseController
 
         $gaps = $this->gaps->listByColaborador($colaboradorId, $empresaId);
         $acoes = $this->acoes->listByColaborador($colaboradorId, $empresaId);
-        // Sprint 03: desenvolvimento (Plano/Treinamento/Necessidade + estado derivado)
-        // por Acao, e mapas para a leitura encadeada Avaliacao -> GAP -> Acao -> Desenvolvimento.
-        $desenvolvimento = [];
-        foreach ($acoes as $a) {
-            $desenvolvimento[(int)$a['id']] = $this->desenvolvimento->desenvolvimentoDaAcao($a);
-        }
+        // Sprint 05: desenvolvimento de TODAS as Ações em lote (número constante de
+        // consultas - antes era 3+ consultas por Ação). Mesmo formato por Ação.
+        $desenvolvimento = $this->desenvolvimento->desenvolvimentoDasAcoes($acoes, $colaboradorId);
         $gapsPorId = [];
         foreach ($gaps as $g) {
             $gapsPorId[(int)$g['id']] = $g;
         }
+        $feedbacks = $this->feedbacks->listByColaborador($colaboradorId, $empresaId);
+        $pdis = $this->pdis->listByColaborador($colaboradorId, $empresaId);
+        $pdiAtivo = null;
+        foreach ($pdis as $p) {
+            if ($p['status'] === 'ativo') {
+                $pdiAtivo = $p;
+                break;
+            }
+        }
+        $ultimaAvaliacao = null;
+        foreach ($avaliacoesDoColaborador as $a) {
+            if ($a['status'] === 'finalizada' && !empty($a['finalizado_em'])
+                && ($ultimaAvaliacao === null || (string)$a['finalizado_em'] > (string)$ultimaAvaliacao['finalizado_em'])) {
+                $ultimaAvaliacao = $a;
+            }
+        }
+
+        $operacional = new PessoaOperacionalModel();
+        $resumo = $operacional->resumoColaborador($colaboradorId, $empresaId);
+        $encaminhamentos = $operacional->encaminhamentosDoColaborador($colaboradorId, $empresaId);
+        $user = $_SESSION['user'] ?? null;
+
         $this->render('pessoas/historico/colaborador', [
-            'pageTitle' => 'Histórico de Desenvolvimento — ' . $colaborador['nome'],
+            'pageTitle' => 'Central do Colaborador — ' . $colaborador['nome'],
             'colaborador' => $colaborador,
+            'perfil' => $operacional->perfilOrganizacional($colaboradorId),
+            'resumo' => $resumo,
+            'ultimaAvaliacao' => $ultimaAvaliacao,
+            'pdiAtivo' => $pdiAtivo,
+            'treinamentosColaborador' => $operacional->treinamentosDoColaborador($colaboradorId, $empresaId),
+            'pontosAtencao' => PessoaOperacionalModel::pontosDeAtencao($colaboradorId, $resumo, $pdiAtivo),
+            'timeline' => PessoaOperacionalModel::timeline($avaliacoesDoColaborador, $gaps, $feedbacks, $acoes, $encaminhamentos, $pdis),
             'avaliacoes' => $avaliacoesDoColaborador,
             'gaps' => $gaps,
             'gapsPorId' => $gapsPorId,
-            'feedbacks' => $this->feedbacks->listByColaborador($colaboradorId, $empresaId),
+            'feedbacks' => $feedbacks,
             'acoes' => $acoes,
             'desenvolvimento' => $desenvolvimento,
             'usuariosResponsaveis' => $this->acoes->usuariosResponsaveisDisponiveis($empresaId),
-            'links' => $this->linksPermitidos(),
-            'pdis' => $this->pdis->listByColaborador($colaboradorId, $empresaId),
+            'links' => array_merge($this->linksPermitidos(), [
+                'pdi' => AccessControl::canAccessRoute('pessoas/pdiShow', 'GET', $user),
+                'pdi_criar' => AccessControl::canAccessRoute('pessoas/pdiCreate', 'GET', $user),
+                'gaps' => AccessControl::canAccessRoute('pessoas/gaps', 'GET', $user),
+                'acoes' => AccessControl::canAccessRoute('pessoas/acoes', 'GET', $user),
+                'necessidades' => AccessControl::canAccessRoute('pessoas/necessidades', 'GET', $user),
+            ]),
+            'pdis' => $pdis,
         ]);
     }
 

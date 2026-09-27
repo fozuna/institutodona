@@ -10,6 +10,7 @@ $qs = static function (array $extra) use ($filters, $selectedEmpresa): string {
 };
 ?>
 <div class="p-4 md:p-6 space-y-6">
+  <?php $pessoasSubnavAtivo = 'pdi'; require __DIR__ . '/../_subnav.php'; ?>
   <div>
     <h1 class="text-2xl font-bold text-brand-black">PDI — Plano de Desenvolvimento Individual</h1>
     <p class="text-sm text-gray-600">Acompanhe o desenvolvimento de cada colaborador. Para criar um PDI, abra o Histórico do colaborador.</p>

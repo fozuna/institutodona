@@ -9,6 +9,7 @@ $statusClasses = [
 ];
 ?>
 <div class="p-4 md:p-6 space-y-6">
+  <?php $pessoasSubnavAtivo = 'avaliacoes'; require __DIR__ . '/../_subnav.php'; ?>
   <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
     <div>
       <h1 class="text-2xl font-bold text-brand-black">Avaliações de Desempenho</h1>

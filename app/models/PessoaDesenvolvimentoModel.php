@@ -217,12 +217,25 @@ class PessoaDesenvolvimentoModel extends BaseModel
         );
         $part->execute(['tid' => $treinamentoId, 'cid' => $colaboradorId]);
         $p = $part->fetch();
-        $cert = $p && (int)$p['certificado_emitido'] === 1;
-        if ($status === 'concluido') {
+        return self::situacaoDe($status !== false ? (string)$status : null, $p ?: null);
+    }
+
+    /**
+     * Regra única da situação do colaborador num treinamento, a partir do
+     * status na lista (treinamento_colaboradores) e da participação mais
+     * recente (data, presenca, certificado_emitido). Usada tanto pela
+     * consulta individual quanto pela versão em lote.
+     *
+     * @return array{label:string, concluido:bool, certificado:bool}
+     */
+    public static function situacaoDe(?string $rosterStatus, ?array $ultimaParticipacao): array
+    {
+        $cert = $ultimaParticipacao !== null && (int)($ultimaParticipacao['certificado_emitido'] ?? 0) === 1;
+        if ($rosterStatus === 'concluido') {
             return ['label' => 'Concluído', 'concluido' => true, 'certificado' => $cert];
         }
-        if ($p) {
-            $futuro = strtotime((string)$p['data']) >= strtotime('today');
+        if ($ultimaParticipacao !== null) {
+            $futuro = strtotime((string)$ultimaParticipacao['data']) >= strtotime('today');
             return ['label' => $futuro ? 'Agendado' : 'Realizado — aguardando conclusão', 'concluido' => false, 'certificado' => $cert];
         }
         return ['label' => 'Aguardando agendamento', 'concluido' => false, 'certificado' => false];
@@ -351,6 +364,100 @@ class PessoaDesenvolvimentoModel extends BaseModel
             'necessidades' => $necessidades,
             'estado' => self::estadoDerivado($acao, $plano, $treinamentos, $necessidades),
         ];
+    }
+
+    /**
+     * Versão em lote de desenvolvimentoDaAcao() para as Ações de UM colaborador
+     * (Central do Colaborador): número constante de consultas, independente da
+     * quantidade de Ações/treinamentos (sem N+1). Mesmo formato de retorno,
+     * indexado pelo id da Ação.
+     *
+     * @return array<int,array{plano:?array,treinamentos:array,necessidades:array,estado:string}>
+     */
+    public function desenvolvimentoDasAcoes(array $acoes, int $colaboradorId): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map(static fn(array $a): int => (int)$a['id'], $acoes))));
+        if (empty($ids)) {
+            return [];
+        }
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+
+        $st = $this->db->prepare(
+            "SELECT ap.*, t.titulo, t.status AS plano_status, t.prazo AS plano_prazo, t.progresso
+             FROM pessoas_acao_planos ap JOIN pdca_tasks t ON t.id = ap.plano_task_id
+             WHERE ap.acao_melhoria_id IN ($ph)"
+        );
+        $st->execute($ids);
+        $planos = [];
+        foreach ($st->fetchAll() as $r) {
+            $planos[(int)$r['acao_melhoria_id']] = $r;
+        }
+
+        $st = $this->db->prepare(
+            "SELECT at.acao_melhoria_id, at.treinamento_id, t.nome, at.created_at
+             FROM pessoas_acao_treinamentos at JOIN treinamentos t ON t.id = at.treinamento_id
+             WHERE at.acao_melhoria_id IN ($ph) ORDER BY at.id"
+        );
+        $st->execute($ids);
+        $vinculos = $st->fetchAll();
+
+        $st = $this->db->prepare(
+            "SELECT n.*, t.nome AS treinamento_nome FROM pessoas_necessidades_treinamento n
+             LEFT JOIN treinamentos t ON t.id = n.treinamento_id
+             WHERE n.acao_melhoria_id IN ($ph) ORDER BY n.created_at DESC, n.id DESC"
+        );
+        $st->execute($ids);
+        $necessidades = [];
+        foreach ($st->fetchAll() as $r) {
+            $necessidades[(int)$r['acao_melhoria_id']][] = $r;
+        }
+
+        // Situação nos treinamentos: roster + participação mais recente do colaborador (2 consultas).
+        $roster = [];
+        $ultima = [];
+        $tids = array_values(array_unique(array_map(static fn(array $v): int => (int)$v['treinamento_id'], $vinculos)));
+        if (!empty($tids)) {
+            $tph = implode(',', array_fill(0, count($tids), '?'));
+            $st = $this->db->prepare("SELECT treinamento_id, status FROM treinamento_colaboradores WHERE colaborador_id = ? AND treinamento_id IN ($tph)");
+            $st->execute(array_merge([$colaboradorId], $tids));
+            foreach ($st->fetchAll() as $r) {
+                $roster[(int)$r['treinamento_id']] = (string)$r['status'];
+            }
+            $st = $this->db->prepare(
+                "SELECT a.treinamento_id, a.data, tp.presenca, tp.certificado_emitido
+                 FROM treinamento_participantes tp JOIN treinamentos_agenda a ON a.id = tp.agenda_id
+                 WHERE tp.colaborador_id = ? AND a.treinamento_id IN ($tph)
+                 ORDER BY a.treinamento_id, a.data DESC"
+            );
+            $st->execute(array_merge([$colaboradorId], $tids));
+            foreach ($st->fetchAll() as $r) {
+                $tid = (int)$r['treinamento_id'];
+                if (!isset($ultima[$tid])) {
+                    $ultima[$tid] = $r;
+                }
+            }
+        }
+        $treinamentos = [];
+        foreach ($vinculos as $v) {
+            $tid = (int)$v['treinamento_id'];
+            $v['situacao'] = self::situacaoDe($roster[$tid] ?? null, $ultima[$tid] ?? null);
+            $treinamentos[(int)$v['acao_melhoria_id']][] = $v;
+        }
+
+        $out = [];
+        foreach ($acoes as $acao) {
+            $id = (int)$acao['id'];
+            $plano = $planos[$id] ?? null;
+            $trein = $treinamentos[$id] ?? [];
+            $nec = $necessidades[$id] ?? [];
+            $out[$id] = [
+                'plano' => $plano,
+                'treinamentos' => $trein,
+                'necessidades' => $nec,
+                'estado' => self::estadoDerivado($acao, $plano, $trein, $nec),
+            ];
+        }
+        return $out;
     }
 
     public static function estadoDerivado(array $acao, ?array $plano, array $treinamentos, array $necessidades): string
