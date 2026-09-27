@@ -120,12 +120,19 @@ $departamentoId = (int)($departamentoId ?? 0);
           $trendKey = $seriesItem['trend']['trend'] === 'alta'
             ? 'indicadores.meta.trend.up'
             : ($seriesItem['trend']['trend'] === 'queda' ? 'indicadores.meta.trend.down' : 'indicadores.meta.trend.stable');
+          $temNegativo = false;
+          foreach ($payload as $p) {
+              if (isset($p['achieved']) && $p['achieved'] !== null && (float)$p['achieved'] < 0) {
+                  $temNegativo = true;
+                  break;
+              }
+          }
           $trendText = $t('indicadores.label.tendencia') . ': ' . $t($trendKey) . ' · ' . $t('indicadores.label.cumprimento') . ' médio: ' . \App\Core\ValueFormatter::percent($seriesItem['trend']['media_cumprimento']);
         ?>
         <div class="bg-white shadow rounded-xl p-4" data-indicador-card data-indicador-id="<?= (int)$seriesItem['indicador_id'] ?>" data-indicador-title="<?= htmlspecialchars((string)$name) ?>" data-indicador-meta="<?= htmlspecialchars($metaAtual) ?>" data-indicador-achieved="<?= htmlspecialchars($atingidoAtual) ?>" data-indicador-trend="<?= htmlspecialchars($trendText) ?>">
           <div class="flex items-start justify-between gap-3 mb-3">
             <div>
-              <div class="font-semibold"><?= htmlspecialchars($name) ?></div>
+              <div class="font-semibold"><?= htmlspecialchars($name) ?><?php if ($temNegativo): ?> <span class="ml-1 inline-block align-middle rounded-full bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 text-[11px] font-semibold" title="Há valores abaixo de zero no período filtrado">Resultado negativo</span><?php endif; ?></div>
               <div class="text-xs text-gray-500"><?= htmlspecialchars($trendText) ?></div>
             </div>
             <a class="text-brand-pink font-semibold text-sm" href="index.php?route=indicadores/historico&id=<?= (int)$seriesItem['indicador_id'] ?>">
@@ -177,7 +184,19 @@ $departamentoId = (int)($departamentoId ?? 0);
           const pad = 34;
           const metas = points.map((point) => Number(point.meta || 0));
           const realizados = points.map((point) => point.achieved === null ? null : Number(point.achieved));
-          const maxValue = Math.max(1, ...metas, ...realizados.filter((point) => point !== null));
+          const valores = [...metas, ...realizados.filter((point) => point !== null)];
+          const rawMin = Math.min(0, ...valores);
+          const hasNegative = rawMin < 0;
+          const rawMax = Math.max(1, ...valores);
+          let maxValue = rawMax;
+          let minValue = 0;
+          if (hasNegative) {
+            // Folga de 8% para os pontos e rotulos nao encostarem nas bordas.
+            const folga = (maxValue - rawMin) * 0.08;
+            maxValue = maxValue + folga;
+            minValue = rawMin - folga;
+          }
+          const range = (maxValue - minValue) || 1;
           ctx.clearRect(0, 0, width, height);
 
           ctx.strokeStyle = '#d1d5db';
@@ -191,12 +210,36 @@ $departamentoId = (int)($departamentoId ?? 0);
             if (points.length === 1) return width / 2;
             return pad + ((width - (pad * 2)) * (index / (points.length - 1)));
           };
-          const y = (value) => height - pad - ((height - (pad * 2)) * (value / maxValue));
+          const y = (value) => height - pad - ((height - (pad * 2)) * ((value - minValue) / range));
 
           ctx.fillStyle = '#6b7280';
           ctx.font = '11px sans-serif';
-          ctx.fillText('0', pad - 12, height - pad + 4);
-          ctx.fillText(nf.format(maxValue), pad - 12, pad + 4);
+          if (hasNegative) {
+            const zeroY = y(0);
+            // Zona negativa: fundo vermelho claro abaixo de zero.
+            ctx.fillStyle = 'rgba(220, 38, 38, 0.07)';
+            ctx.fillRect(pad, zeroY, width - (pad * 2), (height - pad) - zeroY);
+            // Linha do zero destacada.
+            ctx.strokeStyle = '#9ca3af';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            ctx.moveTo(pad, zeroY);
+            ctx.lineTo(width - pad, zeroY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.lineWidth = 1;
+            ctx.fillStyle = '#6b7280';
+            ctx.textAlign = 'right';
+            ctx.fillText('0', pad - 4, zeroY + 4);
+            ctx.fillText(nf.format(rawMax), pad - 4, y(rawMax) + 4);
+            ctx.fillStyle = '#b91c1c';
+            ctx.fillText(nf.format(rawMin), pad - 4, y(rawMin) + 4);
+            ctx.textAlign = 'start';
+          } else {
+            ctx.fillText('0', pad - 12, height - pad + 4);
+            ctx.fillText(nf.format(maxValue), pad - 12, pad + 4);
+          }
 
           ctx.strokeStyle = '#2563eb';
           ctx.lineWidth = 2;
@@ -228,7 +271,16 @@ $departamentoId = (int)($departamentoId ?? 0);
               ctx.fillStyle = '#111827';
               ctx.font = '11px sans-serif';
               const txt = nf.format(Number(point.achieved));
-              ctx.fillText(txt, x(index) - 12, y(Number(point.achieved)) - 10);
+              const py = y(Number(point.achieved));
+              if (Number(point.achieved) < 0) {
+                ctx.fillStyle = '#b91c1c';
+                ctx.textAlign = 'center';
+                const below = py + 16;
+                ctx.fillText(txt, Math.max(pad + 16, x(index)), below < (height - pad - 2) ? below : py - 10);
+                ctx.textAlign = 'start';
+              } else {
+                ctx.fillText(txt, x(index) - 12, py - 10);
+              }
             }
           });
 
@@ -243,6 +295,12 @@ $departamentoId = (int)($departamentoId ?? 0);
           ctx.fillText('Atingido', legendX + 28, legendY + 16);
           ctx.fillStyle = '#dc2626';
           ctx.fillRect(legendX, legendY + 8, 18, 2);
+          if (hasNegative) {
+            ctx.fillStyle = 'rgba(220, 38, 38, 0.18)';
+            ctx.fillRect(legendX, legendY + 22, 18, 10);
+            ctx.fillStyle = '#b91c1c';
+            ctx.fillText('Zona negativa', legendX + 28, legendY + 32);
+          }
         }
 
         function redrawVisibleCharts() {
