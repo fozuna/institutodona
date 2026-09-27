@@ -165,7 +165,7 @@ class ClientesController extends BaseController
         $matrizes = $this->clientes->matrizes();
         $filiais = ((int)($item['is_matriz'] ?? 1) === 1) ? $this->clientes->filiaisByMatriz($id) : [];
         $selectedFilialId = $this->resolveSelectedFilialId($id, $filiais);
-        $scopeClienteIds = $this->buildClienteScopeIds($id, $filiais, $selectedFilialId);
+        $scopeClienteIds = $this->buildClienteScopeIds($id, $selectedFilialId);
         $clienteAlvoId = $selectedFilialId > 0 ? $selectedFilialId : $id;
         $planoPage = isset($_GET['plano_page']) ? max(1, (int)$_GET['plano_page']) : 1;
         [$planoPer, $planoPerValue] = $this->normalizePlanoPerSelection($_GET['plano_per'] ?? null);
@@ -280,16 +280,11 @@ class ClientesController extends BaseController
         return $selected;
     }
 
-    private function buildClienteScopeIds(int $clienteId, array $filiais, int $selectedFilialId): array
+    private function buildClienteScopeIds(int $clienteId, int $selectedFilialId): array
     {
-        if ($selectedFilialId > 0) {
-            return [$selectedFilialId];
-        }
-        $ids = [$clienteId];
-        foreach ($filiais as $filial) {
-            $ids[] = (int)($filial['id'] ?? 0);
-        }
-        return array_values(array_unique(array_filter($ids)));
+        // Uma empresa por vez: a matriz mostra so os proprios dados e cada
+        // filial so os dela (sem visao consolidada do grupo).
+        return [$selectedFilialId > 0 ? $selectedFilialId : $clienteId];
     }
 
     private function normalizePlanoPerSelection($raw): array

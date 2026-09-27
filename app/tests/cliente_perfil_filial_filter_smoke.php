@@ -81,15 +81,19 @@ try {
     if (!str_contains($htmlAgregado, 'name="filial_id"')) {
         failFast('Perfil da matriz deveria exibir dropdown de filial');
     }
-    if (!str_contains($htmlAgregado, 'Todas as filiais')) {
-        failFast('Dropdown deveria oferecer opção agregada para toda a empresa');
+    if (str_contains($htmlAgregado, 'Todas as filiais')) {
+        failFast('Dropdown não deveria mais oferecer visão consolidada do grupo');
     }
-    if (!str_contains($htmlAgregado, 'Plano Matriz ' . $suffix)
-        || !str_contains($htmlAgregado, 'Plano Filial A ' . $suffix)
-        || !str_contains($htmlAgregado, 'Plano Filial B ' . $suffix)) {
-        failFast('Sem filial selecionada a tela deveria agregar matriz e filiais');
+    if (!str_contains($htmlAgregado, '(Matriz)')) {
+        failFast('Dropdown deveria oferecer a própria matriz como opção padrão');
     }
-    ok('Perfil agrega dados de toda a empresa quando nenhuma filial é selecionada');
+    if (!str_contains($htmlAgregado, 'Plano Matriz ' . $suffix)) {
+        failFast('Com a matriz selecionada a tela deveria exibir os planos da matriz');
+    }
+    if (str_contains($htmlAgregado, 'Plano Filial A ' . $suffix) || str_contains($htmlAgregado, 'Plano Filial B ' . $suffix)) {
+        failFast('Com a matriz selecionada a tela NÃO deveria exibir planos das filiais');
+    }
+    ok('Perfil da matriz exibe somente os planos da própria matriz');
 
     $_GET = [
         'route' => 'clientes/show',

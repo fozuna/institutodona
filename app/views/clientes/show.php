@@ -57,12 +57,12 @@
         </div>
         <?php if (!empty($filiais)): ?>
         <div>
-          <div class="text-sm text-gray-500">Filial</div>
+          <div class="text-sm text-gray-500">Empresa</div>
           <form method="get" action="index.php">
             <input type="hidden" name="route" value="clientes/show" />
             <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
             <select name="filial_id" class="border rounded p-2 w-full text-sm" onchange="this.form.submit()">
-              <option value="0">Todas as filiais</option>
+              <option value="0"><?= htmlspecialchars((string)($item['nome_empresa'] ?? '')) ?> (Matriz)</option>
               <?php foreach ($filiais as $filial): ?>
                 <option value="<?= (int)$filial['id'] ?>" <?= $selectedFilialId === (int)$filial['id'] ? 'selected' : '' ?>>
                   <?= htmlspecialchars($filial['nome_empresa'] ?? '') ?>

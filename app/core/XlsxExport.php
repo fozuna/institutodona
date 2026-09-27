@@ -3,12 +3,13 @@ namespace App\Core;
 
 class XlsxExport
 {
-    public static function exportPlanos(array $rows, string $filename): string
+    public static function exportPlanos(array $rows, string $filename, string $empresaNome = ''): string
     {
+        $empresaNome = trim($empresaNome);
         $branding = ReportBranding::aplicarBrandingRelatorio('excel', [
-            'report_title' => 'Planos de AÃ§Ã£o',
-            'header_title' => 'Planos de AÃ§Ã£o',
-            'header_subtitle' => 'ExportaÃ§Ã£o padronizada do sistema',
+            'report_title' => 'Planos de Ação',
+            'header_title' => $empresaNome !== '' ? 'Planos de Ação - ' . $empresaNome : 'Planos de Ação',
+            'header_subtitle' => 'Exportação padronizada do sistema',
             'generated_at' => DateHelper::now(),
             'sheet_name' => 'Planos',
         ]);
@@ -17,7 +18,7 @@ class XlsxExport
 
         $zip = new \ZipArchive();
         if ($zip->open($path, \ZipArchive::OVERWRITE | \ZipArchive::CREATE) !== true) {
-            throw new \RuntimeException('NÃ£o foi possÃ­vel criar arquivo XLSX');
+            throw new \RuntimeException('Não foi possível criar arquivo XLSX');
         }
 
         $zip->addFromString('[Content_Types].xml', self::contentTypes());
@@ -36,9 +37,9 @@ class XlsxExport
     public static function exportRows(array $rows, array $columns, string $filename, array $branding = []): string
     {
         $branding = ReportBranding::aplicarBrandingRelatorio('excel', array_merge([
-            'report_title' => 'RelatÃ³rio',
-            'header_title' => 'RelatÃ³rio',
-            'header_subtitle' => 'ExportaÃ§Ã£o padronizada do sistema',
+            'report_title' => 'Relatório',
+            'header_title' => 'Relatório',
+            'header_subtitle' => 'Exportação padronizada do sistema',
             'generated_at' => DateHelper::now(),
             'sheet_name' => 'Relatorio',
         ], $branding));
@@ -47,7 +48,7 @@ class XlsxExport
 
         $zip = new \ZipArchive();
         if ($zip->open($path, \ZipArchive::OVERWRITE | \ZipArchive::CREATE) !== true) {
-            throw new \RuntimeException('NÃ£o foi possÃ­vel criar arquivo XLSX');
+            throw new \RuntimeException('Não foi possível criar arquivo XLSX');
         }
 
         $zip->addFromString('[Content_Types].xml', self::contentTypes());
@@ -218,7 +219,7 @@ class XlsxExport
         $creator = self::esc(AppBrand::displayName());
         return '<?xml version="1.0" encoding="UTF-8"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <dc:title>' . self::esc($branding['report_title'] ?? 'RelatÃ³rio') . '</dc:title>
+  <dc:title>' . self::esc($branding['report_title'] ?? 'Relatório') . '</dc:title>
   <dc:creator>' . $creator . '</dc:creator>
   <cp:lastModifiedBy>' . $creator . '</cp:lastModifiedBy>
   <dcterms:created xsi:type="dcterms:W3CDTF">'.$now.'</dcterms:created>
@@ -378,7 +379,7 @@ class XlsxExport
 
     private static function renderSheetXml(array $rows, array $columns, array $keys, array $colWidths, array $branding): string
     {
-        $title = (string)($branding['header_title'] ?? 'RelatÃ³rio');
+        $title = (string)($branding['header_title'] ?? 'Relatório');
         $subtitle = trim((string)($branding['header_subtitle'] ?? ''));
         $meta = 'Gerado em ' . (string)($branding['generated_at'] ?? DateHelper::now());
 
@@ -403,7 +404,7 @@ class XlsxExport
         $xml .= '<c r="A1" t="inlineStr" s="1"><is><t>' . self::esc($title) . '</t></is></c>';
         $xml .= '</row>';
         $xml .= '<row r="2" ht="18" customHeight="1">';
-        $xml .= '<c r="A2" t="inlineStr" s="2"><is><t>' . self::esc(trim($subtitle !== '' ? ($subtitle . ' â€¢ ' . $meta) : $meta)) . '</t></is></c>';
+        $xml .= '<c r="A2" t="inlineStr" s="2"><is><t>' . self::esc(trim($subtitle !== '' ? ($subtitle . ' • ' . $meta) : $meta)) . '</t></is></c>';
         $xml .= '</row>';
         $xml .= '<row r="3"></row>';
         // Header row (s=3)
@@ -434,88 +435,26 @@ class XlsxExport
         return $xml;
     }
 
+    /**
+     * Colunas da planilha de Planos de Acao: somente as essenciais para o
+     * acompanhamento, na ordem aprovada. Campos extras nunca sao anexados.
+     */
     private static function buildPlanosColumns(array $rows): array
     {
-        $preferred = [
-            'id',
-            'id_cliente',
-            'cliente_nome',
-            'titulo',
-            'descricao',
-            'meta_valor',
-            'meta_unidade',
-            'responsavel',
-            'fase',
-            'status',
-            'progresso',
-            'prazo',
-            'created_at',
-            'updated_at',
+        $spec = [
+            'titulo' => ['O Quê? (Problema)', 40],
+            'descricao' => ['Por que?', 45],
+            'meta_valor' => ['Meta / Objetivo', 45],
+            'meta_unidade' => ['Origem', 24],
+            'responsavel' => ['Responsável', 26],
+            'status' => ['Status', 16],
+            'prazo' => ['Prazo', 14],
         ];
-
-        $labels = [
-            'id' => 'ID',
-            'id_cliente' => 'ID Cliente',
-            'cliente_nome' => 'Cliente',
-            'titulo' => 'TÃ­tulo',
-            'descricao' => 'DescriÃ§Ã£o',
-            'meta_valor' => 'Meta / Objetivo',
-            'meta_unidade' => 'Origem',
-            'responsavel' => 'ResponsÃ¡vel',
-            'fase' => 'Fase',
-            'status' => 'Status',
-            'progresso' => 'Progresso (%)',
-            'prazo' => 'Prazo',
-            'created_at' => 'Data de CriaÃ§Ã£o',
-            'updated_at' => 'Data de AtualizaÃ§Ã£o',
+        return [
+            array_map(static fn(array $c): string => $c[0], array_values($spec)),
+            array_keys($spec),
+            array_map(static fn(array $c): int => $c[1], array_values($spec)),
         ];
-
-        $widths = [
-            'id' => 10,
-            'id_cliente' => 12,
-            'cliente_nome' => 28,
-            'titulo' => 36,
-            'descricao' => 54,
-            'meta_valor' => 42,
-            'meta_unidade' => 24,
-            'responsavel' => 28,
-            'fase' => 12,
-            'status' => 18,
-            'progresso' => 14,
-            'prazo' => 16,
-            'created_at' => 20,
-            'updated_at' => 20,
-        ];
-
-        $available = [];
-        foreach ($rows as $row) {
-            foreach (array_keys($row) as $key) {
-                $available[$key] = true;
-            }
-        }
-        if (empty($available)) {
-            $available = array_fill_keys($preferred, true);
-        }
-
-        $keys = [];
-        foreach ($preferred as $key) {
-            if (isset($available[$key])) {
-                $keys[] = $key;
-                unset($available[$key]);
-            }
-        }
-        $extraKeys = array_keys($available);
-        sort($extraKeys);
-        $keys = array_merge($keys, $extraKeys);
-
-        $columns = [];
-        $colWidths = [];
-        foreach ($keys as $key) {
-            $columns[] = $labels[$key] ?? self::humanizeKey($key);
-            $colWidths[] = $widths[$key] ?? self::guessWidth($key);
-        }
-
-        return [$columns, $keys, $colWidths];
     }
 
     private static function formatCell(string $key, $value): string

@@ -134,9 +134,11 @@ class PlanoAcaoController extends BaseController
         if ($filialId > 0 && !in_array($filialId, $validFilialIds, true)) {
             $filialId = 0;
         }
-        $scopeClienteIds = $filialId > 0
-            ? [$filialId]
-            : array_values(array_unique(array_filter(array_merge([$id], $validFilialIds))));
+        // Exporta somente a empresa selecionada (matriz OU filial), nunca o
+        // grupo: selecionar a matriz nao inclui as filiais e vice-versa.
+        $empresaId = $filialId > 0 ? $filialId : $id;
+        $scopeClienteIds = [$empresaId];
+        $empresa = $empresaId === $id ? $item : ($clientes->find($empresaId) ?: $item);
 
         $statusFilters = $_GET['plano_status'] ?? [];
         if (!is_array($statusFilters)) {
@@ -150,8 +152,8 @@ class PlanoAcaoController extends BaseController
             echo 'Nenhum plano de ação encontrado para os filtros selecionados.';
             return;
         }
-        $filename = 'planos_acao_cliente_' . $id . '_' . date('Ymd_His') . '.xlsx';
-        $path = \App\Core\XlsxExport::exportPlanos($rows, $filename);
+        $filename = 'planos_acao_cliente_' . $empresaId . '_' . date('Ymd_His') . '.xlsx';
+        $path = \App\Core\XlsxExport::exportPlanos($rows, $filename, (string)($empresa['nome_empresa'] ?? ''));
         AuditLogger::log('planoacao_export', 'pdca_tasks', null, [
             'cliente_id' => $id,
             'filial_id' => $filialId > 0 ? $filialId : null,

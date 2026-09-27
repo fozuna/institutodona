@@ -52,23 +52,31 @@ try {
   $sheet = (string)$zip->getFromName('xl/worksheets/sheet1.xml');
   $zip->close();
   foreach ([
-    'ID Cliente',
-    'Cliente',
+    'O Quê? (Problema)',
+    'Por que?',
     'Meta / Objetivo',
     'Origem',
-    'Fase',
-    'Data de Cria',
-    'Data de Atualiza',
-    'Campo Customizado Alpha',
-    'Cliente Exemplo',
-    'Alpha',
-    'Beta'
+    'Responsável',
+    'Status',
+    'Prazo',
+    'Exemplo Plano',
+    'Descrição de teste',
+    'Implementar ação',
+    'Origem teste',
+    'Responsável A',
+    'Planejado',
+    'Exportação padronizada do sistema',
   ] as $needle) {
     if (!str_contains($sheet, $needle)) {
       fail('Coluna ou valor ausente na exportação: ' . $needle);
     }
   }
-  ok('Planilha contém colunas completas do plano');
+  foreach (['ID Cliente', 'Cliente Exemplo', 'Fase', 'Progresso', 'Data de Cria', 'Data de Atualiza', 'Campo Customizado', 'Alpha', 'Beta', 'Ã', 'â€'] as $needle) {
+    if (str_contains($sheet, $needle)) {
+      fail('Planilha não deveria conter: ' . $needle);
+    }
+  }
+  ok('Planilha contém somente as 7 colunas aprovadas, sem erro de acentuação');
   @unlink($path);
   ok('Limpeza de arquivo temporário');
   echo "All export tests passed.\n";
