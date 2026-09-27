@@ -223,4 +223,21 @@ $logStmt->execute(['id' => $treinamentoId]);
 if ((int)$logStmt->fetchColumn() !== 1) failFast('Deveria existir log de auditoria da reabertura');
 ok('Instituto reabre: status recalculados, turma excluída não volta, reabertura auditada');
 
+// Card "Treinamentos" do dashboard conta treinamentos distintos, mesmo com
+// turmas de instrutores diferentes (participacao tem 1 linha por instrutor).
+$agendaOutroInstrutor = $agendaModel->create([
+    'treinamento_id' => $treinamentoId,
+    'data' => date('Y-m-d H:i:s', strtotime('-2 days 14:00')),
+    'data_fim' => date('Y-m-d H:i:s', strtotime('-2 days 18:00')),
+    'unidade_id' => $clienteId,
+    'instrutor' => 'Outro Instrutor', 'local' => 'Sala', 'observacoes' => '',
+]);
+$agendaModel->syncParticipants($agendaOutroInstrutor, [$colab['nao_agendado']]);
+$dash2 = $treinamentoModel->dashboard(['cliente_id' => $clienteId]);
+if (count($dash2['participacao_treinamento'] ?? []) !== 2) failFast('Pré-condição: participação deveria ter 2 linhas (1 por instrutor)');
+if ((int)($dash2['resumo']['treinamentos_monitorados'] ?? 0) !== 1) {
+    failFast('Card "Treinamentos" deveria contar 1 treinamento distinto, obteve ' . (int)($dash2['resumo']['treinamentos_monitorados'] ?? 0));
+}
+ok('Dashboard conta treinamentos distintos mesmo com 2 instrutores');
+
 echo "Treinamentos encerramento regression tests passed.\n";

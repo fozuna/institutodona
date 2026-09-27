@@ -806,7 +806,9 @@ class TreinamentoModel extends BaseModel
             'acumulados' => $acumulados,
             'alertas_setor' => $alertasSetor,
             'resumo' => [
-                'treinamentos_monitorados' => count($participacao),
+                // participacao_treinamento tem uma linha por treinamento x instrutor;
+                // o card conta treinamentos distintos.
+                'treinamentos_monitorados' => $encerramento['total'],
                 'treinamentos_distintos' => $encerramento['total'],
                 'treinamentos_encerrados' => $encerramento['encerrados'],
                 'cobertura_media' => $encerramento['cobertura_media'],
