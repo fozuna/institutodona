@@ -106,61 +106,61 @@ class PwaController extends BaseController
     public function indicadores(): void
     {
         $this->requirePwaLogin();
-        $this->proxy('indicadores/index', fn(): void => (new IndicadoresController())->index());
+        $this->proxy('indicadores/index', fn() => (new IndicadoresController())->index());
     }
 
     public function indicadoresHistorico(): void
     {
         $this->requirePwaLogin();
-        $this->proxy('indicadores/historico', fn(): void => (new IndicadoresController())->historico());
+        $this->proxy('indicadores/historico', fn() => (new IndicadoresController())->historico());
     }
 
     public function indicadoresGraficos(): void
     {
         $this->requirePwaLogin();
-        $this->proxy('indicadores/charts', fn(): void => (new IndicadoresController())->charts());
+        $this->proxy('indicadores/charts', fn() => (new IndicadoresController())->charts());
     }
 
     public function agenda(): void
     {
         $this->requirePwaLogin();
-        $this->proxy('agenda/index', fn(): void => (new AgendaController())->index());
+        $this->proxy('agenda/index', fn() => (new AgendaController())->index());
     }
 
     public function tarefas(): void
     {
         $this->requirePwaLogin();
-        $this->proxy('tarefas/index', fn(): void => (new TarefasController())->index());
+        $this->proxy('tarefas/index', fn() => (new TarefasController())->index());
     }
 
     public function cronogramas(): void
     {
         $this->requirePwaLogin();
-        $this->proxy('cronograma/index', fn(): void => (new CronogramaController())->index());
+        $this->proxy('cronograma/index', fn() => (new CronogramaController())->index());
     }
 
     public function planoAcao(): void
     {
         $this->requirePwaLogin();
-        $this->proxy('planoacao/index', fn(): void => (new PlanoAcaoController())->index());
+        $this->proxy('planoacao/index', fn() => (new PlanoAcaoController())->index());
     }
 
     public function auditorias(): void
     {
         $this->requirePwaLogin();
-        $this->proxy('auditorias/index', fn(): void => (new AuditoriasController())->index());
+        $this->proxy('auditorias/index', fn() => (new AuditoriasController())->index());
     }
 
     public function avaliacoes(): void
     {
         $this->requirePwaLogin();
-        $this->proxy('avaliacoes/index', fn(): void => (new AvaliacoesController())->index());
+        $this->proxy('avaliacoes/index', fn() => (new AvaliacoesController())->index());
     }
 
     public function tratamentos(): void
     {
         $this->requirePwaLogin();
-        $this->proxy('processos/index', fn(): void => (new ProcessosController())->index());
+        $this->proxy('processos/index', fn() => (new ProcessosController())->index());
     }
 
     public function balancos(): void
