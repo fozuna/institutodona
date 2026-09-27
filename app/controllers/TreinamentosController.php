@@ -211,6 +211,13 @@ class TreinamentosController extends BaseController
             'setores' => $catalogo['setores'],
             'funcoes' => $catalogo['funcoes'],
             'statusAtualOptions' => $this->statusAtualOptions(),
+            'encerramento' => [
+                'encerrado' => $this->isEncerrado($item),
+                'cobertura' => $this->model->cobertura((int)$item['id']),
+                'encerrado_por_nome' => $this->model->encerradoPorNome($item),
+                'turmas_futuras' => $this->isEncerrado($item) ? 0 : $this->model->turmasFuturasExcluiveis((int)$item['id']),
+                'pode_reabrir' => Auth::isInstituto(),
+            ],
         ]);
     }
 
@@ -283,6 +290,11 @@ class TreinamentosController extends BaseController
             echo json_encode(['ok' => false, 'message' => 'Dados inválidos.'], JSON_UNESCAPED_UNICODE);
             return;
         }
+        if ($this->isEncerrado($this->model->find($treinamentoId))) {
+            http_response_code(422);
+            echo json_encode(['ok' => false, 'error' => self::MSG_ENCERRADO], JSON_UNESCAPED_UNICODE);
+            return;
+        }
         try {
             $result = $this->model->addParticipanteExtra($treinamentoId, $colaboradorId);
         } catch (\Throwable $e) {
@@ -332,6 +344,11 @@ class TreinamentosController extends BaseController
         if (!$treinamento) {
             $_SESSION['flash_error'] = 'Treinamento não encontrado.';
             $this->redirect('index.php?route=treinamentos/index');
+            return;
+        }
+        if ($this->isEncerrado($treinamento)) {
+            $_SESSION['flash_error'] = self::MSG_ENCERRADO;
+            $this->redirect('index.php?route=treinamentos/show&id=' . $treinamentoId);
             return;
         }
         $ids = $_POST['colaborador_ids'] ?? [];
@@ -516,6 +533,11 @@ class TreinamentosController extends BaseController
             return;
         }
         $treinamentoId = (int)($_POST['treinamento_id'] ?? 0);
+        if ($this->isEncerrado($this->model->find($treinamentoId))) {
+            $_SESSION['flash_error'] = self::MSG_ENCERRADO;
+            $this->redirect('index.php?route=treinamentos/show&id=' . $treinamentoId);
+            return;
+        }
         $dataInicio = $this->normalizeDateTimeLocal((string)($_POST['data'] ?? ''));
         $dataFim = $this->normalizeDateTimeLocal((string)($_POST['data_fim'] ?? ''));
         if ($dataInicio === '' || $dataFim === '') {
@@ -708,6 +730,67 @@ class TreinamentosController extends BaseController
         $this->agendaModel->closeAgenda($agendaId);
         $_SESSION['flash_success'] = 'Turma encerrada com sucesso. Participantes sem presença registrada foram contabilizados como não participantes.';
         $this->redirect('index.php?route=treinamentos/presenca&agenda_id=' . $agendaId);
+    }
+
+    public function encerrar(): void
+    {
+        $this->requireManagePermission();
+        if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        $item = $this->findOrRedirect($id);
+        if (!$item) {
+            return;
+        }
+        try {
+            $result = $this->model->encerrar($id, (string)($_POST['justificativa'] ?? ''));
+        } catch (\Throwable $e) {
+            error_log('[treinamentos_encerrar_failed] treinamento_id=' . $id . ' ' . $e->getMessage());
+            $_SESSION['flash_error'] = 'Não foi possível encerrar o treinamento. Tente novamente.';
+            $this->redirect('index.php?route=treinamentos/show&id=' . $id);
+            return;
+        }
+        if (!$result['ok']) {
+            $_SESSION['flash_error'] = (string)($result['erro'] ?? 'Não foi possível encerrar o treinamento.');
+            $this->redirect('index.php?route=treinamentos/show&id=' . $id);
+            return;
+        }
+        $cob = $result['cobertura'] ?? ['concluidos' => 0, 'total' => 0, 'pct' => 0];
+        $msg = sprintf('Treinamento encerrado. Cobertura final: %d%% (%d/%d).', (int)$cob['pct'], (int)$cob['concluidos'], (int)$cob['total']);
+        if ((int)($result['turmas_excluidas'] ?? 0) > 0) {
+            $msg .= sprintf(' %d turma(s) futura(s) excluída(s).', (int)$result['turmas_excluidas']);
+        }
+        $_SESSION['flash_success'] = $msg;
+        $this->redirect('index.php?route=treinamentos/show&id=' . $id);
+    }
+
+    public function reabrir(): void
+    {
+        $this->requireManagePermission();
+        if (!Auth::isInstituto()) {
+            $this->denyAccess('Somente o Instituto pode reabrir um treinamento encerrado.', (string)($_GET['route'] ?? ''), null, false);
+            return;
+        }
+        if (!$this->isPost() || !Security::verifyCsrf($_POST['csrf'] ?? null)) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        $item = $this->findOrRedirect($id);
+        if (!$item) {
+            return;
+        }
+        $result = $this->model->reabrir($id);
+        if (!$result['ok']) {
+            $_SESSION['flash_error'] = (string)($result['erro'] ?? 'Não foi possível reabrir o treinamento.');
+        } else {
+            $_SESSION['flash_success'] = 'Treinamento reaberto. Os status dos colaboradores foram recalculados.';
+        }
+        $this->redirect('index.php?route=treinamentos/show&id=' . $id);
     }
 
     public function certificado(): void
@@ -1000,6 +1083,13 @@ class TreinamentosController extends BaseController
             }
         }
         return $errors;
+    }
+
+    private const MSG_ENCERRADO = 'Treinamento encerrado: não é possível incluir colaboradores ou agendar novas turmas. Reabra o treinamento para alterar.';
+
+    private function isEncerrado(?array $item): bool
+    {
+        return $item !== null && !empty($item['encerrado_em']);
     }
 
     private function findOrRedirect(int $id): ?array

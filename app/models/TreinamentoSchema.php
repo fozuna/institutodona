@@ -159,6 +159,10 @@ final class TreinamentoSchema
         self::ensureColumn($db, 'treinamentos_agenda', 'data_fim', "ALTER TABLE treinamentos_agenda ADD COLUMN data_fim DATETIME NULL AFTER data");
         self::ensureColumn($db, 'treinamentos_agenda', 'encerrada_em', "ALTER TABLE treinamentos_agenda ADD COLUMN encerrada_em DATETIME NULL AFTER data_fim");
         self::ensureColumn($db, 'treinamentos_agenda', 'encerrada_por', "ALTER TABLE treinamentos_agenda ADD COLUMN encerrada_por INT NULL AFTER encerrada_em");
+        self::ensureColumn($db, 'treinamentos', 'encerrado_em', "ALTER TABLE treinamentos ADD COLUMN encerrado_em DATETIME NULL AFTER assinatura_responsavel");
+        self::ensureColumn($db, 'treinamentos', 'encerrado_por', "ALTER TABLE treinamentos ADD COLUMN encerrado_por INT NULL AFTER encerrado_em");
+        self::ensureColumn($db, 'treinamentos', 'encerramento_justificativa', "ALTER TABLE treinamentos ADD COLUMN encerramento_justificativa VARCHAR(1000) NULL AFTER encerrado_por");
+        self::ensureIndex($db, 'treinamentos', 'idx_treinamentos_encerrado_em', "ALTER TABLE treinamentos ADD INDEX idx_treinamentos_encerrado_em (encerrado_em)");
         self::ensureColumn($db, 'treinamento_colaboradores', 'status_detalhe', "ALTER TABLE treinamento_colaboradores ADD COLUMN status_detalhe VARCHAR(30) NULL AFTER status");
         self::ensureColumn($db, 'treinamento_colaboradores', 'origem', "ALTER TABLE treinamento_colaboradores ADD COLUMN origem ENUM('publico_alvo','extra') NOT NULL DEFAULT 'publico_alvo' AFTER status_detalhe");
         self::ensureIndex($db, 'treinamento_colaboradores', 'idx_treinamento_colaboradores_origem', "ALTER TABLE treinamento_colaboradores ADD INDEX idx_treinamento_colaboradores_origem (origem)");

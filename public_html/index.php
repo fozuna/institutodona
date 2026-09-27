@@ -620,6 +620,12 @@ switch ($route) {
     case 'treinamentos/close_agenda':
         (new TreinamentosController())->closeAgenda();
         break;
+    case 'treinamentos/encerrar':
+        (new TreinamentosController())->encerrar();
+        break;
+    case 'treinamentos/reabrir':
+        (new TreinamentosController())->reabrir();
+        break;
     case 'treinamentos/certificado':
         (new TreinamentosController())->certificado();
         break;

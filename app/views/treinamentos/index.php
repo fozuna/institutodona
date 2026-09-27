@@ -12,6 +12,7 @@ $statusClasses = [
     'warning' => 'bg-yellow-100 text-yellow-800',
     'info' => 'bg-blue-100 text-blue-700',
     'neutral' => 'bg-gray-100 text-gray-700',
+    'closed' => 'bg-slate-200 text-slate-800',
 ];
 $buildIndexUrl = static function (array $overrides = []) use ($filters, $per): string {
     $params = [
@@ -129,7 +130,7 @@ $pageWindowEnd = min($totalPages, $page + 2);
                 <div class="font-semibold text-brand-black"><?= htmlspecialchars($dataValue) ?></div>
               </div>
               <div class="rounded border border-gray-100 bg-gray-50 px-3 py-2">
-                <div class="text-gray-500">Progresso</div>
+                <div class="text-gray-500" title="Colaboradores que concluíram / colaboradores vinculados">Cobertura</div>
                 <div class="font-semibold text-brand-black"><?= (int)($item['progresso_pct'] ?? 0) ?>%</div>
               </div>
               <div class="rounded border border-gray-100 bg-gray-50 px-3 py-2">
@@ -141,7 +142,7 @@ $pageWindowEnd = min($totalPages, $page + 2);
           <div class="w-full xl:w-72 space-y-3">
             <div>
               <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
-                <span>Andamento</span>
+                <span>Cobertura</span>
                 <span><?= (int)($item['progresso_pct'] ?? 0) ?>%</span>
               </div>
               <div class="h-2 rounded-full bg-gray-100 overflow-hidden">

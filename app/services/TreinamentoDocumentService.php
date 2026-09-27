@@ -189,6 +189,8 @@ class TreinamentoDocumentService
             . $this->summaryCard('Inscritos', (string)($summary['total_inscritos'] ?? 0))
             . $this->summaryCard('Presentes', (string)($summary['total_presentes'] ?? 0))
             . $this->summaryCard('Certificados', (string)($summary['total_certificados'] ?? 0))
+            . $this->summaryCard('Encerrados', (int)($summary['treinamentos_encerrados'] ?? 0) . ' de ' . (int)($summary['treinamentos_distintos'] ?? 0))
+            . $this->summaryCard('Cobertura média', ($summary['cobertura_media'] ?? null) === null ? '—' : number_format((float)$summary['cobertura_media'], 1, ',', '.') . '%')
             . '</div>';
 
         $participacaoTable = $this->tableHtml(['Treinamento', 'Tipo', 'Instrutor', 'Inscritos', 'Presentes', 'Percentual'], array_map(static function (array $row): array {

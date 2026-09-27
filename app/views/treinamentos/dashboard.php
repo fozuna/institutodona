@@ -80,8 +80,19 @@ $naoParticiparam = array_values((array)($dashboard['nao_participaram'] ?? []));
     </div>
   </form>
 
-  <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+  <?php $coberturaMedia = $dashboard['resumo']['cobertura_media'] ?? null; ?>
+  <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-4">
     <div class="bg-white shadow rounded p-4"><div class="text-xs text-gray-500 uppercase">Treinamentos</div><div class="text-3xl font-bold"><?= (int)($dashboard['resumo']['treinamentos_monitorados'] ?? 0) ?></div></div>
+    <div class="bg-white shadow rounded p-4" title="Treinamentos encerrados manualmente, independentemente da cobertura">
+      <div class="text-xs text-gray-500 uppercase">Encerrados</div>
+      <div class="text-3xl font-bold"><?= (int)($dashboard['resumo']['treinamentos_encerrados'] ?? 0) ?></div>
+      <div class="text-xs text-gray-500 mt-1">de <?= (int)($dashboard['resumo']['treinamentos_distintos'] ?? 0) ?> treinamento(s)</div>
+    </div>
+    <div class="bg-white shadow rounded p-4" title="Média, por treinamento, de colaboradores que concluíram / vinculados">
+      <div class="text-xs text-gray-500 uppercase">Cobertura média</div>
+      <div class="text-3xl font-bold"><?= $coberturaMedia === null ? '—' : number_format((float)$coberturaMedia, 1, ',', '.') . '%' ?></div>
+      <div class="text-xs text-gray-500 mt-1">concluídos / vinculados</div>
+    </div>
     <div class="bg-white shadow rounded p-4"><div class="text-xs text-gray-500 uppercase">Inscritos</div><div class="text-3xl font-bold"><?= (int)($dashboard['resumo']['total_inscritos'] ?? 0) ?></div></div>
     <div class="bg-white shadow rounded p-4"><div class="text-xs text-gray-500 uppercase">Presentes</div><div class="text-3xl font-bold"><?= (int)($dashboard['resumo']['total_presentes'] ?? 0) ?></div></div>
     <div class="bg-white shadow rounded p-4"><div class="text-xs text-gray-500 uppercase">Certificados</div><div class="text-3xl font-bold"><?= (int)($dashboard['resumo']['total_certificados'] ?? 0) ?></div></div>

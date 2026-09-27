@@ -20,6 +20,71 @@
     <div class="bg-white shadow rounded p-4"><div class="text-xs text-gray-500 uppercase">Agendamentos</div><div class="text-2xl font-bold text-brand-black"><?= count($agendas) ?></div></div>
   </div>
 
+  <?php
+    $enc = is_array($encerramento ?? null) ? $encerramento : ['encerrado' => false, 'cobertura' => ['total' => 0, 'concluidos' => 0, 'pct' => 0], 'turmas_futuras' => 0, 'pode_reabrir' => false, 'encerrado_por_nome' => null];
+    $cob = $enc['cobertura'];
+    $naoConcluidos = max(0, (int)$cob['total'] - (int)$cob['concluidos']);
+  ?>
+  <?php if (!empty($enc['encerrado'])): ?>
+    <div class="bg-white shadow rounded p-5 border-l-4 border-slate-500" id="treinamentoEncerramento">
+      <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+        <div>
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="text-lg font-semibold">Treinamento encerrado</h2>
+            <span class="text-xs px-3 py-1 rounded-full font-semibold bg-slate-200 text-slate-800">Encerrado</span>
+          </div>
+          <p class="text-sm text-gray-600 mt-1">
+            Em <?= htmlspecialchars(\App\Core\DateHelper::formatDateTime((string)$item['encerrado_em'])) ?>
+            <?php if (!empty($enc['encerrado_por_nome'])): ?> por <?= htmlspecialchars((string)$enc['encerrado_por_nome']) ?><?php endif; ?>
+            • Cobertura final: <strong><?= (int)$cob['pct'] ?>%</strong> (<?= (int)$cob['concluidos'] ?>/<?= (int)$cob['total'] ?> concluídos)
+          </p>
+          <?php if (!empty($item['encerramento_justificativa'])): ?>
+            <p class="text-sm text-gray-700 mt-2"><span class="text-gray-500">Justificativa:</span> <?= nl2br(htmlspecialchars((string)$item['encerramento_justificativa'])) ?></p>
+          <?php endif; ?>
+          <p class="text-xs text-gray-500 mt-2">Colaboradores que não concluíram contam como "não participou". Novas turmas e novos vínculos ficam bloqueados.</p>
+        </div>
+        <?php if (!empty($enc['pode_reabrir'])): ?>
+          <form method="post" action="index.php?route=treinamentos/reabrir" onsubmit="return confirm('Reabrir este treinamento? Os status dos colaboradores serão recalculados e voltarão a pendentes quem não concluiu. Turmas excluídas no encerramento não são restauradas.');">
+            <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+            <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
+            <button type="submit" class="px-4 py-2 rounded bg-gray-200 text-brand-brown whitespace-nowrap">Reabrir treinamento</button>
+          </form>
+        <?php endif; ?>
+      </div>
+    </div>
+  <?php else: ?>
+    <div class="bg-white shadow rounded p-5" id="treinamentoEncerramento">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div>
+          <h2 class="text-lg font-semibold">Cobertura e encerramento</h2>
+          <p class="text-sm text-gray-600">Cobertura atual: <strong><?= (int)$cob['pct'] ?>%</strong> (<?= (int)$cob['concluidos'] ?>/<?= (int)$cob['total'] ?> concluídos). O treinamento pode ser encerrado com qualquer cobertura.</p>
+        </div>
+      </div>
+      <details class="mt-3">
+        <summary class="cursor-pointer inline-block px-4 py-2 rounded bg-slate-700 text-white text-sm">Encerrar treinamento</summary>
+        <form method="post" action="index.php?route=treinamentos/encerrar" class="mt-3 space-y-3" onsubmit="return confirm('Confirmar o encerramento deste treinamento?');">
+          <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
+          <input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
+          <ul class="text-sm text-gray-700 list-disc pl-5 space-y-1">
+            <li>A cobertura final será registrada: <?= (int)$cob['pct'] ?>% (<?= (int)$cob['concluidos'] ?>/<?= (int)$cob['total'] ?>).</li>
+            <?php if ($naoConcluidos > 0): ?>
+              <li><?= $naoConcluidos ?> colaborador(es) que não concluíram passarão a contar como "não participou".</li>
+            <?php endif; ?>
+            <?php if ((int)$enc['turmas_futuras'] > 0): ?>
+              <li class="text-red-700"><?= (int)$enc['turmas_futuras'] ?> turma(s) futura(s) ainda não iniciada(s) e sem presença serão <strong>excluídas</strong>.</li>
+            <?php endif; ?>
+            <li>Novas turmas e novos vínculos ficam bloqueados até uma eventual reabertura (somente o Instituto reabre).</li>
+          </ul>
+          <div>
+            <label class="block text-sm" for="encerramentoJustificativa">Justificativa (opcional)</label>
+            <textarea id="encerramentoJustificativa" name="justificativa" maxlength="1000" rows="2" class="border rounded p-2 w-full" placeholder="Ex.: 3 faltas; serão incluídos na próxima turma."></textarea>
+          </div>
+          <button type="submit" class="px-4 py-2 rounded bg-slate-700 text-white">Confirmar encerramento</button>
+        </form>
+      </details>
+    </div>
+  <?php endif; ?>
+
   <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
     <div class="xl:col-span-2 space-y-6">
       <div class="bg-white shadow rounded p-5">
@@ -623,6 +688,9 @@
 
       <div class="bg-white shadow rounded p-5">
         <h2 class="text-lg font-semibold mb-4">Agendar Treinamento</h2>
+        <?php if (!empty($enc['encerrado'])): ?>
+          <p class="text-sm text-gray-600">Treinamento encerrado: não é possível agendar novas turmas. Reabra o treinamento para agendar.</p>
+        <?php else: ?>
         <form method="post" action="index.php?route=treinamentos/store_agenda" class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <input type="hidden" name="csrf" value="<?= \App\Core\Security::csrfToken() ?>" />
           <input type="hidden" name="treinamento_id" value="<?= (int)$item['id'] ?>" />
@@ -675,6 +743,7 @@
             <button class="px-4 py-2 rounded bg-brand-red text-white" type="submit">Criar Agendamento</button>
           </div>
         </form>
+        <?php endif; ?>
 
         <div class="mt-5 overflow-auto">
           <table class="min-w-full text-sm">

@@ -239,6 +239,169 @@ class TreinamentoModel extends BaseModel
         return $this->db->prepare('DELETE FROM treinamentos WHERE id = :id')->execute(['id' => $id]);
     }
 
+    /**
+     * Turmas que o encerramento do treinamento exclui: ainda nao iniciadas,
+     * nao encerradas e sem nenhuma presenca/certificado registrado.
+     */
+    private const TURMAS_FUTURAS_EXCLUIVEIS_SQL = "FROM treinamentos_agenda ta
+        WHERE ta.treinamento_id = :id
+          AND ta.encerrada_em IS NULL
+          AND ta.data > NOW()
+          AND NOT EXISTS (
+              SELECT 1 FROM treinamento_participantes tp
+              WHERE tp.agenda_id = ta.id
+                AND (tp.presenca = 1 OR tp.certificado_emitido = 1)
+          )";
+
+    /**
+     * Encerra o treinamento independentemente da cobertura (regra de gestao:
+     * o ciclo acabou mesmo com faltas). Turmas futuras ainda nao iniciadas e
+     * sem nenhuma presenca/certificado sao excluidas; quem nao concluiu passa
+     * a contar como "nao participou" via refreshStatuses().
+     *
+     * @return array{ok: bool, erro?: string, turmas_excluidas?: int, cobertura?: array}
+     */
+    public function encerrar(int $id, ?string $justificativa): array
+    {
+        $this->ensureSchema();
+        $item = $this->find($id);
+        if (!$item) {
+            return ['ok' => false, 'erro' => 'Treinamento não encontrado.'];
+        }
+        if (!empty($item['encerrado_em'])) {
+            return ['ok' => false, 'erro' => 'Este treinamento já está encerrado.'];
+        }
+        $justificativa = trim((string)$justificativa);
+        if (function_exists('mb_substr')) {
+            $justificativa = mb_substr($justificativa, 0, 1000);
+        } else {
+            $justificativa = substr($justificativa, 0, 1000);
+        }
+        $userId = (int)(Auth::user()['id'] ?? 0) ?: null;
+
+        $this->db->beginTransaction();
+        try {
+            $futuras = $this->db->prepare('SELECT ta.id, ta.data ' . self::TURMAS_FUTURAS_EXCLUIVEIS_SQL . ' FOR UPDATE');
+            $futuras->execute(['id' => $id]);
+            $turmas = $futuras->fetchAll() ?: [];
+            if ($turmas) {
+                $del = $this->db->prepare('DELETE FROM treinamentos_agenda WHERE id = :id AND treinamento_id = :t');
+                foreach ($turmas as $turma) {
+                    $del->execute(['id' => (int)$turma['id'], 't' => $id]);
+                }
+            }
+
+            $upd = $this->db->prepare("UPDATE treinamentos
+                SET encerrado_em = NOW(),
+                    encerrado_por = :por,
+                    encerramento_justificativa = :just
+                WHERE id = :id AND encerrado_em IS NULL");
+            $upd->execute([
+                'por' => $userId,
+                'just' => $justificativa !== '' ? $justificativa : null,
+                'id' => $id,
+            ]);
+            if ($upd->rowCount() === 0) {
+                $this->db->rollBack();
+                return ['ok' => false, 'erro' => 'Este treinamento já está encerrado.'];
+            }
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            throw $e;
+        }
+
+        $this->refreshStatuses($id);
+        $cobertura = $this->cobertura($id);
+        $this->audit('treinamento_encerrado', [
+            'treinamento_id' => $id,
+            'encerrado_por' => $userId,
+            'justificativa' => $justificativa !== '' ? $justificativa : null,
+            'cobertura' => $cobertura,
+            'turmas_excluidas' => array_map(static fn(array $t): array => ['agenda_id' => (int)$t['id'], 'data' => (string)$t['data']], $turmas),
+        ]);
+        return ['ok' => true, 'turmas_excluidas' => count($turmas), 'cobertura' => $cobertura];
+    }
+
+    /**
+     * Reabre um treinamento encerrado. Os status dos colaboradores sao
+     * recalculados como se o encerramento nao tivesse ocorrido; turmas
+     * excluidas no encerramento nao voltam (ficam registradas no log).
+     */
+    public function reabrir(int $id): array
+    {
+        $this->ensureSchema();
+        $item = $this->find($id);
+        if (!$item) {
+            return ['ok' => false, 'erro' => 'Treinamento não encontrado.'];
+        }
+        if (empty($item['encerrado_em'])) {
+            return ['ok' => false, 'erro' => 'Este treinamento não está encerrado.'];
+        }
+        $stmt = $this->db->prepare("UPDATE treinamentos
+            SET encerrado_em = NULL, encerrado_por = NULL, encerramento_justificativa = NULL
+            WHERE id = :id AND encerrado_em IS NOT NULL");
+        $stmt->execute(['id' => $id]);
+        if ($stmt->rowCount() === 0) {
+            return ['ok' => false, 'erro' => 'Este treinamento não está encerrado.'];
+        }
+        $this->refreshStatuses($id);
+        $this->audit('treinamento_reaberto', [
+            'treinamento_id' => $id,
+            'reaberto_por' => (int)(Auth::user()['id'] ?? 0) ?: null,
+            'encerramento_anterior' => [
+                'encerrado_em' => (string)$item['encerrado_em'],
+                'encerrado_por' => isset($item['encerrado_por']) ? (int)$item['encerrado_por'] : null,
+                'justificativa' => $item['encerramento_justificativa'] ?? null,
+            ],
+        ]);
+        return ['ok' => true];
+    }
+
+    /** Cobertura = colaboradores que concluiram / colaboradores vinculados. */
+    public function cobertura(int $id): array
+    {
+        $this->ensureSchema();
+        $stmt = $this->db->prepare("SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN status = 'concluido' THEN 1 ELSE 0 END) AS concluidos
+            FROM treinamento_colaboradores
+            WHERE treinamento_id = :id");
+        $stmt->execute(['id' => $id]);
+        $row = $stmt->fetch() ?: [];
+        $total = (int)($row['total'] ?? 0);
+        $concluidos = (int)($row['concluidos'] ?? 0);
+        return [
+            'total' => $total,
+            'concluidos' => $concluidos,
+            'pct' => $total > 0 ? (int)round(($concluidos / $total) * 100) : 0,
+        ];
+    }
+
+    /** Nome de quem encerrou (para exibicao); null se aberto ou usuario removido. */
+    public function encerradoPorNome(array $item): ?string
+    {
+        $userId = (int)($item['encerrado_por'] ?? 0);
+        if (empty($item['encerrado_em']) || $userId <= 0) {
+            return null;
+        }
+        $stmt = $this->db->prepare('SELECT nome FROM usuarios WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $userId]);
+        $nome = $stmt->fetchColumn();
+        return $nome !== false ? (string)$nome : null;
+    }
+
+    /** Turmas que seriam excluidas ao encerrar (para avisar antes de confirmar). */
+    public function turmasFuturasExcluiveis(int $id): int
+    {
+        $this->ensureSchema();
+        $stmt = $this->db->prepare('SELECT COUNT(*) ' . self::TURMAS_FUTURAS_EXCLUIVEIS_SQL);
+        $stmt->execute(['id' => $id]);
+        return (int)$stmt->fetchColumn();
+    }
+
     private function indexWhereClause(array $filters, array &$params): string
     {
         $sql = " WHERE 1=1";
@@ -272,7 +435,11 @@ class TreinamentoModel extends BaseModel
             $temProximaAgenda = !empty($row['proxima_agenda_data']);
             $temHistorico = !empty($row['ultima_agenda_data']);
 
-            if ($totalColaboradores > 0 && $totalConcluidos >= $totalColaboradores) {
+            if (!empty($row['encerrado_em'])) {
+                // Encerramento manual: status de gestao, independente da cobertura.
+                $statusResumo = 'Encerrado';
+                $statusVariant = 'closed';
+            } elseif ($totalColaboradores > 0 && $totalConcluidos >= $totalColaboradores) {
                 $statusResumo = 'Concluído';
                 $statusVariant = 'success';
             } elseif ($temProximaAgenda) {
@@ -625,6 +792,7 @@ class TreinamentoModel extends BaseModel
         $concluidos = $this->dashboardListByStatus($filters, 'concluido');
         $naoParticiparam = $this->dashboardListByStatus($filters, 'pendente', 'interrompido');
         $totalPendentesConcluidos = count($pendentes) + count($concluidos);
+        $encerramento = $this->encerramentoResumo(array_column($participacao, 'treinamento_id'));
         return [
             'por_treinamento' => $this->dashboardBy($filters, 't.id', 't.nome'),
             'por_funcao' => $this->dashboardBy($filters, 'f.id', 'f.nome'),
@@ -639,6 +807,9 @@ class TreinamentoModel extends BaseModel
             'alertas_setor' => $alertasSetor,
             'resumo' => [
                 'treinamentos_monitorados' => count($participacao),
+                'treinamentos_distintos' => $encerramento['total'],
+                'treinamentos_encerrados' => $encerramento['encerrados'],
+                'cobertura_media' => $encerramento['cobertura_media'],
                 'setores_monitorados' => count($setores),
                 'total_inscritos' => array_sum(array_map(static fn(array $row): int => (int)($row['total_inscritos'] ?? 0), $participacao)),
                 'total_presentes' => array_sum(array_map(static fn(array $row): int => (int)($row['total_presentes'] ?? 0), $participacao)),
@@ -664,6 +835,7 @@ class TreinamentoModel extends BaseModel
                     tc.status_detalhe AS status_detalhe_atual,
                     t.periodicidade,
                     t.carga_horaria,
+                    t.encerrado_em AS treinamento_encerrado_em,
                     COUNT(ta.id) AS total_agendas_unidade,
                     SUM(CASE WHEN ta.id IS NOT NULL AND (ta.encerrada_em IS NOT NULL OR COALESCE(ta.data_fim, ta.data) <= NOW()) THEN 1 ELSE 0 END) AS total_agendas_encerradas,
                     SUM(CASE WHEN ta.id IS NOT NULL AND ta.encerrada_em IS NULL AND COALESCE(ta.data_fim, ta.data) > NOW() THEN 1 ELSE 0 END) AS total_agendas_futuras,
@@ -710,7 +882,7 @@ class TreinamentoModel extends BaseModel
             $sql .= " AND tc.treinamento_id = :treinamento_id";
             $params['treinamento_id'] = $treinamentoId;
         }
-        $sql .= " GROUP BY tc.id, tc.treinamento_id, tc.colaborador_id, tc.status, tc.status_detalhe, t.periodicidade, t.carga_horaria";
+        $sql .= " GROUP BY tc.id, tc.treinamento_id, tc.colaborador_id, tc.status, tc.status_detalhe, t.periodicidade, t.carga_horaria, t.encerrado_em";
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
@@ -738,6 +910,18 @@ class TreinamentoModel extends BaseModel
     }
 
     private function computeStatusFromSummaryRow(array $row, int $todayTs): array
+    {
+        $computed = $this->computeStatusFromAgendas($row, $todayTs);
+        // Treinamento encerrado manualmente: quem nao concluiu passa a contar
+        // como "nao participou" (mesma semantica do Encerrar Turma). Reabrir
+        // limpa encerrado_em e o recalculo devolve o status original.
+        if (!empty($row['treinamento_encerrado_em']) && $computed['status'] !== 'concluido') {
+            return ['status' => 'pendente', 'status_detalhe' => 'interrompido'];
+        }
+        return $computed;
+    }
+
+    private function computeStatusFromAgendas(array $row, int $todayTs): array
     {
         $totalAgendas = (int)($row['total_agendas_unidade'] ?? 0);
         $future = (int)($row['total_agendas_futuras'] ?? 0);
@@ -791,6 +975,7 @@ class TreinamentoModel extends BaseModel
                     t.nome AS treinamento_nome,
                     t.periodicidade,
                     t.carga_horaria,
+                    t.encerrado_em AS treinamento_encerrado_em,
                     col.nome AS colaborador_nome,
                     col.email AS colaborador_email,
                     COUNT(ta.id) AS total_agendas_unidade,
@@ -845,7 +1030,7 @@ class TreinamentoModel extends BaseModel
         }
         $sql .= " GROUP BY
                     tc.id, tc.treinamento_id, tc.colaborador_id, tc.status, tc.status_detalhe,
-                    t.nome, t.periodicidade, t.carga_horaria,
+                    t.nome, t.periodicidade, t.carga_horaria, t.encerrado_em,
                     col.nome, col.email
                   ORDER BY tc.treinamento_id, tc.colaborador_id";
 
@@ -1408,6 +1593,48 @@ class TreinamentoModel extends BaseModel
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         return array_values(array_map('intval', array_column($stmt->fetchAll() ?: [], 'id')));
+    }
+
+    /**
+     * Execucao x efetividade, separadas: quantos treinamentos foram encerrados
+     * e a cobertura media (concluidos/vinculados) dos que tem vinculados.
+     */
+    private function encerramentoResumo(array $treinamentoIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $treinamentoIds))));
+        if (empty($ids)) {
+            return ['total' => 0, 'encerrados' => 0, 'cobertura_media' => null];
+        }
+        $params = [];
+        $holders = [];
+        foreach ($ids as $i => $id) {
+            $holders[] = ':enc' . $i;
+            $params['enc' . $i] = $id;
+        }
+        $stmt = $this->db->prepare("SELECT
+                t.id,
+                t.encerrado_em,
+                (SELECT COUNT(*) FROM treinamento_colaboradores tc WHERE tc.treinamento_id = t.id) AS total,
+                (SELECT COUNT(*) FROM treinamento_colaboradores tc WHERE tc.treinamento_id = t.id AND tc.status = 'concluido') AS concluidos
+            FROM treinamentos t
+            WHERE t.id IN (" . implode(',', $holders) . ")");
+        $stmt->execute($params);
+        $encerrados = 0;
+        $coberturas = [];
+        foreach ($stmt->fetchAll() ?: [] as $row) {
+            if (!empty($row['encerrado_em'])) {
+                $encerrados++;
+            }
+            $total = (int)($row['total'] ?? 0);
+            if ($total > 0) {
+                $coberturas[] = ((int)($row['concluidos'] ?? 0) / $total) * 100;
+            }
+        }
+        return [
+            'total' => count($ids),
+            'encerrados' => $encerrados,
+            'cobertura_media' => $coberturas ? round(array_sum($coberturas) / count($coberturas), 1) : null,
+        ];
     }
 
     private function participationByTraining(array $filters): array
