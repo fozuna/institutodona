@@ -53,6 +53,23 @@ jobs:
           php app/tests/public_avaliacao_smoke.php
           php app/tests/avaliacao_publica_listing_sync_smoke.php
           php app/tests/avaliacao_publica_no_auth_smoke.php
+      - name: Run full test suite
+        # Cada app/tests/*.php roda isolado; falha se sair com código != 0 ou
+        # imprimir uma linha iniciada por "FAIL". Mostra a saída só dos que falharem
+        # e sempre resume o total, para o deploy não seguir com regressões.
+        run: |
+          set +e
+          total=0; falhas=0; lista=""
+          for t in app/tests/*.php; do
+            total=$((total + 1))
+            out=$(timeout 300 php "$t" 2>&1); rc=$?
+            if [ $rc -ne 0 ] || printf '%s\n' "$out" | grep -q '^FAIL'; then
+              falhas=$((falhas + 1)); lista="$lista\n  - $t (rc=$rc)"
+              echo "::group::FAIL $t (rc=$rc)"; printf '%s\n' "$out" | tail -n 40; echo "::endgroup::"
+            fi
+          done
+          echo "Suite: $total arquivos, $((total - falhas)) PASS, $falhas FAIL"
+          if [ $falhas -gt 0 ]; then printf "Falharam:$lista\n"; exit 1; fi
   deploy:
     needs: validate
     runs-on: ubuntu-latest
