@@ -51,7 +51,11 @@ eq($m->listarGaps([$eA], ['departamento_id' => $F['A']['deps'][2]], 1, 50)['tota
 eq($m->listarGaps([$eA], ['setor_id' => $F['A']['sets'][1]], 1, 50)['total'], 5, 'filtro setor');
 eq($m->listarGaps([$eA], ['funcao_id' => $F['A']['funs'][2]], 1, 50)['total'], 1, 'filtro função');
 eq($m->listarGaps([$eA], ['colaborador_id' => $F['a2']], 1, 50)['total'], 2, 'filtro colaborador');
-eq($m->listarGaps([$eA], ['q' => 'A3 '], 1, 50)['total'], 1, 'busca por nome');
+// Busca pelo nome completo do colaborador: o filtro faz trim() e as fixtures
+// compartilham um sufixo hex aleatório (buscar só "A3" casava todos quando o
+// sufixo continha "a3").
+$nomeA3 = (string)\App\Database\Database::getConnection()->query('SELECT nome FROM colaboradores WHERE id = ' . (int)$F['a3'])->fetchColumn();
+eq($m->listarGaps([$eA], ['q' => $nomeA3], 1, 50)['total'], 1, 'busca por nome');
 eq($m->listarGaps([$eA], ['inicio' => '2026-01-01', 'fim' => '2026-12-31'], 1, 50)['total'], 5, 'período de registro exclui GAP de 2020');
 ok('GAPs: filtros organizacionais, colaborador, busca e período');
 

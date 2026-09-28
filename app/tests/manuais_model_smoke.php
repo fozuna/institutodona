@@ -43,7 +43,8 @@ register_shutdown_function(function () use ($pdo, &$cleanup) {
 });
 
 $empresaId = (int)$pdo->query('SELECT id FROM clientes ORDER BY id ASC LIMIT 1')->fetchColumn();
-$stmt = $pdo->prepare('SELECT id FROM departamentos WHERE cliente_id = :cid ORDER BY id ASC LIMIT 1');
+// Reaproveita só departamento visível para a empresa (vínculo em departamento_clientes).
+$stmt = $pdo->prepare('SELECT d.id FROM departamentos d JOIN departamento_clientes dc ON dc.departamento_id = d.id AND dc.cliente_id = d.cliente_id WHERE d.cliente_id = :cid ORDER BY d.id ASC LIMIT 1');
 $stmt->execute(['cid' => $empresaId]);
 $departamentoId = (int)$stmt->fetchColumn();
 $createdEmpresa = false;
@@ -69,6 +70,9 @@ if ($empresaId <= 0 || $departamentoId <= 0) {
             'cid' => $empresaId,
         ]);
         $departamentoId = (int)$pdo->lastInsertId();
+        // Vínculo dono->departamento (a aplicação cria em DepartamentoModel::syncClienteLinks;
+        // sem ele o departamento não é visível para a empresa e o ManualModel recusa).
+        $pdo->prepare('INSERT IGNORE INTO departamento_clientes (departamento_id, cliente_id) VALUES (?, ?)')->execute([$departamentoId, $empresaId]);
         $createdDepartamento = true;
         $cleanup['departamento_ids'][] = $departamentoId;
     }

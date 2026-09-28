@@ -1,6 +1,11 @@
 <?php
 require_once __DIR__ . '/../autoload.php';
 
+// Buffer de saída do teste inteiro: no CLI, qualquer echo (OK/FAIL) antes da
+// chamada ao controller marca os cabeçalhos como enviados e http_response_code()
+// deixa de funcionar, zerando o status que os cenários de 403/404 verificam.
+ob_start();
+
 // Evita que avisos do PHP (ex.: "headers already sent", esperado neste
 // harness de CLI porque mensagens OK/FAIL já foram impressas antes da
 // chamada ao controller) poluam o buffer de saída capturado via ob_start().

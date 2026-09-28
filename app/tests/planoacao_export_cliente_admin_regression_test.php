@@ -161,7 +161,16 @@ if ($zipAvailable) {
     $conteudoOk = false;
     $contemOutraEmpresa = false;
     if ($zip->open($tmp) === true) {
+        // O XlsxExport grava strings inline (t="inlineStr") nas planilhas, não em
+        // xl/sharedStrings.xml: junta o XML de todas as worksheets (e o
+        // sharedStrings, se um dia existir) para procurar os títulos.
         $shared = (string)$zip->getFromName('xl/sharedStrings.xml');
+        for ($zi = 0; $zi < $zip->numFiles; $zi++) {
+            $zname = (string)$zip->getNameIndex($zi);
+            if (str_starts_with($zname, 'xl/worksheets/') && str_ends_with($zname, '.xml')) {
+                $shared .= (string)$zip->getFromIndex($zi);
+            }
+        }
         $conteudoOk = str_contains($shared, $tituloA);
         $contemOutraEmpresa = str_contains($shared, $tituloC);
         $zip->close();

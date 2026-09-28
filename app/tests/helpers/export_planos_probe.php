@@ -41,6 +41,10 @@ namespace {
         'nome' => 'Probe',
         'email' => 'probe@test.local',
         'tipo_acesso' => $role,
+        // requireLogin() recalcula o escopo (Auth::refreshScope) a partir de
+        // usuarios/usuario_empresas ou, na falta, de id_cliente. O usuário do
+        // probe não existe no banco, então id_cliente sustenta o escopo.
+        'id_cliente' => $allowedClientIds[0] ?? null,
         'allowed_client_ids' => $allowedClientIds,
     ];
 

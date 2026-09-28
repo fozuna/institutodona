@@ -17,9 +17,20 @@ $metrics = new PlanoAcaoMetricModel();
 $checks = new PlanoAcaoCheckModel();
 $actions = new PlanoAcaoActionModel();
 
+// Cliente próprio do teste (antes usava id_cliente = 1 fixo, inexistente em
+// banco limpo -> violação da FK fk_pdca_task_cliente). Removido ao final;
+// pdca_tasks e dependentes saem por ON DELETE CASCADE.
+$pdo = \App\Database\Database::getConnection();
+$pdo->prepare('INSERT INTO clientes (nome_empresa, CNPJ, contato) VALUES (:n, :c, :t)')
+  ->execute(['n' => 'Cliente Plano Teste ' . bin2hex(random_bytes(3)), 'c' => 'PA' . random_int(100000, 999999), 't' => 'Contato']);
+$clienteTesteId = (int)$pdo->lastInsertId();
+register_shutdown_function(static function () use ($pdo, $clienteTesteId): void {
+  try { $pdo->prepare('DELETE FROM clientes WHERE id = ?')->execute([$clienteTesteId]); } catch (\Throwable $e) {}
+});
+
 // Create task
 $taskId = $tasks->create([
-  'id_cliente' => 1,
+  'id_cliente' => $clienteTesteId,
   'titulo' => 'Teste Plano de Ação',
   'descricao' => 'Desc',
   'meta_valor' => 10,

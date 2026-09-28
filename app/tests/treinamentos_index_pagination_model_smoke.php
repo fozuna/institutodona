@@ -52,6 +52,10 @@ try {
         ->execute(['nome' => 'Departamento Index B ' . $suffix, 'cliente_id' => $clienteBId]);
     $departamentoBId = (int)$pdo->lastInsertId();
     $departamentoIds[] = $departamentoBId;
+    // Vínculo dono->departamento: a aplicação cria (DepartamentoModel::syncClienteLinks)
+    // e a regra de visibilidade do catálogo exige; INSERT direto não cria sozinho.
+    $pdo->prepare('INSERT IGNORE INTO departamento_clientes (departamento_id, cliente_id) VALUES (?, ?), (?, ?)')
+        ->execute([$departamentoAId, $clienteAId, $departamentoBId, $clienteBId]);
 
     Auth::login([
         'id' => 9901,

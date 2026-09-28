@@ -1,6 +1,11 @@
 <?php
 require_once __DIR__ . '/../autoload.php';
 
+// Buffer de saída do teste inteiro: no CLI, qualquer echo (OK/FAIL) antes da
+// chamada ao controller marca os cabeçalhos como enviados e http_response_code()
+// deixa de funcionar, zerando o status que os cenários de 403/404 verificam.
+ob_start();
+
 use App\Core\AccessControl;
 use App\Core\Auth;
 use App\Database\Database;

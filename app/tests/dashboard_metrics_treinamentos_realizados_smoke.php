@@ -75,6 +75,11 @@ try {
         'allowed_client_ids' => [],
     ]);
 
+    // Mês futuro relativo a hoje: a regra considera realizada a agenda com
+    // presença/certificado OU cuja data já passou. Com datas fixas o teste
+    // "vencia" (a agenda planejada virava passado e contava como realizada).
+    $mesTeste = date('Y-m', strtotime('first day of +2 months'));
+
     $treinamentoModel = new TreinamentoModel();
     $agendaModel = new TreinamentoAgendaModel();
 
@@ -100,8 +105,8 @@ try {
 
     $agendaRealizadaId = $agendaModel->create([
         'treinamento_id' => $treinamentoId,
-        'data' => '2026-07-20 08:00:00',
-        'data_fim' => '2026-07-20 12:00:00',
+        'data' => $mesTeste . '-05 08:00:00',
+        'data_fim' => $mesTeste . '-05 12:00:00',
         'unidade_id' => $clienteId,
         'responsavel_id' => null,
         'instrutor' => 'Instrutor Dashboard',
@@ -112,8 +117,8 @@ try {
 
     $agendaPlanejadaId = $agendaModel->create([
         'treinamento_id' => $treinamentoId,
-        'data' => '2026-07-28 08:00:00',
-        'data_fim' => '2026-07-28 12:00:00',
+        'data' => $mesTeste . '-20 08:00:00',
+        'data_fim' => $mesTeste . '-20 12:00:00',
         'unidade_id' => $clienteId,
         'responsavel_id' => null,
         'instrutor' => 'Instrutor Dashboard',
@@ -128,8 +133,8 @@ try {
     $_SERVER['REQUEST_METHOD'] = 'GET';
     $_GET = [
         'route' => 'dashboard/metrics',
-        'month_start' => '2026-07',
-        'month_end' => '2026-07',
+        'month_start' => $mesTeste,
+        'month_end' => $mesTeste,
         'clientes' => [$clienteId],
     ];
 

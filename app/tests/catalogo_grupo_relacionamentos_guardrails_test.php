@@ -76,19 +76,24 @@ try {
     $auditorias = new AuditoriaModel();
     $treinamentos = new TreinamentoModel();
 
-    $depMatrizId = $departamentos->create(['nome' => 'Departamento Matriz ' . $suffix, 'cliente_id' => $matrizId]);
+    // Regra vigente (compartilhamento seletivo, ver departamentos_compartilhamento_seletivo_test):
+    // o departamento pertence a quem o criou e só é visível para as empresas vinculadas
+    // em departamento_clientes (ou para todo o grupo com compartilhar_todas_filiais).
+    // $depMatrizId: da matriz, compartilhado com a filial. $depMatrizExclusivoId: só da matriz.
+    $depMatrizId = $departamentos->create(['nome' => 'Departamento Matriz ' . $suffix, 'cliente_id' => $matrizId, 'cliente_ids' => [$matrizId, $filialId]]);
+    $depMatrizExclusivoId = $departamentos->create(['nome' => 'Departamento Matriz Exclusivo ' . $suffix, 'cliente_id' => $matrizId, 'cliente_ids' => [$matrizId]]);
     $depFilialResolvedId = $departamentos->create(['nome' => 'Departamento Filial ' . $suffix, 'cliente_id' => $filialId]);
     $depOutroId = $departamentos->create(['nome' => 'Departamento Outro ' . $suffix, 'cliente_id' => $outroGrupoId]);
-    $departamentoIds = array_filter([$depMatrizId, $depFilialResolvedId, $depOutroId]);
-    if ($depMatrizId <= 0 || $depFilialResolvedId <= 0 || $depOutroId <= 0) {
+    $departamentoIds = array_filter([$depMatrizId, $depMatrizExclusivoId, $depFilialResolvedId, $depOutroId]);
+    if ($depMatrizId <= 0 || $depMatrizExclusivoId <= 0 || $depFilialResolvedId <= 0 || $depOutroId <= 0) {
         failFast('Falha ao criar departamentos de teste');
     }
 
     $depFilialResolved = $departamentos->find($depFilialResolvedId);
-    if ((int)($depFilialResolved['cliente_id'] ?? 0) !== $matrizId) {
-        failFast('Departamento criado pela filial deveria ser reatribuído ao catálogo da matriz');
+    if ((int)($depFilialResolved['cliente_id'] ?? 0) !== $filialId) {
+        failFast('Departamento criado pela filial deve permanecer da filial (sem reatribuição à matriz)');
     }
-    ok('Departamento criado pela filial resolve automaticamente para a matriz');
+    ok('Departamento criado pela filial permanece da filial (compartilhamento seletivo)');
 
     $setorMatrizId = $setores->create(['nome' => 'Setor Matriz ' . $suffix, 'departamento_id' => $depMatrizId]);
     $setorFilialResolvedId = $setores->create(['nome' => 'Setor Filial ' . $suffix, 'departamento_id' => $depFilialResolvedId]);
@@ -117,9 +122,25 @@ try {
     ]);
     $manualIds[] = $manualFilialValido;
     if ($manualFilialValido <= 0) {
-        failFast('Manual da filial com departamento do catálogo da matriz deveria ser permitido');
+        failFast('Manual da filial com departamento da matriz compartilhado deveria ser permitido');
     }
-    ok('Manual da filial aceita departamento do catálogo da matriz');
+    ok('Manual da filial aceita departamento da matriz compartilhado com ela');
+
+    $manualFilialExclusivo = $manuais->create([
+        'empresa_id' => $filialId,
+        'departamento_id' => $depMatrizExclusivoId,
+        'nome' => 'Manual Exclusivo ' . $suffix,
+        'descricao' => 'Departamento da matriz não compartilhado',
+        'arquivo' => 'storage/manuais/' . $filialId . '/' . $depMatrizExclusivoId . '/exclusivo.pdf',
+        'tipo_arquivo' => 'pdf',
+        'tamanho' => 10,
+        'usuario_id' => 1,
+    ]);
+    if ($manualFilialExclusivo !== 0) {
+        $manualIds[] = $manualFilialExclusivo;
+        failFast('Manual da filial não deveria aceitar departamento exclusivo da matriz (não compartilhado)');
+    }
+    ok('Manual bloqueia departamento da matriz não compartilhado com a filial');
 
     $manualFilialInvalido = $manuais->create([
         'empresa_id' => $filialId,
@@ -150,9 +171,9 @@ try {
     ], 1);
     $auditoriaIds[] = $auditoriaValida;
     if ($auditoriaValida <= 0) {
-        failFast('Auditoria da filial com setor do catálogo da matriz deveria ser permitida');
+        failFast('Auditoria da filial com setor de departamento compartilhado da matriz deveria ser permitida');
     }
-    ok('Auditoria aceita setor do catálogo da matriz');
+    ok('Auditoria aceita setor de departamento da matriz compartilhado com a filial');
 
     $auditoriaInvalida = $auditorias->create([
         'cliente_id' => $filialId,
@@ -173,6 +194,7 @@ try {
 
     $treinamentoValido = $treinamentos->create([
         'nome' => 'Treinamento Valido ' . $suffix,
+        'cliente_id' => $matrizId,
         'objetivo' => 'Mesmo grupo',
         'publico' => 'Todos',
         'carga_horaria' => '4',
@@ -193,6 +215,7 @@ try {
 
     $treinamentoInvalido = $treinamentos->create([
         'nome' => 'Treinamento Invalido ' . $suffix,
+        'cliente_id' => $matrizId,
         'objetivo' => 'Outro grupo',
         'publico' => 'Todos',
         'carga_horaria' => '4',

@@ -43,6 +43,9 @@ try {
         ->execute(['n' => 'Departamento Status ' . $suffix, 'c' => $clienteId]);
     $departamentoId = (int)$pdo->lastInsertId();
     $departamentoIds[] = $departamentoId;
+    // Vínculo dono->departamento: a aplicação cria (DepartamentoModel::syncClienteLinks)
+    // e a regra de visibilidade do catálogo exige; INSERT direto não cria sozinho.
+    $pdo->prepare('INSERT IGNORE INTO departamento_clientes (departamento_id, cliente_id) VALUES (?, ?)')->execute([$departamentoId, $clienteId]);
 
     $pdo->prepare('INSERT INTO setores (nome, departamento_id) VALUES (:n,:d)')
         ->execute(['n' => 'Setor Status ' . $suffix, 'd' => $departamentoId]);
@@ -71,6 +74,7 @@ try {
         'objetivo' => 'Validar bloqueio de inativação',
         'publico' => 'Equipe',
         'carga_horaria' => '2',
+        'cliente_id' => $clienteId,
         'departamento_id' => $departamentoId,
         'periodicidade' => 'anual',
         'fornecedor' => 'Fornecedor',

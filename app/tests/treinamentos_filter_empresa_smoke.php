@@ -29,12 +29,12 @@ $departamentos = [
     ['id' => 2, 'nome' => 'Depto B', 'nome_empresa' => 'Empresa B', 'cliente_id' => 2],
 ];
 $setores = [
-    ['id' => 10, 'nome' => 'Setor A', 'departamento_nome' => 'Depto A', 'cliente_id' => 1],
-    ['id' => 11, 'nome' => 'Setor B', 'departamento_nome' => 'Depto B', 'cliente_id' => 2],
+    ['id' => 10, 'nome' => 'Setor A', 'departamento_id' => 1, 'departamento_nome' => 'Depto A', 'cliente_id' => 1],
+    ['id' => 11, 'nome' => 'Setor B', 'departamento_id' => 2, 'departamento_nome' => 'Depto B', 'cliente_id' => 2],
 ];
 $funcoes = [
-    ['id' => 20, 'nome' => 'Função A', 'setor_nome' => 'Setor A', 'cliente_id' => 1],
-    ['id' => 21, 'nome' => 'Função B', 'setor_nome' => 'Setor B', 'cliente_id' => 2],
+    ['id' => 20, 'nome' => 'Função A', 'setor_id' => 10, 'departamento_id' => 1, 'setor_nome' => 'Setor A', 'cliente_id' => 1],
+    ['id' => 21, 'nome' => 'Função B', 'setor_id' => 11, 'departamento_id' => 2, 'setor_nome' => 'Setor B', 'cliente_id' => 2],
 ];
 $periodicidades = ['avulso' => 'Avulso'];
 
@@ -45,7 +45,11 @@ $html = (string)ob_get_clean();
 foreach ([
     'Empresa',
     'name="cliente_id"',
-    'data-cliente-id="1"',
+    // Cascata Empresa > Departamento > Setor > Função: o catálogo da empresa é
+    // carregado via endpoint e as opções filhas carregam o vínculo com o pai.
+    'data-catalog-endpoint=',
+    'data-departamento-id="1"',
+    'data-setor-id="10"',
     'id="treinamentosClienteId"',
     'id="treinamentosDepartamentoId"',
     'id="treinamentosSetores"',

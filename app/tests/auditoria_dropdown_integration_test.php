@@ -37,8 +37,11 @@ if (strpos($html, 'clienteDebugStatus') === false) {
 }
 ok('Indicador de debug renderizado');
 
-if (strpos($html, 'responsavelList_${index}') === false) {
-    failFast('Template de autocomplete de responsável não foi renderizado');
+// Autocomplete próprio (busca + menu de sugestões + status) substituiu o <datalist>.
+foreach (['data-responsavel-search="${index}"', 'data-responsavel-menu="${index}"', 'data-responsavel-status="${index}"'] as $marcador) {
+    if (strpos($html, $marcador) === false) {
+        failFast('Template de autocomplete de responsável não foi renderizado (' . $marcador . ')');
+    }
 }
 ok('Template de autocomplete de responsável renderizado');
 

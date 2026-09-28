@@ -45,6 +45,9 @@ try {
         ->execute(['n' => 'Departamento Agenda ' . $suffix, 'c' => $clienteId]);
     $departamentoId = (int)$pdo->lastInsertId();
     $departamentoIds[] = $departamentoId;
+    // Vínculo dono->departamento: a aplicação cria (DepartamentoModel::syncClienteLinks)
+    // e a regra de visibilidade do catálogo exige; INSERT direto não cria sozinho.
+    $pdo->prepare('INSERT IGNORE INTO departamento_clientes (departamento_id, cliente_id) VALUES (?, ?)')->execute([$departamentoId, $clienteId]);
 
     $pdo->prepare('INSERT INTO setores (nome, departamento_id) VALUES (:n,:d)')
         ->execute(['n' => 'Setor Agenda ' . $suffix, 'd' => $departamentoId]);
@@ -113,12 +116,16 @@ try {
         'objetivo' => 'Objetivo treinamento agenda',
         'publico' => 'Equipe operacional',
         'carga_horaria' => '4',
+        'cliente_id' => $clienteId,
         'departamento_id' => $departamentoId,
         'periodicidade' => 'anual',
         'fornecedor' => 'Fornecedor Agenda',
         'setor_ids' => [$setorId],
         'funcao_ids' => [$funcaoId],
     ]);
+    if ($treinamentoId <= 0) {
+        failFast('Falha ao criar treinamento de fixture');
+    }
     $treinamentoIds[] = $treinamentoId;
     $treinamentoModel->syncColaboradores($treinamentoId, [$colaboradorId]);
     $agendaTreinamentoId = $agendaModel->create([
@@ -150,6 +157,8 @@ try {
         'responsavel' => 'Responsavel Cronograma',
         'modelo' => 'Presencial',
         'status' => 'Planejado',
+        // Tipo do evento é obrigatório e validado contra cronograma_evento_tipos.
+        'tipo_evento' => CronogramaEventoModel::eventTypeOptions()[0] ?? 'Gestão',
     ]);
     $cronogramaEventoRootIds[] = $cronogramaEventoRootId;
 

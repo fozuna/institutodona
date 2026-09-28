@@ -19,21 +19,21 @@ try {
         $pdo->exec('ALTER TABLE clientes ADD COLUMN acesso_restrito TINYINT(1) NOT NULL DEFAULT 0');
     }
     $ins = $pdo->prepare('INSERT INTO clientes (nome_empresa, CNPJ, contato, is_matriz, matriz_id) VALUES (:n, :c, :ct, :m, :mid)');
-    $ins->execute(['n' => 'Matriz ' . $suffix, 'c' => 'CNPJ-' . $suffix . '-1', 'ct' => 'contato', 'm' => 1, 'mid' => null]);
+    $ins->execute(['n' => 'Matriz ' . $suffix, 'c' => 'C' . substr(md5($suffix), 0, 10) . '-1', 'ct' => 'contato', 'm' => 1, 'mid' => null]);
     $matriz = (int)$pdo->lastInsertId();
     $ids[] = $matriz;
 
-    $ins->execute(['n' => 'Filial 1 ' . $suffix, 'c' => 'CNPJ-' . $suffix . '-2', 'ct' => 'contato', 'm' => 0, 'mid' => $matriz]);
+    $ins->execute(['n' => 'Filial 1 ' . $suffix, 'c' => 'C' . substr(md5($suffix), 0, 10) . '-2', 'ct' => 'contato', 'm' => 0, 'mid' => $matriz]);
     $filial1 = (int)$pdo->lastInsertId();
     $ids[] = $filial1;
 
-    $ins->execute(['n' => 'Filial 2 ' . $suffix, 'c' => 'CNPJ-' . $suffix . '-3', 'ct' => 'contato', 'm' => 0, 'mid' => $filial1]);
+    $ins->execute(['n' => 'Filial 2 ' . $suffix, 'c' => 'C' . substr(md5($suffix), 0, 10) . '-3', 'ct' => 'contato', 'm' => 0, 'mid' => $filial1]);
     $filial2 = (int)$pdo->lastInsertId();
     $ids[] = $filial2;
-    $ins->execute(['n' => 'Filial Inativa ' . $suffix, 'c' => 'CNPJ-' . $suffix . '-4', 'ct' => 'contato', 'm' => 0, 'mid' => $matriz]);
+    $ins->execute(['n' => 'Filial Inativa ' . $suffix, 'c' => 'C' . substr(md5($suffix), 0, 10) . '-4', 'ct' => 'contato', 'm' => 0, 'mid' => $matriz]);
     $filialInativa = (int)$pdo->lastInsertId();
     $ids[] = $filialInativa;
-    $ins->execute(['n' => 'Filial Restrita ' . $suffix, 'c' => 'CNPJ-' . $suffix . '-5', 'ct' => 'contato', 'm' => 0, 'mid' => $matriz]);
+    $ins->execute(['n' => 'Filial Restrita ' . $suffix, 'c' => 'C' . substr(md5($suffix), 0, 10) . '-5', 'ct' => 'contato', 'm' => 0, 'mid' => $matriz]);
     $filialRestrita = (int)$pdo->lastInsertId();
     $ids[] = $filialRestrita;
     $upd = $pdo->prepare('UPDATE clientes SET ativo = :ativo, acesso_restrito = :restrito WHERE id = :id');

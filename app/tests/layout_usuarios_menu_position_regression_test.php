@@ -45,8 +45,8 @@ if ($posPessoasPanel !== false && $posPessoasPanelEnd !== false) {
 }
 ok('Submenu "Pessoas" não contém mais o link de Usuários');
 
-// 2) RBAC: perfil "cliente_admin" tem acesso a Usuários mas NÃO a Treinamentos (módulo admin-only).
-//    Antes da correção, isso faria o submenu "Pessoas" aparecer vazio (pois $hasPessoasMenu dependia de $canUsuarios).
+// 2) RBAC vigente: Usuários é cadastro estrutural (AccessControl::CLIENT_ADMIN_FORBIDDEN_PREFIXES),
+//    exclusivo dos perfis internos; o Cliente Admin acessa Treinamentos e o Pilar de Pessoas.
 $clienteAdminUser = [
     'id' => 2,
     'nome' => 'Cliente Admin Teste',
@@ -54,19 +54,42 @@ $clienteAdminUser = [
     'tipo_acesso' => 'cliente_admin',
     'allowed_client_ids' => [1],
 ];
-if (!\App\Core\AccessControl::canAccessRoute('usuarios/index', 'GET', $clienteAdminUser)) {
-    failFast('Cenário de referência inválido: cliente_admin deveria ter acesso a usuarios/index');
+if (\App\Core\AccessControl::canAccessRoute('usuarios/index', 'GET', $clienteAdminUser)) {
+    failFast('Cenário de referência inválido: cliente_admin não deveria ter acesso a usuarios/index (cadastro estrutural)');
 }
-if (\App\Core\AccessControl::canAccessRoute('treinamentos/index', 'GET', $clienteAdminUser)) {
-    failFast('Cenário de referência inválido: cliente_admin não deveria ter acesso a treinamentos/index');
+if (!\App\Core\AccessControl::canAccessRoute('treinamentos/index', 'GET', $clienteAdminUser)) {
+    failFast('Cenário de referência inválido: cliente_admin deveria ter acesso a treinamentos/index');
 }
 $html2 = renderMenu($clienteAdminUser);
-if (str_contains($html2, 'data-submenu-trigger="pessoas"')) {
-    failFast('Submenu "Pessoas" foi renderizado vazio para usuário sem acesso a Treinamentos (regressão de RBAC)');
+if (str_contains($html2, 'href="index.php?route=usuarios/index"')) {
+    failFast('Cliente Admin não deveria ver o link de Usuários no menu');
 }
-if (!str_contains($html2, 'href="index.php?route=usuarios/index"')) {
-    failFast('Usuário cliente_admin com permissão de Usuários deveria ver o link em Cadastros');
+if (!str_contains($html2, 'data-submenu-trigger="pessoas"') || !str_contains($html2, 'href="index.php?route=treinamentos/index"')) {
+    failFast('Cliente Admin deveria ver o submenu "Pessoas" com Treinamentos');
 }
-ok('Usuário sem acesso a Treinamentos não vê submenu "Pessoas" vazio, e ainda vê "Usuários" em Cadastros');
+ok('Cliente Admin não vê "Usuários" e vê o submenu "Pessoas" preenchido');
+
+// 3) Regressão original: o submenu "Pessoas" não pode ser renderizado vazio. O perfil
+//    "cliente" (Cliente Editor) não acessa nenhum item do grupo (nem Usuários).
+$clienteEditorUser = [
+    'id' => 3,
+    'nome' => 'Cliente Editor Teste',
+    'email' => 'cliente-editor@example.com',
+    'tipo_acesso' => 'cliente',
+    'allowed_client_ids' => [1],
+];
+foreach (['usuarios/index', 'treinamentos/index', 'pessoas/visaoGeral', 'pessoas/index', 'pessoas/pdiIndex'] as $rotaSemAcesso) {
+    if (\App\Core\AccessControl::canAccessRoute($rotaSemAcesso, 'GET', $clienteEditorUser)) {
+        failFast('Cenário de referência inválido: perfil cliente não deveria acessar ' . $rotaSemAcesso);
+    }
+}
+$html3 = renderMenu($clienteEditorUser);
+if (str_contains($html3, 'data-submenu-trigger="pessoas"')) {
+    failFast('Submenu "Pessoas" foi renderizado vazio para usuário sem acesso a nenhum item do grupo (regressão de RBAC)');
+}
+if (str_contains($html3, 'href="index.php?route=usuarios/index"')) {
+    failFast('Perfil cliente não deveria ver o link de Usuários');
+}
+ok('Usuário sem acesso aos itens de Pessoas não vê o submenu "Pessoas" vazio');
 
 echo "layout_usuarios_menu_position_regression_test passed.\n";

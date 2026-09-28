@@ -33,6 +33,9 @@ try {
     $insDep->execute(['n' => 'Departamento Resp ' . $suffix, 'cid' => $clienteId]);
     $departamentoId = (int)$pdo->lastInsertId();
     $depIds[] = $departamentoId;
+    // Vínculo dono->departamento: a aplicação cria (DepartamentoModel::syncClienteLinks)
+    // e a regra de visibilidade do catálogo exige; INSERT direto não cria sozinho.
+    $pdo->prepare('INSERT IGNORE INTO departamento_clientes (departamento_id, cliente_id) VALUES (?, ?)')->execute([$departamentoId, $clienteId]);
 
     $insSet = $pdo->prepare('INSERT INTO setores (nome, departamento_id) VALUES (:n,:did)');
     $insSet->execute(['n' => 'Setor Resp ' . $suffix, 'did' => $departamentoId]);

@@ -24,22 +24,22 @@ try {
     }
 
     $insCli = $pdo->prepare('INSERT INTO clientes (nome_empresa, CNPJ, contato, is_matriz, matriz_id, ativo, acesso_restrito) VALUES (:n, :c, :ct, :m, :mid, :ativo, :restrito)');
-    $insCli->execute(['n' => 'Matriz A ' . $suffix, 'c' => 'CNPJ-' . $suffix . '-1', 'ct' => 'contato', 'm' => 1, 'mid' => null, 'ativo' => 1, 'restrito' => 0]);
+    $insCli->execute(['n' => 'Matriz A ' . $suffix, 'c' => 'C' . substr(md5($suffix), 0, 10) . '-1', 'ct' => 'contato', 'm' => 1, 'mid' => null, 'ativo' => 1, 'restrito' => 0]);
     $matrizA = (int)$pdo->lastInsertId();
     $clienteIds[] = $matrizA;
-    $insCli->execute(['n' => 'Filial A1 ' . $suffix, 'c' => 'CNPJ-' . $suffix . '-2', 'ct' => 'contato', 'm' => 0, 'mid' => $matrizA, 'ativo' => 1, 'restrito' => 0]);
+    $insCli->execute(['n' => 'Filial A1 ' . $suffix, 'c' => 'C' . substr(md5($suffix), 0, 10) . '-2', 'ct' => 'contato', 'm' => 0, 'mid' => $matrizA, 'ativo' => 1, 'restrito' => 0]);
     $filialA1 = (int)$pdo->lastInsertId();
     $clienteIds[] = $filialA1;
-    $insCli->execute(['n' => 'Filial A2 Restrita ' . $suffix, 'c' => 'CNPJ-' . $suffix . '-3', 'ct' => 'contato', 'm' => 0, 'mid' => $matrizA, 'ativo' => 1, 'restrito' => 1]);
+    $insCli->execute(['n' => 'Filial A2 Restrita ' . $suffix, 'c' => 'C' . substr(md5($suffix), 0, 10) . '-3', 'ct' => 'contato', 'm' => 0, 'mid' => $matrizA, 'ativo' => 1, 'restrito' => 1]);
     $filialA2 = (int)$pdo->lastInsertId();
     $clienteIds[] = $filialA2;
-    $insCli->execute(['n' => 'Matriz B ' . $suffix, 'c' => 'CNPJ-' . $suffix . '-4', 'ct' => 'contato', 'm' => 1, 'mid' => null, 'ativo' => 1, 'restrito' => 0]);
+    $insCli->execute(['n' => 'Matriz B ' . $suffix, 'c' => 'C' . substr(md5($suffix), 0, 10) . '-4', 'ct' => 'contato', 'm' => 1, 'mid' => null, 'ativo' => 1, 'restrito' => 0]);
     $matrizB = (int)$pdo->lastInsertId();
     $clienteIds[] = $matrizB;
-    $insCli->execute(['n' => 'Filial B1 Inativa ' . $suffix, 'c' => 'CNPJ-' . $suffix . '-5', 'ct' => 'contato', 'm' => 0, 'mid' => $matrizB, 'ativo' => 0, 'restrito' => 0]);
+    $insCli->execute(['n' => 'Filial B1 Inativa ' . $suffix, 'c' => 'C' . substr(md5($suffix), 0, 10) . '-5', 'ct' => 'contato', 'm' => 0, 'mid' => $matrizB, 'ativo' => 0, 'restrito' => 0]);
     $filialB1 = (int)$pdo->lastInsertId();
     $clienteIds[] = $filialB1;
-    $insCli->execute(['n' => 'Filial B2 ' . $suffix, 'c' => 'CNPJ-' . $suffix . '-6', 'ct' => 'contato', 'm' => 0, 'mid' => $matrizB, 'ativo' => 1, 'restrito' => 0]);
+    $insCli->execute(['n' => 'Filial B2 ' . $suffix, 'c' => 'C' . substr(md5($suffix), 0, 10) . '-6', 'ct' => 'contato', 'm' => 0, 'mid' => $matrizB, 'ativo' => 1, 'restrito' => 0]);
     $filialB2 = (int)$pdo->lastInsertId();
     $clienteIds[] = $filialB2;
 

@@ -23,6 +23,9 @@ try {
         ->execute(['n' => 'Dep ' . $suffix, 'cid' => $clienteId]);
     $depId = (int)$pdo->lastInsertId();
     $ids['departamentos'][] = $depId;
+    // Vínculo dono->departamento: a aplicação cria (DepartamentoModel::syncClienteLinks)
+    // e a regra de visibilidade do catálogo exige; INSERT direto não cria sozinho.
+    $pdo->prepare('INSERT IGNORE INTO departamento_clientes (departamento_id, cliente_id) VALUES (?, ?)')->execute([$depId, $clienteId]);
 
     $pdo->prepare('INSERT INTO setores (nome, departamento_id) VALUES (:n,:did)')
         ->execute(['n' => 'Setor ' . $suffix, 'did' => $depId]);

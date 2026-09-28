@@ -5,8 +5,10 @@ $root = dirname(__DIR__, 2);
 $dumpPath = $root . '/public/institutodona_dump.sql';
 
 if (!is_file($dumpPath)) {
-    fwrite(STDERR, "Dump de produção não encontrado em public/institutodona_dump.sql\n");
-    exit(2);
+    // Relatório opcional: só roda quando um dump de produção é colocado
+    // localmente. Sem ele, não é falha (a suíte completa roda na CI).
+    echo "SKIP: dump de produção não encontrado em public/institutodona_dump.sql (relatório de paridade não executado)\n";
+    exit(0);
 }
 
 $dump = file_get_contents($dumpPath);
