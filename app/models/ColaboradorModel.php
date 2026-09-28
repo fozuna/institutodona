@@ -627,13 +627,15 @@ class ColaboradorModel extends BaseModel
             $sql .= ' AND col.ativo = 1';
         }
         if ($q !== '') {
-            $sql .= ' AND (col.nome LIKE :q OR col.email LIKE :q)';
-            $params['q'] = '%' . $q . '%';
+            // Placeholders distintos (ATTR_EMULATE_PREPARES=false não aceita nome repetido).
+            $sql .= ' AND (col.nome LIKE :q_nome OR col.email LIKE :q_email)';
+            $params['q_nome'] = '%' . $q . '%';
+            $params['q_email'] = '%' . $q . '%';
         }
         $sql .= ' ORDER BY col.nome LIMIT :lim';
         $stmt = $this->db->prepare($sql);
         foreach ($params as $k => $v) {
-            $stmt->bindValue(':' . $k, $v, $k === 'q' ? \PDO::PARAM_STR : \PDO::PARAM_INT);
+            $stmt->bindValue(':' . $k, $v, is_int($v) ? \PDO::PARAM_INT : \PDO::PARAM_STR);
         }
         $stmt->bindValue(':lim', $limit, \PDO::PARAM_INT);
         $stmt->execute();

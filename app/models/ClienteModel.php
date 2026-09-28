@@ -492,12 +492,12 @@ class ClienteModel extends BaseModel
             return [];
         }
 
-        $params = ['root_id' => $rootId];
+        $params = ['root_id' => $rootId, 'root_id_filial' => $rootId];
         $scope = $this->tenantInCondition('id', $params, 'cgroup');
         $stmt = $this->db->prepare(
             "SELECT id, nome_empresa, is_matriz, matriz_id
              FROM clientes
-             WHERE (id = :root_id OR matriz_id = :root_id)
+             WHERE (id = :root_id OR matriz_id = :root_id_filial)
                AND $scope
              ORDER BY is_matriz DESC, nome_empresa"
         );

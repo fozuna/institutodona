@@ -410,8 +410,13 @@ class TreinamentoModel extends BaseModel
             $params['cliente_id'] = (int)$filters['cliente_id'];
         }
         if (!empty($filters['q'])) {
-            $sql .= " AND (t.nome LIKE :q OR t.objetivo LIKE :q OR t.fornecedor LIKE :q)";
-            $params['q'] = '%' . trim((string)$filters['q']) . '%';
+            // Placeholders distintos: com ATTR_EMULATE_PREPARES=false o PDO não aceita
+            // o mesmo nome repetido na consulta (SQLSTATE[HY093]).
+            $sql .= " AND (t.nome LIKE :q_nome OR t.objetivo LIKE :q_objetivo OR t.fornecedor LIKE :q_fornecedor)";
+            $like = '%' . trim((string)$filters['q']) . '%';
+            $params['q_nome'] = $like;
+            $params['q_objetivo'] = $like;
+            $params['q_fornecedor'] = $like;
         }
 
         $scope = $this->tenantInCondition('c.id', $params, 'trall');
