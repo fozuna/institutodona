@@ -28,9 +28,16 @@ if ($erros) {
 }
 ok('Todos os controllers passam em php -l');
 
+// Roda como arquivo (não `php -r`): no Windows, escapeshellarg() não escapa
+// aspas duplas de forma compatível com cmd.exe, e aspas aninhadas dentro do
+// código de `-r` chegam corrompidas ao PHP (ex.: "LOADED" vira LOADED, uma
+// constante indefinida - erro de execução do teste, não do PwaController).
+$probe = tempnam(sys_get_temp_dir(), 'pwa_probe_') . '.php';
+file_put_contents($probe, '<?php require ' . var_export(__DIR__ . '/../autoload.php', true) . '; echo class_exists(\App\Controllers\PwaController::class) ? "LOADED" : "MISSING";');
 $rc = 0;
 $out = [];
-exec($php . ' -r ' . escapeshellarg('require ' . var_export(__DIR__ . '/../autoload.php', true) . '; echo class_exists(\App\Controllers\PwaController::class) ? "LOADED" : "MISSING";') . ' 2>&1', $out, $rc);
+exec($php . ' ' . escapeshellarg($probe) . ' 2>&1', $out, $rc);
+@unlink($probe);
 if ($rc !== 0 || trim(implode('', $out)) !== 'LOADED') {
     failFast('PwaController não carrega: ' . implode(' ', $out));
 }
