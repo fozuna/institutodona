@@ -65,7 +65,7 @@ register_shutdown_function(function () use ($pdo, $manualId, $createdDepartament
 });
 
 $_SESSION['user'] = [
-    'id' => 2,
+    'id' => 900000,
     'nome' => 'Consultor',
     'email' => 'consultor@example.com',
     'tipo_acesso' => 'consultor',
