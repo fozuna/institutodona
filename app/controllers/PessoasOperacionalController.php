@@ -169,6 +169,19 @@ class PessoasOperacionalController extends BaseController
         $this->renderLista('pessoas/acoes/index', 'Pessoas — Ações de Melhoria', $base, $res, ['responsaveis' => $responsaveis]);
     }
 
+    public function feedbacks(): void
+    {
+        $this->requireClienteAdminAccess();
+        $base = $this->filtrosBase();
+        $tipo = self::whitelist('tipo', PessoaOperacionalModel::FEEDBACK_TIPOS);
+        if ($tipo !== '') {
+            $base['f']['tipo'] = $tipo;
+            $base['qs']['tipo'] = $tipo;
+        }
+        $res = $this->model->listarFeedbacks($base['escopo']['empresaIds'], $base['f'], $base['page'], self::PER_PAGE);
+        $this->renderLista('pessoas/feedbacks/index', 'Pessoas — Feedbacks', $base, $res, []);
+    }
+
     public function necessidades(): void
     {
         $this->requireClienteAdminAccess();

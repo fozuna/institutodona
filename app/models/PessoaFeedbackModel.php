@@ -11,14 +11,26 @@ class PessoaFeedbackModel extends BaseModel
 {
     private const TIPOS_VALIDOS = ['positivo', 'melhoria'];
 
+    /**
+     * Sprint 05.1: junta empresa/autor/GAP/avaliação relacionados (mesmo
+     * estilo de PessoaGapModel::find()) - usado tanto pela tela de detalhe
+     * quanto por qualquer lugar que precise do feedback já enriquecido.
+     */
     public function find(int $id): ?array
     {
         $params = ['id' => $id];
         $scope = $this->tenantInCondition('f.empresa_id', $params, 'pff');
         $stmt = $this->db->prepare(
-            "SELECT f.*, col.nome AS colaborador_nome
+            "SELECT f.*, col.nome AS colaborador_nome, c.nome_empresa AS empresa_nome,
+                    u.nome AS registrado_por_nome, g.titulo AS gap_titulo,
+                    a.status AS avaliacao_status, cic.nome AS ciclo_nome
              FROM pessoas_feedbacks f
              JOIN colaboradores col ON col.id = f.colaborador_id
+             JOIN clientes c ON c.id = f.empresa_id
+             LEFT JOIN usuarios u ON u.id = f.registrado_por
+             LEFT JOIN pessoas_gaps g ON g.id = f.gap_id
+             LEFT JOIN pessoas_avaliacoes a ON a.id = f.avaliacao_id
+             LEFT JOIN pessoas_ciclos_avaliacao cic ON cic.id = a.ciclo_id
              WHERE f.id = :id AND $scope"
         );
         $stmt->execute($params);
@@ -26,10 +38,15 @@ class PessoaFeedbackModel extends BaseModel
         return $row ?: null;
     }
 
+    /** Autoria (registrado_por_nome) incluída - já persistida desde a Sprint 02, só não era exibida. */
     public function listByColaborador(int $colaboradorId, int $empresaId): array
     {
         $stmt = $this->db->prepare(
-            'SELECT * FROM pessoas_feedbacks WHERE colaborador_id = :cid AND empresa_id = :eid ORDER BY data_feedback DESC, id DESC'
+            'SELECT f.*, u.nome AS registrado_por_nome
+             FROM pessoas_feedbacks f
+             LEFT JOIN usuarios u ON u.id = f.registrado_por
+             WHERE f.colaborador_id = :cid AND f.empresa_id = :eid
+             ORDER BY f.data_feedback DESC, f.id DESC'
         );
         $stmt->execute(['cid' => $colaboradorId, 'eid' => $empresaId]);
         return $stmt->fetchAll();
@@ -51,8 +68,8 @@ class PessoaFeedbackModel extends BaseModel
         if (!in_array($tipo, self::TIPOS_VALIDOS, true)) {
             return 0;
         }
-        $titulo = trim((string)($data['titulo'] ?? ''));
-        $descricao = trim((string)($data['descricao'] ?? ''));
+        $titulo = mb_substr(trim((string)($data['titulo'] ?? '')), 0, 255);
+        $descricao = mb_substr(trim((string)($data['descricao'] ?? '')), 0, 2000);
         if ($titulo === '' || $descricao === '') {
             return 0;
         }

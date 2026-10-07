@@ -774,6 +774,12 @@ switch ($route) {
     case 'pessoas/gaps':
         (new PessoasOperacionalController())->gaps();
         break;
+    case 'pessoas/feedbacks':
+        (new PessoasOperacionalController())->feedbacks();
+        break;
+    case 'pessoas/feedbackShow':
+        (new PessoasGestaoController())->feedbackShow();
+        break;
     case 'pessoas/acoes':
         (new PessoasOperacionalController())->acoes();
         break;

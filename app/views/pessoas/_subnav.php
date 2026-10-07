@@ -14,6 +14,7 @@ $pessoasSubnavItens = [
     'colaboradores' => ['colaboradores/index', 'Colaboradores'],
     'avaliacoes' => ['pessoas/index', 'Avaliações'],
     'gaps' => ['pessoas/gaps', 'GAPs'],
+    'feedbacks' => ['pessoas/feedbacks', 'Feedbacks'],
     'acoes' => ['pessoas/acoes', 'Ações'],
     'pdi' => ['pessoas/pdiIndex', 'PDI'],
     'necessidades' => ['pessoas/necessidades', 'Necessidades de Treinamento'],

@@ -120,6 +120,7 @@ class PessoasGestaoController extends BaseController
                 'gaps' => AccessControl::canAccessRoute('pessoas/gaps', 'GET', $user),
                 'acoes' => AccessControl::canAccessRoute('pessoas/acoes', 'GET', $user),
                 'necessidades' => AccessControl::canAccessRoute('pessoas/necessidades', 'GET', $user),
+                'feedbacks' => AccessControl::canAccessRoute('pessoas/feedbacks', 'GET', $user),
             ]),
             'pdis' => $pdis,
         ]);
@@ -298,6 +299,34 @@ class PessoasGestaoController extends BaseController
             $_SESSION['flash_success'] = 'Feedback registrado.';
         }
         $this->redirect($voltarPara !== '' ? $voltarPara : 'index.php?route=pessoas/colaboradorHistorico&id=' . $colaboradorId);
+    }
+
+    /**
+     * Detalhe de um Feedback (Sprint 05.1): conteúdo completo (a listagem
+     * mostra só um resumo truncado) + contexto de GAP/avaliação relacionados.
+     * Somente leitura - Feedback não tem edição/exclusão nem lifecycle.
+     */
+    public function feedbackShow(): void
+    {
+        $this->requireClienteAdminAccess();
+        $id = (int)($_GET['id'] ?? 0);
+        $feedback = $this->feedbacks->find($id);
+        if (!$feedback) {
+            $_SESSION['flash_error'] = 'Feedback não encontrado.';
+            $this->redirect('index.php?route=pessoas/feedbacks');
+            return;
+        }
+        $colaborador = $this->colaboradorSeguro((int)$feedback['colaborador_id']);
+        if (!$colaborador) {
+            http_response_code(404);
+            echo 'Colaborador não encontrado.';
+            return;
+        }
+        $this->render('pessoas/feedbacks/show', [
+            'pageTitle' => 'Feedback — ' . $feedback['titulo'],
+            'feedback' => $feedback,
+            'colaborador' => $colaborador,
+        ]);
     }
 
     // ---------------------------------------------------------------

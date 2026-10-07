@@ -97,7 +97,7 @@ $tipoTimeline = ['avaliacao' => 'Avaliação', 'gap' => 'GAP', 'feedback' => 'Fe
   <?php endif; ?>
 
   <!-- Resumo do desenvolvimento -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+  <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3">
     <div class="bg-white shadow rounded-xl p-4">
       <div class="text-xs text-gray-500">Última avaliação</div>
       <?php if ($ultimaAvaliacao): ?>
@@ -134,6 +134,14 @@ $tipoTimeline = ['avaliacao' => 'Avaliação', 'gap' => 'GAP', 'feedback' => 'Fe
         <div class="text-xs text-gray-600 mt-1">Ativo · <?= (int)$pdiAtivo['objetivos_concluidos'] ?>/<?= (int)$pdiAtivo['objetivos_validos'] ?> objetivo(s)</div>
       <?php else: ?>
         <div class="text-sm text-gray-600 mt-1">Sem PDI ativo</div>
+      <?php endif; ?>
+    </div>
+    <div class="bg-white shadow rounded-xl p-4">
+      <div class="text-xs text-gray-500">Feedbacks</div>
+      <div class="text-lg font-bold text-brand-black"><?= (int)$resumo['feedbacks_total'] ?> <span class="text-sm font-normal text-gray-600">registrado(s)</span></div>
+      <div class="text-xs text-gray-600"><?= (int)$resumo['feedbacks_positivos'] ?> positivo(s) · <?= (int)$resumo['feedbacks_melhoria'] ?> de melhoria</div>
+      <?php if ($resumo['feedbacks_total'] > 0 && !empty($links['feedbacks'])): ?>
+        <div class="text-xs mt-1"><a class="text-brand-pink underline" href="<?= htmlspecialchars($listaUrl('pessoas/feedbacks', [])) ?>">ver na listagem</a></div>
       <?php endif; ?>
     </div>
     <div class="bg-white shadow rounded-xl p-4">
@@ -260,20 +268,26 @@ $tipoTimeline = ['avaliacao' => 'Avaliação', 'gap' => 'GAP', 'feedback' => 'Fe
 
       <!-- Feedbacks -->
       <section class="bg-white shadow rounded-xl p-4 md:p-5">
-        <h2 class="font-semibold mb-3">Feedbacks</h2>
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-semibold">Feedbacks</h2>
+          <?php if (!empty($links['feedbacks']) && !empty($feedbacks)): ?><a class="text-sm text-brand-pink" href="<?= htmlspecialchars($listaUrl('pessoas/feedbacks', [])) ?>">ver na listagem</a><?php endif; ?>
+        </div>
         <?php if (empty($feedbacks)): ?>
           <div class="text-sm text-gray-500 mb-3">Nenhum feedback registrado ainda.</div>
         <?php else: ?>
           <div class="space-y-2 mb-3">
             <?php foreach ($feedbacks as $f): ?>
-              <div class="border rounded p-3 text-sm">
+              <a href="index.php?route=pessoas/feedbackShow&id=<?= (int)$f['id'] ?>" class="block border rounded p-3 text-sm hover:bg-gray-50">
                 <div class="flex items-center justify-between gap-2 mb-1">
                   <span class="font-medium"><?= htmlspecialchars($f['titulo']) ?></span>
                   <span class="px-2 py-0.5 rounded text-xs <?= $feedbackTipoClasses[$f['tipo']] ?? '' ?>"><?= htmlspecialchars($feedbackTipoLabels[$f['tipo']] ?? $f['tipo']) ?></span>
                 </div>
                 <p class="text-gray-600"><?= htmlspecialchars(mb_strimwidth($f['descricao'], 0, 180, '…')) ?></p>
-                <div class="text-xs text-gray-400 mt-1"><?= htmlspecialchars(DateHelper::formatDate((string)$f['data_feedback'])) ?></div>
-              </div>
+                <div class="text-xs text-gray-400 mt-1">
+                  <?= htmlspecialchars(DateHelper::formatDate((string)$f['data_feedback'])) ?>
+                  <?php if (!empty($f['registrado_por_nome'])): ?> · por <?= htmlspecialchars($f['registrado_por_nome']) ?><?php endif; ?>
+                </div>
+              </a>
             <?php endforeach; ?>
           </div>
         <?php endif; ?>

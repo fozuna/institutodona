@@ -43,6 +43,8 @@ eq($R, [
     'gaps_abertos' => 2, 'gaps_em_tratamento' => 1, 'gaps_abertos_sem_acao' => 2,
     'acoes_pendentes' => 1, 'acoes_em_andamento' => 0, 'acoes_vencidas' => 1,
     'necessidades_pendentes' => 1, 'avaliacoes_pendentes' => 0, 'avaliacoes_em_andamento' => 1,
+    // Sprint 05.1: contadores de Feedback (sem score) - o fixture de a1 tem 1 positivo.
+    'feedbacks_total' => 1, 'feedbacks_positivos' => 1, 'feedbacks_melhoria' => 0,
 ], 'resumo do colaborador a1');
 // Mesma semântica das listagens:
 eq($m->listarGaps([$eA], ['colaborador_id' => $a1, 'status' => 'aberto', 'tratamento' => 'sem_acao'], 1, 1)['total'], $R['gaps_abertos_sem_acao'], 'Central x listagem (GAP sem ação)');

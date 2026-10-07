@@ -25,6 +25,7 @@ class PessoaOperacionalModel extends BaseModel
     public const GAP_STATUS = ['aberto', 'em_tratamento', 'resolvido', 'nao_resolvido'];
     public const ACAO_STATUS = ['pendente', 'em_andamento', 'concluida', 'cancelada', 'ativas'];
     public const NECESSIDADE_STATUS = ['pendente', 'atendida', 'cancelada'];
+    public const FEEDBACK_TIPOS = ['positivo', 'melhoria'];
 
     /** Filtros comuns (colaborador, busca por nome, período de registro) sobre alias da tabela principal. */
     private function filtrosComuns(string $alias, array $f, array &$p): string
@@ -178,6 +179,56 @@ class PessoaOperacionalModel extends BaseModel
     }
 
     // ---------------------------------------------------------------
+    // Feedbacks (Sprint 05.1)
+    // ---------------------------------------------------------------
+
+    /**
+     * Feedback não tem status/lifecycle (é registro histórico de gestão): o
+     * único filtro de "estado" é o tipo (positivo/melhoria). O período usa
+     * `data_feedback` - a data semântica do evento -, nunca `created_at`.
+     *
+     * @param int[] $empresaIds
+     * @param array{tipo?:string,colaborador_id?:int,q?:string,inicio?:string,fim?:string,departamento_id?:int,setor_id?:int,funcao_id?:int} $f
+     * @return array{items:array,total:int,page:int}
+     */
+    public function listarFeedbacks(array $empresaIds, array $f, int $page, int $per): array
+    {
+        $p = [];
+        $where = $this->inClause('fb.empresa_id', $empresaIds, $p, 'fe') . $this->orgFilter($f, $p, 'fo');
+        if (!empty($f['colaborador_id'])) {
+            $where .= ' AND fb.colaborador_id = :fcolid';
+            $p['fcolid'] = (int)$f['colaborador_id'];
+        }
+        if (isset($f['q']) && trim((string)$f['q']) !== '') {
+            $where .= ' AND col.nome LIKE :fq';
+            $p['fq'] = '%' . trim((string)$f['q']) . '%';
+        }
+        $tipo = (string)($f['tipo'] ?? '');
+        if (in_array($tipo, self::FEEDBACK_TIPOS, true)) {
+            $where .= ' AND fb.tipo = :ftipo';
+            $p['ftipo'] = $tipo;
+        }
+        if (!empty($f['inicio'])) {
+            $where .= ' AND fb.data_feedback >= :fdini';
+            $p['fdini'] = $f['inicio'];
+        }
+        if (!empty($f['fim'])) {
+            $where .= ' AND fb.data_feedback <= :fdfim';
+            $p['fdfim'] = $f['fim'];
+        }
+        $from = 'pessoas_feedbacks fb JOIN colaboradores col ON col.id = fb.colaborador_id JOIN clientes c ON c.id = fb.empresa_id
+                 LEFT JOIN usuarios u ON u.id = fb.registrado_por
+                 LEFT JOIN pessoas_gaps g ON g.id = fb.gap_id
+                 LEFT JOIN pessoas_avaliacoes a ON a.id = fb.avaliacao_id
+                 LEFT JOIN pessoas_ciclos_avaliacao cic ON cic.id = a.ciclo_id';
+        $select = "fb.id, fb.empresa_id, fb.colaborador_id, fb.avaliacao_id, fb.gap_id, fb.tipo, fb.titulo, fb.descricao,
+                   fb.data_feedback, fb.created_at, fb.registrado_por, col.nome AS colaborador_nome, c.nome_empresa AS empresa_nome,
+                   u.nome AS registrado_por_nome, g.titulo AS gap_titulo, cic.nome AS ciclo_nome";
+        $order = 'fb.data_feedback DESC, fb.id DESC';
+        return $this->paginar($from, $where, $select, $order, $p, $page, $per);
+    }
+
+    // ---------------------------------------------------------------
     // Central do Colaborador
     // ---------------------------------------------------------------
 
@@ -217,7 +268,10 @@ class PessoaOperacionalModel extends BaseModel
                 (SELECT COUNT(*) FROM pessoas_acoes_melhoria ac WHERE ac.colaborador_id = :cid AND ac.empresa_id = :eid AND $vencida) AS acoes_vencidas,
                 (SELECT COUNT(*) FROM pessoas_necessidades_treinamento n WHERE n.colaborador_id = :cid AND n.empresa_id = :eid AND n.status = 'pendente') AS necessidades_pendentes,
                 (SELECT COUNT(*) FROM pessoas_avaliacoes a WHERE a.colaborador_id = :cid AND a.empresa_id = :eid AND a.status = 'pendente') AS avaliacoes_pendentes,
-                (SELECT COUNT(*) FROM pessoas_avaliacoes a WHERE a.colaborador_id = :cid AND a.empresa_id = :eid AND a.status = 'em_andamento') AS avaliacoes_em_andamento",
+                (SELECT COUNT(*) FROM pessoas_avaliacoes a WHERE a.colaborador_id = :cid AND a.empresa_id = :eid AND a.status = 'em_andamento') AS avaliacoes_em_andamento,
+                (SELECT COUNT(*) FROM pessoas_feedbacks fb WHERE fb.colaborador_id = :cid AND fb.empresa_id = :eid) AS feedbacks_total,
+                (SELECT COUNT(*) FROM pessoas_feedbacks fb WHERE fb.colaborador_id = :cid AND fb.empresa_id = :eid AND fb.tipo = 'positivo') AS feedbacks_positivos,
+                (SELECT COUNT(*) FROM pessoas_feedbacks fb WHERE fb.colaborador_id = :cid AND fb.empresa_id = :eid AND fb.tipo = 'melhoria') AS feedbacks_melhoria",
             $p
         );
         return array_map('intval', $r);
