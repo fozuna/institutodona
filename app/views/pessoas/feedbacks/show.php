@@ -32,7 +32,21 @@ $tipoClasses = PessoasGestaoConfig::feedbackTipoClasses();
       <?php if (!empty($feedback['registrado_por_nome'])): ?><span class="text-xs text-gray-500">· por <?= htmlspecialchars($feedback['registrado_por_nome']) ?></span><?php endif; ?>
     </div>
 
-    <p class="text-sm text-gray-800 whitespace-pre-line"><?= htmlspecialchars($feedback['descricao']) ?></p>
+    <?php $estruturado = !empty($feedback['situacao']) && !empty($feedback['comportamento']) && !empty($feedback['impacto']) && !empty($feedback['orientacao']); ?>
+    <?php if ($estruturado): ?>
+      <div class="space-y-3 text-sm">
+        <div><div class="text-xs font-semibold text-gray-500 uppercase">Situação</div><p class="text-gray-800 whitespace-pre-line"><?= htmlspecialchars($feedback['situacao']) ?></p></div>
+        <div><div class="text-xs font-semibold text-gray-500 uppercase">Comportamento</div><p class="text-gray-800 whitespace-pre-line"><?= htmlspecialchars($feedback['comportamento']) ?></p></div>
+        <div><div class="text-xs font-semibold text-gray-500 uppercase">Impacto</div><p class="text-gray-800 whitespace-pre-line"><?= htmlspecialchars($feedback['impacto']) ?></p></div>
+        <div><div class="text-xs font-semibold text-gray-500 uppercase"><?= $feedback['tipo'] === 'melhoria' ? 'Orientação — o que precisa ser melhorado' : 'Orientação — o que deve ser reconhecido e mantido' ?></div><p class="text-gray-800 whitespace-pre-line"><?= htmlspecialchars($feedback['orientacao']) ?></p></div>
+        <?php if (!empty($feedback['proximo_passo'])): ?>
+          <div><div class="text-xs font-semibold text-gray-500 uppercase">Próximo passo</div><p class="text-gray-800 whitespace-pre-line"><?= htmlspecialchars($feedback['proximo_passo']) ?></p></div>
+        <?php endif; ?>
+      </div>
+    <?php else: ?>
+      <!-- Feedback legado (anterior ao cadastro estruturado SBI): texto livre original, exibido integralmente. -->
+      <p class="text-sm text-gray-800 whitespace-pre-line"><?= htmlspecialchars($feedback['descricao']) ?></p>
+    <?php endif; ?>
 
     <?php if (!empty($feedback['gap_id']) || !empty($feedback['avaliacao_id'])): ?>
       <div class="pt-3 border-t space-y-1 text-sm">

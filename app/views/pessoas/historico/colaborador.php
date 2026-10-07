@@ -9,6 +9,7 @@
  * @var array $treinamentosColaborador @var array $pontosAtencao @var array $timeline
  * @var array $avaliacoes @var array $gaps @var array $gapsPorId @var array $feedbacks @var array $acoes
  * @var array $desenvolvimento @var array $usuariosResponsaveis @var array $links @var array $pdis
+ * @var ?array $feedbackOld
  */
 $gapStatusLabels = PessoasGestaoConfig::gapStatusLabels();
 $gapStatusClasses = PessoasGestaoConfig::gapStatusClasses();
@@ -291,19 +292,14 @@ $tipoTimeline = ['avaliacao' => 'Avaliação', 'gap' => 'GAP', 'feedback' => 'Fe
             <?php endforeach; ?>
           </div>
         <?php endif; ?>
-        <details id="novo-feedback" class="scroll-mt-4">
+        <details id="novo-feedback" class="scroll-mt-4" <?= !empty($feedbackOld) ? 'open' : '' ?>>
           <summary class="cursor-pointer text-sm text-brand-pink font-semibold">Novo Feedback</summary>
-          <form method="post" action="index.php?route=pessoas/feedbackCreate" class="mt-3 space-y-2 bg-gray-50 rounded p-3">
+          <form method="post" action="index.php?route=pessoas/feedbackCreate" class="mt-3 space-y-4 bg-gray-50 rounded p-3">
             <input type="hidden" name="csrf" value="<?= $csrf ?>" />
             <input type="hidden" name="colaborador_id" value="<?= $cid ?>" />
-            <select name="tipo" class="border rounded p-2 w-full text-sm" required>
-              <option value="positivo">Feedback Positivo</option>
-              <option value="melhoria">Feedback de Melhoria</option>
-            </select>
-            <input type="text" name="titulo" class="border rounded p-2 w-full text-sm" placeholder="Título" required maxlength="255" />
-            <textarea name="descricao" class="border rounded p-2 w-full text-sm" rows="2" placeholder="Descrição" required maxlength="2000"></textarea>
-            <input type="date" name="data_feedback" class="border rounded p-2 w-full text-sm" value="<?= htmlspecialchars(date('Y-m-d')) ?>" />
-            <button type="submit" class="px-3 py-2 rounded bg-brand-red text-white text-sm w-full">Registrar feedback</button>
+            <input type="hidden" name="voltar_para" value="index.php?route=pessoas/colaboradorHistorico&id=<?= $cid ?>#novo-feedback" />
+            <?php $tipo = $feedbackOld['tipo'] ?? 'positivo'; $valores = $feedbackOld ?? []; require __DIR__ . '/../feedbacks/_form_campos.php'; ?>
+            <button type="submit" class="px-3 py-2 rounded bg-brand-red text-white text-sm w-full">Salvar Feedback</button>
           </form>
         </details>
       </section>

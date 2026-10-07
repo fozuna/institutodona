@@ -4,6 +4,7 @@ namespace App\Controllers;
 use App\Core\AuditLogger;
 use App\Core\BaseController;
 use App\Core\Security;
+use App\Models\ClienteModel;
 use App\Models\ColaboradorModel;
 use App\Models\PessoaAcaoMelhoriaModel;
 use App\Core\AccessControl;
@@ -40,6 +41,21 @@ class PessoasGestaoController extends BaseController
         $this->acoes = new PessoaAcaoMelhoriaModel();
         $this->desenvolvimento = new PessoaDesenvolvimentoModel();
         $this->pdis = new PessoaPdiModel();
+    }
+
+    /**
+     * Repopula o formulário de Feedback após falha de validação (campo SBI
+     * obrigatório faltante) - só se a sessão guardou dados para o MESMO
+     * colaborador desta tela. Consome a sessão (nunca reaparece de novo).
+     */
+    private function feedbackFormOld(int $colaboradorId): ?array
+    {
+        $old = $_SESSION['feedback_form_old'] ?? null;
+        if (is_array($old) && (int)($old['colaborador_id'] ?? 0) === $colaboradorId) {
+            unset($_SESSION['feedback_form_old']);
+            return $old;
+        }
+        return null;
     }
 
     /** Resolve o colaborador garantindo tenant (find() já filtra por escopo; canAccessCliente() é defesa redundante). */
@@ -111,6 +127,7 @@ class PessoasGestaoController extends BaseController
             'gaps' => $gaps,
             'gapsPorId' => $gapsPorId,
             'feedbacks' => $feedbacks,
+            'feedbackOld' => $this->feedbackFormOld($colaboradorId),
             'acoes' => $acoes,
             'desenvolvimento' => $desenvolvimento,
             'usuariosResponsaveis' => $this->acoes->usuariosResponsaveisDisponiveis($empresaId),
@@ -217,6 +234,7 @@ class PessoasGestaoController extends BaseController
             'gap' => $gap,
             'colaborador' => $colaborador,
             'feedbacks' => $this->feedbacksRelacionadosAoGap((int)$gap['id']),
+            'feedbackOld' => $this->feedbackFormOld((int)$colaborador['id']),
             'acoes' => $this->acoes->listByGap((int)$gap['id']),
             'usuariosResponsaveis' => $this->acoes->usuariosResponsaveisDisponiveis((int)$gap['empresa_id']),
             'pdiDoGap' => $this->pdis->pdiDoGap((int)$gap['id']),
@@ -265,6 +283,33 @@ class PessoasGestaoController extends BaseController
     // Feedback
     // ---------------------------------------------------------------
 
+    /**
+     * Formulário standalone de "+ Novo Feedback" (Pessoas -> Feedbacks),
+     * sem depender da Central do Colaborador: se vier `colaborador_id`
+     * válido (tenant já reforçado por colaboradorSeguro), o colaborador fica
+     * contextualizado; senão, a view oferece empresa + busca de colaborador
+     * (componente existente: colaboradores/search, já tenant-protegido por
+     * BaseController::authorizeRoute()). O POST cai no MESMO feedbackCreate().
+     */
+    public function feedbackCreateForm(): void
+    {
+        $this->requireClienteAdminAccess();
+        $colaboradorId = (int)($_GET['colaborador_id'] ?? 0);
+        $colaborador = $colaboradorId > 0 ? $this->colaboradorSeguro($colaboradorId) : null;
+        $clientes = (new ClienteModel())->all();
+        $acessiveis = array_map(static fn(array $c): int => (int)$c['id'], $clientes);
+        $empresaReq = $colaborador ? (int)$colaborador['cliente_id'] : (int)($_GET['empresa_id'] ?? 0);
+        $empresaSel = ($empresaReq > 0 && in_array($empresaReq, $acessiveis, true)) ? $empresaReq
+            : (count($acessiveis) === 1 ? $acessiveis[0] : 0);
+        $this->render('pessoas/feedbacks/create', [
+            'pageTitle' => 'Novo Feedback',
+            'colaborador' => $colaborador,
+            'clientes' => $clientes,
+            'selectedEmpresa' => $empresaSel,
+            'feedbackOld' => $colaborador ? $this->feedbackFormOld((int)$colaborador['id']) : null,
+        ]);
+    }
+
     public function feedbackCreate(): void
     {
         $this->requireClienteAdminAccess();
@@ -285,20 +330,44 @@ class PessoasGestaoController extends BaseController
         $id = $this->feedbacks->create($empresaId, $colaboradorId, [
             'tipo' => $_POST['tipo'] ?? '',
             'titulo' => $_POST['titulo'] ?? '',
-            'descricao' => $_POST['descricao'] ?? '',
+            'situacao' => $_POST['situacao'] ?? '',
+            'comportamento' => $_POST['comportamento'] ?? '',
+            'impacto' => $_POST['impacto'] ?? '',
+            'orientacao' => $_POST['orientacao'] ?? '',
+            'proximo_passo' => $_POST['proximo_passo'] ?? '',
             'data_feedback' => $_POST['data_feedback'] ?? '',
             'avaliacao_id' => $_POST['avaliacao_id'] ?? 0,
             'gap_id' => $_POST['gap_id'] ?? 0,
         ], $this->colaboradores, $this->avaliacoes, $this->gaps, $registradoPor);
 
+        // voltar_para_erro é opcional e só usado quando o destino de sucesso difere
+        // do destino em caso de falha (ex.: formulário standalone - sucesso vai para
+        // o detalhe recém-criado, falha volta para o próprio formulário).
         $voltarPara = (string)($_POST['voltar_para'] ?? '');
+        $voltarParaErro = (string)($_POST['voltar_para_erro'] ?? '');
         if ($id <= 0) {
-            $_SESSION['flash_error'] = 'Não foi possível registrar o feedback. Verifique tipo, título e descrição.';
-        } else {
-            AuditLogger::log('pessoas_feedback_criado', 'pessoas_feedback', $id, ['empresa_id' => $empresaId, 'colaborador_id' => $colaboradorId]);
-            $_SESSION['flash_success'] = 'Feedback registrado.';
+            $_SESSION['flash_error'] = 'Não foi possível registrar o feedback. Preencha Situação, Comportamento, Impacto e Orientação.';
+            // Preserva os valores digitados para repopular o formulário (Situação,
+            // Comportamento, Impacto e Orientação podem ser longos - não force o
+            // usuário a redigitar tudo por causa de um campo faltante).
+            $_SESSION['feedback_form_old'] = [
+                'colaborador_id' => $colaboradorId,
+                'tipo' => (string)($_POST['tipo'] ?? ''),
+                'titulo' => (string)($_POST['titulo'] ?? ''),
+                'situacao' => (string)($_POST['situacao'] ?? ''),
+                'comportamento' => (string)($_POST['comportamento'] ?? ''),
+                'impacto' => (string)($_POST['impacto'] ?? ''),
+                'orientacao' => (string)($_POST['orientacao'] ?? ''),
+                'proximo_passo' => (string)($_POST['proximo_passo'] ?? ''),
+                'data_feedback' => (string)($_POST['data_feedback'] ?? ''),
+            ];
+            $destino = $voltarParaErro !== '' ? $voltarParaErro : ($voltarPara !== '' ? $voltarPara : 'index.php?route=pessoas/colaboradorHistorico&id=' . $colaboradorId);
+            $this->redirect($destino);
+            return;
         }
-        $this->redirect($voltarPara !== '' ? $voltarPara : 'index.php?route=pessoas/colaboradorHistorico&id=' . $colaboradorId);
+        AuditLogger::log('pessoas_feedback_criado', 'pessoas_feedback', $id, ['empresa_id' => $empresaId, 'colaborador_id' => $colaboradorId]);
+        $_SESSION['flash_success'] = 'Feedback registrado.';
+        $this->redirect($voltarPara !== '' ? $voltarPara : 'index.php?route=pessoas/feedbackShow&id=' . $id);
     }
 
     /**

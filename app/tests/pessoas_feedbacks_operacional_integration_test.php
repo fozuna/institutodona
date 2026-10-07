@@ -106,20 +106,22 @@ ok('Ordenação determinística: data_feedback DESC, id DESC');
 
 // ===== 15. Registro contextual pelo colaborador (empresa nunca vem do formulário) =====
 $antesA1 = count($feedbacks->listByColaborador($F['a1'], $eA));
-$novoId = $feedbacks->create($eA, $F['a1'], ['tipo' => 'positivo', 'titulo' => 'Contextual', 'descricao' => 'via central', 'data_feedback' => '2026-09-25'], $cols, $avals, $gaps, 501);
+$sbiOk = ['situacao' => 's', 'comportamento' => 'c', 'impacto' => 'i', 'orientacao' => 'o'];
+$novoId = $feedbacks->create($eA, $F['a1'], ['tipo' => 'positivo', 'titulo' => 'Contextual'] + $sbiOk + ['data_feedback' => '2026-09-25'], $cols, $avals, $gaps, 501);
 if ($novoId <= 0) { failFast('Criar feedback contextual falhou'); }
 $linha = $feedbacks->find($novoId);
 if ((int)$linha['colaborador_id'] !== $F['a1'] || (int)$linha['empresa_id'] !== $eA) { failFast('Feedback contextual com colaborador/empresa incorretos'); }
+eq($linha['descricao'], "Situação: s\n\nComportamento: c\n\nImpacto: i\n\nOrientação: o", 'descricao é a representação canônica consolidada (sem próximo passo, pois não foi informado)');
 if ((int)$linha['registrado_por'] !== 501 || $linha['registrado_por_nome'] === null && false) { /* nome pode ser null se usuário de teste não existe - ok */ }
 $depoisA1 = count($feedbacks->listByColaborador($F['a1'], $eA));
 eq($depoisA1, $antesA1 + 1, '24. histórico do colaborador (listByColaborador) atualizado imediatamente');
 ok('Registro contextual: colaborador/empresa corretos; autoria gravada; histórico atualizado');
 
 // ===== 16/17. Vínculo válido com Avaliação e com GAP =====
-$comAval = $feedbacks->create($eA, $F['a1'], ['tipo' => 'positivo', 'titulo' => 'Com avaliação válida', 'descricao' => 'x', 'avaliacao_id' => $F['av1']], $cols, $avals, $gaps, 1);
+$comAval = $feedbacks->create($eA, $F['a1'], ['tipo' => 'positivo', 'titulo' => 'Com avaliação válida'] + $sbiOk + ['avaliacao_id' => $F['av1']], $cols, $avals, $gaps, 1);
 $linhaAval = $feedbacks->find($comAval);
 eq((int)$linhaAval['avaliacao_id'], (int)$F['av1'], 'vínculo com avaliação do MESMO colaborador/empresa é aceito');
-$comGap = $feedbacks->create($eA, $F['a1'], ['tipo' => 'melhoria', 'titulo' => 'Com GAP válido', 'descricao' => 'x', 'gap_id' => $F['g']['gA1']], $cols, $avals, $gaps, 1);
+$comGap = $feedbacks->create($eA, $F['a1'], ['tipo' => 'melhoria', 'titulo' => 'Com GAP válido'] + $sbiOk + ['gap_id' => $F['g']['gA1']], $cols, $avals, $gaps, 1);
 $linhaGap = $feedbacks->find($comGap);
 eq((int)$linhaGap['gap_id'], (int)$F['g']['gA1'], 'vínculo com GAP do MESMO colaborador/empresa é aceito');
 eq($linhaGap['gap_titulo'], 'gA1 sem acao', 'find() traz o título do GAP relacionado (usado na tela de detalhe)');
@@ -127,34 +129,54 @@ ok('Vínculo válido com Avaliação e com GAP (mesmo colaborador/empresa)');
 
 // ===== 18/19. Avaliação/GAP cross-tenant (ou de outro colaborador) bloqueados =====
 $avB = s05_ins($pdo, 'pessoas_avaliacoes', ['empresa_id' => $eB, 'ciclo_id' => $F['B']['ciclo1'], 'colaborador_id' => $F['b1'], 'status' => 'finalizada', 'resultado' => 3.0, 'finalizado_em' => '2026-09-01 10:00:00']);
-$semAval = $feedbacks->create($eA, $F['a1'], ['tipo' => 'positivo', 'titulo' => 'Avaliação de outra empresa', 'descricao' => 'x', 'avaliacao_id' => $avB], $cols, $avals, $gaps, 1);
+$semAval = $feedbacks->create($eA, $F['a1'], ['tipo' => 'positivo', 'titulo' => 'Avaliação de outra empresa'] + $sbiOk + ['avaliacao_id' => $avB], $cols, $avals, $gaps, 1);
 if ($semAval <= 0) { failFast('Feedback com avaliação cross-tenant deveria ser criado (só sem o vínculo), não rejeitado por inteiro'); }
 $linhaSemAval = $feedbacks->find($semAval);
 if ($linhaSemAval['avaliacao_id'] !== null) { failFast('Avaliação de outra empresa NÃO deveria ser persistida como vínculo'); }
-$semGapOutroColab = $feedbacks->create($eA, $F['a1'], ['tipo' => 'positivo', 'titulo' => 'GAP de outro colaborador', 'descricao' => 'x', 'gap_id' => $F['g']['gA4']], $cols, $avals, $gaps, 1);
+$semGapOutroColab = $feedbacks->create($eA, $F['a1'], ['tipo' => 'positivo', 'titulo' => 'GAP de outro colaborador'] + $sbiOk + ['gap_id' => $F['g']['gA4']], $cols, $avals, $gaps, 1);
 $linhaSemGap = $feedbacks->find($semGapOutroColab);
 if ($linhaSemGap['gap_id'] !== null) { failFast('GAP de OUTRO colaborador (mesma empresa) NÃO deveria ser persistido como vínculo'); }
-$semGapB = $feedbacks->create($eA, $F['a1'], ['tipo' => 'positivo', 'titulo' => 'GAP de outra empresa', 'descricao' => 'x', 'gap_id' => $F['g']['gB1']], $cols, $avals, $gaps, 1);
+$semGapB = $feedbacks->create($eA, $F['a1'], ['tipo' => 'positivo', 'titulo' => 'GAP de outra empresa'] + $sbiOk + ['gap_id' => $F['g']['gB1']], $cols, $avals, $gaps, 1);
 $linhaSemGapB = $feedbacks->find($semGapB);
 if ($linhaSemGapB['gap_id'] !== null) { failFast('GAP de OUTRA empresa NÃO deveria ser persistido como vínculo'); }
 ok('Avaliação/GAP cross-tenant e de outro colaborador: vínculo descartado (propriedade validada antes da gravação)');
 
-// ===== 20/21. Conteúdo obrigatório; tipo inválido bloqueado =====
-if ($feedbacks->create($eA, $F['a1'], ['tipo' => 'positivo', 'titulo' => 'Sem descrição', 'descricao' => ''], $cols, $avals, $gaps, 1) !== 0) { failFast('Descrição vazia deveria bloquear'); }
-if ($feedbacks->create($eA, $F['a1'], ['tipo' => 'positivo', 'titulo' => '', 'descricao' => 'x'], $cols, $avals, $gaps, 1) !== 0) { failFast('Título vazio deveria bloquear'); }
-if ($feedbacks->create($eA, $F['a1'], ['tipo' => 'neutro', 'titulo' => 'x', 'descricao' => 'x'], $cols, $avals, $gaps, 1) !== 0) { failFast('Tipo inválido deveria bloquear'); }
-if ($feedbacks->create($eA, $F['b1'], ['tipo' => 'positivo', 'titulo' => 'x', 'descricao' => 'x'], $cols, $avals, $gaps, 1) !== 0) { failFast('Colaborador de outra empresa (empresaId=A, colaborador de B) deveria bloquear'); }
-ok('Validação obrigatória: título, descrição, tipo e colaborador/empresa coerentes');
+// ===== 20/21. Campos obrigatórios do modelo SBI; tipo inválido bloqueado =====
+foreach (['situacao', 'comportamento', 'impacto', 'orientacao'] as $campoFaltante) {
+    $payload = ['tipo' => 'positivo', 'titulo' => 'x'] + $sbiOk;
+    $payload[$campoFaltante] = '';
+    if ($feedbacks->create($eA, $F['a1'], $payload, $cols, $avals, $gaps, 1) !== 0) {
+        failFast("Campo obrigatório '$campoFaltante' vazio deveria bloquear a criação");
+    }
+}
+if ($feedbacks->create($eA, $F['a1'], ['tipo' => 'positivo', 'titulo' => ''] + $sbiOk, $cols, $avals, $gaps, 1) !== 0) { failFast('Título vazio deveria bloquear'); }
+if ($feedbacks->create($eA, $F['a1'], ['tipo' => 'neutro', 'titulo' => 'x'] + $sbiOk, $cols, $avals, $gaps, 1) !== 0) { failFast('Tipo inválido deveria bloquear'); }
+if ($feedbacks->create($eA, $F['b1'], ['tipo' => 'positivo', 'titulo' => 'x'] + $sbiOk, $cols, $avals, $gaps, 1) !== 0) { failFast('Colaborador de outra empresa (empresaId=A, colaborador de B) deveria bloquear'); }
+// Próximo passo é o único campo opcional.
+$semProximo = $feedbacks->create($eA, $F['a1'], ['tipo' => 'positivo', 'titulo' => 'Sem próximo passo'] + $sbiOk + ['proximo_passo' => ''], $cols, $avals, $gaps, 1);
+if ($semProximo <= 0) { failFast('Próximo passo vazio não deveria bloquear (é opcional)'); }
+if ($feedbacks->find($semProximo)['proximo_passo'] !== null) { failFast('Próximo passo vazio deveria ser gravado como NULL'); }
+ok('Validação obrigatória: Situação/Comportamento/Impacto/Orientação, título, tipo e colaborador/empresa coerentes; Próximo passo opcional');
 
-// ===== Tamanho máximo conforme schema (titulo 255 / descricao 2000) =====
-$idLongo = $feedbacks->create($eA, $F['a1'], ['tipo' => 'positivo', 'titulo' => str_repeat('T', 400), 'descricao' => str_repeat('D', 2500)], $cols, $avals, $gaps, 1);
-if ($idLongo <= 0) { failFast('Título/descrição longos deveriam ser truncados, não rejeitados'); }
+// ===== Tamanho máximo conforme schema (titulo 255 / campos SBI 1000 cada) =====
+$idLongo = $feedbacks->create($eA, $F['a1'], [
+    'tipo' => 'positivo', 'titulo' => str_repeat('T', 400),
+    'situacao' => str_repeat('S', 1500), 'comportamento' => str_repeat('C', 1500),
+    'impacto' => str_repeat('I', 1500), 'orientacao' => str_repeat('O', 1500), 'proximo_passo' => str_repeat('P', 1500),
+], $cols, $avals, $gaps, 1);
+if ($idLongo <= 0) { failFast('Título/campos SBI longos deveriam ser truncados, não rejeitados'); }
 $linhaLonga = $feedbacks->find($idLongo);
-if (mb_strlen($linhaLonga['titulo']) > 255 || mb_strlen($linhaLonga['descricao']) > 2000) { failFast('Truncamento de título/descrição não aplicado conforme schema'); }
-ok('Título/descrição truncados no limite do schema (VARCHAR 255/2000), sem erro de banco');
+foreach (['titulo' => 255, 'situacao' => 1000, 'comportamento' => 1000, 'impacto' => 1000, 'orientacao' => 1000, 'proximo_passo' => 1000] as $campo => $max) {
+    if (mb_strlen($linhaLonga[$campo]) > $max) { failFast("Truncamento de '$campo' não aplicado conforme schema (" . mb_strlen($linhaLonga[$campo]) . " > $max)"); }
+}
+// descricao (TEXT) é a consolidação dos campos já truncados - não precisa truncar de novo.
+if (!str_contains($linhaLonga['descricao'], str_repeat('S', 1000)) || !str_contains($linhaLonga['descricao'], 'Próximo passo: ' . str_repeat('P', 1000))) {
+    failFast('descricao consolidada deveria conter os campos SBI já truncados, incluindo o próximo passo');
+}
+ok('Título/campos SBI truncados no limite do schema (VARCHAR 255/1000), descricao (TEXT) consolida sem truncar de novo');
 
 // ===== 23. Autoria =====
-$comAutoria = $feedbacks->create($eA, $F['a1'], ['tipo' => 'positivo', 'titulo' => 'Com autoria', 'descricao' => 'x'], $cols, $avals, $gaps, (int)$F['u']);
+$comAutoria = $feedbacks->create($eA, $F['a1'], ['tipo' => 'positivo', 'titulo' => 'Com autoria'] + $sbiOk, $cols, $avals, $gaps, (int)$F['u']);
 $listaA1 = $feedbacks->listByColaborador($F['a1'], $eA);
 $achado = null;
 foreach ($listaA1 as $row) { if ((int)$row['id'] === $comAutoria) { $achado = $row; break; } }

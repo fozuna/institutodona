@@ -10,6 +10,29 @@ namespace App\Models;
 class PessoaFeedbackModel extends BaseModel
 {
     private const TIPOS_VALIDOS = ['positivo', 'melhoria'];
+    private const CAMPO_MAX = 1000;
+
+    /**
+     * `descricao` (TEXT) é a representação canônica CONSOLIDADA dos campos
+     * estruturados, sempre regenerada a partir deles em create() - nunca
+     * editada isoladamente. Isso elimina qualquer divergência entre os
+     * campos estruturados e o texto consolidado: só existe uma direção de
+     * geração. Feedbacks legados (sem campos estruturados) mantêm o texto
+     * livre original em `descricao` e continuam exibidos integralmente.
+     */
+    public static function montarDescricaoConsolidada(string $situacao, string $comportamento, string $impacto, string $orientacao, ?string $proximoPasso): string
+    {
+        $partes = [
+            'Situação: ' . $situacao,
+            'Comportamento: ' . $comportamento,
+            'Impacto: ' . $impacto,
+            'Orientação: ' . $orientacao,
+        ];
+        if ($proximoPasso !== null && $proximoPasso !== '') {
+            $partes[] = 'Próximo passo: ' . $proximoPasso;
+        }
+        return implode("\n\n", $partes);
+    }
 
     /**
      * Sprint 05.1: junta empresa/autor/GAP/avaliação relacionados (mesmo
@@ -53,10 +76,15 @@ class PessoaFeedbackModel extends BaseModel
     }
 
     /**
-     * Cria um feedback (positivo ou de melhoria). avaliacao_id e gap_id são
-     * opcionais - quando informados, são validados contra o MESMO
-     * colaborador/empresa antes de serem gravados (nunca confia no id cru
-     * do formulário).
+     * Cria um feedback estruturado no modelo SBI (Situação, Comportamento,
+     * Impacto) + Orientação (obrigatórios) e Próximo passo (opcional).
+     * `descricao` é sempre derivada destes campos (ver
+     * montarDescricaoConsolidada) - nunca lida de $data['descricao']
+     * diretamente, para não divergir do texto estruturado.
+     *
+     * avaliacao_id e gap_id são opcionais - quando informados, são
+     * validados contra o MESMO colaborador/empresa antes de serem
+     * gravados (nunca confia no id cru do formulário).
      */
     public function create(int $empresaId, int $colaboradorId, array $data, ColaboradorModel $colaboradores, PessoaAvaliacaoModel $avaliacoes, PessoaGapModel $gaps, int $registradoPor): int
     {
@@ -69,10 +97,15 @@ class PessoaFeedbackModel extends BaseModel
             return 0;
         }
         $titulo = mb_substr(trim((string)($data['titulo'] ?? '')), 0, 255);
-        $descricao = mb_substr(trim((string)($data['descricao'] ?? '')), 0, 2000);
-        if ($titulo === '' || $descricao === '') {
+        $situacao = mb_substr(trim((string)($data['situacao'] ?? '')), 0, self::CAMPO_MAX);
+        $comportamento = mb_substr(trim((string)($data['comportamento'] ?? '')), 0, self::CAMPO_MAX);
+        $impacto = mb_substr(trim((string)($data['impacto'] ?? '')), 0, self::CAMPO_MAX);
+        $orientacao = mb_substr(trim((string)($data['orientacao'] ?? '')), 0, self::CAMPO_MAX);
+        $proximoPasso = mb_substr(trim((string)($data['proximo_passo'] ?? '')), 0, self::CAMPO_MAX);
+        if ($titulo === '' || $situacao === '' || $comportamento === '' || $impacto === '' || $orientacao === '') {
             return 0;
         }
+        $descricao = self::montarDescricaoConsolidada($situacao, $comportamento, $impacto, $orientacao, $proximoPasso !== '' ? $proximoPasso : null);
 
         $avaliacaoId = (int)($data['avaliacao_id'] ?? 0);
         if ($avaliacaoId > 0) {
@@ -95,8 +128,12 @@ class PessoaFeedbackModel extends BaseModel
         }
 
         $stmt = $this->db->prepare(
-            'INSERT INTO pessoas_feedbacks (empresa_id, colaborador_id, avaliacao_id, gap_id, tipo, titulo, descricao, data_feedback, registrado_por)
-             VALUES (:eid, :cid, :aid, :gid, :tipo, :titulo, :descricao, :data_feedback, :registrado_por)'
+            'INSERT INTO pessoas_feedbacks
+                (empresa_id, colaborador_id, avaliacao_id, gap_id, tipo, titulo, descricao,
+                 situacao, comportamento, impacto, orientacao, proximo_passo, data_feedback, registrado_por)
+             VALUES
+                (:eid, :cid, :aid, :gid, :tipo, :titulo, :descricao,
+                 :situacao, :comportamento, :impacto, :orientacao, :proximo_passo, :data_feedback, :registrado_por)'
         );
         $stmt->execute([
             'eid' => $empresaId,
@@ -106,6 +143,11 @@ class PessoaFeedbackModel extends BaseModel
             'tipo' => $tipo,
             'titulo' => $titulo,
             'descricao' => $descricao,
+            'situacao' => $situacao,
+            'comportamento' => $comportamento,
+            'impacto' => $impacto,
+            'orientacao' => $orientacao,
+            'proximo_passo' => $proximoPasso !== '' ? $proximoPasso : null,
             'data_feedback' => $dataFeedback,
             'registrado_por' => $registradoPor > 0 ? $registradoPor : null,
         ]);

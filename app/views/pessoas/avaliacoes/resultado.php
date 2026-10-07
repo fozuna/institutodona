@@ -43,19 +43,14 @@ $csrf = \App\Core\Security::csrfToken();
     <div class="w-full bg-gray-100 rounded-full h-3 overflow-hidden mt-4 max-w-md mx-auto">
       <div class="bg-brand-red h-3" style="width: <?= min(100, round(($resultadoGeral / 5) * 100)) ?>%"></div>
     </div>
-    <details class="mt-4 text-left max-w-md mx-auto">
+    <details class="mt-4 text-left max-w-xl mx-auto">
       <summary class="cursor-pointer text-sm text-brand-pink font-semibold text-center">Registrar Feedback sobre esta avaliação</summary>
-      <form method="post" action="index.php?route=pessoas/feedbackCreate" class="mt-3 space-y-2 bg-gray-50 rounded p-3">
+      <form method="post" action="index.php?route=pessoas/feedbackCreate" class="mt-3 space-y-4 bg-gray-50 rounded p-3">
         <input type="hidden" name="csrf" value="<?= $csrf ?>" />
         <input type="hidden" name="colaborador_id" value="<?= (int)$avaliacao['colaborador_id'] ?>" />
         <input type="hidden" name="avaliacao_id" value="<?= (int)$avaliacao['id'] ?>" />
         <input type="hidden" name="voltar_para" value="index.php?route=pessoas/avaliacaoResultado&id=<?= (int)$avaliacao['id'] ?>" />
-        <select name="tipo" class="border rounded p-2 w-full text-sm" required>
-          <option value="positivo">Feedback Positivo</option>
-          <option value="melhoria">Feedback de Melhoria</option>
-        </select>
-        <input type="text" name="titulo" class="border rounded p-2 w-full text-sm" placeholder="Título" required maxlength="255" />
-        <textarea name="descricao" class="border rounded p-2 w-full text-sm" rows="2" placeholder="Descrição" required maxlength="2000"></textarea>
+        <?php $tipo = 'positivo'; $valores = []; require __DIR__ . '/../feedbacks/_form_campos.php'; ?>
         <button type="submit" class="px-3 py-2 rounded bg-brand-red text-white text-sm w-full">Salvar Feedback</button>
       </form>
     </details>
@@ -140,14 +135,19 @@ $csrf = \App\Core\Security::csrfToken();
                   <?php elseif ($isDestaque): ?>
                     <details>
                       <summary class="cursor-pointer text-xs text-green-700 font-semibold">Registrar Feedback Positivo</summary>
-                      <form method="post" action="index.php?route=pessoas/feedbackCreate" class="mt-2 space-y-1 bg-gray-50 rounded p-2 w-56">
+                      <form method="post" action="index.php?route=pessoas/feedbackCreate" class="mt-2 space-y-1 bg-gray-50 rounded p-2 w-72">
                         <input type="hidden" name="csrf" value="<?= $csrf ?>" />
                         <input type="hidden" name="colaborador_id" value="<?= (int)$avaliacao['colaborador_id'] ?>" />
                         <input type="hidden" name="avaliacao_id" value="<?= (int)$avaliacao['id'] ?>" />
                         <input type="hidden" name="tipo" value="positivo" />
                         <input type="hidden" name="voltar_para" value="index.php?route=pessoas/avaliacaoResultado&id=<?= (int)$avaliacao['id'] ?>" />
                         <input type="text" name="titulo" class="border rounded p-1 w-full text-xs" placeholder="Título" value="<?= htmlspecialchars(mb_substr((string)$item['pergunta_snapshot'], 0, 80)) ?>" required maxlength="255" />
-                        <textarea name="descricao" class="border rounded p-1 w-full text-xs" rows="2" placeholder="Descrição do reconhecimento" required maxlength="2000"></textarea>
+                        <!-- Modelo SBI compacto (tipo fixo: positivo) -->
+                        <textarea name="situacao" class="border rounded p-1 w-full text-xs" rows="2" placeholder="Situação: em que momento?" required maxlength="1000"></textarea>
+                        <textarea name="comportamento" class="border rounded p-1 w-full text-xs" rows="2" placeholder="Comportamento: o que ele fez?" required maxlength="1000"></textarea>
+                        <textarea name="impacto" class="border rounded p-1 w-full text-xs" rows="2" placeholder="Impacto: qual o efeito?" required maxlength="1000"></textarea>
+                        <textarea name="orientacao" class="border rounded p-1 w-full text-xs" rows="2" placeholder="O que deve ser reconhecido e mantido?" required maxlength="1000"></textarea>
+                        <textarea name="proximo_passo" class="border rounded p-1 w-full text-xs" rows="1" placeholder="Próximo passo (opcional)" maxlength="1000"></textarea>
                         <button type="submit" class="px-2 py-1 rounded bg-green-600 text-white text-xs w-full">Salvar Feedback</button>
                       </form>
                     </details>

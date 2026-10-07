@@ -12,9 +12,12 @@ $atalho = static fn(array $extra): string => 'index.php?' . http_build_query(arr
 <div class="p-4 md:p-6 space-y-5">
   <?php require __DIR__ . '/../_subnav.php'; ?>
 
-  <div>
-    <h1 class="text-2xl font-bold text-brand-black">Feedbacks</h1>
-    <p class="text-sm text-gray-600">Registro histórico de gestão — feedbacks positivos e de melhoria registrados para os colaboradores.</p>
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-bold text-brand-black">Feedbacks</h1>
+      <p class="text-sm text-gray-600">Registro histórico de gestão — feedbacks positivos e de melhoria registrados para os colaboradores.</p>
+    </div>
+    <a class="px-4 py-2 rounded-lg bg-brand-red text-white text-sm font-semibold shrink-0" href="index.php?route=pessoas/feedbackCreateForm">+ Novo Feedback</a>
   </div>
 
   <div class="flex flex-wrap gap-2 text-sm" aria-label="Atalhos de filtro">

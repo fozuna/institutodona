@@ -169,7 +169,9 @@ ok('GAP movido para em_tratamento; transição inválida (voltar para aberto) bl
 // ===================== FEEDBACK DE MELHORIA (relacionado ao GAP) =====================
 $feedbacks = new PessoaFeedbackModel();
 $feedbackMelhoriaId = $feedbacks->create($empresaA['cliente_id'], $col1, [
-    'tipo' => 'melhoria', 'titulo' => 'Conversa sobre comunicação', 'descricao' => 'Conversamos sobre pontos de melhoria.',
+    'tipo' => 'melhoria', 'titulo' => 'Conversa sobre comunicação',
+    'situacao' => 'Na reunião de equipe de segunda-feira.', 'comportamento' => 'Interrompeu colegas antes de concluírem a fala.',
+    'impacto' => 'Gerou desconforto e perda de pontos importantes da discussão.', 'orientacao' => 'Aguardar o colega concluir antes de falar.',
     'data_feedback' => date('Y-m-d'), 'avaliacao_id' => $avaliacaoId, 'gap_id' => $gapId,
 ], $colaboradores, $avaliacoes, $gaps, 1);
 if ($feedbackMelhoriaId <= 0) {
@@ -180,7 +182,9 @@ ok('Feedback de Melhoria registrado, relacionado à avaliação e ao GAP');
 
 // ===================== FEEDBACK POSITIVO INDEPENDENTE =====================
 $feedbackPositivoId = $feedbacks->create($empresaA['cliente_id'], $col1, [
-    'tipo' => 'positivo', 'titulo' => 'Excelente condução de reunião', 'descricao' => 'Excelente condução da reunião mensal com a equipe.',
+    'tipo' => 'positivo', 'titulo' => 'Excelente condução de reunião',
+    'situacao' => 'Na reunião mensal com a equipe.', 'comportamento' => 'Conduziu a pauta com clareza e no tempo previsto.',
+    'impacto' => 'A equipe saiu alinhada e com os próximos passos definidos.', 'orientacao' => 'Manter esse padrão nas próximas reuniões.',
     'data_feedback' => date('Y-m-d'),
 ], $colaboradores, $avaliacoes, $gaps, 1);
 if ($feedbackPositivoId <= 0) {

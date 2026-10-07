@@ -777,6 +777,9 @@ switch ($route) {
     case 'pessoas/feedbacks':
         (new PessoasOperacionalController())->feedbacks();
         break;
+    case 'pessoas/feedbackCreateForm':
+        (new PessoasGestaoController())->feedbackCreateForm();
+        break;
     case 'pessoas/feedbackShow':
         (new PessoasGestaoController())->feedbackShow();
         break;

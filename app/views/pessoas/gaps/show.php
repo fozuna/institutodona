@@ -5,6 +5,7 @@
 /** @var array $feedbacks */
 /** @var array $acoes */
 /** @var array $usuariosResponsaveis */
+/** @var ?array $feedbackOld */
 $statusLabels = PessoasGestaoConfig::gapStatusLabels();
 $statusClasses = PessoasGestaoConfig::gapStatusClasses();
 $prioridadeLabels = PessoasGestaoConfig::gapPrioridadeLabels();
@@ -114,19 +115,14 @@ $csrf = \App\Core\Security::csrfToken();
         <?php endforeach; ?>
       </div>
     <?php endif; ?>
-    <details>
+    <details id="novo-feedback-gap" <?= !empty($feedbackOld) ? 'open' : '' ?>>
       <summary class="cursor-pointer text-sm text-brand-pink font-semibold">Registrar Feedback</summary>
-      <form method="post" action="index.php?route=pessoas/feedbackCreate" class="mt-3 space-y-2 bg-gray-50 rounded p-3">
+      <form method="post" action="index.php?route=pessoas/feedbackCreate" class="mt-3 space-y-4 bg-gray-50 rounded p-3">
         <input type="hidden" name="csrf" value="<?= $csrf ?>" />
         <input type="hidden" name="colaborador_id" value="<?= (int)$colaborador['id'] ?>" />
         <input type="hidden" name="gap_id" value="<?= (int)$gap['id'] ?>" />
         <input type="hidden" name="voltar_para" value="index.php?route=pessoas/gapShow&id=<?= (int)$gap['id'] ?>" />
-        <select name="tipo" class="border rounded p-2 w-full text-sm" required>
-          <option value="melhoria">Feedback de Melhoria</option>
-          <option value="positivo">Feedback Positivo</option>
-        </select>
-        <input type="text" name="titulo" class="border rounded p-2 w-full text-sm" placeholder="Título" required maxlength="255" />
-        <textarea name="descricao" class="border rounded p-2 w-full text-sm" rows="2" placeholder="Descrição" required maxlength="2000"></textarea>
+        <?php $tipo = $feedbackOld['tipo'] ?? 'melhoria'; $valores = $feedbackOld ?? []; require __DIR__ . '/../feedbacks/_form_campos.php'; ?>
         <button type="submit" class="px-3 py-2 rounded bg-brand-red text-white text-sm w-full">Salvar Feedback</button>
       </form>
     </details>

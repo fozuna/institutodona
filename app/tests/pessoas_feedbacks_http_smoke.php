@@ -106,11 +106,14 @@ if ($depoisSemCsrf !== $antes) { failFast('CSRF inválido não deveria criar reg
 ok('CSRF inválido: 400, nada criado');
 
 // Registrar Feedback a partir da Central (contextual: colaborador já vem preenchido).
-// Payload com XSS no título para provar escaping na exibição.
+// Payload com XSS no título e no campo "Impacto" para provar escaping na exibição.
 $tituloXss = 'Excelente entrega <script>alert(1)</script> ' . bin2hex(random_bytes(3));
 $store = http($base . '?route=pessoas/feedbackCreate', $jar, [
     'csrf' => $csrf, 'colaborador_id' => $F['a1'], 'tipo' => 'melhoria', 'titulo' => $tituloXss,
-    'descricao' => 'Registrado via fluxo HTTP', 'data_feedback' => '2026-09-27',
+    'situacao' => 'Na reunião de equipe de sexta-feira.', 'comportamento' => 'Entregou o relatório fora do prazo combinado.',
+    'impacto' => 'Atrasou a decisão da diretoria <script>alert(2)</script>.', 'orientacao' => 'Alinhar prazos com antecedência.',
+    'proximo_passo' => 'Revisar o cronograma na próxima reunião.',
+    'data_feedback' => '2026-09-27',
 ]);
 if ($store['code'] !== 302 || !str_contains($store['location'], 'pessoas/colaboradorHistorico')) { failFast('Registrar Feedback deveria voltar para a Central do Colaborador (destino contextual)'); }
 $novoId = (int)$pdo->query("SELECT id FROM pessoas_feedbacks WHERE colaborador_id = " . (int)$F['a1'] . " ORDER BY id DESC LIMIT 1")->fetchColumn();
@@ -120,7 +123,7 @@ ok('Registrar Feedback pela Central: colaborador contextual, redireciona de volt
 // Volta para a Central: feedback aparece no histórico, escapado.
 $centralDepois = http($base . '?route=pessoas/colaboradorHistorico&id=' . $F['a1'], $jar);
 if (!str_contains($centralDepois['body'], 'Feedback registrado.')) { failFast('Mensagem de sucesso deveria aparecer após registrar'); }
-if (str_contains($centralDepois['body'], '<script>alert(1)</script>')) { failFast('XSS não escapado no histórico da Central'); }
+if (str_contains($centralDepois['body'], '<script>alert(1)</script>') || str_contains($centralDepois['body'], '<script>alert(2)</script>')) { failFast('XSS não escapado no histórico da Central'); }
 if (!str_contains($centralDepois['body'], htmlspecialchars($tituloXss))) { failFast('Feedback registrado deveria aparecer no histórico (escapado)'); }
 ok('Histórico da Central atualizado com o novo feedback; XSS escapado');
 
@@ -131,17 +134,29 @@ if (str_contains($listaDepois['body'], '<script>alert(1)</script>')) { failFast(
 ok('Mesmo registro localizado na listagem operacional de Feedbacks');
 
 $detalhe = http($base . '?route=pessoas/feedbackShow&id=' . $novoId, $jar);
-if ($detalhe['code'] !== 200 || !str_contains($detalhe['body'], 'Registrado via fluxo HTTP')) { failFast('Detalhe do Feedback deveria mostrar o conteúdo completo'); }
-if (str_contains($detalhe['body'], '<script>alert(1)</script>')) { failFast('XSS não escapado no detalhe do Feedback'); }
-ok('Detalhe do Feedback: conteúdo completo acessível, escapado');
+if ($detalhe['code'] !== 200 || !str_contains($detalhe['body'], 'Revisar o cronograma na próxima reunião.')) { failFast('Detalhe do Feedback deveria mostrar o conteúdo completo (incluindo Próximo passo)'); }
+if (str_contains($detalhe['body'], '<script>alert(1)</script>') || str_contains($detalhe['body'], '<script>alert(2)</script>')) { failFast('XSS não escapado no detalhe do Feedback'); }
+if (!str_contains($detalhe['body'], 'Situação') || !str_contains($detalhe['body'], 'Comportamento') || !str_contains($detalhe['body'], 'Impacto')) { failFast('Detalhe deveria exibir os campos estruturados SBI'); }
+ok('Detalhe do Feedback: conteúdo completo (campos SBI) acessível, escapado');
 
-// Tipo inválido / conteúdo vazio via HTTP.
+// Repopulação de valores após erro de validação (campo SBI obrigatório faltante).
+$semSituacao = http($base . '?route=pessoas/feedbackCreate', $jar, [
+    'csrf' => $csrf, 'colaborador_id' => $F['a1'], 'tipo' => 'melhoria', 'titulo' => 'Titulo Repopular',
+    'situacao' => '', 'comportamento' => 'c', 'impacto' => 'i', 'orientacao' => 'o',
+]);
+if ($semSituacao['code'] !== 302) { failFast('Falha de validação deveria redirecionar (302)'); }
+$centralComErro = http($base . '?route=pessoas/colaboradorHistorico&id=' . $F['a1'], $jar);
+if (!str_contains($centralComErro['body'], 'Preencha Situação, Comportamento, Impacto e Orientação')) { failFast('Mensagem de erro deveria aparecer'); }
+if (!str_contains($centralComErro['body'], 'value="Titulo Repopular"') && !str_contains($centralComErro['body'], '>Titulo Repopular<')) { failFast('Valores digitados deveriam ser preservados após erro de validação'); }
+ok('Valores preservados no formulário após falha de validação');
+
+// Tipo inválido / campo obrigatório vazio via HTTP.
 $antesInvalidos = (int)$pdo->query("SELECT COUNT(*) FROM pessoas_feedbacks WHERE colaborador_id = " . (int)$F['a1'])->fetchColumn();
-http($base . '?route=pessoas/feedbackCreate', $jar, ['csrf' => $csrf, 'colaborador_id' => $F['a1'], 'tipo' => 'neutro', 'titulo' => 'x', 'descricao' => 'x']);
-http($base . '?route=pessoas/feedbackCreate', $jar, ['csrf' => $csrf, 'colaborador_id' => $F['a1'], 'tipo' => 'positivo', 'titulo' => 'x', 'descricao' => '']);
+http($base . '?route=pessoas/feedbackCreate', $jar, ['csrf' => $csrf, 'colaborador_id' => $F['a1'], 'tipo' => 'neutro', 'titulo' => 'x', 'situacao' => 's', 'comportamento' => 'c', 'impacto' => 'i', 'orientacao' => 'o']);
+http($base . '?route=pessoas/feedbackCreate', $jar, ['csrf' => $csrf, 'colaborador_id' => $F['a1'], 'tipo' => 'positivo', 'titulo' => 'x', 'situacao' => '', 'comportamento' => 'c', 'impacto' => 'i', 'orientacao' => 'o']);
 $depoisInvalidos = (int)$pdo->query("SELECT COUNT(*) FROM pessoas_feedbacks WHERE colaborador_id = " . (int)$F['a1'])->fetchColumn();
-if ($depoisInvalidos !== $antesInvalidos) { failFast('Tipo inválido / conteúdo vazio não deveriam criar registro'); }
-ok('Tipo inválido e conteúdo vazio bloqueados via HTTP (nada criado)');
+if ($depoisInvalidos !== $antesInvalidos) { failFast('Tipo inválido / campo SBI vazio não deveriam criar registro'); }
+ok('Tipo inválido e campo SBI obrigatório vazio bloqueados via HTTP (nada criado)');
 
 // ID inexistente.
 $r = http($base . '?route=pessoas/feedbackShow&id=999999999', $jar);
@@ -166,7 +181,7 @@ ok('Cliente Admin: escopo respeitado; feedback de outro tenant bloqueado na list
 // Cliente Admin não pode vincular GAP de outra empresa via formulário manipulado.
 $centralA = http($base . '?route=pessoas/colaboradorHistorico&id=' . $F['a1'], $jarA);
 $csrfA = csrfDe($centralA['body']);
-http($base . '?route=pessoas/feedbackCreate', $jarA, ['csrf' => $csrfA, 'colaborador_id' => $F['a1'], 'tipo' => 'positivo', 'titulo' => 'Tentativa cross-tenant', 'descricao' => 'x', 'gap_id' => $gapB]);
+http($base . '?route=pessoas/feedbackCreate', $jarA, ['csrf' => $csrfA, 'colaborador_id' => $F['a1'], 'tipo' => 'positivo', 'titulo' => 'Tentativa cross-tenant', 'situacao' => 's', 'comportamento' => 'c', 'impacto' => 'i', 'orientacao' => 'o', 'gap_id' => $gapB]);
 $feedbackCrossTenant = $pdo->query("SELECT gap_id FROM pessoas_feedbacks WHERE titulo = 'Tentativa cross-tenant' ORDER BY id DESC LIMIT 1")->fetchColumn();
 if ($feedbackCrossTenant !== false && $feedbackCrossTenant !== null) { failFast('GAP de outra empresa não poderia ter sido vinculado via formulário manipulado'); }
 ok('Cliente Admin: GAP de outra empresa manipulado no formulário é descartado (não vincula, não quebra)');
