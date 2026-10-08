@@ -318,26 +318,37 @@ $latestItems = array_slice($latestItems, 0, 8);
           </div>
           <aside class="dash-mini">
             <h2>Carteira atual</h2>
+            <?php $carteiraEmpresasQtd = max(0, (int)($carteiraEmpresas ?? 0)); ?>
+            <small style="color:rgba(255,255,255,.74);margin-top:-6px"><span id="dashCarteiraPeriodLabel"><?= htmlspecialchars($periodLabel) ?></span> · <span id="dashCarteiraEmpresaCount"><?= $carteiraEmpresasQtd ?></span> empresa(s)</small>
             <?php
-            $carteiraEmpresas = max(0, (int)($carteiraEmpresas ?? 0));
-            $carteiraMedia = $carteiraEmpresas > 1;
-            $totalCarteira = max(1, array_sum(array_map('intval', $totalsByStatus)));
+            // As 3 linhas replicam EXATAMENTE os cards abaixo (Cumprimento do
+            // Cronograma / Auditorias / Indicadores Estratégicos) - mesma fonte,
+            // mesma regra, sem média entre os três indicadores. O valor inicial
+            // "—%" é só o estado antes do primeiro carregamento via AJAX
+            // (dashboard/metrics); renderCarteira() atualiza isso a cada
+            // mudança de filtro, em sincronia com os cards (ver loadMetrics()).
             ?>
-            <small style="color:rgba(255,255,255,.74);margin-top:-6px"><?= $carteiraMedia ? ('Média por empresa (' . $carteiraEmpresas . ' empresas)') : 'Empresa selecionada' ?></small>
-            <?php foreach (['Planejado', 'Em Andamento', 'Concluído', 'Pendente'] as $statusLabel): ?>
-              <?php $count = (int)($totalsByStatus[$statusLabel] ?? 0); ?>
-              <div class="dash-mini-row">
-                <div class="flex items-center justify-between gap-3">
-                  <strong><?= htmlspecialchars($statusLabel) ?></strong>
-                  <?php if ($carteiraMedia): ?>
-                    <small title="<?= $count ?> item(ns) no total"><?= number_format($count / $carteiraEmpresas, 2, ',', '.') ?> item(ns) · <?= number_format(($count / $totalCarteira) * 100, 0, ',', '.') ?>%</small>
-                  <?php else: ?>
-                    <small><?= $count ?> item(ns)</small>
-                  <?php endif; ?>
-                </div>
-                <div class="dash-mini-track"><div class="dash-mini-fill" style="width: <?= max(0, min(100, ($count / $totalCarteira) * 100)) ?>%;"></div></div>
+            <div class="dash-mini-row">
+              <div class="flex items-center justify-between gap-3">
+                <strong>Cumprimento do Cronograma</strong>
+                <small id="dashCarteiraCronLabel">—%</small>
               </div>
-            <?php endforeach; ?>
+              <div class="dash-mini-track"><div class="dash-mini-fill" id="dashCarteiraCronFill" style="width: 0%;"></div></div>
+            </div>
+            <div class="dash-mini-row">
+              <div class="flex items-center justify-between gap-3">
+                <strong>Auditorias</strong>
+                <small id="dashCarteiraAudLabel">—%</small>
+              </div>
+              <div class="dash-mini-track"><div class="dash-mini-fill" id="dashCarteiraAudFill" style="width: 0%;"></div></div>
+            </div>
+            <div class="dash-mini-row">
+              <div class="flex items-center justify-between gap-3">
+                <strong>Indicadores Estratégicos</strong>
+                <small id="dashCarteiraIndLabel">—%</small>
+              </div>
+              <div class="dash-mini-track"><div class="dash-mini-fill" id="dashCarteiraIndFill" style="width: 0%;"></div></div>
+            </div>
           </aside>
         </div>
       </div>
@@ -683,6 +694,12 @@ $latestItems = array_slice($latestItems, 0, 8);
       indBar: document.getElementById('dashIndBar'),
       indStatus: document.getElementById('dashIndStatus'),
       indEmpty: document.getElementById('dashIndEmpty'),
+      carteiraCronLabel: document.getElementById('dashCarteiraCronLabel'),
+      carteiraCronFill: document.getElementById('dashCarteiraCronFill'),
+      carteiraAudLabel: document.getElementById('dashCarteiraAudLabel'),
+      carteiraAudFill: document.getElementById('dashCarteiraAudFill'),
+      carteiraIndLabel: document.getElementById('dashCarteiraIndLabel'),
+      carteiraIndFill: document.getElementById('dashCarteiraIndFill'),
       planoTotal: document.getElementById('dashPlanoTotal'),
       planoChart: document.getElementById('dashPlanoChart'),
       planoSummary: document.getElementById('dashPlanoSummary'),
@@ -750,6 +767,10 @@ $latestItems = array_slice($latestItems, 0, 8);
       }
       if (empresaCountLabel) {
         empresaCountLabel.textContent = String(effectiveCompanyCount());
+      }
+      const carteiraEmpresaCountLabel = document.getElementById('dashCarteiraEmpresaCount');
+      if (carteiraEmpresaCountLabel) {
+        carteiraEmpresaCountLabel.textContent = String(effectiveCompanyCount());
       }
       updatePdfLink();
     }
@@ -897,6 +918,27 @@ $latestItems = array_slice($latestItems, 0, 8);
       if (dash.indBar) dash.indBar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
       renderBadge(dash.indStatus, total > 0 ? status.text : 'Sem indicadores', total > 0 ? status.badge : 'neutral');
       dash.indEmpty?.classList.toggle('hidden', total > 0);
+    }
+
+    // Carteira Atual (cabeçalho): reaproveita EXATAMENTE os mesmos campos do
+    // payload usados pelos cards abaixo (cronograma.pct, auditorias.media_
+    // conformidade_pct, indicadores.media_atingimento_pct) - nenhum cálculo
+    // paralelo, nenhuma média entre os três indicadores. "—%" quando o valor
+    // é null/undefined (ausência de dados); valor real preservado no texto
+    // mesmo acima de 100% ou negativo - só a barra é limitada a [0,100].
+    function renderCarteiraLinha(labelEl, fillEl, value) {
+      const temDado = value !== null && value !== undefined;
+      if (labelEl) labelEl.textContent = temDado ? `${formatPct(value)}%` : '—%';
+      if (fillEl) fillEl.style.width = `${temDado ? Math.max(0, Math.min(100, Number(value))) : 0}%`;
+    }
+
+    function renderCarteira(json) {
+      const cronPct = Number(json?.cronograma?.pct ?? 0);
+      const audMedia = json?.auditorias?.media_conformidade_pct;
+      const indMedia = json?.indicadores?.media_atingimento_pct;
+      renderCarteiraLinha(dash.carteiraCronLabel, dash.carteiraCronFill, cronPct);
+      renderCarteiraLinha(dash.carteiraAudLabel, dash.carteiraAudFill, audMedia === null || audMedia === undefined ? null : Number(audMedia));
+      renderCarteiraLinha(dash.carteiraIndLabel, dash.carteiraIndFill, indMedia === null || indMedia === undefined ? null : Number(indMedia));
     }
 
     function renderPlano(plano) {
@@ -1106,12 +1148,15 @@ $latestItems = array_slice($latestItems, 0, 8);
         }
         const filters = json.filters || {};
         if (periodLabel) periodLabel.textContent = periodText(filters.start_date, filters.end_date);
+        const carteiraPeriodLabel = document.getElementById('dashCarteiraPeriodLabel');
+        if (carteiraPeriodLabel) carteiraPeriodLabel.textContent = periodText(filters.start_date, filters.end_date);
         if (lastUpdatedAt) lastUpdatedAt.textContent = nowLabel();
 
         renderCronograma(json.cronograma || {});
         renderBiblioteca(json.biblioteca || {});
         renderAuditorias(json.auditorias || {});
         renderIndicadores(json.indicadores || {});
+        renderCarteira(json);
         renderPlano(json.planoacao || {});
         renderTreinamentos(json.treinamentos || {});
 
