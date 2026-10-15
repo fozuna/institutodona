@@ -20,7 +20,7 @@ class AuthController extends BaseController
 
     public function login(): void
     {
-        $this->render('auth/login');
+        $this->renderPublic('auth/login');
     }
 
     public function doLogin(): void
@@ -39,7 +39,7 @@ class AuthController extends BaseController
             AuditLogger::log('auth_login_csrf_fail', 'usuario', null, [
                 'has_session_csrf' => isset($_SESSION['csrf']),
             ]);
-            $this->render('auth/login', ['error' => 'Sessão expirada ou CSRF inválido. Tente novamente.']);
+            $this->renderPublic('auth/login', ['error' => 'Sessão expirada ou CSRF inválido. Tente novamente.']);
             return;
         }
 
@@ -55,7 +55,7 @@ class AuthController extends BaseController
                     'resultado' => 'negado',
                 ]);
                 Auth::logout();
-                $this->render('auth/login', ['error' => 'Você não possui permissão para acessar este recurso.']);
+                $this->renderPublic('auth/login', ['error' => 'Você não possui permissão para acessar este recurso.']);
                 return;
             }
             AuditLogger::log('auth_login_success', 'usuario', (int)$user['id'], [
@@ -74,7 +74,7 @@ class AuthController extends BaseController
             header('Location: index.php?route=' . AccessControl::defaultHomeRoute($user));
         } else {
             AuditLogger::log('auth_login_fail', 'usuario', null, ['email' => $email]);
-            $this->render('auth/login', ['error' => 'Credenciais inválidas']);
+            $this->renderPublic('auth/login', ['error' => 'Credenciais inválidas']);
         }
     }
 

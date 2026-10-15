@@ -40,6 +40,23 @@ class BaseController
         require __DIR__ . '/../views/layouts/main.php';
     }
 
+    /**
+     * Renderiza uma página verdadeiramente pública (sem sessão exigida),
+     * usando um layout próprio (`layouts/public.php`) - nunca o layout
+     * administrativo (`layouts/main.php`), que reserva largura de sidebar
+     * via CSS independentemente de haver `<aside>` no DOM. Usar sempre que a
+     * tela não depender de usuário autenticado (ex.: auth/login).
+     */
+    protected function renderPublic(string $view, array $params = []): void
+    {
+        $params['pageTitle'] = $params['pageTitle'] ?? $this->autoTitle($view);
+        extract($params, EXTR_SKIP);
+        ob_start();
+        require __DIR__ . '/../views/' . $view . '.php';
+        $content = ob_get_clean();
+        require __DIR__ . '/../views/layouts/public.php';
+    }
+
     protected function renderPartial(string $view, array $params = []): void
     {
         $params['pageTitle'] = $params['pageTitle'] ?? $this->autoTitle($view);

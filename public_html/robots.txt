@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Allow: /index.php$
+Disallow: /index.php?
+Disallow: /pwa/
+Disallow: /public/
+Disallow: /avaliar/
+Disallow: /manuais/
+Disallow: /biblioteca/
+
+Sitemap: https://donaconsultorias.com.br/sitemap.xml

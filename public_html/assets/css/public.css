@@ -1,0 +1,448 @@
+/* =====================================================================
+   Landing page pública — DONA VIVA+ DIGITAL / Instituto Dona
+   CSS próprio, sem dependência do Tailwind CDN nem de theme.css (área
+   administrativa). Paleta oficial: manual "Identidade Visual - Mentoria
+   VIVA+" (vermelho vibrante, rosa, marrom profundo, grafite, preto, branco;
+   tipografia Poppins). --viva-red-ink é uma variante mais escura da mesma
+   cor, usada só em texto corrido sobre fundo branco, para garantir
+   contraste AA (o vermelho vibrante puro fica abaixo de 4.5:1 em texto
+   pequeno sobre branco - continua usado em botões, bordas e elementos
+   gráficos grandes).
+   ===================================================================== */
+
+:root {
+  --viva-red: #FF003C;
+  --viva-red-ink: #C40030;
+  --viva-red-dark: #A3002A;
+  --viva-pink: #F77F89;
+  --viva-brown: #381013;
+  --viva-brown-soft: #4A1A1E;
+  --viva-graphite: #353535;
+  --viva-black: #000000;
+  --viva-white: #FFFFFF;
+  --viva-bg: #FBF9F8;
+  --viva-border: #ECE3E2;
+
+  --viva-font: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  --viva-radius: 14px;
+  --viva-radius-lg: 22px;
+  --viva-shadow: 0 10px 30px rgba(56, 16, 19, .10);
+  --viva-shadow-lg: 0 24px 60px rgba(56, 16, 19, .16);
+  --viva-container: 1180px;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  font-family: var(--viva-font);
+  color: var(--viva-graphite);
+  background: var(--viva-bg);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.6;
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: inherit; text-decoration: none; }
+h1, h2, h3 { font-weight: 700; color: var(--viva-brown); margin: 0 0 .5em; line-height: 1.2; }
+p { margin: 0 0 1em; }
+ul { margin: 0; padding: 0; list-style: none; }
+button { font-family: inherit; cursor: pointer; }
+
+.container {
+  max-width: var(--viva-container);
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* Acessibilidade: foco visível e link de pular para o conteúdo */
+a:focus-visible, button:focus-visible, input:focus-visible {
+  outline: 3px solid var(--viva-red);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--viva-brown);
+  color: var(--viva-white);
+  padding: 12px 20px;
+  z-index: 100;
+  border-radius: 0 0 8px 0;
+}
+.skip-link:focus {
+  left: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+
+/* ---------------------------------------------------------------------
+   Cabeçalho
+   --------------------------------------------------------------------- */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(251, 249, 248, .92);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--viva-border);
+}
+.site-header__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.brand__mark {
+  background: var(--viva-brown);
+  border-radius: 10px;
+  padding: 7px 10px;
+  width: 110px;
+  height: auto;
+}
+.brand__text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.brand__org { font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--viva-red-ink); }
+.brand__product { font-size: 14px; font-weight: 600; color: var(--viva-brown); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.site-nav { display: none; align-items: center; gap: 28px; font-size: 14px; font-weight: 500; color: var(--viva-graphite); }
+.site-nav a:hover { color: var(--viva-red-ink); }
+
+.site-header__actions { display: flex; align-items: center; gap: 10px; }
+
+.nav-toggle {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--viva-border);
+  border-radius: 10px;
+  background: var(--viva-white);
+}
+.nav-toggle span { display: block; width: 18px; height: 2px; margin: 0 auto; background: var(--viva-brown); border-radius: 2px; transition: transform .2s ease, opacity .2s ease; }
+.nav-toggle[aria-expanded="true"] span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+.nav-toggle[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
+.nav-toggle[aria-expanded="true"] span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+
+.mobile-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 20px 18px;
+  border-top: 1px solid var(--viva-border);
+}
+.mobile-nav a { padding: 10px 4px; font-weight: 500; border-bottom: 1px solid var(--viva-border); }
+.mobile-nav .btn { margin-top: 10px; }
+.mobile-nav[hidden] { display: none; }
+
+/* ---------------------------------------------------------------------
+   Botões
+   --------------------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 20px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  transition: transform .15s ease, box-shadow .15s ease, background-color .15s ease, border-color .15s ease;
+  white-space: nowrap;
+}
+.btn--lg { padding: 14px 28px; font-size: 15px; }
+.btn--block { width: 100%; }
+.btn--primary { background: var(--viva-red); color: var(--viva-white); box-shadow: 0 10px 24px rgba(255, 0, 60, .28); }
+.btn--primary:hover { background: var(--viva-red-dark); transform: translateY(-1px); }
+.btn--ghost { background: var(--viva-white); color: var(--viva-brown); border-color: var(--viva-border); }
+.btn--ghost:hover { border-color: var(--viva-brown); }
+.btn--outline-light { background: transparent; color: var(--viva-white); border-color: rgba(255,255,255,.35); }
+.btn--outline-light:hover { background: rgba(255,255,255,.12); }
+
+.link-button { background: none; border: 0; padding: 0; color: var(--viva-red-ink); font-weight: 600; font-size: inherit; }
+.link-button:hover { text-decoration: underline; }
+
+/* ---------------------------------------------------------------------
+   Eyebrow / kickers
+   --------------------------------------------------------------------- */
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--viva-red-ink);
+  margin-bottom: 14px;
+}
+.eyebrow__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--viva-red); flex-shrink: 0; }
+.eyebrow--center { justify-content: center; width: 100%; }
+.eyebrow--on-dark { color: var(--viva-pink); }
+
+/* ---------------------------------------------------------------------
+   Hero
+   --------------------------------------------------------------------- */
+.hero {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(247, 127, 137, .16), transparent 42%),
+    radial-gradient(circle at 92% 8%, rgba(255, 0, 60, .10), transparent 38%),
+    var(--viva-bg);
+  padding: 56px 0 72px;
+}
+.hero__grid { display: grid; gap: 48px; align-items: center; }
+.hero__content h1 { font-size: clamp(2rem, 1.3rem + 3vw, 3.2rem); max-width: 18ch; }
+.hero__lead { font-size: 1.1rem; color: var(--viva-graphite); max-width: 52ch; }
+.hero__actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 28px 0 34px; }
+
+.hero__pillars { display: grid; gap: 14px; grid-template-columns: repeat(3, 1fr); padding: 0; margin: 0; }
+.hero__pillars div {
+  background: rgba(255, 255, 255, .75);
+  border: 1px solid var(--viva-border);
+  border-radius: var(--viva-radius);
+  padding: 14px;
+}
+.hero__pillars dt { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--viva-red-ink); margin-bottom: 6px; }
+.hero__pillars dd { margin: 0; font-size: 13px; color: var(--viva-graphite); }
+
+.hero__visual { display: flex; justify-content: center; }
+.hero-panel {
+  width: 100%;
+  max-width: 420px;
+  background: linear-gradient(160deg, var(--viva-brown), var(--viva-brown-soft));
+  border-radius: var(--viva-radius-lg);
+  padding: 28px;
+  color: var(--viva-white);
+  box-shadow: var(--viva-shadow-lg);
+}
+.hero-panel__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.hero-panel__kicker { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.7); }
+.hero-panel__logo { background: rgba(255,255,255,.12); border-radius: 8px; padding: 6px 8px; }
+.hero-panel__list { display: grid; gap: 10px; }
+.hero-panel__list li {
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+/* ---------------------------------------------------------------------
+   Seções gerais
+   --------------------------------------------------------------------- */
+.section { padding: 64px 0; }
+.section--alt { background: var(--viva-white); border-top: 1px solid var(--viva-border); border-bottom: 1px solid var(--viva-border); }
+.section__head { max-width: 640px; margin: 0 auto 40px; text-align: center; }
+.section__head--split { max-width: none; text-align: left; margin-bottom: 36px; }
+.section__lead { color: #5b5b5b; font-size: 1.05rem; }
+
+.card-grid { display: grid; gap: 20px; }
+.card-grid--3 { grid-template-columns: repeat(3, 1fr); }
+.card-grid--4 { grid-template-columns: repeat(4, 1fr); }
+
+.card {
+  background: var(--viva-white);
+  border: 1px solid var(--viva-border);
+  border-radius: var(--viva-radius);
+  padding: 26px 24px;
+  box-shadow: var(--viva-shadow);
+}
+.card h3 { font-size: 1.05rem; margin-bottom: 8px; }
+.card p { color: #5b5b5b; font-size: .92rem; margin: 0; }
+.card--compact { padding: 22px 20px; }
+
+/* ---------------------------------------------------------------------
+   Institucional
+   --------------------------------------------------------------------- */
+.about-grid { display: grid; gap: 28px; grid-template-columns: 1.05fr .95fr; align-items: start; }
+.about-card {
+  background: var(--viva-brown);
+  color: var(--viva-white);
+  border-radius: var(--viva-radius-lg);
+  padding: 36px;
+}
+.about-card h2 { color: var(--viva-white); }
+.about-card p { color: rgba(255,255,255,.82); }
+.about-card__pillars { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; margin-top: 22px; }
+.about-card__pillars div { background: rgba(255,255,255,.08); border-radius: var(--viva-radius); padding: 16px; }
+.about-card__pillars span { display: block; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--viva-pink); margin-bottom: 8px; }
+.about-card__pillars p { font-size: .88rem; margin: 0; }
+
+.about-side { display: grid; gap: 20px; }
+.list li { position: relative; padding: 6px 0 6px 20px; font-size: .92rem; color: #5b5b5b; }
+.list li::before { content: ''; position: absolute; left: 0; top: 15px; width: 6px; height: 6px; border-radius: 50%; background: var(--viva-red); }
+
+/* ---------------------------------------------------------------------
+   CTA de fechamento
+   --------------------------------------------------------------------- */
+.section--cta { padding-top: 0; }
+.cta-panel {
+  background: linear-gradient(135deg, var(--viva-brown), #230a0c);
+  color: var(--viva-white);
+  border-radius: var(--viva-radius-lg);
+  padding: 44px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  box-shadow: var(--viva-shadow-lg);
+}
+.cta-panel h2 { color: var(--viva-white); max-width: 22ch; }
+.cta-panel p { color: rgba(255,255,255,.85); max-width: 46ch; margin: 0; }
+.cta-panel__actions { display: flex; gap: 12px; flex-wrap: wrap; }
+
+/* ---------------------------------------------------------------------
+   Rodapé
+   --------------------------------------------------------------------- */
+.site-footer { background: var(--viva-white); border-top: 1px solid var(--viva-border); padding-top: 56px; }
+.footer-grid { display: grid; gap: 32px; grid-template-columns: 1.3fr .85fr .85fr; padding-bottom: 32px; }
+.footer-brand__logo { background: var(--viva-brown); border-radius: 8px; padding: 6px 9px; width: 96px; margin-bottom: 14px; }
+.footer-brand p { color: #5b5b5b; font-size: .9rem; max-width: 42ch; }
+.footer-col { display: flex; flex-direction: column; gap: 10px; font-size: .9rem; color: #5b5b5b; }
+.footer-col__title { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--viva-brown); margin-bottom: 2px; }
+.footer-col a:hover { color: var(--viva-red-ink); }
+
+.legal-note {
+  background: var(--viva-bg);
+  border: 1px solid var(--viva-border);
+  border-radius: var(--viva-radius);
+  padding: 16px 18px;
+  font-size: .85rem;
+  color: #5b5b5b;
+  margin-bottom: 14px;
+}
+.legal-note strong { color: var(--viva-brown); }
+
+.footer-bottom {
+  border-top: 1px solid var(--viva-border);
+  padding: 22px 20px 28px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
+  font-size: .82rem;
+  color: #6b6b6b;
+}
+.footer-credit a { color: var(--viva-red-ink); font-weight: 600; }
+.footer-credit a:hover { text-decoration: underline; }
+
+/* ---------------------------------------------------------------------
+   Modal de login
+   --------------------------------------------------------------------- */
+.login-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity .18s ease, visibility .18s ease;
+}
+.login-modal.is-open { visibility: visible; opacity: 1; }
+.login-modal__backdrop { position: absolute; inset: 0; background: rgba(56, 16, 19, .55); }
+.login-modal__panel {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  max-height: 92vh;
+  overflow-y: auto;
+  background: var(--viva-white);
+  border-radius: var(--viva-radius-lg);
+  box-shadow: var(--viva-shadow-lg);
+  transform: translateY(12px) scale(.98);
+  opacity: 0;
+  transition: transform .2s ease, opacity .2s ease;
+}
+.login-modal.is-open .login-modal__panel { transform: translateY(0) scale(1); opacity: 1; }
+.login-modal__head { display: flex; align-items: flex-start; justify-content: space-between; padding: 22px 24px 0; }
+.login-modal__head h2 { margin: 2px 0 0; font-size: 1.4rem; }
+.icon-close { background: var(--viva-bg); border: 1px solid var(--viva-border); border-radius: 50%; width: 34px; height: 34px; font-size: 20px; line-height: 1; color: var(--viva-brown); }
+.login-modal__body { padding: 18px 24px 26px; }
+
+.form-alert {
+  background: #FDE8EC;
+  border: 1px solid var(--viva-red);
+  color: var(--viva-red-dark);
+  border-radius: var(--viva-radius);
+  padding: 12px 14px;
+  font-size: .88rem;
+  margin-bottom: 16px;
+}
+.form-field { margin-bottom: 16px; }
+.form-field label { display: block; font-size: .85rem; font-weight: 600; color: var(--viva-brown); margin-bottom: 6px; }
+.form-field input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--viva-border);
+  border-radius: var(--viva-radius);
+  background: var(--viva-bg);
+  font: inherit;
+  color: var(--viva-brown);
+}
+.form-field input:focus { border-color: var(--viva-red); background: var(--viva-white); outline: none; }
+.login-form__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: .85rem; margin-bottom: 14px; flex-wrap: wrap; }
+.checkbox { display: inline-flex; align-items: center; gap: 8px; color: #5b5b5b; }
+.login-form__tip { background: var(--viva-bg); border-radius: var(--viva-radius); padding: 12px 14px; font-size: .82rem; color: #5b5b5b; margin: 0 0 16px; }
+.login-form__tip[hidden] { display: none; }
+
+/* ---------------------------------------------------------------------
+   Breakpoints — a versão mobile reorganiza (não só encolhe) a grade
+   --------------------------------------------------------------------- */
+@media (min-width: 860px) {
+  .site-nav { display: flex; }
+  .nav-toggle { display: none; }
+  .mobile-nav { display: none !important; }
+  .hero__grid { grid-template-columns: 1.08fr .92fr; }
+  .card-grid--3 { grid-template-columns: repeat(3, 1fr); }
+  .card-grid--4 { grid-template-columns: repeat(4, 1fr); }
+}
+
+@media (max-width: 859px) {
+  .card-grid--3, .card-grid--4 { grid-template-columns: repeat(2, 1fr); }
+  .about-grid { grid-template-columns: 1fr; }
+  .footer-grid { grid-template-columns: 1fr 1fr; }
+  .footer-brand { grid-column: 1 / -1; }
+}
+
+@media (max-width: 640px) {
+  .container { padding: 0 16px; }
+  .hero { padding: 40px 0 52px; }
+  .hero__pillars { grid-template-columns: 1fr; }
+  .card-grid--3, .card-grid--4 { grid-template-columns: 1fr; }
+  .section { padding: 48px 0; }
+  .section__head--split { text-align: left; }
+  .about-card { padding: 26px; }
+  .about-card__pillars { grid-template-columns: 1fr; }
+  .cta-panel { padding: 30px 24px; flex-direction: column; align-items: flex-start; }
+  .footer-grid { grid-template-columns: 1fr; }
+  .footer-bottom { flex-direction: column; align-items: flex-start; }
+  .brand__mark { width: 92px; }
+  .brand__product { font-size: 12.5px; }
+}
+
+@media (max-width: 460px) {
+  /* Evita truncar "DONA VIVA+ DIGITAL" espremido entre o logo e os botões
+     do cabeçalho - mantém só a sigla institucional nesta largura. */
+  .brand__product { display: none; }
+  .site-header__inner { gap: 10px; }
+  .site-header__actions { gap: 8px; }
+  .btn { padding: 10px 16px; font-size: 13px; }
+}

@@ -6,7 +6,8 @@ function ok(string $msg): void { echo "OK: {$msg}\n"; }
 
 $checks = [
     __DIR__ . '/../views/layouts/main.php' => 'AppBrand::displayName',
-    __DIR__ . '/../views/auth/login.php' => 'AppBrand::displayName',
+    __DIR__ . '/../views/auth/login.php' => 'PublicSite::productName',
+    __DIR__ . '/../core/PublicSite.php' => 'AppBrand::displayName',
     __DIR__ . '/../core/AppBrand.php' => "public const NAME = 'VIVA+ DIGITAL'",
     __DIR__ . '/../core/XlsxExport.php' => 'AppBrand::EXPORT_APP',
     __DIR__ . '/../core/SimplePdfReport.php' => 'AppBrand::PRODUCER',
